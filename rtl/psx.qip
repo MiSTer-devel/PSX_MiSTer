@@ -1,0 +1,13 @@
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) proc_bus.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) dpram.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) reg_gpu.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) export.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) divider.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_fillVram.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_cpu2vram.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) cpu.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) memorymux.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) psx_top.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) psx_mister.vhd ]
+
