@@ -23,8 +23,10 @@ Work in progress, don't report any bugs!
 - No games working
 - BIOS startup not working
 
-CPU    : 50%
-GPU    : 10%
-Memory : 20%
+--
+
+- CPU    : 50%
+- GPU    : 10%
+- Memory : 20%
 
 Everything else still missing
