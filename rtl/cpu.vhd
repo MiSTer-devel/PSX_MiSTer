@@ -836,7 +836,7 @@ begin
                   when 16#22# => -- SUB
                      calcResult    := value1 - value2; 
                      EXEresultData <= calcResult;               
-                     if (((calcResult(31) xor value1(31)) and (value1(31) xor value2(15))) = '1') then
+                     if (((calcResult(31) xor value1(31)) and (value1(31) xor value2(31))) = '1') then
                         --report "should trigger exception" severity failure; 
                      else
                         EXEresultWriteEnable <= '1';
@@ -1130,7 +1130,15 @@ begin
                   EXEMemWriteEnable <= '1';
                end if;
                
-               
+            when 16#2A# => -- SWL
+               case (to_integer(calcMemAddr(1 downto 0))) is 
+                  when 0 => EXEMemWriteMask <= "0001"; EXEMemWriteData <= x"000000" & value2(31 downto 24);
+                  when 1 => EXEMemWriteMask <= "0011"; EXEMemWriteData <= x"0000" & value2(31 downto 16);
+                  when 2 => EXEMemWriteMask <= "0111"; EXEMemWriteData <= x"00" & value2(31 downto 8);
+                  when 3 => EXEMemWriteMask <= "1111"; EXEMemWriteData <= value2;
+                  when others => null;
+               end case;
+               EXEMemWriteEnable <= '1';   
 
             when 16#2B# => -- SW
                if (calcMemAddr(1 downto 0) /= "00") then
@@ -1139,7 +1147,15 @@ begin
                   EXEMemWriteEnable <= '1';
                end if;
                
-               
+            when 16#2E# => -- SWR
+               case (to_integer(calcMemAddr(1 downto 0))) is 
+                  when 0 => EXEMemWriteMask <= "1111"; EXEMemWriteData <= value2;
+                  when 1 => EXEMemWriteMask <= "1110"; EXEMemWriteData <= value2(23 downto 0) & x"00";
+                  when 2 => EXEMemWriteMask <= "1100"; EXEMemWriteData <= value2(15 downto 0) & x"0000";
+                  when 3 => EXEMemWriteMask <= "1000"; EXEMemWriteData <= value2( 7 downto 0) & x"000000";
+                  when others => null;
+               end case;
+               EXEMemWriteEnable <= '1';    
                
                
                
@@ -1419,9 +1435,15 @@ begin
 
             if ((executeReadAddress(31 downto 29) = 0 or executeReadAddress(31 downto 29) = 4) and executeReadAddress(28 downto 10) = 16#7E000#) then
                report "scratchpad access" severity failure;
+               --if (executeLoadType = LOADTYPE_LEFT or executeLoadType = LOADTYPE_RIGHT) then 
+               --   mem4_address(1 downto 0) <= "00";
+               --end if;
             else 
                mem4_request   <= '1';
                mem4_address   <= executeReadAddress;
+               if (executeLoadType = LOADTYPE_LEFT or executeLoadType = LOADTYPE_RIGHT) then 
+                  mem4_address(1 downto 0) <= "00";
+               end if;
                mem4_rnw       <= '1';
                stallNew4      <= '1';
             end if;

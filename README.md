@@ -19,13 +19,18 @@ so you will see things that are not visible on a real PlayStation.
 
 Work in progress, don't report any bugs!
 
-- Some CPU testroms in .exe format working: https://github.com/RobertPeip/PSX/tree/master/CPUTest/CPU
+- All CPU testroms in .exe format working: https://github.com/RobertPeip/PSX/tree/master/CPUTest/CPU
+- HelloWorld in 16+24 bit working
+- ImageLoad/LZ77/Huffman in 16+24 bit working
+
+-- 
+
 - No games working
 - BIOS startup not working
 
 --
 
-- CPU    : 50%
+- CPU    : 55%
 - GPU    : 10%
 - Memory : 20%
 

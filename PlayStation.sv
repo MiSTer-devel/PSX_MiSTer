@@ -191,10 +191,10 @@ assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
 assign FB_BASE    = 32'h30000000;
 assign FB_EN      = 1;
-assign FB_FORMAT  = 5'b01100;
+assign FB_FORMAT  = status[10] ? 5'b00101 : 5'b01100;
 assign FB_WIDTH   = 12'd1024;
 assign FB_HEIGHT  = 12'd512;
-assign FB_STRIDE  = 0;
+assign FB_STRIDE  = 14'd2048;
 assign FB_FORCE_BLANK = 0;
 assign FB_PAL_CLK = 0;
 assign FB_PAL_ADDR= 0;
@@ -277,6 +277,9 @@ parameter CONF_STR = {
 	"h4H3RH,Save state (Alt-F1);",
 	"h4H3RI,Restore state (F1);",
 	"h4H3-;",
+	"- ;",
+	"OA,Color,16,24;",
+	"- ;",
 
 	"P1,Video & Audio;",
 	"P1-;",
