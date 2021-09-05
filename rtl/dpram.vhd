@@ -90,8 +90,7 @@ entity dpram_dif is
 		addr_width_a  : integer := 8;
 		data_width_a  : integer := 8;
 		addr_width_b  : integer := 8;
-		data_width_b  : integer := 8;
-		mem_init_file : string := " "
+		data_width_b  : integer := 8
 	);
 	PORT
 	(
@@ -149,7 +148,6 @@ BEGIN
 		power_up_uninitialized => "FALSE",
 		read_during_write_mode_port_a => "NEW_DATA_NO_NBE_READ",
 		read_during_write_mode_port_b => "NEW_DATA_NO_NBE_READ",
-		init_file => mem_init_file, 
 		widthad_a => addr_width_a,
 		widthad_b => addr_width_b,
 		width_a => data_width_a,

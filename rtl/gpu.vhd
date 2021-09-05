@@ -3,6 +3,7 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all; 
 
 library mem;
+use work.pGPU.all;
 
 entity gpu is
    port 
@@ -44,122 +45,210 @@ end entity;
 
 architecture arch of gpu is
   
-   signal softReset              : std_logic := '0';
-  
-   signal GPUREAD                : std_logic_vector(31 downto 0) := (others => '0');
-   signal GPUSTAT                : std_logic_vector(31 downto 0) := (others => '0');
-   signal GPUSTAT_TextPageX      : std_logic_vector(3 downto 0);
-   signal GPUSTAT_TextPageY      : std_logic;
-   signal GPUSTAT_Transparency   : std_logic_vector(1 downto 0);
-   signal GPUSTAT_TextPageColors : std_logic_vector(1 downto 0);
-   signal GPUSTAT_Dither         : std_logic;
-   signal GPUSTAT_DrawToDisplay  : std_logic;
-   signal GPUSTAT_SetMask        : std_logic;
-   signal GPUSTAT_DrawPixelsMask : std_logic;
-   signal GPUSTAT_InterlaceField : std_logic;
-   signal GPUSTAT_ReverseFlag    : std_logic;
-   signal GPUSTAT_TextureDisable : std_logic;
-   signal GPUSTAT_HorRes2        : std_logic;
-   signal GPUSTAT_HorRes1        : std_logic_vector(1 downto 0);
-   signal GPUSTAT_VerRes         : std_logic;
-   signal GPUSTAT_PalVideoMode   : std_logic;
-   signal GPUSTAT_ColorDepth24   : std_logic;
-   signal GPUSTAT_VertInterlace  : std_logic;
-   signal GPUSTAT_DisplayDisable : std_logic;
-   signal GPUSTAT_IRQRequest     : std_logic;
-   signal GPUSTAT_DMADataRequest : std_logic;
-   signal GPUSTAT_ReadyRecCmd    : std_logic;
-   signal GPUSTAT_ReadySendVRAM  : std_logic;
-   signal GPUSTAT_ReadyRecDMA    : std_logic;
-   signal GPUSTAT_DMADirection   : std_logic_vector(1 downto 0);
-   signal GPUSTAT_DrawingOddline : std_logic;
+   signal softReset                 : std_logic := '0';
    
-   signal vramRange              : unsigned(18 downto 0) := (others => '0');
-   alias vramRangeY              : unsigned is vramRange(18 downto 10);
-   signal hDisplayRange          : unsigned(23 downto 0) := (others => '0');
-   signal vDisplayRange          : unsigned(19 downto 0) := (others => '0');
+   signal GPUREAD                   : std_logic_vector(31 downto 0) := (others => '0');
+   signal GPUSTAT                   : std_logic_vector(31 downto 0) := (others => '0');
+   signal GPUSTAT_TextPageX         : std_logic_vector(3 downto 0);
+   signal GPUSTAT_TextPageY         : std_logic;
+   signal GPUSTAT_Transparency      : std_logic_vector(1 downto 0);
+   signal GPUSTAT_TextPageColors    : std_logic_vector(1 downto 0);
+   signal GPUSTAT_Dither            : std_logic;
+   signal GPUSTAT_DrawToDisplay     : std_logic;
+   signal GPUSTAT_SetMask           : std_logic;
+   signal GPUSTAT_DrawPixelsMask    : std_logic;
+   signal GPUSTAT_InterlaceField    : std_logic;
+   signal GPUSTAT_ReverseFlag       : std_logic;
+   signal GPUSTAT_TextureDisable    : std_logic;
+   signal GPUSTAT_HorRes2           : std_logic;
+   signal GPUSTAT_HorRes1           : std_logic_vector(1 downto 0);
+   signal GPUSTAT_VerRes            : std_logic;
+   signal GPUSTAT_PalVideoMode      : std_logic;
+   signal GPUSTAT_ColorDepth24      : std_logic;
+   signal GPUSTAT_VertInterlace     : std_logic;
+   signal GPUSTAT_DisplayDisable    : std_logic;
+   signal GPUSTAT_IRQRequest        : std_logic;
+   signal GPUSTAT_DMADataRequest    : std_logic;
+   signal GPUSTAT_ReadyRecCmd       : std_logic;
+   signal GPUSTAT_ReadySendVRAM     : std_logic;
+   signal GPUSTAT_ReadyRecDMA       : std_logic;
+   signal GPUSTAT_DMADirection      : std_logic_vector(1 downto 0);
+   signal GPUSTAT_DrawingOddline    : std_logic;
+      
+   signal vramRange                 : unsigned(18 downto 0) := (others => '0');
+   alias vramRangeY                 : unsigned is vramRange(18 downto 10);
+   signal hDisplayRange             : unsigned(23 downto 0) := (others => '0');
+   signal vDisplayRange             : unsigned(19 downto 0) := (others => '0');
+      
+   signal drawMode                  : unsigned(13 downto 0) := (others => '0');
+      
+   signal textureWindow             : unsigned(19 downto 0) := (others => '0');
+   signal textureWindow_AND_X       : unsigned(7 downto 0) := (others => '0');
+   signal textureWindow_AND_Y       : unsigned(7 downto 0) := (others => '0');
+      
+   signal drawingAreaLeft           : unsigned(9 downto 0) := (others => '0');
+   signal drawingAreaRight          : unsigned(9 downto 0) := (others => '0');
+   signal drawingAreaTop            : unsigned(8 downto 0) := (others => '0');
+   signal drawingAreaBottom         : unsigned(8 downto 0) := (others => '0');
+   signal drawingOffsetX            : signed(10 downto 0) := (others => '0');
+   signal drawingOffsetY            : signed(10 downto 0) := (others => '0');
+      
+   signal nextHCount                : integer range 0 to 4095;
+   signal vpos                      : integer range 0 to 511;
+   signal inVsync                   : std_logic := '0';
+   signal interlacedDisplayField    : std_logic := '0';
+   signal activeLineLSB             : std_logic := '0';
+   signal interlacedDrawing         : std_logic;
+      
+   signal htotal                    : integer range 2169 to 2173; -- 3406 to 3413 in GPU clock domain
+   signal vtotal                    : integer range 263 to 314;
+   signal vDisplayStart             : integer range 0 to 314;
+   signal vDisplayEnd               : integer range 0 to 314;
+      
+   -- FIFO IN  
+   signal fifoIn_reset              : std_logic; 
+   signal fifoIn_Din                : std_logic_vector(31 downto 0);
+   signal fifoIn_Wr                 : std_logic; 
+   signal fifoIn_Full               : std_logic;
+   signal fifoIn_NearFull           : std_logic;
+   signal fifoIn_Dout               : std_logic_vector(31 downto 0);
+   signal fifoIn_Rd                 : std_logic;
+   signal fifoIn_Empty              : std_logic;
+   signal fifoIn_Valid              : std_logic;
+      
+   -- Processing  
+   signal proc_idle                 : std_logic;
+   signal proc_done                 : std_logic;
+   signal proc_requestFifo          : std_logic;
+   signal pixelStall                : std_logic;
+   signal pixelColor                : std_logic_vector(15 downto 0);
+   signal pixelAddr                 : unsigned(19 downto 0);
+   signal pixelWrite                : std_logic;
+      
+   signal pixel64data               : std_logic_vector(63 downto 0) := (others => '0');
+   signal pixel64wordEna            : std_logic_vector(3 downto 0) := (others => '0');
+   signal pixel64addr               : std_logic_vector(16 downto 0) := (others => '0');
+   signal pixel64filled             : std_logic := '0';
+   signal pixel64timeout            : integer range 0 to 15;
+      
+   -- workers  
+   signal vramFill_requestFifo      : std_logic; 
+   signal vramFill_done             : std_logic; 
+   signal vramFill_pixelColor       : std_logic_vector(15 downto 0);
+   signal vramFill_pixelAddr        : unsigned(19 downto 0);
+   signal vramFill_pixelWrite       : std_logic;   
+      
+   signal cpu2vram_requestFifo      : std_logic; 
+   signal cpu2vram_done             : std_logic; 
+   signal cpu2vram_pixelColor       : std_logic_vector(15 downto 0);
+   signal cpu2vram_pixelAddr        : unsigned(19 downto 0);
+   signal cpu2vram_pixelWrite       : std_logic;
+      
+   signal vram2vram_requestFifo     : std_logic; 
+   signal vram2vram_done            : std_logic; 
+   signal vram2vram_pixelColor      : std_logic_vector(15 downto 0);
+   signal vram2vram_pixelAddr       : unsigned(19 downto 0);
+   signal vram2vram_pixelWrite      : std_logic;
+   signal vram2vram_reqVRAMEnable   : std_logic;
+   signal vram2vram_reqVRAMXPos     : unsigned(9 downto 0);
+   signal vram2vram_reqVRAMYPos     : unsigned(8 downto 0);
+   signal vram2vram_reqVRAMSize     : unsigned(10 downto 0);
+   signal vram2vram_vramLineEna     : std_logic;
+   signal vram2vram_vramLineAddr    : unsigned(9 downto 0);
    
-   signal drawMode               : unsigned(13 downto 0) := (others => '0');
+   signal line_requestFifo          : std_logic; 
+   signal line_done                 : std_logic;
+   type t_linediv_array is array(0 to 5) of div_type;
+   signal line_div                  : t_linediv_array;
+   signal line_pipeline_new         : std_logic;
+   signal line_pipeline_transparent : std_logic;
+   signal line_pipeline_x           : unsigned(9 downto 0);
+   signal line_pipeline_y           : unsigned(8 downto 0);
+   signal line_pipeline_cr          : unsigned(7 downto 0);
+   signal line_pipeline_cg          : unsigned(7 downto 0);
+   signal line_pipeline_cb          : unsigned(7 downto 0);
+   signal line_reqVRAMEnable        : std_logic;
+   signal line_reqVRAMXPos          : unsigned(9 downto 0);
+   signal line_reqVRAMYPos          : unsigned(8 downto 0);
+   signal line_reqVRAMSize          : unsigned(10 downto 0);
+   signal line_vramLineEna          : std_logic;
+   signal line_vramLineAddr         : unsigned(9 downto 0);
    
-   signal textureWindow          : unsigned(19 downto 0) := (others => '0');
-   signal textureWindow_AND_X    : unsigned(7 downto 0) := (others => '0');
-   signal textureWindow_AND_Y    : unsigned(7 downto 0) := (others => '0');
+   signal rect_requestFifo          : std_logic; 
+   signal rect_done                 : std_logic;
+   signal rect_pipeline_new         : std_logic;
+   signal rect_pipeline_texture     : std_logic;
+   signal rect_pipeline_transparent : std_logic;
+   signal rect_pipeline_rawTexture  : std_logic;
+   signal rect_pipeline_x           : unsigned(9 downto 0);
+   signal rect_pipeline_y           : unsigned(8 downto 0);
+   signal rect_pipeline_cr          : unsigned(7 downto 0);
+   signal rect_pipeline_cg          : unsigned(7 downto 0);
+   signal rect_pipeline_cb          : unsigned(7 downto 0);
+   signal rect_pipeline_u           : unsigned(7 downto 0);
+   signal rect_pipeline_v           : unsigned(7 downto 0);
+   signal rect_reqVRAMEnable        : std_logic;
+   signal rect_reqVRAMXPos          : unsigned(9 downto 0);
+   signal rect_reqVRAMYPos          : unsigned(8 downto 0);
+   signal rect_reqVRAMSize          : unsigned(10 downto 0);
+   signal rect_vramLineEna          : std_logic;
+   signal rect_vramLineAddr         : unsigned(9 downto 0);
    
-   signal drawingAreaLeft        : unsigned(9 downto 0) := (others => '0');
-   signal drawingAreaRight       : unsigned(9 downto 0) := (others => '0');
-   signal drawingAreaTop         : unsigned(8 downto 0) := (others => '0');
-   signal drawingAreaBottom      : unsigned(8 downto 0) := (others => '0');
-   signal drawingOffsetX         : signed(10 downto 0) := (others => '0');
-   signal drawingOffsetY         : signed(10 downto 0) := (others => '0');
+   signal pipeline_pixelColor       : std_logic_vector(15 downto 0);
+   signal pipeline_pixelAddr        : unsigned(19 downto 0);
+   signal pipeline_pixelWrite       : std_logic;
+   signal pipeline_reqVRAMEnable    : std_logic;
+   signal pipeline_reqVRAMXPos      : unsigned(9 downto 0);
+   signal pipeline_reqVRAMYPos      : unsigned(8 downto 0);
+   signal pipeline_reqVRAMSize      : unsigned(10 downto 0);
    
-   signal nextHCount             : integer range 0 to 4095;
-   signal vpos                   : integer range 0 to 511;
-   signal inVsync                : std_logic := '0';
-   signal interlacedDisplayField : std_logic := '0';
-   signal activeLineLSB          : std_logic := '0';
-   
-   signal htotal                 : integer range 2169 to 2173; -- 3406 to 3413 in GPU clock domain
-   signal vtotal                 : integer range 263 to 314;
-   signal vDisplayStart          : integer range 0 to 314;
-   signal vDisplayEnd            : integer range 0 to 314;
-   
-   -- FIFO IN
-   signal fifoIn_reset           : std_logic; 
-   signal fifoIn_Din             : std_logic_vector(31 downto 0);
-   signal fifoIn_Wr              : std_logic; 
-   signal fifoIn_Full            : std_logic;
-   signal fifoIn_NearFull        : std_logic;
-   signal fifoIn_Dout            : std_logic_vector(31 downto 0);
-   signal fifoIn_Rd              : std_logic;
-   signal fifoIn_Empty           : std_logic;
-   signal fifoIn_Valid           : std_logic;
-   
-   -- Processing
-   signal proc_idle              : std_logic;
-   signal proc_done              : std_logic;
-   signal proc_requestFifo       : std_logic;
-   signal pixelStall             : std_logic;
-   signal pixelColor             : std_logic_vector(15 downto 0);
-   signal pixelAddr              : unsigned(19 downto 0);
-   signal pixelWrite             : std_logic;
-   
-   signal pixel64data            : std_logic_vector(63 downto 0) := (others => '0');
-   signal pixel64wordEna         : std_logic_vector(3 downto 0) := (others => '0');
-   signal pixel64addr            : std_logic_vector(16 downto 0) := (others => '0');
-   signal pixel64filled          : std_logic := '0';
-   signal pixel64timeout         : integer range 0 to 15;
-   
-   -- workers
-   signal vramFill_requestFifo   : std_logic; 
-   signal vramFill_done          : std_logic; 
-   signal vramFill_pixelColor    : std_logic_vector(15 downto 0);
-   signal vramFill_pixelAddr     : unsigned(19 downto 0);
-   signal vramFill_pixelWrite    : std_logic;   
-   
-   signal cpu2vram_requestFifo   : std_logic; 
-   signal cpu2vram_done          : std_logic; 
-   signal cpu2vram_pixelColor    : std_logic_vector(15 downto 0);
-   signal cpu2vram_pixelAddr     : unsigned(19 downto 0);
-   signal cpu2vram_pixelWrite    : std_logic;
-   
-   -- FIFO OUT
-   signal fifoOut_reset          : std_logic; 
-   signal fifoOut_Din            : std_logic_vector(84 downto 0);
-   signal fifoOut_Wr             : std_logic; 
-   signal fifoOut_Full           : std_logic;
-   signal fifoOut_NearFull       : std_logic;
-   signal fifoOut_Dout           : std_logic_vector(84 downto 0);
-   signal fifoOut_Rd             : std_logic;
-   signal fifoOut_Empty          : std_logic;
-   signal fifoOut_Valid          : std_logic;
+   signal pipeline_stall            : std_logic;
+   signal pipeline_new              : std_logic;
+   signal pipeline_texture          : std_logic;
+   signal pipeline_transparent      : std_logic;
+   signal pipeline_rawTexture       : std_logic;
+   signal pipeline_x                : unsigned(9 downto 0);
+   signal pipeline_y                : unsigned(8 downto 0);
+   signal pipeline_cr               : unsigned(7 downto 0);
+   signal pipeline_cg               : unsigned(7 downto 0);
+   signal pipeline_cb               : unsigned(7 downto 0);
+   signal pipeline_u                : unsigned(7 downto 0);
+   signal pipeline_v                : unsigned(7 downto 0);
+      
+   -- FIFO OUT 
+   signal fifoOut_reset             : std_logic; 
+   signal fifoOut_Din               : std_logic_vector(84 downto 0);
+   signal fifoOut_Wr                : std_logic; 
+   signal fifoOut_Full              : std_logic;
+   signal fifoOut_NearFull          : std_logic;
+   signal fifoOut_Dout              : std_logic_vector(84 downto 0);
+   signal fifoOut_Rd                : std_logic;
+   signal fifoOut_Empty             : std_logic;
+   signal fifoOut_Valid             : std_logic;
    
    -- vram access
    type tvramState is
    (
       IDLE,
-      WRITEPIXEL
+      WRITEPIXEL,
+      READVRAM
    );
    signal vramState : tvramState := IDLE;
+   
+   signal reqVRAMIdle               : std_logic;
+   signal reqVRAMDone               : std_logic;
+   
+   signal reqVRAMEnable             : std_logic;
+   signal reqVRAMXPos               : unsigned(9 downto 0);
+   signal reqVRAMYPos               : unsigned(8 downto 0);
+   signal reqVRAMSize               : unsigned(10 downto 0);
+   signal reqVRAMremain             : unsigned(7 downto 0);
+   signal reqVRAMnext               : unsigned(6 downto 0);
+   signal reqVRAMaddr               : unsigned(7 downto 0) := (others => '0');
+   
+   signal vramLineAddr              : unsigned(9 downto 0);
+   
+   signal vramLineData              : std_logic_vector(15 downto 0);
    
    
 begin 
@@ -250,7 +339,6 @@ begin
                   
                   case (to_integer(unsigned(bus_dataWrite(29 downto 24)))) is
                      when 16#00# => -- reset
-                        drawMode  <= (others => '0');
                         softReset <= '1';
                         
                      when 16#01# => -- clear fifo
@@ -534,6 +622,7 @@ begin
             end if;
             
             if (softReset = '1') then
+               drawMode               <= (others => '0');
                GPUSTAT_TextPageX      <= "0000";
                GPUSTAT_TextPageY      <= '0';
                GPUSTAT_Transparency   <= "00";
@@ -551,11 +640,12 @@ begin
       end if;
    end process; 
    
-   proc_done <= vramFill_done or cpu2vram_done;
-   
-   proc_requestFifo <= vramFill_requestFifo or cpu2vram_requestFifo;
+   proc_done        <= vramFill_done        or cpu2vram_done        or vram2vram_done        or line_done        or rect_done       ;
+   proc_requestFifo <= vramFill_requestFifo or cpu2vram_requestFifo or vram2vram_requestFifo or line_requestFifo or rect_requestFifo;
    
    pixelStall <= fifoOut_NearFull;
+   
+   interlacedDrawing <= GPUSTAT_VertInterlace and GPUSTAT_VerRes and not GPUSTAT_DrawToDisplay;
    
    -- workers
    igpu_fillVram : entity work.gpu_fillVram
@@ -598,9 +688,205 @@ begin
       pixelWrite           => cpu2vram_pixelWrite
    );
    
-   pixelColor <= vramFill_pixelColor or cpu2vram_pixelColor;
-   pixelAddr  <= vramFill_pixelAddr  or cpu2vram_pixelAddr ;
-   pixelWrite <= vramFill_pixelWrite or cpu2vram_pixelWrite;
+   igpu_vram2vram : entity work.gpu_vram2vram
+   port map
+   (
+      clk2x                => clk2x,     
+      clk2xIndex           => clk2xIndex,
+      ce                   => ce,        
+      reset                => softreset,     
+      
+      GPUSTAT_SetMask      => GPUSTAT_SetMask,
+      
+      proc_idle            => proc_idle,
+      fifo_Valid           => fifoIn_Valid, 
+      fifo_data            => fifoIn_Dout,
+      requestFifo          => vram2vram_requestFifo,
+      done                 => vram2vram_done,
+      
+      requestVRAMEnable    => vram2vram_reqVRAMEnable,
+      requestVRAMXPos      => vram2vram_reqVRAMXPos,  
+      requestVRAMYPos      => vram2vram_reqVRAMYPos,  
+      requestVRAMSize      => vram2vram_reqVRAMSize,  
+      requestVRAMIdle      => reqVRAMIdle,
+      requestVRAMDone      => reqVRAMDone,
+      
+      vramLineEna          => vram2vram_vramLineEna, 
+      vramLineAddr         => vram2vram_vramLineAddr,
+      vramLineData         => vramLineData,
+      
+      pixelEmpty           => fifoOut_Empty,
+      pixelStall           => pixelStall,
+      pixelColor           => vram2vram_pixelColor,
+      pixelAddr            => vram2vram_pixelAddr, 
+      pixelWrite           => vram2vram_pixelWrite
+   );
+   
+   igpu_line : entity work.gpu_line
+   port map
+   (
+      clk2x                => clk2x,     
+      clk2xIndex           => clk2xIndex,
+      ce                   => ce,        
+      reset                => softreset,     
+      
+      interlacedDrawing    => interlacedDrawing,
+      activeLineLSB        => activeLineLSB,    
+      drawingOffsetX       => drawingOffsetX,   
+      drawingOffsetY       => drawingOffsetY,   
+      drawingAreaLeft      => drawingAreaLeft,  
+      drawingAreaRight     => drawingAreaRight, 
+      drawingAreaTop       => drawingAreaTop,   
+      drawingAreaBottom    => drawingAreaBottom,
+      
+      div1                 => line_div(0), 
+      div2                 => line_div(1), 
+      div3                 => line_div(2), 
+      div4                 => line_div(3), 
+      div5                 => line_div(4), 
+      div6                 => line_div(5), 
+      
+      pipeline_stall       => pipeline_stall,      
+      pipeline_new         => line_pipeline_new,        
+      pipeline_transparent => line_pipeline_transparent,
+      pipeline_x           => line_pipeline_x,          
+      pipeline_y           => line_pipeline_y,          
+      pipeline_cr          => line_pipeline_cr,         
+      pipeline_cg          => line_pipeline_cg,         
+      pipeline_cb          => line_pipeline_cb,         
+      
+      proc_idle            => proc_idle,
+      fifo_Valid           => fifoIn_Valid, 
+      fifo_data            => fifoIn_Dout,
+      requestFifo          => line_requestFifo,
+      done                 => line_done,
+      
+      requestVRAMEnable    => line_reqVRAMEnable,
+      requestVRAMXPos      => line_reqVRAMXPos,  
+      requestVRAMYPos      => line_reqVRAMYPos,  
+      requestVRAMSize      => line_reqVRAMSize,  
+      requestVRAMIdle      => reqVRAMIdle,
+      requestVRAMDone      => reqVRAMDone,
+      
+      vramLineEna          => line_vramLineEna, 
+      vramLineAddr         => line_vramLineAddr
+   );
+   
+   igpu_rect : entity work.gpu_rect
+   port map
+   (
+      clk2x                => clk2x,     
+      clk2xIndex           => clk2xIndex,
+      ce                   => ce,        
+      reset                => softreset,     
+      
+      interlacedDrawing    => interlacedDrawing,
+      activeLineLSB        => activeLineLSB,    
+      drawingOffsetX       => drawingOffsetX,   
+      drawingOffsetY       => drawingOffsetY,   
+      drawingAreaLeft      => drawingAreaLeft,  
+      drawingAreaRight     => drawingAreaRight, 
+      drawingAreaTop       => drawingAreaTop,   
+      drawingAreaBottom    => drawingAreaBottom,
+      
+      pipeline_stall       => pipeline_stall,      
+      pipeline_new         => rect_pipeline_new,        
+      pipeline_texture     => rect_pipeline_texture,
+      pipeline_transparent => rect_pipeline_transparent,
+      pipeline_rawTexture  => rect_pipeline_rawTexture,
+      pipeline_x           => rect_pipeline_x,          
+      pipeline_y           => rect_pipeline_y,          
+      pipeline_cr          => rect_pipeline_cr,         
+      pipeline_cg          => rect_pipeline_cg,         
+      pipeline_cb          => rect_pipeline_cb,         
+      pipeline_u           => rect_pipeline_u,         
+      pipeline_v           => rect_pipeline_v,         
+      
+      proc_idle            => proc_idle,
+      fifo_Valid           => fifoIn_Valid, 
+      fifo_data            => fifoIn_Dout,
+      requestFifo          => rect_requestFifo,
+      done                 => rect_done,
+      
+      requestVRAMEnable    => rect_reqVRAMEnable,
+      requestVRAMXPos      => rect_reqVRAMXPos,  
+      requestVRAMYPos      => rect_reqVRAMYPos,  
+      requestVRAMSize      => rect_reqVRAMSize,  
+      requestVRAMIdle      => reqVRAMIdle,
+      requestVRAMDone      => reqVRAMDone,
+      
+      vramLineEna          => rect_vramLineEna, 
+      vramLineAddr         => rect_vramLineAddr
+   );
+   
+   pipeline_new         <= line_pipeline_new         or rect_pipeline_new        ;       
+   pipeline_texture     <= '0'                       or rect_pipeline_texture    ;
+   pipeline_transparent <= line_pipeline_transparent or rect_pipeline_transparent;          
+   pipeline_rawTexture  <= '0'                       or rect_pipeline_rawTexture ;         
+   pipeline_x           <= line_pipeline_x           or rect_pipeline_x          ;       
+   pipeline_y           <= line_pipeline_y           or rect_pipeline_y          ;     
+   pipeline_cr          <= line_pipeline_cr          or rect_pipeline_cr         ;
+   pipeline_cg          <= line_pipeline_cg          or rect_pipeline_cg         ;
+   pipeline_cb          <= line_pipeline_cb          or rect_pipeline_cb         ;
+   pipeline_u           <= x"00"                     or rect_pipeline_u          ;
+   pipeline_v           <= x"00"                     or rect_pipeline_v          ;
+   
+   igpu_pixelpipeline : entity work.gpu_pixelpipeline
+   port map
+   (
+      clk2x                => clk2x,     
+      clk2xIndex           => clk2xIndex,
+      ce                   => ce,        
+      reset                => softreset,  
+
+      transparencyMode     => drawMode(6 downto 5),
+      
+      pipeline_stall       => pipeline_stall,      
+      pipeline_new         => pipeline_new,        
+      pipeline_texture     => pipeline_texture,    
+      pipeline_transparent => pipeline_transparent,
+      pipeline_rawTexture  => pipeline_rawTexture, 
+      pipeline_x           => pipeline_x,          
+      pipeline_y           => pipeline_y,          
+      pipeline_cr          => pipeline_cr,         
+      pipeline_cg          => pipeline_cg,         
+      pipeline_cb          => pipeline_cb,         
+      pipeline_u           => pipeline_u,          
+      pipeline_v           => pipeline_v,          
+      
+      requestVRAMEnable    => pipeline_reqVRAMEnable,
+      requestVRAMXPos      => pipeline_reqVRAMXPos,  
+      requestVRAMYPos      => pipeline_reqVRAMYPos,  
+      requestVRAMSize      => pipeline_reqVRAMSize,  
+      requestVRAMIdle      => reqVRAMIdle,
+      requestVRAMDone      => reqVRAMDone,
+      
+      vramLineData         => vramLineData,
+      
+      pixelStall           => pixelStall,
+      pixelColor           => pipeline_pixelColor,
+      pixelAddr            => pipeline_pixelAddr, 
+      pixelWrite           => pipeline_pixelWrite
+   );
+   
+   gdividers: for i in 0 to 5 generate
+   begin
+      idivider : entity work.divider
+      port map
+      (
+         clk       => clk2x,      
+         start     => line_div(i).start,
+         done      => line_div(i).done,          
+         dividend  => line_div(i).dividend, 
+         divisor   => line_div(i).divisor,  
+         quotient  => line_div(i).quotient, 
+         remainder => line_div(i).remainder
+      );
+   end generate;
+   
+   pixelColor <= vramFill_pixelColor or cpu2vram_pixelColor or vram2vram_pixelColor or pipeline_pixelColor;
+   pixelAddr  <= vramFill_pixelAddr  or cpu2vram_pixelAddr  or vram2vram_pixelAddr  or pipeline_pixelAddr ;
+   pixelWrite <= vramFill_pixelWrite or cpu2vram_pixelWrite or vram2vram_pixelWrite or pipeline_pixelWrite;
    
    -- pixel writing fifo
    iSyncFifo_OUT: entity mem.SyncFifo
@@ -682,15 +968,32 @@ begin
       end if;
    end process;
    
-   fifoOut_Rd <= '1' when (ce = '1' and vramState = IDLE and vram_BUSY = '0' and fifoOut_Empty = '0') else '0';
+   fifoOut_Rd <= '1' when (ce = '1' and vramState = IDLE and vram_BUSY = '0' and fifoOut_Empty = '0' and reqVRAMEnable = '0') else '0';
+   
+   reqVRAMIdle <= '1' when vramState = IDLE else '0';
+   
+   reqVRAMEnable <= vram2vram_reqVRAMEnable or line_reqVRAMEnable or rect_reqVRAMEnable or pipeline_reqVRAMEnable;
+   reqVRAMXPos   <= vram2vram_reqVRAMXPos   or line_reqVRAMXPos   or rect_reqVRAMXPos   or pipeline_reqVRAMXPos  ;  
+   reqVRAMYPos   <= vram2vram_reqVRAMYPos   or line_reqVRAMYPos   or rect_reqVRAMYPos   or pipeline_reqVRAMYPos  ;  
+   reqVRAMSize   <= vram2vram_reqVRAMSize   or line_reqVRAMSize   or rect_reqVRAMSize   or pipeline_reqVRAMSize  ;  
+   
+   vramLineAddr  <= vram2vram_vramLineAddr when vram2vram_vramLineEna else 
+                    line_vramLineAddr  when line_vramLineEna else
+                    rect_vramLineAddr  when rect_vramLineEna else
+                    (others => '0');
    
    -- vram access
    process (clk2x)
+      variable reqVRAMSizeRounded : unsigned(10 downto 0);
    begin
       if rising_edge(clk2x) then
       
-         vram_WE <= '0';
-         vram_RD <= '0';
+         if (vram_BUSY = '0') then
+            vram_WE <= '0';
+            vram_RD <= '0';
+         end if;
+         
+         reqVRAMDone <= '0';
          
          if (reset = '1') then
             
@@ -700,10 +1003,29 @@ begin
          
             case (vramState) is
                when IDLE =>
-                  if (vram_BUSY = '0') then
-                     if (fifoOut_Empty = '0') then
-                        vramState <= WRITEPIXEL;
+                  if (reqVRAMEnable = '1') then
+                     reqVRAMSizeRounded := reqVRAMSize;
+                     if (reqVRAMSize(1 downto 0) /= "00") then -- round up read size to full 4*16bit
+                        reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
                      end if;
+                     if ((to_integer(reqVRAMXPos(1 downto 0)) + to_integer(reqVRAMSize(1 downto 0))) > 3) then -- increase read size by 1 if 4 word boundary is crossed
+                        reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
+                     end if;
+                     vramState     <= READVRAM;
+                     vram_ADDR     <= std_logic_vector(reqVRAMYPos) & std_logic_vector(reqVRAMXPos(9 downto 2)) & "000";
+                     vram_RD       <= '1';
+                     reqVRAMaddr   <= reqVRAMXPos(9 downto 2);
+                     if (reqVRAMSizeRounded > 512) then
+                        vram_BURSTCNT <= x"80";
+                        reqVRAMremain <= x"80" - 1;
+                        reqVRAMnext   <= reqVRAMSizeRounded(8 downto 2);
+                     else
+                        vram_BURSTCNT <= std_logic_vector(reqVRAMSizeRounded(9 downto 2));
+                        reqVRAMremain <= reqVRAMSizeRounded(9 downto 2) - 1;
+                        reqVRAMnext   <= (others => '0');
+                     end if;
+                  elsif (fifoOut_Empty = '0') then
+                     vramState <= WRITEPIXEL;
                   end if;
                   
                when WRITEPIXEL =>
@@ -714,12 +1036,51 @@ begin
                   vram_DIN      <= fifoOut_Dout(63 downto 0);
                   vram_BURSTCNT <= x"01";
             
+               when READVRAM =>
+                  if (vram_DOUT_READY = '1') then
+                     reqVRAMaddr <= reqVRAMaddr + 1;
+                     if (reqVRAMremain > 0) then
+                        reqVRAMremain <= reqVRAMremain - 1;
+                     else
+                        if (reqVRAMnext > 0) then
+                           vram_ADDR(10) <= '1';
+                           vram_RD       <= '1';
+                           vram_BURSTCNT <= '0' & std_logic_vector(reqVRAMnext);
+                        else
+                           vramState   <= IDLE;
+                           reqVRAMDone <= '1';
+                        end if;
+                     end if;
+                  end if;
+            
             end case;
             
          end if;
 
       end if;
    end process;
+   
+   ilineram: entity work.dpram_dif
+   generic map 
+   ( 
+      addr_width_a  => 8,
+      data_width_a  => 64,
+      addr_width_b  => 10,
+      data_width_b  => 16
+   )
+   port map
+   (
+      clock       => clk2x,
+      
+      address_a   => std_logic_vector(reqVRAMaddr),
+      data_a      => vram_DOUT,
+      wren_a      => vram_DOUT_READY,
+      
+      address_b   => std_logic_vector(vramLineAddr),
+      data_b      => x"0000",
+      wren_b      => '0',
+      q_b         => vramLineData
+   );
 
 end architecture;
 

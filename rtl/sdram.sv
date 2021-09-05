@@ -68,8 +68,8 @@ assign SDRAM_CKE  = 1;
 assign {SDRAM_DQMH,SDRAM_DQML} = SDRAM_A[12:11];
 
 
-// Burst length = 4
-localparam BURST_LENGTH        = 4;
+// Burst length = 8
+localparam BURST_LENGTH        = 8;
 localparam BURST_CODE          = (BURST_LENGTH == 8) ? 3'b011 : (BURST_LENGTH == 4) ? 3'b010 : (BURST_LENGTH == 2) ? 3'b001 : 3'b000;  // 000=1, 001=2, 010=4, 011=8
 localparam ACCESS_TYPE         = 1'b0;     // 0=sequential, 1=interleaved
 localparam CAS_LATENCY         = 3'd2;     // 2 for < 100MHz, 3 for >100MHz
@@ -121,8 +121,6 @@ reg ch1_req_1 = 0;
 reg ch2_req_1 = 0;
 reg ch3_req_1 = 0;
 
-reg first64   = 0;
-reg first64_1 = 0;
 reg req128    = 0;
 
 always @(posedge clk) begin
@@ -157,27 +155,23 @@ always @(posedge clk) begin
 
 	dq_reg <= SDRAM_DQ;
 
-   first64_1 <= first64;
-   if (first64_1) begin
-      if(data_ready_delay1[3]) ch1_dout[15:00]    <= dq_reg;
-      if(data_ready_delay1[2]) ch1_dout[31:16]    <= dq_reg;
-      if(data_ready_delay1[1]) ch1_dout[47:32]    <= dq_reg;
-      if(data_ready_delay1[0]) ch1_dout[63:48]    <= dq_reg;
-      if(data_ready_delay1[1]) ch1_ready_ramclock <= ~req128;
-   end else begin
-      if(data_ready_delay1[3]) ch1_dout[ 79: 64]  <= dq_reg;
-      if(data_ready_delay1[2]) ch1_dout[ 95: 80]  <= dq_reg;
-      if(data_ready_delay1[1]) ch1_dout[111: 96]  <= dq_reg;
-      if(data_ready_delay1[0]) ch1_dout[127:112]  <= dq_reg;
-      if(data_ready_delay1[1]) ch1_ready_ramclock <= 1;
-   end
+   if(data_ready_delay1[7]) ch1_dout[ 15: 00]  <= dq_reg;
+   if(data_ready_delay1[6]) ch1_dout[ 31: 16]  <= dq_reg;
+   if(data_ready_delay1[5]) ch1_dout[ 47: 32]  <= dq_reg;
+   if(data_ready_delay1[4]) ch1_dout[ 63: 48]  <= dq_reg;
+   if(data_ready_delay1[3]) ch1_dout[ 79: 64]  <= dq_reg;
+   if(data_ready_delay1[2]) ch1_dout[ 95: 80]  <= dq_reg;
+   if(data_ready_delay1[1]) ch1_dout[111: 96]  <= dq_reg;
+   if(data_ready_delay1[0]) ch1_dout[127:112]  <= dq_reg;
+   if(data_ready_delay1[2] &&  req128) ch1_ready_ramclock <= 1;
+   if(data_ready_delay1[7] && ~req128) ch1_ready_ramclock <= 1;
 
-	if(data_ready_delay2[3]) ch2_dout[15:00]    <= dq_reg;
-	if(data_ready_delay2[2]) ch2_dout[31:16]    <= dq_reg;
+	if(data_ready_delay2[7]) ch2_dout[15:00]    <= dq_reg;
+	if(data_ready_delay2[6]) ch2_dout[31:16]    <= dq_reg;
 	if(data_ready_delay2[2]) ch2_ready_ramclock <= 1;
 
-	if(data_ready_delay3[3]) ch3_dout[07:00]    <= dq_reg[7:0];
-	if(data_ready_delay3[1]) ch3_dout[15:08]    <= dq_reg[7:0];
+	if(data_ready_delay3[7]) ch3_dout[07:00]    <= dq_reg[7:0];
+	if(data_ready_delay3[5]) ch3_dout[15:08]    <= dq_reg[7:0];
 	if(data_ready_delay3[1]) ch3_ready_ramclock <= 1;
 
 	SDRAM_DQ <= 16'bZ;
@@ -243,18 +237,7 @@ always @(posedge clk) begin
 		end
 
 		STATE_IDLE: begin
-         if(req128) begin // highest prio is to fetch second 64bit
-            {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, 1'b1, ch1_addr[25:4], 3'b100};
-				chip       <= ch1_addr[26];
-				saved_data <= ch1_din;
-				saved_wr   <= ~ch1_rnw;
-				ch         <= 0;
-				ch1_rq     <= 0;
-				command    <= CMD_ACTIVE;
-				state      <= STATE_WAIT;
-            req128     <= 0;
-            first64    <= 0;
-			end else if (refresh_count > (cycles_per_refresh << 1)) begin
+         if (refresh_count > (cycles_per_refresh << 1)) begin
 				// Priority is to issue a refresh if one is outstanding
 				state <= STATE_IDLE_1;
 			end else if(ch1_rq) begin
@@ -267,7 +250,6 @@ always @(posedge clk) begin
 				command    <= CMD_ACTIVE;
 				state      <= STATE_WAIT;
             req128     <= ch1_128;
-            first64    <= 1;
 			end else if(ch2_rq) begin
 				{cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch2_be[1:0], ch2_rnw, ch2_addr[25:1]};
 				chip       <= ch2_addr[26];

@@ -28,6 +28,8 @@ architecture arch of etb is
    signal bus_gpu_write       : std_logic := '0';
    signal bus_gpu_dataRead    : std_logic_vector(31 downto 0); 
    
+   signal vram_ADDR           : std_logic_vector(19 downto 0);
+   
    -- ddrram
    signal DDRAM_CLK           : std_logic;
    signal DDRAM_BUSY          : std_logic;
@@ -90,14 +92,17 @@ begin
       vram_DOUT             => DDRAM_DOUT,      
       vram_DOUT_READY       => DDRAM_DOUT_READY,
       vram_BURSTCNT         => DDRAM_BURSTCNT,  
-      vram_ADDR             => DDRAM_ADDR(19 downto 0),      
+      vram_ADDR             => vram_ADDR,      
       vram_DIN              => DDRAM_DIN,       
       vram_BE               => DDRAM_BE,        
       vram_WE               => DDRAM_WE,        
       vram_RD               => DDRAM_RD
    );
    
-   DDRAM_ADDR(28 downto 20) <= (others => '1');
+   -- vram is at 0x30000000
+   DDRAM_ADDR(28 downto 25) <= "0011";
+   DDRAM_ADDR(24 downto 17) <= (others => '0');
+   DDRAM_ADDR(16 downto  0) <= vram_ADDR(19 downto 3);
    
    iddrram_model : entity work.ddrram_model
    port map

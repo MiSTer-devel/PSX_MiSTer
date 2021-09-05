@@ -55,6 +55,8 @@ begin
       variable pixelTimeout : integer; 
       variable pixelCount   : integer; 
       
+      variable readval      : signed(31 downto 0); 
+      
       -- copy from std_logic_arith, not used here because numeric std is also included
       function CONV_STD_LOGIC_VECTOR(ARG: INTEGER; SIZE: INTEGER) return STD_LOGIC_VECTOR is
         variable result: STD_LOGIC_VECTOR (SIZE-1 downto 0);
@@ -102,8 +104,8 @@ begin
             cmd_burst_save   := DDRAM_BURSTCNT;
             wait until rising_edge(DDRAM_CLK);
             for i in 0 to (to_integer(unsigned(cmd_burst_save)) - 1) loop
-               DDRAM_DOUT       <= std_logic_vector(to_signed(data(to_integer(unsigned(cmd_address_save)) * 2 + (i * 2) + 1), 32)) & 
-                                 std_logic_vector(to_signed(data(to_integer(unsigned(cmd_address_save)) * 2 + (i * 2) + 0), 32));
+               DDRAM_DOUT       <= std_logic_vector(to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 1), 32)) & 
+                                   std_logic_vector(to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 0), 32));
                DDRAM_DOUT_READY <= '1';
                wait until rising_edge(DDRAM_CLK);
             end loop;
@@ -118,10 +120,28 @@ begin
             cmd_be_save      := DDRAM_BE;
             for i in 0 to (to_integer(unsigned(cmd_burst_save)) - 1) loop                                                         
                if (cmd_be_save(7 downto 4) = x"F") then                        
-                  data(to_integer(unsigned(cmd_address_save)) * 2 + (i * 2) + 1) := to_integer(signed(cmd_din_save(63 downto 32)));
-               end if;                                                      
-               if (cmd_be_save(3 downto 0) = x"F") then                        
-                  data(to_integer(unsigned(cmd_address_save)) * 2 + (i * 2) + 0) := to_integer(signed(cmd_din_save(31 downto  0)));
+                  data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 1) := to_integer(signed(DDRAM_DIN(63 downto 32)));
+               end if;                                                  
+               if (cmd_be_save(3 downto 0) = x"F") then                    
+                  data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 0) := to_integer(signed(DDRAM_DIN(31 downto  0)));
+               end if;
+               
+               if (cmd_be_save(3 downto 0) = x"3") then     
+                  readval := to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 0), 32);
+                  data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 0) := to_integer(readval(31 downto 16) & signed(DDRAM_DIN(15 downto  0)));
+               end if;
+               if (cmd_be_save(3 downto 0) = x"C") then     
+                  readval := to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 0), 32);
+                  data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 0) := to_integer(signed(DDRAM_DIN(31 downto 16)) & readval(15 downto 0));
+               end if;
+               
+               if (cmd_be_save(7 downto 4) = x"3") then     
+                  readval := to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 1), 32);
+                  data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 1) := to_integer(readval(31 downto 16) & signed(DDRAM_DIN(47 downto 32)));
+               end if;
+               if (cmd_be_save(7 downto 4) = x"C") then     
+                  readval := to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 1), 32);
+                  data(to_integer(unsigned(cmd_address_save)) + (i * 8) + 1) := to_integer(signed(DDRAM_DIN(63 downto 48)) & readval(15 downto 0));
                end if;
                
                if (DDRAM_ADDR(28 downto 25) = "0011") then

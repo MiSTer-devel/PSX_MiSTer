@@ -9,10 +9,10 @@ entity divider is
       start     : in  std_logic;
       done      : out std_logic := '0';
       busy      : out std_logic := '0';
-      dividend  : in  signed(32 downto 0);
-      divisor   : in  signed(32 downto 0);
-      quotient  : out signed(32 downto 0);
-      remainder : out signed(32 downto 0)
+      dividend  : in  signed;
+      divisor   : in  signed;
+      quotient  : out signed;
+      remainder : out signed
    );
 end entity;
 
@@ -20,12 +20,15 @@ architecture arch of divider is
 
    constant bits_per_cycle : integer := 1;
    
-   signal dividend_u  : unsigned(dividend'length downto 0);
-   signal divisor_u   : unsigned(divisor'length downto 0);
-   signal quotient_u  : unsigned(quotient'length downto 0);
-   signal Akku        : unsigned (divisor'left + 1 downto divisor'right);
-   signal QPointer    : integer range quotient_u'range;
-   signal done_buffer : std_logic := '0';
+   signal dividend_u    : unsigned(dividend'length downto 0);
+   signal divisor_u     : unsigned(divisor'length downto 0);
+   signal quotient_u    : unsigned(quotient'length downto 0) := (others => '0');
+   signal Akku          : unsigned (divisor'left + 1 downto divisor'right);
+   signal QPointer      : integer range quotient_u'range;
+   signal done_buffer   : std_logic := '0';
+   
+   signal sign_dividend : std_logic := '0';
+   signal sign_divisor  : std_logic := '0';
 
 begin 
    
@@ -49,6 +52,9 @@ begin
             
             dividend_u  <= '0' & unsigned(abs(dividend));
             divisor_u   <= '0' & unsigned(abs(divisor));
+            
+            sign_dividend <= dividend(dividend'left);
+            sign_divisor  <= divisor(divisor'left);
             
             QPointerNew := quotient_u'left;
             XPointer    := dividend_u'left;
@@ -95,12 +101,12 @@ begin
          QPointer  <= QPointerNew;
          Akku      <= AkkuNew;
          
-         if ((dividend(dividend'left) xor divisor(divisor'left)) = '1') then
+         if ((sign_dividend xor sign_divisor) = '1') then
             quotient <= -signed(quotient_u(quotient'left downto 0));
          else
             quotient <= signed(quotient_u(quotient'left downto 0));
          end if;
-         if (dividend(dividend'left) = '1') then
+         if (sign_dividend = '1') then
             remainder <= -signed(AkkuNew(remainder'left + 1 downto remainder'right + 1));
          else
             remainder <= signed(AkkuNew(remainder'left + 1 downto remainder'right + 1));

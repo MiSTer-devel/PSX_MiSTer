@@ -22,6 +22,7 @@ Work in progress, don't report any bugs!
 - All CPU testroms in .exe format working: https://github.com/RobertPeip/PSX/tree/master/CPUTest/CPU
 - HelloWorld in 16+24 bit working
 - ImageLoad/LZ77/Huffman in 16+24 bit working
+- Rectangle and Linedrawing working
 
 -- 
 
@@ -31,7 +32,7 @@ Work in progress, don't report any bugs!
 --
 
 - CPU    : 55%
-- GPU    : 10%
+- GPU    : 30%
 - Memory : 20%
 
 Everything else still missing

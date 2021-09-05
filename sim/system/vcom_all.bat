@@ -24,8 +24,13 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/dpram.vhd ^
 ../../rtl/export.vhd ^
 ../../rtl/divider.vhd ^
+../../rtl/pGPU.vhd ^
 ../../rtl/gpu_fillVram.vhd ^
 ../../rtl/gpu_cpu2vram.vhd ^
+../../rtl/gpu_vram2vram.vhd ^
+../../rtl/gpu_line.vhd ^
+../../rtl/gpu_rect.vhd ^
+../../rtl/gpu_pixelpipeline.vhd ^
 ../../rtl/gpu.vhd ^
 ../../rtl/cpu.vhd ^
 ../../rtl/memorymux.vhd ^

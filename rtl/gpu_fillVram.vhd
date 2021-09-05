@@ -58,17 +58,17 @@ begin
    begin
       if rising_edge(clk2x) then
          
-         pixelColor <= (others => '0');
-         pixelAddr  <= (others => '0');
-         pixelWrite <= '0';
-         
-         done       <= '0';
-         
          if (reset = '1') then
          
             state <= IDLE;
          
          elsif (ce = '1') then
+         
+            pixelColor <= (others => '0');
+            pixelAddr  <= (others => '0');
+            pixelWrite <= '0';
+            
+            done       <= '0';
          
             case (state) is
             

@@ -49,26 +49,25 @@ begin
 
    requestFifo <= '1' when (state = REQUESTWORD2 or state = REQUESTWORD3 or (state = WRITING and pixelStall = '0' and fifo_Valid = '0')) else '0';
 
-   -- fill VRAM
    process (clk2x)
       variable row : unsigned(8 downto 0);
       variable col : unsigned(9 downto 0);
    begin
       if rising_edge(clk2x) then
          
-         pixelColor   <= (others => '0');
-         pixelAddr    <= (others => '0');
-         pixelWrite   <= '0';
-         
-         done         <= '0';
-         
-         fifo_Valid_1 <= '0';
-         
          if (reset = '1') then
          
             state <= IDLE;
          
          elsif (ce = '1') then
+         
+            pixelColor   <= (others => '0');
+            pixelAddr    <= (others => '0');
+            pixelWrite   <= '0';
+            
+            done         <= '0';
+            
+            fifo_Valid_1 <= '0';
          
             case (state) is
             
