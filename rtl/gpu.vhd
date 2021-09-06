@@ -132,6 +132,9 @@ architecture arch of gpu is
    signal pixel64timeout            : integer range 0 to 15;
       
    -- workers  
+   type t_div_array is array(0 to 5) of div_type;
+   signal div_array                 : t_div_array;
+   
    signal vramFill_requestFifo      : std_logic; 
    signal vramFill_done             : std_logic; 
    signal vramFill_pixelColor       : std_logic_vector(15 downto 0);
@@ -158,8 +161,7 @@ architecture arch of gpu is
    
    signal line_requestFifo          : std_logic; 
    signal line_done                 : std_logic;
-   type t_linediv_array is array(0 to 5) of div_type;
-   signal line_div                  : t_linediv_array;
+   signal line_div                  : t_div_array;
    signal line_pipeline_new         : std_logic;
    signal line_pipeline_transparent : std_logic;
    signal line_pipeline_x           : unsigned(9 downto 0);
@@ -193,6 +195,30 @@ architecture arch of gpu is
    signal rect_reqVRAMSize          : unsigned(10 downto 0);
    signal rect_vramLineEna          : std_logic;
    signal rect_vramLineAddr         : unsigned(9 downto 0);
+   
+   signal poly_requestFifo          : std_logic; 
+   signal poly_done                 : std_logic;
+   signal poly_div                  : t_div_array;
+   signal poly_pipeline_new         : std_logic;
+   signal poly_pipeline_texture     : std_logic;
+   signal poly_pipeline_transparent : std_logic;
+   signal poly_pipeline_rawTexture  : std_logic;
+   signal poly_pipeline_x           : unsigned(9 downto 0);
+   signal poly_pipeline_y           : unsigned(8 downto 0);
+   signal poly_pipeline_cr          : unsigned(7 downto 0);
+   signal poly_pipeline_cg          : unsigned(7 downto 0);
+   signal poly_pipeline_cb          : unsigned(7 downto 0);
+   signal poly_pipeline_u           : unsigned(7 downto 0);
+   signal poly_pipeline_v           : unsigned(7 downto 0);
+   signal poly_reqVRAMEnable        : std_logic;
+   signal poly_reqVRAMXPos          : unsigned(9 downto 0);
+   signal poly_reqVRAMYPos          : unsigned(8 downto 0);
+   signal poly_reqVRAMSize          : unsigned(10 downto 0);
+   signal poly_vramLineEna          : std_logic;
+   signal poly_vramLineAddr         : unsigned(9 downto 0);
+   
+   signal poly_drawModeRec          : unsigned(11 downto 0);
+   signal poly_drawModeNew          : std_logic;
    
    signal pipeline_pixelColor       : std_logic_vector(15 downto 0);
    signal pipeline_pixelAddr        : unsigned(19 downto 0);
@@ -505,7 +531,7 @@ begin
    iSyncFifo_IN: entity mem.SyncFifo
    generic map
    (
-      SIZE             => 32, -- 16 is correct, but only allows 15 entries -> muse nearfull or allow this big for broken homebrew?
+      SIZE             => 32, -- 16 is correct, but only allows 15 entries -> use nearfull or allow this big for broken homebrew -> some games seem to exceed it also with DMA, how is that possible?
       DATAWIDTH        => 32,
       NEARFULLDISTANCE => 16
    )
@@ -567,6 +593,11 @@ begin
             drawingOffsetY          <= (others => '0');
             
          elsif (ce = '1') then
+         
+            if (poly_drawModeNew = '1') then
+               drawMode(8 downto 0) <= poly_drawModeRec(8 downto 0);
+               drawMode(11)         <= poly_drawModeRec(11);
+            end if;
          
             if (fifoIn_Valid = '1') then
                
@@ -640,8 +671,8 @@ begin
       end if;
    end process; 
    
-   proc_done        <= vramFill_done        or cpu2vram_done        or vram2vram_done        or line_done        or rect_done       ;
-   proc_requestFifo <= vramFill_requestFifo or cpu2vram_requestFifo or vram2vram_requestFifo or line_requestFifo or rect_requestFifo;
+   proc_done        <= vramFill_done        or cpu2vram_done        or vram2vram_done        or line_done        or rect_done        or poly_done       ;
+   proc_requestFifo <= vramFill_requestFifo or cpu2vram_requestFifo or vram2vram_requestFifo or line_requestFifo or rect_requestFifo or poly_requestFifo;
    
    pixelStall <= fifoOut_NearFull;
    
@@ -819,17 +850,74 @@ begin
       vramLineAddr         => rect_vramLineAddr
    );
    
-   pipeline_new         <= line_pipeline_new         or rect_pipeline_new        ;       
-   pipeline_texture     <= '0'                       or rect_pipeline_texture    ;
-   pipeline_transparent <= line_pipeline_transparent or rect_pipeline_transparent;          
-   pipeline_rawTexture  <= '0'                       or rect_pipeline_rawTexture ;         
-   pipeline_x           <= line_pipeline_x           or rect_pipeline_x          ;       
-   pipeline_y           <= line_pipeline_y           or rect_pipeline_y          ;     
-   pipeline_cr          <= line_pipeline_cr          or rect_pipeline_cr         ;
-   pipeline_cg          <= line_pipeline_cg          or rect_pipeline_cg         ;
-   pipeline_cb          <= line_pipeline_cb          or rect_pipeline_cb         ;
-   pipeline_u           <= x"00"                     or rect_pipeline_u          ;
-   pipeline_v           <= x"00"                     or rect_pipeline_v          ;
+   igpu_poly : entity work.gpu_poly
+   port map
+   (
+      clk2x                => clk2x,     
+      clk2xIndex           => clk2xIndex,
+      ce                   => ce,        
+      reset                => softreset,     
+      
+      interlacedDrawing    => interlacedDrawing,
+      activeLineLSB        => activeLineLSB,    
+      drawingOffsetX       => drawingOffsetX,   
+      drawingOffsetY       => drawingOffsetY,   
+      drawingAreaLeft      => drawingAreaLeft,  
+      drawingAreaRight     => drawingAreaRight, 
+      drawingAreaTop       => drawingAreaTop,   
+      drawingAreaBottom    => drawingAreaBottom,
+      
+      drawModeRec          => poly_drawModeRec,
+      drawModeNew          => poly_drawModeNew,
+      
+      div1                 => poly_div(0), 
+      div2                 => poly_div(1), 
+      div3                 => poly_div(2), 
+      div4                 => poly_div(3), 
+      div5                 => poly_div(4), 
+      div6                 => poly_div(5), 
+      
+      pipeline_stall       => pipeline_stall,      
+      pipeline_new         => poly_pipeline_new,        
+      pipeline_texture     => poly_pipeline_texture,
+      pipeline_transparent => poly_pipeline_transparent,
+      pipeline_rawTexture  => poly_pipeline_rawTexture,
+      pipeline_x           => poly_pipeline_x,          
+      pipeline_y           => poly_pipeline_y,          
+      pipeline_cr          => poly_pipeline_cr,         
+      pipeline_cg          => poly_pipeline_cg,         
+      pipeline_cb          => poly_pipeline_cb,         
+      pipeline_u           => poly_pipeline_u,         
+      pipeline_v           => poly_pipeline_v,         
+      
+      proc_idle            => proc_idle,
+      fifo_Valid           => fifoIn_Valid, 
+      fifo_data            => fifoIn_Dout,
+      requestFifo          => poly_requestFifo,
+      done                 => poly_done,
+      
+      requestVRAMEnable    => poly_reqVRAMEnable,
+      requestVRAMXPos      => poly_reqVRAMXPos,  
+      requestVRAMYPos      => poly_reqVRAMYPos,  
+      requestVRAMSize      => poly_reqVRAMSize,  
+      requestVRAMIdle      => reqVRAMIdle,
+      requestVRAMDone      => reqVRAMDone,
+      
+      vramLineEna          => poly_vramLineEna, 
+      vramLineAddr         => poly_vramLineAddr
+   );
+   
+   pipeline_new         <= line_pipeline_new         or rect_pipeline_new         or poly_pipeline_new        ;       
+   pipeline_texture     <= '0'                       or rect_pipeline_texture     or poly_pipeline_texture    ;
+   pipeline_transparent <= line_pipeline_transparent or rect_pipeline_transparent or poly_pipeline_transparent;          
+   pipeline_rawTexture  <= '0'                       or rect_pipeline_rawTexture  or poly_pipeline_rawTexture ;         
+   pipeline_x           <= line_pipeline_x           or rect_pipeline_x           or poly_pipeline_x          ;       
+   pipeline_y           <= line_pipeline_y           or rect_pipeline_y           or poly_pipeline_y          ;     
+   pipeline_cr          <= line_pipeline_cr          or rect_pipeline_cr          or poly_pipeline_cr         ;
+   pipeline_cg          <= line_pipeline_cg          or rect_pipeline_cg          or poly_pipeline_cg         ;
+   pipeline_cb          <= line_pipeline_cb          or rect_pipeline_cb          or poly_pipeline_cb         ;
+   pipeline_u           <= x"00"                     or rect_pipeline_u           or poly_pipeline_u          ;
+   pipeline_v           <= x"00"                     or rect_pipeline_v           or poly_pipeline_v          ;
    
    igpu_pixelpipeline : entity work.gpu_pixelpipeline
    port map
@@ -871,16 +959,29 @@ begin
    
    gdividers: for i in 0 to 5 generate
    begin
+   
+      div_array(i).start    <= line_div(i).start    or poly_div(i).start;
+      div_array(i).dividend <= line_div(i).dividend or poly_div(i).dividend;
+      div_array(i).divisor  <= line_div(i).divisor  or poly_div(i).divisor;
+      
+      line_div(i).done      <= div_array(i).done;     
+      line_div(i).quotient  <= div_array(i).quotient; 
+      line_div(i).remainder <= div_array(i).remainder;
+      
+      poly_div(i).done      <= div_array(i).done;     
+      poly_div(i).quotient  <= div_array(i).quotient; 
+      poly_div(i).remainder <= div_array(i).remainder;
+      
       idivider : entity work.divider
       port map
       (
          clk       => clk2x,      
-         start     => line_div(i).start,
-         done      => line_div(i).done,          
-         dividend  => line_div(i).dividend, 
-         divisor   => line_div(i).divisor,  
-         quotient  => line_div(i).quotient, 
-         remainder => line_div(i).remainder
+         start     => div_array(i).start,
+         done      => div_array(i).done,          
+         dividend  => div_array(i).dividend, 
+         divisor   => div_array(i).divisor,  
+         quotient  => div_array(i).quotient, 
+         remainder => div_array(i).remainder
       );
    end generate;
    
@@ -972,14 +1073,15 @@ begin
    
    reqVRAMIdle <= '1' when vramState = IDLE else '0';
    
-   reqVRAMEnable <= vram2vram_reqVRAMEnable or line_reqVRAMEnable or rect_reqVRAMEnable or pipeline_reqVRAMEnable;
-   reqVRAMXPos   <= vram2vram_reqVRAMXPos   or line_reqVRAMXPos   or rect_reqVRAMXPos   or pipeline_reqVRAMXPos  ;  
-   reqVRAMYPos   <= vram2vram_reqVRAMYPos   or line_reqVRAMYPos   or rect_reqVRAMYPos   or pipeline_reqVRAMYPos  ;  
-   reqVRAMSize   <= vram2vram_reqVRAMSize   or line_reqVRAMSize   or rect_reqVRAMSize   or pipeline_reqVRAMSize  ;  
+   reqVRAMEnable <= vram2vram_reqVRAMEnable or line_reqVRAMEnable or rect_reqVRAMEnable or poly_reqVRAMEnable or pipeline_reqVRAMEnable;
+   reqVRAMXPos   <= vram2vram_reqVRAMXPos   or line_reqVRAMXPos   or rect_reqVRAMXPos   or poly_reqVRAMXPos   or pipeline_reqVRAMXPos  ;  
+   reqVRAMYPos   <= vram2vram_reqVRAMYPos   or line_reqVRAMYPos   or rect_reqVRAMYPos   or poly_reqVRAMYPos   or pipeline_reqVRAMYPos  ;  
+   reqVRAMSize   <= vram2vram_reqVRAMSize   or line_reqVRAMSize   or rect_reqVRAMSize   or poly_reqVRAMSize   or pipeline_reqVRAMSize  ;  
    
    vramLineAddr  <= vram2vram_vramLineAddr when vram2vram_vramLineEna else 
                     line_vramLineAddr  when line_vramLineEna else
                     rect_vramLineAddr  when rect_vramLineEna else
+                    poly_vramLineAddr  when poly_vramLineEna else
                     (others => '0');
    
    -- vram access

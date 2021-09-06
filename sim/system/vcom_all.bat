@@ -30,6 +30,7 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/gpu_vram2vram.vhd ^
 ../../rtl/gpu_line.vhd ^
 ../../rtl/gpu_rect.vhd ^
+../../rtl/gpu_poly.vhd ^
 ../../rtl/gpu_pixelpipeline.vhd ^
 ../../rtl/gpu.vhd ^
 ../../rtl/cpu.vhd ^

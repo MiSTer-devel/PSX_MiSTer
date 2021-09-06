@@ -8,6 +8,7 @@ set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_cpu2vr
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_vram2vram.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_line.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_rect.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_poly.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_pixelpipeline.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) cpu.vhd ]

@@ -7,10 +7,10 @@ package pGPU is
    type div_type is record
       start     : std_logic;
       done      : std_logic;
-      dividend  : signed(43 downto 0);
-      divisor   : signed(11 downto 0);
-      quotient  : signed(43 downto 0);
-      remainder : signed(11 downto 0);
+      dividend  : signed(44 downto 0);
+      divisor   : signed(24 downto 0);
+      quotient  : signed(44 downto 0);
+      remainder : signed(24 downto 0);
    end record;
   
 end package;

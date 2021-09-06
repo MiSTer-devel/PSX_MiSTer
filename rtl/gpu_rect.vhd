@@ -101,7 +101,6 @@ begin
    vramLineEna  <= '1' when (state = PROCPIXELS) else '0';
    vramLineAddr <= unsigned(xPos(9 downto 0)) when (state = PROCPIXELS) else (others => '0');
    
-   -- receive details
    process (clk2x)
    begin
       if rising_edge(clk2x) then

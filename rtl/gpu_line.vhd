@@ -357,32 +357,32 @@ begin
                   procstate   <= PROCCALC3;
                   div1.start     <= '1';
                   dx := proc_pos2x - proc_pos1x;
-                  if (dx < 0) then div1.dividend <= (dx & x"00000000") - to_integer(points - 1);
-                  else             div1.dividend <= (dx & x"00000000") + to_integer(points - 1); end if;
-                  div1.divisor   <= "00" & signed(points);
+                  if (dx < 0) then div1.dividend <= (resize(dx, 13) & x"00000000") - to_integer(points - 1);
+                  else             div1.dividend <= (resize(dx, 13) & x"00000000") + to_integer(points - 1); end if;
+                  div1.divisor   <= "000" & x"000" & signed(points);
                   
                   div2.start     <= '1';
                   dy := proc_pos2y - proc_pos1y;
-                  if (dy < 0) then div2.dividend <= (dy & x"00000000") - to_integer(points - 1);
-                  else             div2.dividend <= (dy & x"00000000") + to_integer(points - 1); end if;
-                  div2.divisor   <= "00" & signed(points);
+                  if (dy < 0) then div2.dividend <= (resize(dy, 13) & x"00000000") - to_integer(points - 1);
+                  else             div2.dividend <= (resize(dy, 13) & x"00000000") + to_integer(points - 1); end if;
+                  div2.divisor   <= "000" & x"000" & signed(points);
                   
                   div3.start     <= '1';
-                  div3.dividend  <= ((x"000000" & signed(proc_color2(7 downto 0))) - (x"000000" & signed(proc_color1(7 downto 0)))) & x"000";
-                  div3.divisor   <= "00" & signed(points);
+                  div3.dividend  <= (('0' & x"000000" & signed(proc_color2(7 downto 0))) - (x"000000" & signed(proc_color1(7 downto 0)))) & x"000";
+                  div3.divisor   <= "000" & x"000" & signed(points);
                   
                   div4.start     <= '1';
-                  div4.dividend  <= ((x"000000" & signed(proc_color2(15 downto 8))) - (x"000000" & signed(proc_color1(15 downto 8)))) & x"000";
-                  div4.divisor   <= "00" & signed(points);
+                  div4.dividend  <= (('0' & x"000000" & signed(proc_color2(15 downto 8))) - (x"000000" & signed(proc_color1(15 downto 8)))) & x"000";
+                  div4.divisor   <= "000" & x"000" & signed(points);
                   
                   div5.start     <= '1';
-                  div5.dividend  <= ((x"000000" & signed(proc_color2(23 downto 16))) - (x"000000" & signed(proc_color1(23 downto 16)))) & x"000";
-                  div5.divisor   <= "00" & signed(points);
+                  div5.dividend  <= (('0' & x"000000" & signed(proc_color2(23 downto 16))) - (x"000000" & signed(proc_color1(23 downto 16)))) & x"000";
+                  div5.divisor   <= "000" & x"000" & signed(points);
 
                   -- calculate pixels per line for transparency readback
                   div6.start     <= '1';
-                  div6.dividend  <= "00" & x"00000000" & signed(points);
-                  div6.divisor   <= abs(proc_pos2y - proc_pos1y) + 1;
+                  div6.dividend  <= "000" & x"00000000" & signed(points);
+                  div6.divisor   <= "0" & x"000" & (abs(proc_pos2y - proc_pos1y) + 1);
                   
                when PROCCALC3 =>
                   pixelCnt  <= (others => '0');
@@ -401,8 +401,8 @@ begin
                      else
                         procstate <= PROCPIXELS;
                      end if;
-                     stepDx   <= div1.quotient;
-                     stepDy   <= div2.quotient;
+                     stepDx   <= div1.quotient(43 downto 0);
+                     stepDy   <= div2.quotient(43 downto 0);
                      stepDr   <= div3.quotient(19 downto 0);
                      stepDg   <= div4.quotient(19 downto 0);
                      stepDb   <= div5.quotient(19 downto 0);
