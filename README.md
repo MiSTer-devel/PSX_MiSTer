@@ -23,7 +23,8 @@ Work in progress, don't report any bugs!
 - HelloWorld in 16+24 bit working
 - ImageLoad/LZ77/Huffman in 16+24 bit working
 - polygon(triangle/quad), rectangle and line drawing working
-- Gouraud Shading and transparency working, textures still missing
+- Gouraud Shading and transparency working
+- direct color texturing and texture cache, palette textures not implemented
 
 -- 
 
@@ -33,7 +34,7 @@ Work in progress, don't report any bugs!
 --
 
 - CPU    : 55%
-- GPU    : 40%
+- GPU    : 50%
 - Memory : 20%
 
 Everything else still missing

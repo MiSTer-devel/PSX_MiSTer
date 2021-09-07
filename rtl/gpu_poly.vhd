@@ -34,16 +34,16 @@ entity gpu_poly is
       
       pipeline_stall       : in  std_logic;
       pipeline_new         : out std_logic := '0';
-      pipeline_texture     : out std_logic;
-      pipeline_transparent : out std_logic;
-      pipeline_rawTexture  : out std_logic;
-      pipeline_x           : out unsigned(9 downto 0);
-      pipeline_y           : out unsigned(8 downto 0);
-      pipeline_cr          : out unsigned(7 downto 0);
-      pipeline_cg          : out unsigned(7 downto 0);
-      pipeline_cb          : out unsigned(7 downto 0);
-      pipeline_u           : out unsigned(7 downto 0);
-      pipeline_v           : out unsigned(7 downto 0);
+      pipeline_texture     : out std_logic := '0';
+      pipeline_transparent : out std_logic := '0';
+      pipeline_rawTexture  : out std_logic := '0';
+      pipeline_x           : out unsigned(9 downto 0) := (others => '0');
+      pipeline_y           : out unsigned(8 downto 0) := (others => '0');
+      pipeline_cr          : out unsigned(7 downto 0) := (others => '0');
+      pipeline_cg          : out unsigned(7 downto 0) := (others => '0');
+      pipeline_cb          : out unsigned(7 downto 0) := (others => '0');
+      pipeline_u           : out unsigned(7 downto 0) := (others => '0');
+      pipeline_v           : out unsigned(7 downto 0) := (others => '0');
       
       proc_idle            : in  std_logic;
       fifo_Valid           : in  std_logic;
@@ -65,7 +65,6 @@ end entity;
 
 architecture arch of gpu_poly is
    
-   -- receive
    type tState is
    (
       IDLE,
@@ -323,7 +322,7 @@ begin
                         drawModeNew   <= '1';
                      end if;
                      
-                     if ((rec_quad = '1' and rec_index = 4) or (rec_quad = '0' and rec_index = 3)) then
+                     if ((rec_quad = '1' and rec_index = 3) or (rec_quad = '0' and rec_index = 2)) then
                         state    <= ISSUE;  
                      else
                         rec_index <= rec_index +1;
@@ -577,7 +576,7 @@ begin
                   end if;
                   
                when CALCTEXTURE4 =>
-                  state <= CALCTEXTURE4;
+                  state <= CALCTEXTURE5;
                   base_U <= base_U - resize(dxU * vt(coreVertex).x, 32);
                   base_V <= base_V - resize(dxV * vt(coreVertex).x, 32);
                
@@ -667,8 +666,13 @@ begin
                      work_B <= base_B;
                   end if;
                   
-                  work_U <= base_U;
-                  work_V <= base_V;
+                  if (rec_texture = '1') then
+                     work_U <= base_U + resize(dxU * to_integer(xStart(43 downto 32)), 32) + resize(dyU * yCoord, 32);
+                     work_V <= base_V + resize(dxV * to_integer(xStart(43 downto 32)), 32) + resize(dyV * yCoord, 32);
+                  else
+                     work_U <= base_U;
+                     work_V <= base_V;
+                  end if;
                   
                   stop := '0';
                   skip := '0';
@@ -743,6 +747,11 @@ begin
                         work_R <= work_R + dxR;
                         work_G <= work_G + dxG;
                         work_B <= work_B + dxB;
+                     end if;
+                     
+                     if (rec_texture = '1') then
+                        work_U <= work_U + dxU;
+                        work_V <= work_V + dxV;
                      end if;
                      
                      if (xPos + 1 >= xStop) then

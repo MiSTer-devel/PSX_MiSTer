@@ -271,6 +271,7 @@ architecture arch of gpu is
    signal reqVRAMremain             : unsigned(7 downto 0);
    signal reqVRAMnext               : unsigned(6 downto 0);
    signal reqVRAMaddr               : unsigned(7 downto 0) := (others => '0');
+   signal reqVRAMStore              : std_logic;        
    
    signal vramLineAddr              : unsigned(9 downto 0);
    
@@ -927,7 +928,7 @@ begin
       ce                   => ce,        
       reset                => softreset,  
 
-      transparencyMode     => drawMode(6 downto 5),
+      drawMode             => drawMode,
       
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => pipeline_new,        
@@ -948,6 +949,8 @@ begin
       requestVRAMSize      => pipeline_reqVRAMSize,  
       requestVRAMIdle      => reqVRAMIdle,
       requestVRAMDone      => reqVRAMDone,
+      vram_DOUT            => vram_DOUT,      
+      vram_DOUT_READY      => vram_DOUT_READY,
       
       vramLineData         => vramLineData,
       
@@ -1106,11 +1109,12 @@ begin
             case (vramState) is
                when IDLE =>
                   if (reqVRAMEnable = '1') then
+                     reqVRAMStore <= not pipeline_reqVRAMEnable;
                      reqVRAMSizeRounded := reqVRAMSize;
                      if (reqVRAMSize(1 downto 0) /= "00") then -- round up read size to full 4*16bit
                         reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
                      end if;
-                     if ((to_integer(reqVRAMXPos(1 downto 0)) + to_integer(reqVRAMSize(1 downto 0))) > 3) then -- increase read size by 1 if 4 word boundary is crossed
+                     if ((to_integer(reqVRAMXPos(1 downto 0)) + to_integer(reqVRAMSize(1 downto 0))) > 4) then -- increase read size by 1 if 4 word boundary is crossed
                         reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
                      end if;
                      vramState     <= READVRAM;
@@ -1176,7 +1180,7 @@ begin
       
       address_a   => std_logic_vector(reqVRAMaddr),
       data_a      => vram_DOUT,
-      wren_a      => vram_DOUT_READY,
+      wren_a      => (vram_DOUT_READY and reqVRAMStore),
       
       address_b   => std_logic_vector(vramLineAddr),
       data_b      => x"0000",

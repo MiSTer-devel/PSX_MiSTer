@@ -31,12 +31,12 @@ entity gpu_line is
       
       pipeline_stall       : in  std_logic;
       pipeline_new         : out std_logic := '0';
-      pipeline_transparent : out std_logic;
-      pipeline_x           : out unsigned(9 downto 0);
-      pipeline_y           : out unsigned(8 downto 0);
-      pipeline_cr          : out unsigned(7 downto 0);
-      pipeline_cg          : out unsigned(7 downto 0);
-      pipeline_cb          : out unsigned(7 downto 0);
+      pipeline_transparent : out std_logic := '0';
+      pipeline_x           : out unsigned(9 downto 0) := (others => '0');
+      pipeline_y           : out unsigned(8 downto 0) := (others => '0');
+      pipeline_cr          : out unsigned(7 downto 0) := (others => '0');
+      pipeline_cg          : out unsigned(7 downto 0) := (others => '0');
+      pipeline_cb          : out unsigned(7 downto 0) := (others => '0');
       
       proc_idle            : in  std_logic;
       fifo_Valid           : in  std_logic;
