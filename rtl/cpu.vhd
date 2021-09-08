@@ -28,7 +28,7 @@ entity cpu is
       mem_done              : in  std_logic;
 
       cpu_done              : out std_logic := '0'; 
-      cpu_export            : out cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'))
+      cpu_export            : out cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'), (others => '0'))
    );
 end entity;
 
@@ -69,16 +69,25 @@ architecture arch of cpu is
    signal stall5                       : std_logic := '0';
    signal stall                        : unsigned(4 downto 0) := (others => '0');
                      
-   signal exception1                   : std_logic := '0';
-   signal exception2                   : std_logic := '0';
-   signal exception3                   : std_logic := '0';
-   signal exception4                   : std_logic := '0';
-   signal exception5                   : std_logic := '0';
    signal exception                    : unsigned(4 downto 0) := (others => '0');
                
+   signal exceptionNew1                : std_logic := '0';
    signal exceptionNew3                : std_logic := '0';
-   signal exceptionNew4                : std_logic := '0';
-   signal exceptionNew                 : unsigned(3 downto 2) := (others => '0');
+   signal exceptionNew5                : std_logic := '0';
+   signal exceptionNew                 : unsigned(4 downto 0) := (others => '0');
+   
+   signal exception_SR                 : unsigned(31 downto 0) := (others => '0');
+   signal exception_CAUSE              : unsigned(31 downto 0) := (others => '0');
+   signal exception_EPC                : unsigned(31 downto 0) := (others => '0');
+   signal exception_JMP                : unsigned(31 downto 0) := (others => '0');
+   
+   signal exceptionCode                : unsigned(3 downto 0);
+   signal exceptionCode_3              : unsigned(3 downto 0);   
+   signal exceptionInstr               : unsigned(1 downto 0);
+   signal exception_PC                 : unsigned(31 downto 0);
+   signal exception_branch             : std_logic;
+   signal exception_brslot             : std_logic;
+   signal exception_JMPnext            : unsigned(31 downto 0);
                
    signal memoryMuxStage               : integer range 1 to 4;
                
@@ -120,6 +129,7 @@ architecture arch of cpu is
    
    -- regs           
    signal blockIRQ                     : std_logic := '0';
+   signal blockIRQCnt                  : integer range 0 to 10;
    signal fetchReady                   : std_logic := '0';
    signal cacheHit                     : std_logic := '0';
    signal cacheUpdate                  : std_logic := '0';
@@ -135,6 +145,8 @@ architecture arch of cpu is
    signal fetchReadyNext               : std_logic := '0';
    signal cacheHitNext                 : std_logic := '0';
    signal cacheUpdateNext              : std_logic := '0';
+   signal blockIRQNext                 : std_logic := '0';
+   signal blockIRQCntNext              : integer range 0 to 10;
             
    -- stage 2           
    --regs            
@@ -249,6 +261,7 @@ architecture arch of cpu is
          
    -- stage 4     
    -- reg      
+   signal writebackException           : std_logic := '0';
    signal writebackTarget              : unsigned(4 downto 0) := (others => '0');
    signal writebackData                : unsigned(31 downto 0) := (others => '0');
    signal writebackWriteEnable         : std_logic := '0';
@@ -260,6 +273,8 @@ architecture arch of cpu is
    signal writebackReadAddress         : unsigned(31 downto 0) := (others => '0');
    signal writebackInvalidateCacheEna  : std_logic := '0';
    signal writebackInvalidateCacheLine : unsigned(7 downto 0) := (others => '0');
+   signal writeBackBranchdelaySlot     : std_logic;
+   signal writeBackBranchTaken         : std_logic;
          
    -- wire     
    signal mem4_request                 : std_logic := '0';
@@ -297,10 +312,8 @@ begin
 
    -- common
    stall        <= stall5 & stall4 & stall3 & stall2 & stall1;
-   
-   exception    <= exception5 & exception4 & exception3 & exception2 & exception1;
 
-   exceptionNew <= exceptionNew4 & exceptionNew3;
+   exceptionNew <= exceptionNew5 & '0' & exceptionNew3 & '0' & exceptionNew1;
    
    process (clk1x)
    begin
@@ -386,9 +399,8 @@ begin
    
    cache_address_a <= std_logic_vector(PC(11 downto 4));
    
-   
-   
-   FetchAddr       <= x"00000000" when (exception > 0) else
+   FetchAddr       <= x"BFC00180" when (exception > 0 and cop0_SR(22) = '1') else
+                      x"80000080" when (exception > 0 and cop0_SR(22) = '0') else
                       PCbranch when branch = '1' else
                       PC;
                       
@@ -396,7 +408,8 @@ begin
 
    mem1_address    <= FetchAddr;
 
-   process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, branch, PCbranch, mem4_request, mem_done, mem_dataRead, memoryMuxStage, PC, fetchReady, stall1, exceptionNew, opcode0, mem_dataCache, reset, FetchAddr, cacheUpdate, tagValid, tag_q_b)
+   process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, branch, PCbranch, mem4_request, mem_done, mem_dataRead, memoryMuxStage, PC, fetchReady, stall1, exceptionNew, opcode0, mem_dataCache, reset, FetchAddr, 
+            cacheUpdate, tagValid, tag_q_b, blockirqCnt)
       variable request : std_logic;
    begin
       request         := '0';
@@ -405,6 +418,11 @@ begin
       stallNew1       <= stall1;
       opcodeNext      <= opcode0;
       cacheUpdateNext <= '0';
+      blockirqNext    <= blockirq;
+      blockirqCntNext <= blockirqCnt;
+      
+      exceptionNew1   <= '0';
+      exceptionNew5   <= '0';
 
       cache_data_a    <= mem_dataCache;
       cache_wren_a    <= "0000";
@@ -421,13 +439,24 @@ begin
       
       if (blockirq = '0' and cop0_SR(0) = '1' and cop0_SR(10) = '1' and cop0_CAUSE(10) = '1') then
       
-         null; --todo
+         if (stall = 0) then
+            blockirqNext    <= '1';
+            blockirqCntNext <= 10;     
+            exceptionNew5   <= '1';
+         elsif (mem_done = '1') then  
+            stallNew1       <= '0';
+         end if;
          
       elsif (stall = 0) then
       
          if (exception > 0) then
       
-            null; --todo
+            request := '1';
+            if (cop0_SR(22) = '1') then
+               PCnext <= x"BFC00180";
+            else
+               PCnext <= x"80000080";
+            end if;
             
          else 
          
@@ -441,6 +470,13 @@ begin
                request := '1';
             else
                stallNew1 <= '1';
+            end if;
+            
+            if (blockirqCnt > 0) then
+               blockirqCntNext <= blockirqCnt - 1;
+               if (blockirqCnt = 1) then
+                  blockirqNext <= '0';
+               end if;
             end if;
       
          end if;
@@ -517,7 +553,6 @@ begin
             tagValid      <= (others => '0');
          
             stall1        <= '0';
-            exception1    <= '0';
             PC            <= x"BFC00000";
                         
             blockIRQ      <= '0';
@@ -531,11 +566,15 @@ begin
          
          elsif (ce = '1') then
             
-            fetchReady  <= fetchReadyNext;
-            PC          <= PCnext;
-            stall1      <= stallNew1 or requestStall;
-            cacheHit    <= cacheHitNext;
-            cacheUpdate <= cacheUpdateNext;
+            fetchReady     <= fetchReadyNext;
+            PC             <= PCnext;
+            stall1         <= stallNew1 or requestStall;
+            
+            blockirq       <= blockirqNext;   
+            blockirqCnt    <= blockirqCntNext;
+            
+            cacheHit       <= cacheHitNext;
+            cacheUpdate    <= cacheUpdateNext;
             if (cacheHit = '1' and stall > 0) then
                cacheHitLast   <= '1';
                case (PCold0(3 downto 2)) is
@@ -593,7 +632,6 @@ begin
          if (reset = '1') then
          
             stall2     <= '0';
-            exception2 <= '0';
             
             pcOld1  <= (others => '0');
             opcode1 <= (others => '0');
@@ -617,7 +655,7 @@ begin
             
                if (exception(4 downto 1) > 0) then
                
-                  if (exception5 = '1') then decodeException <= '1'; end if;
+                  if (exception(4) = '1') then decodeException <= '1'; end if;
                   
                   decodeImmData    <= (others => '0');
                   decodeSource1    <= (others => '0');
@@ -634,7 +672,7 @@ begin
                else
                
                   decodeException <= '0';
-                  if (exception1 = '1') then decodeException <= '1'; end if;
+                  if (exception(0) = '1') then decodeException <= '1'; end if;
    
                   pcOld1  <= pcOld0;
                   opcode1 <= opcodeCacheMuxed;
@@ -726,6 +764,8 @@ begin
       EXEhiUpdate             <= '0';
       EXEloUpdate             <= '0';
       
+      exceptionCode_3         <= x"0";
+      
       EXEstalltype            <= EXESTALLTYPE_NONE;
        
       if (exception(4 downto 2) = 0 and stall = 0) then
@@ -782,7 +822,13 @@ begin
                         branch <= '1';
                      end if;
 
-
+                  when 16#0C# => -- SYSCALL
+                     exceptionNew3   <= '1';
+                     exceptionCode_3 <= x"8";
+                     
+                  when 16#0D# => -- BREAK
+                     exceptionNew3   <= '1';
+                     exceptionCode_3 <= x"9";
 
                   when 16#10# => -- MFHI
                      EXEresultWriteEnable <= '1';
@@ -1180,8 +1226,7 @@ begin
          if (reset = '1') then
          
             stall3                        <= '0';
-            exception3                    <= '0';
-                        
+                       
             pcOld2                        <= (others => '0');
             opcode2                       <= (others => '0');
                         
@@ -1236,7 +1281,6 @@ begin
                   pcOld2                        <= pcOld1;
                   opcode2                       <= opcode1;
                         
-                  exception3                    <= exceptionNew3;
                   stall3                        <= stallNew3;
                         
                   -- from calculation     
@@ -1370,7 +1414,6 @@ begin
    begin
    
       mem4_request   <= '0';
-      exceptionNew4  <= '0';
       stallNew4      <= stall4;
       
       WBCACHECONTROL <= CACHECONTROL;
@@ -1464,7 +1507,6 @@ begin
          if (reset = '1') then
          
             stall4                           <= '0';
-            exception4                       <= '0';
                               
             pcOld3                           <= (others => '0');
             opcode3                          <= (others => '0');
@@ -1475,13 +1517,16 @@ begin
             writebackData                    <= (others => '0');
             writebackWriteEnable             <= '0';
                      
-            cop0_SR                          <= (others => '0');
-            
             writebackCOP0WriteEnable         <= '0';
             writebackCOP0WriteDestination    <= (others => '0');
             writebackCOP0WriteValue          <= (others => '0');
          
             writebackInvalidateCacheEna      <= '0';
+            
+            writebackException               <= '0';
+            
+            writeBackBranchdelaySlot         <= '0';
+            writeBackBranchTaken             <= '0';
          
          elsif (ce = '1') then
          
@@ -1498,7 +1543,11 @@ begin
             
                if (exception(4 downto 3) > 0) then
                
-                  -- todo
+                  writebackException            <= '1';
+                  
+                  writebackMemOPisRead          <= '0';
+                  writebackCOP0WriteEnable      <= '0';
+                  writebackWriteEnable          <= '0';
                   
                else
                
@@ -1506,6 +1555,8 @@ begin
                   opcode3                       <= opcode2;
                   writebackTarget               <= resultTarget;
                   writebackData                 <= resultData;
+                  
+                  writebackException            <= executeException;
                            
                   CACHECONTROL                  <= WBCACHECONTROL;
                   
@@ -1513,13 +1564,11 @@ begin
                   writebackCOP0WriteDestination <= executeCOP0WriteDestination;
                   writebackCOP0WriteValue       <= executeCOP0WriteValue;
                   
-                  if (executeCOP0WriteEnable = '1') then
-                     if (executeCOP0WriteDestination = 16#C#) then
-                        cop0_SR <= executeCOP0WriteValue and x"F27FFF3F"; -- only this is done in stage 4, todo: what is correct stage4 or stage5?
-                     end if;
-                  end if;
-                  
                   writebackMemOPisRead          <= executeReadEnable;
+                  
+                  writeBackBranchdelaySlot      <= executeBranchdelaySlot;
+                  writeBackBranchTaken          <= executeBranchTaken;     
+                  
                   
                   writebackWriteEnable <= '0';
                   if (executeReadEnable = '1') then
@@ -1599,6 +1648,7 @@ begin
       
          if (reset = '1') then
          
+            cop0_SR              <= (others => '0');
             cop0_BPC             <= (others => '0');
             cop0_BDA             <= (others => '0');
             cop0_JUMPDEST        <= (others => '0');
@@ -1609,9 +1659,10 @@ begin
             cop0_CAUSE           <= (others => '0');
             cop0_EPC             <= (others => '0');
             cop0_PRID            <= (others => '0');
+            
+            exception            <= (others => '0');
          
             stall5               <= '0';
-            exception5           <= '0';
             
             pcOld4               <= (others => '0');
             opcode4              <= (others => '0');
@@ -1638,8 +1689,7 @@ begin
                writeDoneWriteEnable <= writebackWriteEnable;
                
             
-               --if (writebackWriteEnable = '1' and writebackException = '0';
-               if (writebackWriteEnable = '1') then
+               if (writebackWriteEnable = '1' and writebackException = '0') then 
                   if (writebackTarget > 0) then
                      regs(to_integer(writebackTarget)) <= writebackData;
                   end if;
@@ -1652,9 +1702,59 @@ begin
                      when 16#7# => cop0_DCIC  <= writebackCOP0WriteValue and x"FF80F03F";
                      when 16#9# => cop0_BDAM  <= writebackCOP0WriteValue;
                      when 16#B# => cop0_BPCM  <= writebackCOP0WriteValue;
+                     when 16#C# => cop0_SR    <= writebackCOP0WriteValue and x"F27FFF3F";
                      when 16#D# => cop0_CAUSE <= writebackCOP0WriteValue and x"00000300";
                      when others => null;
                   end case;
+               end if;
+               
+               -- exception handling
+               if (writebackException = '1') then
+                  cop0_SR        <= exception_SR;
+                  cop0_CAUSE     <= exception_CAUSE;
+                  cop0_EPC       <= exception_EPC;  
+                  cop0_JUMPDEST  <= exception_JMP;  
+               end if;
+               
+               exception <= exceptionNew;
+               if (exceptionNew1 = '1') then    -- PC out of bounds
+                  exceptionCode     <= x"0";
+                  exceptionInstr    <= opcode2(27 downto 26);
+                  exception_PC      <= PCnext;
+                  exception_branch  <= executeBranchTaken;
+                  exception_brslot  <= executeBranchdelaySlot;
+               elsif (exceptionNew5 = '1') then -- interrupt
+                  exceptionCode     <= x"6";
+                  exceptionInstr    <= opcode2(27 downto 26);
+                  exception_PC      <= pcOld2;
+                  exception_branch  <= writeBackBranchTaken;
+                  exception_brslot  <= writeBackBranchdelaySlot;
+               else                             -- execute stage
+                  exceptionCode     <= exceptionCode_3;
+                  exceptionInstr    <= opcode1(27 downto 26);
+                  if (EXEBranchTaken = '1') then
+                     exception_PC   <= PCbranch;
+                  else
+                     exception_PC   <= PCold1;
+                  end if;
+                  exception_branch  <= executeBranchTaken;
+                  exception_brslot  <= executeBranchdelaySlot;
+               end if;
+               exception_JMPnext <= PCold0;
+               
+               if (exception > 0) then
+                  exception_SR    <= cop0_SR(31 downto 6) & cop0_SR(3 downto 0) & "00";
+                  exception_CAUSE <= cop0_CAUSE;
+                  exception_CAUSE(5 downto 2)   <= exceptionCode;
+                  exception_CAUSE(29 downto 28) <= exceptionInstr; 
+                  exception_CAUSE(30) <= exception_branch;
+                  exception_CAUSE(31) <= exception_brslot;
+                  if (exception_brslot = '1') then
+                     exception_EPC <= exception_PC - 4;
+                     exception_JMP <= exception_JMPnext;
+                  else
+                     exception_EPC <= exception_PC;
+                  end if;
                end if;
                
                -- export
@@ -1662,14 +1762,15 @@ begin
                cpu_done          <= '1';
                cpu_export.pc     <= pcOld4;
                cpu_export.opcode <= opcode4;
+               cpu_export.cause  <= cop0_CAUSE;
                for i in 0 to 31 loop
                   cpu_export.regs(i) <= regs(i);
                end loop;
                
                -- todo: REMOVE!
-               if (debugCnt(31) = '1' and writebackTarget = 0) then
-                  writeDoneWriteEnable <= '0';
-               end if;
+               --if (debugCnt(31) = '1' and writebackTarget = 0) then
+               --   writeDoneWriteEnable <= '0';
+               --end if;
                
             end if;
    

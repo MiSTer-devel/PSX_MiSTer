@@ -15,6 +15,7 @@ package pexport is
       regs           : tExportRegs;
       pc             : unsigned(31 downto 0);
       opcode         : unsigned(31 downto 0);
+      cause          : unsigned(31 downto 0);
    end record;
   
 end package;
@@ -63,7 +64,7 @@ architecture arch of export is
    signal export_reset     : std_logic := '0';
    signal exportnow        : std_logic;
    
-   signal export_cpu_last  : cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'));   
+   signal export_cpu_last  : cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'), (others => '0'));   
 
    signal export_gtm_last  : unsigned(11 downto 0) := (others => '0');
    signal export_line_last : unsigned(11 downto 0) := (others => '0');
@@ -193,6 +194,8 @@ begin
                end if;
             end loop; 
 
+            if (export_cpu.cause /= export_cpu_last.cause)   then write(line_out, string'("CAUSE "));  write(line_out, to_lower(to_hstring(export_cpu.cause)) & " "); end if;
+            
             if (export_gtm /= export_gtm_last)   then write(line_out, string'("GTM "));  write(line_out, to_lower(to_hstring(export_gtm)) & " "); end if;
             if (export_line /= export_line_last) then write(line_out, string'("LINE ")); write(line_out, to_lower(to_hstring(export_line)) & " "); end if;
             if (export_gpus /= export_gpus_last) then write(line_out, string'("GPUS ")); write(line_out, to_lower(to_hstring(export_gpus)) & " "); end if;
