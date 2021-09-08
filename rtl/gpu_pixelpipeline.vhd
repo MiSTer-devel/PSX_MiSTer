@@ -79,7 +79,7 @@ architecture arch of gpu_pixelpipeline is
    signal CLUTaddrB           : std_logic_vector(7 downto 0);
    signal CLUTDataB           : std_logic_vector(15 downto 0);
    
-   signal CLUTDataB_S         : std_logic_vector(15 downto 0);
+   signal CLUTDataB_S         : std_logic_vector(15 downto 0) := (others => '0');
   
    signal textPalFetched      : std_logic := '0';
    signal textPalX            : unsigned(9 downto 0) := (others => '0');   
@@ -97,32 +97,32 @@ architecture arch of gpu_pixelpipeline is
    
    signal pipeline_stall_1    : std_logic := '0';
    
-   signal reqVRAMXPos         : unsigned(9 downto 0);
-   signal reqVRAMYPos         : unsigned(8 downto 0);
-   signal reqVRAMSize         : unsigned(10 downto 0);
+   signal reqVRAMXPos         : unsigned(9 downto 0)  := (others => '0');
+   signal reqVRAMYPos         : unsigned(8 downto 0)  := (others => '0');
+   signal reqVRAMSize         : unsigned(10 downto 0) := (others => '0');
   
    signal stageS_valid        : std_logic := '0';
-   signal stageS_texture      : std_logic;
-   signal stageS_transparent  : std_logic;
-   signal stageS_rawTexture   : std_logic;
+   signal stageS_texture      : std_logic := '0';
+   signal stageS_transparent  : std_logic := '0';
+   signal stageS_rawTexture   : std_logic := '0';
    signal stageS_x            : unsigned(9 downto 0) := (others => '0');
-   signal stageS_y            : unsigned(8 downto 0);
-   signal stageS_cr           : unsigned(7 downto 0);
-   signal stageS_cg           : unsigned(7 downto 0);
-   signal stageS_cb           : unsigned(7 downto 0);
-   signal stageS_u            : unsigned(7 downto 0);
-   signal stageS_v            : unsigned(7 downto 0);
-   signal stageS_oldPixel     : std_logic_vector(15 downto 0);
+   signal stageS_y            : unsigned(8 downto 0) := (others => '0');
+   signal stageS_cr           : unsigned(7 downto 0) := (others => '0');
+   signal stageS_cg           : unsigned(7 downto 0) := (others => '0');
+   signal stageS_cb           : unsigned(7 downto 0) := (others => '0');
+   signal stageS_u            : unsigned(7 downto 0) := (others => '0');
+   signal stageS_v            : unsigned(7 downto 0) := (others => '0');
+   signal stageS_oldPixel     : std_logic_vector(15 downto 0) := (others => '0');
 
    signal stage0_valid        : std_logic := '0';
-   signal stage0_texture      : std_logic;
-   signal stage0_transparent  : std_logic;
-   signal stage0_rawTexture   : std_logic;
+   signal stage0_texture      : std_logic := '0';
+   signal stage0_transparent  : std_logic := '0';
+   signal stage0_rawTexture   : std_logic := '0';
    signal stage0_x            : unsigned(9 downto 0) := (others => '0');
-   signal stage0_y            : unsigned(8 downto 0);
-   signal stage0_cr           : unsigned(7 downto 0);
-   signal stage0_cg           : unsigned(7 downto 0);
-   signal stage0_cb           : unsigned(7 downto 0);
+   signal stage0_y            : unsigned(8 downto 0) := (others => '0');
+   signal stage0_cr           : unsigned(7 downto 0) := (others => '0');
+   signal stage0_cg           : unsigned(7 downto 0) := (others => '0');
+   signal stage0_cb           : unsigned(7 downto 0) := (others => '0');
    signal stage0_u            : unsigned(7 downto 0) := (others => '0');
    signal stage0_v            : unsigned(7 downto 0) := (others => '0');
    signal stage0_oldPixel     : std_logic_vector(15 downto 0);
@@ -130,54 +130,54 @@ architecture arch of gpu_pixelpipeline is
    signal stage0_textaddr     : unsigned(19 downto 0) := (others => '0');
    
    signal stage1_valid        : std_logic := '0';
-   signal stage1_texture      : std_logic;
-   signal stage1_transparent  : std_logic;
-   signal stage1_rawTexture   : std_logic;
+   signal stage1_texture      : std_logic := '0';
+   signal stage1_transparent  : std_logic := '0';
+   signal stage1_rawTexture   : std_logic := '0';
    signal stage1_x            : unsigned(9 downto 0) := (others => '0');
-   signal stage1_y            : unsigned(8 downto 0);
-   signal stage1_cr           : unsigned(7 downto 0);
-   signal stage1_cg           : unsigned(7 downto 0);
-   signal stage1_cb           : unsigned(7 downto 0);
+   signal stage1_y            : unsigned(8 downto 0) := (others => '0');
+   signal stage1_cr           : unsigned(7 downto 0) := (others => '0');
+   signal stage1_cg           : unsigned(7 downto 0) := (others => '0');
+   signal stage1_cb           : unsigned(7 downto 0) := (others => '0');
    signal stage1_u            : unsigned(7 downto 0) := (others => '0');
    signal stage1_oldPixel     : std_logic_vector(15 downto 0);
    signal stage1_texdata      : std_logic_vector(15 downto 0) := (others => '0');
    signal stage1_cachehit     : std_logic;
    
-   signal stage1_u_mux        : unsigned(1 downto 0);
-   signal texdata_raw         : std_logic_vector(15 downto 0);
+   signal stage1_u_mux        : unsigned(1 downto 0) := (others => '0');
+   signal texdata_raw         : std_logic_vector(15 downto 0) := (others => '0');
    
    signal stage2_valid        : std_logic := '0';
-   signal stage2_texture      : std_logic;
-   signal stage2_transparent  : std_logic;
-   signal stage2_rawTexture   : std_logic;
-   signal stage2_x            : unsigned(9 downto 0);
-   signal stage2_y            : unsigned(8 downto 0);
-   signal stage2_cr           : unsigned(7 downto 0);
-   signal stage2_cg           : unsigned(7 downto 0);
-   signal stage2_cb           : unsigned(7 downto 0);
-   signal stage2_oldPixel     : std_logic_vector(15 downto 0);
-   signal stage2_texdata      : std_logic_vector(15 downto 0);
+   signal stage2_texture      : std_logic := '0';
+   signal stage2_transparent  : std_logic := '0';
+   signal stage2_rawTexture   : std_logic := '0';
+   signal stage2_x            : unsigned(9 downto 0) := (others => '0');
+   signal stage2_y            : unsigned(8 downto 0) := (others => '0');
+   signal stage2_cr           : unsigned(7 downto 0) := (others => '0');
+   signal stage2_cg           : unsigned(7 downto 0) := (others => '0');
+   signal stage2_cb           : unsigned(7 downto 0) := (others => '0');
+   signal stage2_oldPixel     : std_logic_vector(15 downto 0) := (others => '0');
+   signal stage2_texdata      : std_logic_vector(15 downto 0) := (others => '0');
    
-   signal texdata_palette     : std_logic_vector(15 downto 0);
+   signal texdata_palette     : std_logic_vector(15 downto 0) := (others => '0');
    
    signal stage3_valid        : std_logic := '0';
-   signal stage3_transparent  : std_logic;
-   signal stage3_alphacheck   : std_logic;
-   signal stage3_alphabit     : std_logic;
-   signal stage3_x            : unsigned(9 downto 0);
-   signal stage3_y            : unsigned(8 downto 0);
-   signal stage3_cr           : unsigned(4 downto 0);
-   signal stage3_cg           : unsigned(4 downto 0);
-   signal stage3_cb           : unsigned(4 downto 0);
-   signal stage3_oldPixel     : std_logic_vector(15 downto 0);
+   signal stage3_transparent  : std_logic := '0';
+   signal stage3_alphacheck   : std_logic := '0';
+   signal stage3_alphabit     : std_logic := '0';
+   signal stage3_x            : unsigned(9 downto 0) := (others => '0');
+   signal stage3_y            : unsigned(8 downto 0) := (others => '0');
+   signal stage3_cr           : unsigned(4 downto 0) := (others => '0');
+   signal stage3_cg           : unsigned(4 downto 0) := (others => '0');
+   signal stage3_cb           : unsigned(4 downto 0) := (others => '0');
+   signal stage3_oldPixel     : std_logic_vector(15 downto 0) := (others => '0');
    
    signal stage4_valid        : std_logic := '0';
-   signal stage4_alphabit     : std_logic;
-   signal stage4_x            : unsigned(9 downto 0);
-   signal stage4_y            : unsigned(8 downto 0);
-   signal stage4_cr           : std_logic_vector(4 downto 0);
-   signal stage4_cg           : std_logic_vector(4 downto 0);
-   signal stage4_cb           : std_logic_vector(4 downto 0);
+   signal stage4_alphabit     : std_logic := '0';
+   signal stage4_x            : unsigned(9 downto 0) := (others => '0');
+   signal stage4_y            : unsigned(8 downto 0) := (others => '0');
+   signal stage4_cr           : std_logic_vector(4 downto 0) := (others => '0');
+   signal stage4_cg           : std_logic_vector(4 downto 0) := (others => '0');
+   signal stage4_cb           : std_logic_vector(4 downto 0) := (others => '0');
   
 begin 
 

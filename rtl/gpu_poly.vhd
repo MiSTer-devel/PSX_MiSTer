@@ -448,9 +448,9 @@ begin
                   rightFacing <= 0;
                   if (vt(1).y = vt(0).y) then
                      boundCoordUs <= (others => '0');
-                     if (vt(1).x = vt(0).x) then rightFacing  <= 1; end if;
+                     if (vt(1).x > vt(0).x) then rightFacing <= 1; end if;
                   else
-                     if (div2.quotient > baseStep) then rightFacing  <= 1; end if;
+                     if (div2.quotient > div1.quotient) then rightFacing <= 1; end if;
                      boundCoordUs <= div2.quotient;
                   end if;
                   
