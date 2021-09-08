@@ -24,7 +24,7 @@ Work in progress, don't report any bugs!
 - ImageLoad/LZ77/Huffman in 16+24 bit working
 - polygon(triangle/quad), rectangle and line drawing working
 - Gouraud Shading and transparency working
-- direct color texturing and texture cache, palette textures not implemented
+- direct, masked and palette color texturing and texture cache working
 
 -- 
 
@@ -34,7 +34,7 @@ Work in progress, don't report any bugs!
 --
 
 - CPU    : 55%
-- GPU    : 50%
+- GPU    : 70%
 - Memory : 20%
 
 Everything else still missing

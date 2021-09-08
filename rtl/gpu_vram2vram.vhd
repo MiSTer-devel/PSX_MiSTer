@@ -4,6 +4,8 @@ use IEEE.numeric_std.all;
 
 -- todo: how does it behave when copy with srcX + widt wrapping around?
 
+-- todo: if (width == 0 || height == 0 || (srcX == dstX && srcY == dstY && !((PSXRegs.GPUSTAT >> 11) & 1))) -> don't draw
+
 entity gpu_vram2vram is
    port 
    (

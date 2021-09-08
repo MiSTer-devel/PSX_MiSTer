@@ -12,6 +12,7 @@ entity gpu_rect is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      DrawPixelsMask       : in  std_logic;
       interlacedDrawing    : in  std_logic;
       activeLineLSB        : in  std_logic;
       drawingOffsetX       : in  signed(10 downto 0);
@@ -47,6 +48,10 @@ entity gpu_rect is
       requestVRAMIdle      : in  std_logic;
       requestVRAMDone      : in  std_logic;
       
+      textPalNew           : out std_logic := '0';
+      textPalX             : out unsigned(9 downto 0) := (others => '0');   
+      textPalY             : out unsigned(8 downto 0) := (others => '0'); 
+      
       vramLineEna          : out std_logic;
       vramLineAddr         : out unsigned(9 downto 0)
    );
@@ -78,8 +83,6 @@ architecture arch of gpu_rect is
    signal rec_sizey           : unsigned(8 downto 0) := (others => '0');  
    
    signal rec_u               : unsigned(7 downto 0) := (others => '0');     
-   signal rec_textPalX        : unsigned(9 downto 0) := (others => '0');   
-   signal rec_textPalY        : unsigned(8 downto 0) := (others => '0'); 
 
    signal xPos                : signed(11 downto 0) := (others => '0'); 
    signal yPos                : signed(11 downto 0) := (others => '0');    
@@ -123,6 +126,10 @@ begin
             pipeline_cb          <= (others => '0');
             pipeline_u           <= (others => '0');
             pipeline_v           <= (others => '0');
+            
+            textPalNew           <= '0';
+            textPalX             <= (others => '0');
+            textPalY             <= (others => '0');
          
             case (state) is
             
@@ -163,7 +170,7 @@ begin
                         state    <= REQUESTTEXTURE;  
                      elsif (rec_size = "00") then
                         state    <= REQUESTSIZE;  
-                     elsif (rec_transparency = '1') then
+                     elsif (rec_transparency = '1' or DrawPixelsMask = '1') then
                         state  <= REQUESTLINE;
                      else
                         state  <= PROCPIXELS;
@@ -175,11 +182,12 @@ begin
                      uWork         <= unsigned(fifo_data( 7 downto  0));
                      vWork         <= unsigned(fifo_data(15 downto  8));
                      rec_u         <= unsigned(fifo_data( 7 downto  0));
-                     rec_textPalX  <= unsigned(fifo_data(21 downto 16)) & "0000";
-                     rec_textPalY  <= unsigned(fifo_data(30 downto 22));
+                     textPalX      <= unsigned(fifo_data(21 downto 16)) & "0000";
+                     textPalY      <= unsigned(fifo_data(30 downto 22));
+                     textPalNew    <= '1';
                      if (rec_size = "00") then
                         state    <= REQUESTSIZE;  
-                     elsif (rec_transparency = '1') then
+                     elsif (rec_transparency = '1' or DrawPixelsMask = '1') then
                         state  <= REQUESTLINE;
                      else
                         state  <= PROCPIXELS;
@@ -190,7 +198,7 @@ begin
                   if (fifo_Valid = '1') then
                      rec_sizex   <= unsigned(fifo_data(9 downto  0));
                      rec_sizey   <= unsigned(fifo_data(24 downto 16));
-                     if (rec_transparency = '1') then
+                     if (rec_transparency = '1' or DrawPixelsMask = '1') then
                         state  <= REQUESTLINE;
                      else
                         state  <= PROCPIXELS;
@@ -224,7 +232,7 @@ begin
                            xPos  <= rec_posx;
                            xCnt  <= (others => '0');
                            uWork <= rec_u;
-                           if (rec_transparency = '1') then
+                           if (rec_transparency = '1' or DrawPixelsMask = '1') then
                               state <= REQUESTLINE;
                            end if;
                         end if;

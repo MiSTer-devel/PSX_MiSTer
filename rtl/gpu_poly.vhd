@@ -13,6 +13,7 @@ entity gpu_poly is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      DrawPixelsMask       : in  std_logic;
       interlacedDrawing    : in  std_logic;
       activeLineLSB        : in  std_logic;
       drawingOffsetX       : in  signed(10 downto 0);
@@ -57,6 +58,10 @@ entity gpu_poly is
       requestVRAMSize      : out unsigned(10 downto 0);
       requestVRAMIdle      : in  std_logic;
       requestVRAMDone      : in  std_logic;
+      
+      textPalNew           : out std_logic := '0';
+      textPalX             : out unsigned(9 downto 0) := (others => '0');   
+      textPalY             : out unsigned(8 downto 0) := (others => '0'); 
       
       vramLineEna          : out std_logic;
       vramLineAddr         : out unsigned(9 downto 0)
@@ -230,6 +235,10 @@ begin
 
             drawModeNew          <= '0';
             
+            textPalNew           <= '0';
+            textPalX             <= (others => '0');
+            textPalY             <= (others => '0');
+            
             pipeline_new         <= '0';
             pipeline_texture     <= '0';
             pipeline_transparent <= '0';
@@ -320,6 +329,11 @@ begin
                      if (rec_index = 1) then
                         drawModeRec   <= unsigned(fifo_data(27 downto 16));
                         drawModeNew   <= '1';
+                     end if;
+                     if (rec_index = 2) then
+                        textPalX    <= rec_textPalX;
+                        textPalY    <= rec_textPalY;
+                        textPalNew  <= '1';
                      end if;
                      
                      if ((rec_quad = '1' and rec_index = 3) or (rec_quad = '0' and rec_index = 2)) then
@@ -650,7 +664,7 @@ begin
                      xSize <= ('0' & (unsigned(xEnd(41 downto 32)) - unsigned(xStart(41 downto 32)))) + 1;
                   end if;
                
-                  if (rec_transparency = '1') then
+                  if (rec_transparency = '1' or DrawPixelsMask = '1') then
                      state <= REQUESTLINE;
                   else
                      state <= PROCPIXELS;

@@ -13,6 +13,7 @@ entity gpu_line is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      DrawPixelsMask       : in  std_logic;
       interlacedDrawing    : in  std_logic;
       activeLineLSB        : in  std_logic;
       drawingOffsetX       : in  signed(10 downto 0);
@@ -396,7 +397,7 @@ begin
                   workg <= '0' & signed(proc_color1(15 downto  8)) & x"800";
                   workb <= '0' & signed(proc_color1(23 downto 16)) & x"800";
                   if (div1.done = '1') then
-                     if (proc_transparency = '1') then
+                     if (proc_transparency = '1' or DrawPixelsMask = '1') then
                         procstate <= PROCREADLINE;
                      else
                         procstate <= PROCPIXELS;
@@ -430,7 +431,7 @@ begin
                      nexty := worky + stepDy;
                      if (pixelCnt >= points) then
                         procstate <= PROCIDLE;
-                     elsif (proc_transparency = '1' and nexty(40 downto 32) /= worky(40 downto 32)) then
+                     elsif ((proc_transparency = '1' or DrawPixelsMask = '1') and nexty(40 downto 32) /= worky(40 downto 32)) then
                         procstate <= PROCREADLINE;
                      end if;
                      

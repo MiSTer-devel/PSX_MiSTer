@@ -15,6 +15,8 @@ entity gpu_pixelpipeline is
       reset                : in  std_logic;
       
       drawMode             : in  unsigned(13 downto 0) := (others => '0');
+      DrawPixelsMask       : in  std_logic;
+      SetMask              : in  std_logic;
       
       pipeline_stall       : out std_logic;
       pipeline_new         : in  std_logic;
@@ -40,6 +42,10 @@ entity gpu_pixelpipeline is
       
       vramLineData         : in  std_logic_vector(15 downto 0);
       
+      textPalInNew         : in  std_logic;
+      textPalInX           : in  unsigned(9 downto 0);   
+      textPalInY           : in  unsigned(8 downto 0); 
+      
       pixelStall           : in  std_logic;
       pixelColor           : out std_logic_vector(15 downto 0);
       pixelAddr            : out unsigned(19 downto 0);
@@ -49,24 +55,35 @@ end entity;
 
 architecture arch of gpu_pixelpipeline is
   
-   signal tag_addr                     : unsigned(7 downto 0) := (others => '0');
-   signal tag_data                     : unsigned(9 downto 0) := (others => '0');
+   signal tag_addr            : unsigned(7 downto 0) := (others => '0');
+   signal tag_data            : unsigned(9 downto 0) := (others => '0');
+      
+   signal tag_address_a       : unsigned(7 downto 0) := (others => '0');
+   signal tag_data_a          : std_logic_vector(9 downto 0) := (others => '0');
+   signal tag_wren_a          : std_logic := '0';
+   signal tag_address_b       : unsigned(7 downto 0) := (others => '0');
+   signal tag_q_b             : std_logic_vector(9 downto 0) := (others => '0');
+      
+   signal tagValid            : std_logic_vector(0 to 255) := (others => '0');
+      
+   signal cache_address_a     : unsigned(7 downto 0) := (others => '0');
+   signal cache_data_a        : std_logic_vector(63 downto 0) := (others => '0');
+   signal cache_wren_a        : std_logic := '0';
+   signal cache_address_b     : unsigned(7 downto 0);
+   signal cache_q_b           : std_logic_vector(63 downto 0);
    
-   signal tag_address_a                : unsigned(7 downto 0) := (others => '0');
-   signal tag_data_a                   : std_logic_vector(9 downto 0) := (others => '0');
-   signal tag_wren_a                   : std_logic := '0';
-   signal tag_address_b                : unsigned(7 downto 0) := (others => '0');
-   signal tag_q_b                      : std_logic_vector(9 downto 0) := (others => '0');
+   signal cachehit            : std_logic;
+      
+   signal CLUTaddrA           : unsigned(5 downto 0) := (others => '0');
+   signal CLUTwrenA           : std_logic;
+   signal CLUTaddrB           : std_logic_vector(7 downto 0);
+   signal CLUTDataB           : std_logic_vector(15 downto 0);
    
-   signal tagValid                     : std_logic_vector(0 to 255) := (others => '0');
-   
-   signal cache_address_a              : unsigned(7 downto 0) := (others => '0');
-   signal cache_data_a                 : std_logic_vector(63 downto 0) := (others => '0');
-   signal cache_wren_a                 : std_logic := '0';
-   signal cache_address_b              : unsigned(7 downto 0);
-   signal cache_q_b                    : std_logic_vector(63 downto 0);
+   signal CLUTDataB_S         : std_logic_vector(15 downto 0);
   
-   signal cachehit                     : std_logic;
+   signal textPalFetched      : std_logic := '0';
+   signal textPalX            : unsigned(9 downto 0) := (others => '0');   
+   signal textPalY            : unsigned(8 downto 0) := (others => '0'); 
   
    type tState is
    (
@@ -88,7 +105,7 @@ architecture arch of gpu_pixelpipeline is
    signal stageS_texture      : std_logic;
    signal stageS_transparent  : std_logic;
    signal stageS_rawTexture   : std_logic;
-   signal stageS_x            : unsigned(9 downto 0);
+   signal stageS_x            : unsigned(9 downto 0) := (others => '0');
    signal stageS_y            : unsigned(8 downto 0);
    signal stageS_cr           : unsigned(7 downto 0);
    signal stageS_cg           : unsigned(7 downto 0);
@@ -101,7 +118,7 @@ architecture arch of gpu_pixelpipeline is
    signal stage0_texture      : std_logic;
    signal stage0_transparent  : std_logic;
    signal stage0_rawTexture   : std_logic;
-   signal stage0_x            : unsigned(9 downto 0);
+   signal stage0_x            : unsigned(9 downto 0) := (others => '0');
    signal stage0_y            : unsigned(8 downto 0);
    signal stage0_cr           : unsigned(7 downto 0);
    signal stage0_cg           : unsigned(7 downto 0);
@@ -116,44 +133,60 @@ architecture arch of gpu_pixelpipeline is
    signal stage1_texture      : std_logic;
    signal stage1_transparent  : std_logic;
    signal stage1_rawTexture   : std_logic;
-   signal stage1_x            : unsigned(9 downto 0);
+   signal stage1_x            : unsigned(9 downto 0) := (others => '0');
    signal stage1_y            : unsigned(8 downto 0);
    signal stage1_cr           : unsigned(7 downto 0);
    signal stage1_cg           : unsigned(7 downto 0);
    signal stage1_cb           : unsigned(7 downto 0);
-   signal stage1_u            : unsigned(7 downto 0);
-   signal stage1_v            : unsigned(7 downto 0);
+   signal stage1_u            : unsigned(7 downto 0) := (others => '0');
    signal stage1_oldPixel     : std_logic_vector(15 downto 0);
-   signal stage1_texdata      : std_logic_vector(15 downto 0);
+   signal stage1_texdata      : std_logic_vector(15 downto 0) := (others => '0');
    signal stage1_cachehit     : std_logic;
-  
+   
+   signal stage1_u_mux        : unsigned(1 downto 0);
+   signal texdata_raw         : std_logic_vector(15 downto 0);
+   
    signal stage2_valid        : std_logic := '0';
+   signal stage2_texture      : std_logic;
    signal stage2_transparent  : std_logic;
-   signal stage2_alphacheck   : std_logic;
-   signal stage2_alphabit     : std_logic;
+   signal stage2_rawTexture   : std_logic;
    signal stage2_x            : unsigned(9 downto 0);
    signal stage2_y            : unsigned(8 downto 0);
-   signal stage2_cr           : unsigned(4 downto 0);
-   signal stage2_cg           : unsigned(4 downto 0);
-   signal stage2_cb           : unsigned(4 downto 0);
+   signal stage2_cr           : unsigned(7 downto 0);
+   signal stage2_cg           : unsigned(7 downto 0);
+   signal stage2_cb           : unsigned(7 downto 0);
    signal stage2_oldPixel     : std_logic_vector(15 downto 0);
+   signal stage2_texdata      : std_logic_vector(15 downto 0);
+   
+   signal texdata_palette     : std_logic_vector(15 downto 0);
    
    signal stage3_valid        : std_logic := '0';
+   signal stage3_transparent  : std_logic;
+   signal stage3_alphacheck   : std_logic;
    signal stage3_alphabit     : std_logic;
    signal stage3_x            : unsigned(9 downto 0);
    signal stage3_y            : unsigned(8 downto 0);
-   signal stage3_cr           : std_logic_vector(4 downto 0);
-   signal stage3_cg           : std_logic_vector(4 downto 0);
-   signal stage3_cb           : std_logic_vector(4 downto 0);
+   signal stage3_cr           : unsigned(4 downto 0);
+   signal stage3_cg           : unsigned(4 downto 0);
+   signal stage3_cb           : unsigned(4 downto 0);
+   signal stage3_oldPixel     : std_logic_vector(15 downto 0);
+   
+   signal stage4_valid        : std_logic := '0';
+   signal stage4_alphabit     : std_logic;
+   signal stage4_x            : unsigned(9 downto 0);
+   signal stage4_y            : unsigned(8 downto 0);
+   signal stage4_cr           : std_logic_vector(4 downto 0);
+   signal stage4_cg           : std_logic_vector(4 downto 0);
+   signal stage4_cb           : std_logic_vector(4 downto 0);
   
 begin 
 
    pipeline_stall <= '1' when (pixelStall = '1' or state /= IDLE) else '0';
 
-   requestVRAMEnable <= '1'         when (state = REQUESTTEXTURE) else '0';
-   requestVRAMXPos   <= reqVRAMXPos when (state = REQUESTTEXTURE) else (others => '0');
-   requestVRAMYPos   <= reqVRAMYPos when (state = REQUESTTEXTURE) else (others => '0');
-   requestVRAMSize   <= reqVRAMSize when (state = REQUESTTEXTURE) else (others => '0');
+   requestVRAMEnable <= '1'         when (state = REQUESTTEXTURE or state = REQUESTPALETTE) else '0';
+   requestVRAMXPos   <= reqVRAMXPos when (state = REQUESTTEXTURE or state = REQUESTPALETTE) else (others => '0');
+   requestVRAMYPos   <= reqVRAMYPos when (state = REQUESTTEXTURE or state = REQUESTPALETTE) else (others => '0');
+   requestVRAMSize   <= reqVRAMSize when (state = REQUESTTEXTURE or state = REQUESTPALETTE) else (others => '0');
    
    itagram : altdpram
 	GENERIC MAP 
@@ -225,8 +258,53 @@ begin
    
    cachehit <= '1' when (unsigned(tag_q_b) = tag_data and tagValid(to_integer(tag_addr)) = '1') else '0';
    
+   stage1_u_mux <= stage1_u(3 downto 2) when drawMode(8 downto 7) = "00" else
+                   stage1_u(2 downto 1) when drawMode(8 downto 7) = "01" else
+                   stage1_u(1 downto 0);
+   
+   texdata_raw  <= stage1_texdata          when (stage1_cachehit = '0') else
+                   cache_q_b(15 downto  0) when (stage1_u_mux = "00")   else
+                   cache_q_b(31 downto 16) when (stage1_u_mux = "01")   else
+                   cache_q_b(47 downto 32) when (stage1_u_mux = "10")   else
+                   cache_q_b(63 downto 48);
+   
+   iCLUTram: entity work.dpram_dif
+   generic map 
+   ( 
+      addr_width_a  => 6,
+      data_width_a  => 64,
+      addr_width_b  => 8,
+      data_width_b  => 16
+   )
+   port map
+   (
+      clock       => clk2x,
+      
+      address_a   => std_logic_vector(CLUTaddrA),
+      data_a      => vram_DOUT,
+      wren_a      => CLUTwrenA,
+      
+      address_b   => CLUTaddrB,
+      data_b      => x"0000",
+      wren_b      => '0',
+      q_b         => CLUTDataB
+   );
+   
+   CLUTwrenA <= '1' when (vram_DOUT_READY = '1' and state = WAITPALETTE) else '0';
+   
+   CLUTaddrB <= x"0" & texdata_raw( 3 downto  0) when (drawMode(7) = '0' and stage1_u(1 downto 0) = "00") else
+                x"0" & texdata_raw( 7 downto  4) when (drawMode(7) = '0' and stage1_u(1 downto 0) = "01") else
+                x"0" & texdata_raw(11 downto  8) when (drawMode(7) = '0' and stage1_u(1 downto 0) = "10") else
+                x"0" & texdata_raw(15 downto 12) when (drawMode(7) = '0' and stage1_u(1 downto 0) = "11") else
+                texdata_raw( 7 downto 0) when (drawMode(7) = '1' and stage1_u(0) = '0') else
+                texdata_raw(15 downto 8);
+   
+   
+   texdata_palette <= stage2_texdata when (drawMode(8) = '1')      else
+                      CLUTDataB_S    when (pipeline_stall_1 = '1') else 
+                      CLUTDataB;
+   
    process (clk2x)
-      variable texdata   : std_logic_vector(15 downto 0);
       variable colorTr   : unsigned(12 downto 0);
       variable colorTg   : unsigned(12 downto 0);
       variable colorTb   : unsigned(12 downto 0);
@@ -244,12 +322,13 @@ begin
          
          if (reset = '1') then
          
-            state        <= IDLE;
-            stage0_valid <= '0';
-            stage1_valid <= '0';
-            stage2_valid <= '0';
-            stage3_valid <= '0';
-            tagValid     <= (others => '0');
+            state          <= IDLE;
+            stage0_valid   <= '0';
+            stage1_valid   <= '0';
+            stage3_valid   <= '0';
+            stage4_valid   <= '0';
+            tagValid       <= (others => '0');
+            textPalFetched <= '0';
          
          elsif (ce = '1') then
          
@@ -264,28 +343,27 @@ begin
             
             case (state) is
                when IDLE =>
-                  if (stage0_valid = '1' and stage0_texture = '1' and cachehit = '0') then
+                  if (textPalInNew = '1' and drawMode(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
+                     state          <= REQUESTPALETTE;
+                     textPalFetched <= '1';
+                     textPalX       <= textPalInX;
+                     textPalY       <= textPalInY;
+                     reqVRAMXPos    <= textPalInX;
+                     reqVRAMYPos    <= textPalInY;
+                     if (drawMode(7) = '1') then
+                        reqVRAMSize <= to_unsigned(256, 11); 
+                     else
+                        reqVRAMSize <= to_unsigned(16, 11);
+                     end if;
+                  elsif (stage0_valid = '1' and stage0_texture = '1' and cachehit = '0') then
                      state           <= REQUESTTEXTURE;
                      tag_data_a      <= std_logic_vector(tag_data);
                      tag_address_a   <= tag_addr;
                      cache_address_a <= tag_addr;
                      
-                     case (drawMode(8 downto 7)) is
-                        when "00" => -- Palette4Bit
-                           reqVRAMXPos <= (others => '0');
-                           reqVRAMYPos <= (others => '0');
-                           reqVRAMSize <= (others => '0');
-                        
-                        when "01" => -- Palette8Bit
-                           reqVRAMXPos <= (others => '0');
-                           reqVRAMYPos <= (others => '0');
-                           reqVRAMSize <= (others => '0');
-                           
-                        when others => -- 15bit
-                           reqVRAMXPos <= (drawMode(3 downto 0) & "000000") + stage0_u;
-                           reqVRAMYPos <= drawMode(4) & stage0_v;
-                           reqVRAMSize <= to_unsigned(1, 11);
-                     end case;
+                     reqVRAMXPos <= stage0_textaddr(10 downto 1);
+                     reqVRAMYPos <= stage0_textaddr(19 downto 11);
+                     reqVRAMSize <= to_unsigned(1, 11);
                   end if;
                
                when REQUESTTEXTURE =>
@@ -302,9 +380,7 @@ begin
                      cache_wren_a  <= '1';
                      cache_data_a  <= vram_DOUT;
                      tagValid(to_integer(tag_address_a)) <= '1';
-                     
-                     
-                     case (stage1_u(1 downto 0)) is
+                     case (stage1_u_mux) is
                         when "00" => stage1_texdata <= vram_DOUT(15 downto  0);
                         when "01" => stage1_texdata <= vram_DOUT(31 downto 16);
                         when "10" => stage1_texdata <= vram_DOUT(47 downto 32);
@@ -314,12 +390,23 @@ begin
                   end if;
                
                when REQUESTPALETTE =>
+                  if (requestVRAMIdle = '1') then
+                     state       <= WAITPALETTE;
+                  end if;
+                  CLUTaddrA <= (others => '0');
+ 
                when WAITPALETTE =>
+                  if (requestVRAMDone = '1') then
+                     state <= IDLE;
+                  end if;
+                  if (vram_DOUT_READY = '1') then
+                     CLUTaddrA <= CLUTaddrA + 1;
+                  end if;
                
             end case;
             
             if (pipeline_stall = '1' and pipeline_stall_1 = '0') then
-               stageS_valid         <= pipeline_new;
+               stageS_valid         <= pipeline_new and ((not DrawPixelsMask) or (not vramLineData(15)));
                stageS_texture       <= pipeline_texture;
                stageS_transparent   <= pipeline_transparent;
                stageS_rawTexture    <= pipeline_rawTexture; 
@@ -331,6 +418,8 @@ begin
                stageS_u             <= pipeline_u; 
                stageS_v             <= pipeline_v;
                stageS_oldPixel      <= vramLineData;
+               
+               CLUTDataB_S          <= CLUTDataB;
             end if;
             
             if (pipeline_stall = '0') then
@@ -350,7 +439,7 @@ begin
                   stage0_v             <= stageS_v;          
                   stage0_oldPixel      <= stageS_oldPixel;  
                else
-                  stage0_valid         <= pipeline_new;
+                  stage0_valid         <= pipeline_new and ((not DrawPixelsMask) or (not vramLineData(15)));
                   stage0_texture       <= pipeline_texture;
                   stage0_transparent   <= pipeline_transparent;
                   stage0_rawTexture    <= pipeline_rawTexture; 
@@ -375,85 +464,87 @@ begin
                stage1_cg          <= stage0_cg;         
                stage1_cb          <= stage0_cb; 
                stage1_u           <= stage0_u;
-               stage1_v           <= stage0_v;
                stage1_oldPixel    <= stage0_oldPixel;
                stage1_cachehit    <= cachehit;          
             
-               -- stage2 - apply blending or raw color
-               stage2_valid       <= stage1_valid; 
+               -- stage 2 - texture palette reading
+               stage2_valid       <= stage1_valid;      
+               stage2_texture     <= stage1_texture;    
                stage2_transparent <= stage1_transparent;
+               stage2_rawTexture  <= stage1_rawTexture; 
                stage2_x           <= stage1_x;          
-               stage2_y           <= stage1_y;
-               stage2_oldPixel    <= stage1_oldPixel;               
-               if (stage1_texture = '1') then
-                  texdata := stage1_texdata;
-                  if (stage1_cachehit = '1') then
-                     case (stage1_u(1 downto 0)) is
-                        when "00" => texdata := cache_q_b(15 downto  0);
-                        when "01" => texdata := cache_q_b(31 downto 16);
-                        when "10" => texdata := cache_q_b(47 downto 32);
-                        when "11" => texdata := cache_q_b(63 downto 48);
-                        when others => null;
-                     end case;
+               stage2_y           <= stage1_y;          
+               stage2_cr          <= stage1_cr;         
+               stage2_cg          <= stage1_cg;         
+               stage2_cb          <= stage1_cb; 
+               stage2_texdata     <= texdata_raw;
+               stage2_oldPixel    <= stage1_oldPixel;
+               
+               -- stage 3 - apply blending or raw color
+               stage3_valid       <= stage2_valid; 
+               stage3_transparent <= stage2_transparent;
+               stage3_x           <= stage2_x;          
+               stage3_y           <= stage2_y;
+               stage3_oldPixel    <= stage2_oldPixel;               
+               if (stage2_texture = '1') then
+                  stage3_alphacheck <= texdata_palette(15);
+                  stage3_alphabit   <= texdata_palette(15);
+                  if (texdata_palette = x"0000") then
+                     stage3_valid <= '0';
                   end if;
-                  stage2_alphacheck <= texdata(15);
-                  stage2_alphabit   <= texdata(15);
-                  if (texdata = x"0000") then
-                     stage2_valid <= '0';
-                  end if;
-                  if (stage1_rawTexture = '1') then
-                     stage2_cr         <= unsigned(texdata( 4 downto  0));
-                     stage2_cg         <= unsigned(texdata( 9 downto  5));
-                     stage2_cb         <= unsigned(texdata(14 downto 10));
+                  if (stage2_rawTexture = '1') then
+                     stage3_cr         <= unsigned(texdata_palette( 4 downto  0));
+                     stage3_cg         <= unsigned(texdata_palette( 9 downto  5));
+                     stage3_cb         <= unsigned(texdata_palette(14 downto 10));
                   else
-                     colorTr := unsigned(texdata( 4 downto  0)) * stage1_cr;
-                     colorTg := unsigned(texdata( 9 downto  5)) * stage1_cg;
-                     colorTb := unsigned(texdata(14 downto 10)) * stage1_cb;
-                     if (colorTr(12 downto 7) > 31) then stage2_cr <= (others => '1'); else stage2_cr <= colorTr(11 downto 7); end if;
-                     if (colorTg(12 downto 7) > 31) then stage2_cg <= (others => '1'); else stage2_cg <= colorTg(11 downto 7); end if;
-                     if (colorTb(12 downto 7) > 31) then stage2_cb <= (others => '1'); else stage2_cb <= colorTb(11 downto 7); end if;
+                     colorTr := unsigned(texdata_palette( 4 downto  0)) * stage2_cr;
+                     colorTg := unsigned(texdata_palette( 9 downto  5)) * stage2_cg;
+                     colorTb := unsigned(texdata_palette(14 downto 10)) * stage2_cb;
+                     if (colorTr(12 downto 7) > 31) then stage3_cr <= (others => '1'); else stage3_cr <= colorTr(11 downto 7); end if;
+                     if (colorTg(12 downto 7) > 31) then stage3_cg <= (others => '1'); else stage3_cg <= colorTg(11 downto 7); end if;
+                     if (colorTb(12 downto 7) > 31) then stage3_cb <= (others => '1'); else stage3_cb <= colorTb(11 downto 7); end if;
                   end if;
                else
-                  stage2_cr         <= stage1_cr(7 downto 3);
-                  stage2_cg         <= stage1_cg(7 downto 3);
-                  stage2_cb         <= stage1_cb(7 downto 3);
-                  stage2_alphacheck <= '1';
-                  stage2_alphabit   <= '0';
+                  stage3_cr         <= stage2_cr(7 downto 3);
+                  stage3_cg         <= stage2_cg(7 downto 3);
+                  stage3_cb         <= stage2_cb(7 downto 3);
+                  stage3_alphacheck <= '1';
+                  stage3_alphabit   <= '0';
                end if;
                
-               -- stage3 - apply alpha
-               stage3_valid    <= stage2_valid;   
-               stage3_alphabit <= stage2_alphabit;
-               stage3_x        <= stage2_x;       
-               stage3_y        <= stage2_y;       
+               -- stage 4 - apply alpha
+               stage4_valid    <= stage3_valid;   
+               stage4_alphabit <= stage3_alphabit or SetMask;
+               stage4_x        <= stage3_x;       
+               stage4_y        <= stage3_y;       
 
-               if (stage2_transparent = '1' and stage2_alphacheck = '1') then
+               if (stage3_transparent = '1' and stage3_alphacheck = '1') then
                   -- also check for mask bit
                   
-                  colorBGr  := unsigned(stage2_oldPixel( 4 downto  0));
-                  colorBGg  := unsigned(stage2_oldPixel( 9 downto  5));
-                  colorBGb  := unsigned(stage2_oldPixel(14 downto 10));
+                  colorBGr  := unsigned(stage3_oldPixel( 4 downto  0));
+                  colorBGg  := unsigned(stage3_oldPixel( 9 downto  5));
+                  colorBGb  := unsigned(stage3_oldPixel(14 downto 10));
                   
                   case (drawMode(6 downto 5)) is
                      when "00" => --  B/2+F/2
-                        colorMixr := to_integer(stage2_cr(4 downto 1)) + to_integer(colorBGr(4 downto 1));
-                        colorMixg := to_integer(stage2_cg(4 downto 1)) + to_integer(colorBGg(4 downto 1));
-                        colorMixb := to_integer(stage2_cb(4 downto 1)) + to_integer(colorBGb(4 downto 1));
+                        colorMixr := to_integer(stage3_cr(4 downto 1)) + to_integer(colorBGr(4 downto 1));
+                        colorMixg := to_integer(stage3_cg(4 downto 1)) + to_integer(colorBGg(4 downto 1));
+                        colorMixb := to_integer(stage3_cb(4 downto 1)) + to_integer(colorBGb(4 downto 1));
                         
                      when "01" => --  B+F
-                        colorMixr := to_integer(stage2_cr) + to_integer(colorBGr);
-                        colorMixg := to_integer(stage2_cg) + to_integer(colorBGg);
-                        colorMixb := to_integer(stage2_cb) + to_integer(colorBGb);
+                        colorMixr := to_integer(stage3_cr) + to_integer(colorBGr);
+                        colorMixg := to_integer(stage3_cg) + to_integer(colorBGg);
+                        colorMixb := to_integer(stage3_cb) + to_integer(colorBGb);
                         
                      when "10" => -- B-F
-                        colorMixr := to_integer(stage2_cr) - to_integer(colorBGr);
-                        colorMixg := to_integer(stage2_cg) - to_integer(colorBGg);
-                        colorMixb := to_integer(stage2_cb) - to_integer(colorBGb);
+                        colorMixr := to_integer(stage3_cr) - to_integer(colorBGr);
+                        colorMixg := to_integer(stage3_cg) - to_integer(colorBGg);
+                        colorMixb := to_integer(stage3_cb) - to_integer(colorBGb);
                         
                      when "11" => -- B+F/4
-                        colorMixr := to_integer(stage2_cr(4 downto 2)) + to_integer(colorBGr(4 downto 1));
-                        colorMixg := to_integer(stage2_cg(4 downto 2)) + to_integer(colorBGg(4 downto 1));
-                        colorMixb := to_integer(stage2_cb(4 downto 2)) + to_integer(colorBGb(4 downto 1));
+                        colorMixr := to_integer(stage3_cr(4 downto 2)) + to_integer(colorBGr(4 downto 1));
+                        colorMixg := to_integer(stage3_cg(4 downto 2)) + to_integer(colorBGg(4 downto 1));
+                        colorMixb := to_integer(stage3_cb(4 downto 2)) + to_integer(colorBGb(4 downto 1));
                   
                      when others => null;
                   end case;
@@ -462,19 +553,19 @@ begin
                   if (colorMixg > 31) then colorMixg := 31; elsif (colorMixg < 0) then colorMixg := 0; end if;
                   if (colorMixb > 31) then colorMixb := 31; elsif (colorMixb < 0) then colorMixb := 0; end if;
                   
-                  stage3_cr       <= std_logic_vector(to_unsigned(colorMixr,5));
-                  stage3_cg       <= std_logic_vector(to_unsigned(colorMixg,5));
-                  stage3_cb       <= std_logic_vector(to_unsigned(colorMixb,5));
+                  stage4_cr       <= std_logic_vector(to_unsigned(colorMixr,5));
+                  stage4_cg       <= std_logic_vector(to_unsigned(colorMixg,5));
+                  stage4_cb       <= std_logic_vector(to_unsigned(colorMixb,5));
                else
-                  stage3_cr       <= std_logic_vector(stage2_cr);      
-                  stage3_cg       <= std_logic_vector(stage2_cg);      
-                  stage3_cb       <= std_logic_vector(stage2_cb);       
+                  stage4_cr       <= std_logic_vector(stage3_cr);      
+                  stage4_cg       <= std_logic_vector(stage3_cg);      
+                  stage4_cb       <= std_logic_vector(stage3_cb);       
                end if;
                
-               -- stage 4 - write
-               if (stage3_valid = '1') then
-                  pixelColor <= stage3_alphabit & stage3_cb & stage3_cg & stage3_cr;
-                  pixelAddr  <= stage3_y & stage3_x & '0';
+               -- stage 5 - write
+               if (stage4_valid = '1') then
+                  pixelColor <= stage4_alphabit & stage4_cb & stage4_cg & stage4_cr;
+                  pixelAddr  <= stage4_y & stage4_x & '0';
                   pixelWrite <= '1';
                end if;
             

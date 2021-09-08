@@ -195,6 +195,9 @@ architecture arch of gpu is
    signal rect_reqVRAMSize          : unsigned(10 downto 0);
    signal rect_vramLineEna          : std_logic;
    signal rect_vramLineAddr         : unsigned(9 downto 0);
+   signal rect_textPalNew           : std_logic;
+   signal rect_textPalX             : unsigned(9 downto 0);   
+   signal rect_textPalY             : unsigned(8 downto 0); 
    
    signal poly_requestFifo          : std_logic; 
    signal poly_done                 : std_logic;
@@ -216,9 +219,11 @@ architecture arch of gpu is
    signal poly_reqVRAMSize          : unsigned(10 downto 0);
    signal poly_vramLineEna          : std_logic;
    signal poly_vramLineAddr         : unsigned(9 downto 0);
-   
    signal poly_drawModeRec          : unsigned(11 downto 0);
    signal poly_drawModeNew          : std_logic;
+   signal poly_textPalNew           : std_logic;
+   signal poly_textPalX             : unsigned(9 downto 0);   
+   signal poly_textPalY             : unsigned(8 downto 0); 
    
    signal pipeline_pixelColor       : std_logic_vector(15 downto 0);
    signal pipeline_pixelAddr        : unsigned(19 downto 0);
@@ -240,6 +245,10 @@ architecture arch of gpu is
    signal pipeline_cb               : unsigned(7 downto 0);
    signal pipeline_u                : unsigned(7 downto 0);
    signal pipeline_v                : unsigned(7 downto 0);
+   
+   signal pipeline_textPalNew       : std_logic;
+   signal pipeline_textPalX         : unsigned(9 downto 0);   
+   signal pipeline_textPalY         : unsigned(8 downto 0); 
       
    -- FIFO OUT 
    signal fifoOut_reset             : std_logic; 
@@ -398,8 +407,8 @@ begin
                         GPUSTAT_HorRes2       <= bus_dataWrite(6);
                         GPUSTAT_ReverseFlag   <= bus_dataWrite(7);
                         
-                     when 16#09# => -- Set display mode
-                        GPUSTAT_TextureDisable <= bus_dataWrite(0);
+                     when 16#09# => -- Allow texture disable
+                        -- todo
                           
                      when 16#10# | 16#11# | 16#12# | 16#13# | 16#14# | 16#15# | 16#16# | 16#17# | 16#18# | 16#19# | 16#1A# | 16#1B# | 16#1C# | 16#1D# | 16#1E# | 16#1F# => -- GPUInfo
                         case (to_integer(unsigned(bus_dataWrite(2 downto 0)))) is
@@ -507,10 +516,8 @@ begin
                vpos                   <= 0;
                inVsync                <= '0';
                      
-               GPUSTAT_DrawPixelsMask <= '0';
                GPUSTAT_InterlaceField <= '1';
                GPUSTAT_ReverseFlag    <= '0';
-               GPUSTAT_TextureDisable <= '0';
                GPUSTAT_HorRes2        <= '0';
                GPUSTAT_HorRes1        <= "00";
                GPUSTAT_VerRes         <= '0';
@@ -622,7 +629,7 @@ begin
                   GPUSTAT_TextPageColors <= fifoIn_Dout(8 downto 7);
                   GPUSTAT_Dither         <= fifoIn_Dout(9);
                   GPUSTAT_DrawToDisplay  <= fifoIn_Dout(10);
-                  GPUSTAT_SetMask        <= fifoIn_Dout(11);
+                  GPUSTAT_TextureDisable <= fifoIn_Dout(11);
                   drawMode               <= unsigned(fifoIn_Dout(13 downto 0));
                   
                elsif (cmdNew = 16#E2#) then -- Set Texture window
@@ -641,7 +648,8 @@ begin
                   drawingOffsetY <= signed(fifoIn_Dout(21 downto 11));
                   
                elsif (cmdNew = 16#E6#) then -- Mask Bit Setting
-                  -- todo
+                  GPUSTAT_SetMask        <= fifoIn_Dout(0);
+                  GPUSTAT_DrawPixelsMask <= fifoIn_Dout(1);
                   
                end if;
             
@@ -662,6 +670,8 @@ begin
                GPUSTAT_Dither         <= '0';
                GPUSTAT_DrawToDisplay  <= '0';
                GPUSTAT_SetMask        <= '0';
+               GPUSTAT_DrawPixelsMask <= '0';
+               GPUSTAT_TextureDisable <= '0';
                GPUSTAT_ReadyRecCmd    <= '1';
                GPUSTAT_ReadySendVRAM  <= '0';
                GPUSTAT_ReadyRecDMA    <= '1';
@@ -762,6 +772,7 @@ begin
       ce                   => ce,        
       reset                => softreset,     
       
+      DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
       activeLineLSB        => activeLineLSB,    
       drawingOffsetX       => drawingOffsetX,   
@@ -812,6 +823,7 @@ begin
       ce                   => ce,        
       reset                => softreset,     
       
+      DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
       activeLineLSB        => activeLineLSB,    
       drawingOffsetX       => drawingOffsetX,   
@@ -847,6 +859,10 @@ begin
       requestVRAMIdle      => reqVRAMIdle,
       requestVRAMDone      => reqVRAMDone,
       
+      textPalNew           => rect_textPalNew,
+      textPalX             => rect_textPalX,  
+      textPalY             => rect_textPalY,  
+      
       vramLineEna          => rect_vramLineEna, 
       vramLineAddr         => rect_vramLineAddr
    );
@@ -859,6 +875,7 @@ begin
       ce                   => ce,        
       reset                => softreset,     
       
+      DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
       activeLineLSB        => activeLineLSB,    
       drawingOffsetX       => drawingOffsetX,   
@@ -904,6 +921,10 @@ begin
       requestVRAMIdle      => reqVRAMIdle,
       requestVRAMDone      => reqVRAMDone,
       
+      textPalNew           => poly_textPalNew,
+      textPalX             => poly_textPalX,  
+      textPalY             => poly_textPalY,  
+      
       vramLineEna          => poly_vramLineEna, 
       vramLineAddr         => poly_vramLineAddr
    );
@@ -920,6 +941,10 @@ begin
    pipeline_u           <= x"00"                     or rect_pipeline_u           or poly_pipeline_u          ;
    pipeline_v           <= x"00"                     or rect_pipeline_v           or poly_pipeline_v          ;
    
+   pipeline_textPalNew  <= rect_textPalNew or poly_textPalNew;
+   pipeline_textPalX    <= rect_textPalX   or poly_textPalX  ;
+   pipeline_textPalY    <= rect_textPalY   or poly_textPalY  ;
+   
    igpu_pixelpipeline : entity work.gpu_pixelpipeline
    port map
    (
@@ -929,6 +954,8 @@ begin
       reset                => softreset,  
 
       drawMode             => drawMode,
+      DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
+      SetMask              => GPUSTAT_SetMask,
       
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => pipeline_new,        
@@ -953,6 +980,10 @@ begin
       vram_DOUT_READY      => vram_DOUT_READY,
       
       vramLineData         => vramLineData,
+      
+      textPalInNew         => pipeline_textPalNew,
+      textPalInX           => pipeline_textPalX,  
+      textPalInY           => pipeline_textPalY,  
       
       pixelStall           => pixelStall,
       pixelColor           => pipeline_pixelColor,
