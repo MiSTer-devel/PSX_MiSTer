@@ -42,7 +42,7 @@ entity export is
       new_export       : in std_logic;
       export_cpu       : in cpu_export_type;    
       
-      export_irq       : in std_logic_vector(7 downto 0);
+      export_irq       : in unsigned(15 downto 0);
       
       export_gtm       : in unsigned(11 downto 0);
       export_line      : in unsigned(11 downto 0);
@@ -66,6 +66,8 @@ architecture arch of export is
    
    signal export_cpu_last  : cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'), (others => '0'));   
 
+   signal export_irq_last  : unsigned(15 downto 0) := (others => '0');
+   
    signal export_gtm_last  : unsigned(11 downto 0) := (others => '0');
    signal export_line_last : unsigned(11 downto 0) := (others => '0');
    signal export_gpus_last : unsigned(31 downto 0) := (others => '0');
@@ -196,6 +198,8 @@ begin
 
             if (export_cpu.cause /= export_cpu_last.cause)   then write(line_out, string'("CAUSE "));  write(line_out, to_lower(to_hstring(export_cpu.cause)) & " "); end if;
             
+            if (export_irq /= export_irq_last)   then write(line_out, string'("IRQ "));  write(line_out, to_lower(to_hstring(export_irq)) & " "); end if;
+            
             if (export_gtm /= export_gtm_last)   then write(line_out, string'("GTM "));  write(line_out, to_lower(to_hstring(export_gtm)) & " "); end if;
             if (export_line /= export_line_last) then write(line_out, string'("LINE ")); write(line_out, to_lower(to_hstring(export_line)) & " "); end if;
             if (export_gpus /= export_gpus_last) then write(line_out, string'("GPUS ")); write(line_out, to_lower(to_hstring(export_gpus)) & " "); end if;
@@ -214,6 +218,7 @@ begin
             end if;
             
             export_cpu_last   <= export_cpu;
+            export_irq_last   <= export_irq;
             export_gtm_last   <= export_gtm;
             export_line_last  <= export_line;
             export_gpus_last  <= export_gpus;

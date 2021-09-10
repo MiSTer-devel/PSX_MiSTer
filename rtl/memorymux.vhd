@@ -40,6 +40,19 @@ entity memorymux is
       bus_exp1_write       : out std_logic;
       bus_exp1_dataRead    : in  std_logic_vector(31 downto 0);
       
+      bus_pad_addr         : out unsigned(3 downto 0); 
+      bus_pad_dataWrite    : out std_logic_vector(31 downto 0);
+      bus_pad_read         : out std_logic;
+      bus_pad_write        : out std_logic;
+      bus_pad_writeMask    : out std_logic_vector(3 downto 0);
+      bus_pad_dataRead     : in  std_logic_vector(31 downto 0);
+      
+      bus_irq_addr         : out unsigned(3 downto 0); 
+      bus_irq_dataWrite    : out std_logic_vector(31 downto 0);
+      bus_irq_read         : out std_logic;
+      bus_irq_write        : out std_logic;
+      bus_irq_dataRead     : in  std_logic_vector(31 downto 0);
+      
       bus_gpu_addr         : out unsigned(3 downto 0); 
       bus_gpu_dataWrite    : out std_logic_vector(31 downto 0);
       bus_gpu_read         : out std_logic;
@@ -109,6 +122,31 @@ begin
          end if;
       end if;
       
+      -- pad
+      bus_pad_read      <= '0';
+      bus_pad_write     <= '0';
+      bus_pad_addr      <= address(3 downto 0);
+      bus_pad_dataWrite <= mem_dataWrite;
+      bus_pad_writeMask <= mem_writeMask;
+      if (address >= 16#1F801040# and address < 16#1F801050#) then
+         if (mem_request = '1' and mem_isData = '1') then
+            bus_pad_read  <= mem_rnw;
+            bus_pad_write <= not mem_rnw;
+         end if;
+      end if;
+      
+      -- irq
+      bus_irq_read      <= '0';
+      bus_irq_write     <= '0';
+      bus_irq_addr      <= address(3 downto 0);
+      bus_irq_dataWrite <= mem_dataWrite;
+      if (address >= 16#1F801070# and address < 16#1F801080#) then
+         if (mem_request = '1' and mem_isData = '1') then
+            bus_irq_read  <= mem_rnw;
+            bus_irq_write <= not mem_rnw;
+         end if;
+      end if;
+      
       -- gpu
       bus_gpu_read      <= '0';
       bus_gpu_write     <= '0';
@@ -123,7 +161,7 @@ begin
 
    end process;
    
-   dataFromBusses <= bus_exp1_dataRead or bus_gpu_dataRead;
+   dataFromBusses <= bus_exp1_dataRead or bus_pad_dataRead or bus_irq_dataRead or bus_gpu_dataRead;
   
    process (clk1x)
    begin

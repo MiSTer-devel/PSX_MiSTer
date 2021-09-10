@@ -41,6 +41,10 @@ entity psx_top is
       vsync                 : out std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
+      DisplayWidth          : out unsigned( 9 downto 0);
+      DisplayHeight         : out unsigned( 8 downto 0);
+      DisplayOffsetX        : out unsigned( 9 downto 0);
+      DisplayOffsetY        : out unsigned( 8 downto 0);
       -- Keys - all active high   
       KeyTriangle           : in  std_logic; 
       KeyCircle             : in  std_logic; 
@@ -85,6 +89,19 @@ architecture arch of psx_top is
    signal bus_exp1_write         : std_logic;
    signal bus_exp1_dataRead      : std_logic_vector(31 downto 0);
    
+   signal bus_pad_addr           : unsigned(3 downto 0); 
+   signal bus_pad_dataWrite      : std_logic_vector(31 downto 0);
+   signal bus_pad_read           : std_logic;
+   signal bus_pad_write          : std_logic;
+   signal bus_pad_writeMask      : std_logic_vector(3 downto 0);
+   signal bus_pad_dataRead       : std_logic_vector(31 downto 0);
+   
+   signal bus_irq_addr           : unsigned(3 downto 0); 
+   signal bus_irq_dataWrite      : std_logic_vector(31 downto 0);
+   signal bus_irq_read           : std_logic;
+   signal bus_irq_write          : std_logic;
+   signal bus_irq_dataRead       : std_logic_vector(31 downto 0);
+   
    signal bus_gpu_addr           : unsigned(3 downto 0); 
    signal bus_gpu_dataWrite      : std_logic_vector(31 downto 0);
    signal bus_gpu_read           : std_logic;
@@ -105,6 +122,20 @@ architecture arch of psx_top is
    signal mem_dataCache          : std_logic_vector(127 downto 0); 
    signal mem_done               : std_logic;
    
+   -- irq
+   signal irqRequest             : std_logic;
+   signal irq_VBLANK             : std_logic;
+   signal irq_GPU                : std_logic;
+   signal irq_CDROM              : std_logic;
+   signal irq_DMA                : std_logic;
+   signal irq_TIMER0             : std_logic;
+   signal irq_TIMER1             : std_logic;
+   signal irq_TIMER2             : std_logic;
+   signal irq_PAD                : std_logic;
+   signal irq_SIO                : std_logic;
+   signal irq_SPU                : std_logic;
+   signal irq_LIGHTPEN           : std_logic;
+   
    -- export
    signal cpu_done               : std_logic; 
    signal new_export             : std_logic; 
@@ -112,6 +143,7 @@ architecture arch of psx_top is
    signal export_8               : std_logic_vector(7 downto 0);
    signal export_16              : std_logic_vector(15 downto 0);
    signal export_32              : std_logic_vector(31 downto 0);
+   signal export_irq             : unsigned(15 downto 0);
    signal export_gtm             : unsigned(11 downto 0);
    signal export_line            : unsigned(11 downto 0);
    signal export_gpus            : unsigned(31 downto 0);
@@ -164,6 +196,63 @@ begin
       
       end if;
    end process;
+
+   ijoypad: entity work.joypad
+   port map 
+   (
+      clk1x                => clk1x,
+      ce                   => ce,   
+      reset                => reset_intern,
+      
+      irqRequest           => irq_PAD,
+      
+      bus_addr             => bus_pad_addr,     
+      bus_dataWrite        => bus_pad_dataWrite,
+      bus_read             => bus_pad_read,     
+      bus_write            => bus_pad_write,    
+      bus_writeMask        => bus_pad_writeMask,   
+      bus_dataRead         => bus_pad_dataRead
+   );
+   
+   irq_GPU       <= '0'; -- todo
+   irq_CDROM     <= '0'; -- todo
+   irq_DMA       <= '0'; -- todo
+   irq_TIMER0    <= '0'; -- todo
+   irq_TIMER1    <= '0'; -- todo
+   irq_TIMER2    <= '0'; -- todo
+   irq_SIO       <= '0'; -- todo
+   irq_SPU       <= '0'; -- todo
+   irq_LIGHTPEN  <= '0'; -- todo
+
+   iirq : entity work.irq
+   port map
+   (
+      clk1x                => clk1x,
+      ce                   => ce,   
+      reset                => reset_intern,
+      
+      irq_VBLANK           => irq_VBLANK,
+      irq_GPU              => irq_GPU,     
+      irq_CDROM            => irq_CDROM,   
+      irq_DMA              => irq_DMA,     
+      irq_TIMER0           => irq_TIMER0,  
+      irq_TIMER1           => irq_TIMER1,  
+      irq_TIMER2           => irq_TIMER2,  
+      irq_PAD              => irq_PAD,     
+      irq_SIO              => irq_SIO,     
+      irq_SPU              => irq_SPU,     
+      irq_LIGHTPEN         => irq_LIGHTPEN,
+      
+      bus_addr             => bus_irq_addr,     
+      bus_dataWrite        => bus_irq_dataWrite,
+      bus_read             => bus_irq_read,     
+      bus_write            => bus_irq_write,    
+      bus_dataRead         => bus_irq_dataRead,
+      
+      irqRequest           => irqRequest,
+      
+      export_irq           => export_irq
+   );
    
    igpu : entity work.gpu
    port map
@@ -182,6 +271,8 @@ begin
       bus_write            => bus_gpu_write,    
       bus_dataRead         => bus_gpu_dataRead, 
       
+      irq_VBLANK           => irq_VBLANK,
+      
       vram_BUSY            => vram_BUSY,      
       vram_DOUT            => vram_DOUT,      
       vram_DOUT_READY      => vram_DOUT_READY,
@@ -196,6 +287,10 @@ begin
       vsync                => vsync, 
       hblank               => hblank,
       vblank               => vblank,
+      DisplayWidth         => DisplayWidth, 
+      DisplayHeight        => DisplayHeight,
+      DisplayOffsetX       => DisplayOffsetX,
+      DisplayOffsetY       => DisplayOffsetY,
       
       export_gtm           => export_gtm,
       export_line          => export_line,
@@ -240,7 +335,20 @@ begin
       bus_exp1_read        => bus_exp1_read,   
       bus_exp1_write       => bus_exp1_write,  
       bus_exp1_dataRead    => bus_exp1_dataRead,
+      
+      bus_pad_addr         => bus_pad_addr,     
+      bus_pad_dataWrite    => bus_pad_dataWrite,
+      bus_pad_read         => bus_pad_read,     
+      bus_pad_write        => bus_pad_write,    
+      bus_pad_writeMask    => bus_pad_writeMask,
+      bus_pad_dataRead     => bus_pad_dataRead, 
 
+      bus_irq_addr         => bus_irq_addr,     
+      bus_irq_dataWrite    => bus_irq_dataWrite,
+      bus_irq_read         => bus_irq_read,     
+      bus_irq_write        => bus_irq_write,    
+      bus_irq_dataRead     => bus_irq_dataRead,      
+      
       bus_gpu_addr         => bus_gpu_addr,     
       bus_gpu_dataWrite    => bus_gpu_dataWrite,
       bus_gpu_read         => bus_gpu_read,     
@@ -248,13 +356,14 @@ begin
       bus_gpu_dataRead     => bus_gpu_dataRead
    );
    
-   
    icpu : entity work.cpu
    port map
    (
       clk1x             => clk1x,
       ce                => ce,   
       reset             => reset_intern,
+         
+      irqRequest        => irqRequest,
          
       mem_request       => mem_request,  
       mem_rnw           => mem_rnw,      
@@ -290,7 +399,7 @@ begin
          new_export     => cpu_done,
          export_cpu     => cpu_export,
          
-         export_irq     => x"00",
+         export_irq     => export_irq,
          
          export_gtm     => export_gtm,
          export_line    => export_line,

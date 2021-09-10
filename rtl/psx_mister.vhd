@@ -37,6 +37,10 @@ entity psx_mister is
       vsync                 : out std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
+      DisplayWidth         : out unsigned( 9 downto 0);
+      DisplayHeight        : out unsigned( 8 downto 0);
+      DisplayOffsetX       : out unsigned( 9 downto 0);
+      DisplayOffsetY       : out unsigned( 8 downto 0);
       -- Keys - all active high   
       KeyTriangle           : in  std_logic; 
       KeyCircle             : in  std_logic; 
@@ -111,6 +115,10 @@ begin
       vsync                 => vsync, 
       hblank                => hblank,
       vblank                => vblank,
+      DisplayWidth          => DisplayWidth, 
+      DisplayHeight         => DisplayHeight,
+      DisplayOffsetX        => DisplayOffsetX,
+      DisplayOffsetY        => DisplayOffsetY,
       -- Keys - all active high
       KeyTriangle           => KeyTriangle,           
       KeyCircle             => KeyCircle,           

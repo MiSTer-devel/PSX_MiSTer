@@ -189,11 +189,16 @@ assign VGA_SCALER= 0;
 
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
-assign FB_BASE    = 32'h30000000;
+wire [11:0] DisplayWidth;
+wire [11:0] DisplayHeight;
+wire [ 9:0] DisplayOffsetX;
+wire [ 8:0] DisplayOffsetY;
+
+assign FB_BASE    = status[11] ? 32'h30000000 : (32'h30000000 + (DisplayOffsetX * 2) + (DisplayOffsetY * 2048));
 assign FB_EN      = 1;
 assign FB_FORMAT  = status[10] ? 5'b00101 : 5'b01100;
-assign FB_WIDTH   = 12'd1024;
-assign FB_HEIGHT  = 12'd512;
+assign FB_WIDTH   = status[11] ? 12'd1024 : DisplayWidth;
+assign FB_HEIGHT  = status[11] ? 12'd512  : DisplayHeight;
 assign FB_STRIDE  = 14'd2048;
 assign FB_FORCE_BLANK = 0;
 assign FB_PAL_CLK = 0;
@@ -261,7 +266,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX  RXX   XX    X   X     XXXXXXX
+// X XXXXXXX XXXX   XX    X   X     XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -279,6 +284,7 @@ parameter CONF_STR = {
 	"h4H3-;",
 	"- ;",
 	"OA,Color,16,24;",
+	"OB,VRAMViewer,Off,On;",
 	"- ;",
 
 	"P1,Video & Audio;",
@@ -512,6 +518,10 @@ psx
    .vsync           (vs),
    .hblank          (hbl),
    .vblank          (vbl),
+   .DisplayWidth    (DisplayWidth), 
+   .DisplayHeight   (DisplayHeight),
+   .DisplayOffsetX  (DisplayOffsetX),
+   .DisplayOffsetY  (DisplayOffsetY),
    //Keys
    .KeyTriangle(1'b0),    
    .KeyCircle(1'b0),       
@@ -753,8 +763,8 @@ video_freak video_freak
 	.VGA_DE_IN(VGA_DE),
 	.VGA_DE(),
 
-	.ARX((!ar) ? 12'd2 : (ar - 1'd1)),
-	.ARY((!ar) ? 12'd1 : 12'd0),
+	.ARX((!ar) ? (status[11] ? 12'd2 : 12'd4) : (ar - 1'd1)),
+	.ARY((!ar) ? (status[11] ? 12'd1 : 12'd3) : 12'd0),
 	.CROP_SIZE(0),
 	.CROP_OFF(0),
 	.SCALE(status[35:34])

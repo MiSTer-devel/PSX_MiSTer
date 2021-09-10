@@ -21,6 +21,8 @@ entity gpu is
       bus_read             : in  std_logic;
       bus_write            : in  std_logic;
       bus_dataRead         : out std_logic_vector(31 downto 0);
+      
+      irq_VBLANK           : out std_logic := '0';
                      
       vram_BUSY            : in  std_logic;                    
       vram_DOUT            : in  std_logic_vector(63 downto 0);
@@ -36,6 +38,10 @@ entity gpu is
       vsync                : out std_logic := '0';
       hblank               : out std_logic := '0';
       vblank               : out std_logic := '0';
+      DisplayWidth         : out unsigned( 9 downto 0);
+      DisplayHeight        : out unsigned( 8 downto 0);
+      DisplayOffsetX       : out unsigned( 9 downto 0);
+      DisplayOffsetY       : out unsigned( 8 downto 0);
       
       export_gtm           : out unsigned(11 downto 0);
       export_line          : out unsigned(11 downto 0);
@@ -293,7 +299,6 @@ begin
    export_line <= to_unsigned(vpos, 12);
    export_gpus <= unsigned(GPUSTAT);
 
-
    GPUSTAT(3 downto 0)     <= GPUSTAT_TextPageX;
    GPUSTAT(4)              <= GPUSTAT_TextPageY;
    GPUSTAT(6 downto 5)     <= GPUSTAT_Transparency;
@@ -337,8 +342,13 @@ begin
          if (nextHCount < 400) then hblank <= '1'; else hblank <= '0'; end if;
          
          vblank <= inVsync;
-         if (vpos = vtotal - 4) then vsync <= '1'; end if; 
-         if (vpos = vtotal - 2) then vsync <= '0'; end if; 
+         if (vDisplayStart >= 4) then
+            if (vpos = vDisplayStart - 4) then vsync <= '1'; end if; 
+            if (vpos = vDisplayStart - 2) then vsync <= '0'; end if; 
+         else
+            if (vpos = vDisplayEnd - 4) then vsync <= '1'; end if; 
+            if (vpos = vDisplayEnd - 2) then vsync <= '0'; end if; 
+         end if;
          
       
          if (reset = '1') then
@@ -351,12 +361,38 @@ begin
             
             fifoIn_reset            <= '1';
             fifoOut_reset           <= '1';
+            
+            irq_VBLANK              <= '0';
 
          elsif (ce = '1') then
          
+            irq_VBLANK   <= '0';
+         
             bus_dataRead <= (others => '0');
             softReset    <= '0';
-
+            
+            if (GPUSTAT_HorRes2 = '1') then
+               DisplayWidth  <= to_unsigned(368, 10);
+            else
+               case (GPUSTAT_HorRes1) is
+                  when "00" => DisplayWidth <= to_unsigned(256, 10);
+                  when "01" => DisplayWidth <= to_unsigned(320, 10);
+                  when "10" => DisplayWidth <= to_unsigned(512, 10);
+                  when "11" => DisplayWidth <= to_unsigned(640, 10);
+                  when others => null;
+               end case;
+            end if;
+            
+            if (GPUSTAT_VerRes = '1') then
+               DisplayHeight  <= to_unsigned(240, 9);
+            else
+               DisplayHeight  <= to_unsigned(240, 9);
+            end if;
+            
+            DisplayOffsetX <= vramRange(9 downto 0);
+            DisplayOffsetY <= vramRange(18 downto 10);
+            
+            
             -- bus read
             if (bus_read = '1') then
                if (bus_addr(3 downto 2) = "00") then
@@ -400,7 +436,7 @@ begin
                         
                      when 16#08# => -- Set display mode
                         GPUSTAT_HorRes1       <= bus_dataWrite(1 downto 0);
-                        GPUSTAT_VertInterlace <= bus_dataWrite(2);
+                        GPUSTAT_VerRes        <= bus_dataWrite(2);
                         GPUSTAT_PalVideoMode  <= bus_dataWrite(3);
                         GPUSTAT_ColorDepth24  <= bus_dataWrite(4);
                         GPUSTAT_VertInterlace <= bus_dataWrite(5);
@@ -476,7 +512,7 @@ begin
                interlacedDisplayFieldNew := interlacedDisplayField;
                if (isVsync /= inVsync) then
                   if (isVsync = '1') then
-                     --PSXRegs.setIRQ(0);
+                     irq_VBLANK <= '1';
                      if (mode480i = '1') then 
                         interlacedDisplayFieldNew := not GPUSTAT_InterlaceField;
                      else 

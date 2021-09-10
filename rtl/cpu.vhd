@@ -14,6 +14,8 @@ entity cpu is
       ce                    : in  std_logic;
       reset                 : in  std_logic;
       
+      irqRequest            : in  std_logic;
+      
       mem_request           : out std_logic;
       mem_rnw               : out std_logic; 
       mem_isData            : out std_logic; 
@@ -500,11 +502,9 @@ begin
                
             end case;
             
-
-
          end if;
          
-         if (mem_done = '1' and memoryMuxStage = 4 and fetchReady = '0') then
+         if (mem_done = '1' and memoryMuxStage = 4 and fetchReady = '0' and exception = 0) then
             request := '1';
          end if;
       
@@ -1718,17 +1718,17 @@ begin
                
                exception <= exceptionNew;
                if (exceptionNew1 = '1') then    -- PC out of bounds
-                  exceptionCode     <= x"0";
+                  exceptionCode     <= x"6";
                   exceptionInstr    <= opcode2(27 downto 26);
                   exception_PC      <= PCnext;
                   exception_branch  <= executeBranchTaken;
                   exception_brslot  <= executeBranchdelaySlot;
                elsif (exceptionNew5 = '1') then -- interrupt
-                  exceptionCode     <= x"6";
-                  exceptionInstr    <= opcode2(27 downto 26);
-                  exception_PC      <= pcOld2;
-                  exception_branch  <= writeBackBranchTaken;
-                  exception_brslot  <= writeBackBranchdelaySlot;
+                  exceptionCode     <= x"0";
+                  exceptionInstr    <= opcode1(27 downto 26);
+                  exception_PC      <= pcOld1;
+                  exception_branch  <= executeBranchTaken;
+                  exception_brslot  <= executeBranchdelaySlot;
                else                             -- execute stage
                   exceptionCode     <= exceptionCode_3;
                   exceptionInstr    <= opcode1(27 downto 26);
@@ -1768,11 +1768,13 @@ begin
                end loop;
                
                -- todo: REMOVE!
-               --if (debugCnt(31) = '1' and writebackTarget = 0) then
-               --   writeDoneWriteEnable <= '0';
-               --end if;
+               if (debugCnt(31) = '1' and writebackTarget = 0) then
+                  cop0_CAUSE(10) <= '0';
+               end if;
                
             end if;
+            
+            cop0_CAUSE(10) <= irqRequest;
    
          end if;
       end if;

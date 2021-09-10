@@ -12,8 +12,11 @@ Rename to boot.rom
 Core uses direct framebuffer mode to display VRAM content in DDR3 with scaler over HDMI.
 This is done for bandwidth purposes and will not allow you to display via analog out/VGA, unless you use direct video!
 
-Current output mode is full VRAM output with 1024x512 pixels, 
-so you will see things that are not visible on a real PlayStation.
+Also vsync_adjust=2 (low latency mode) in the mister.ini is required or it will lead to screen drawing being in the visible area!
+
+You can choose to view
+- normal drawing area without any overscan cutoff
+- full VRAM as 1024x512 pixel image (debug mode)
 
 # Status
 
@@ -33,8 +36,10 @@ Work in progress, don't report any bugs!
 
 --
 
-- CPU    : 55%
+- CPU    : 60%
 - GPU    : 70%
 - Memory : 20%
+- IRQ    : 20%
+- PAD    : 20%
 
 Everything else still missing

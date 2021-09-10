@@ -11,6 +11,8 @@ set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_rect.v
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_poly.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_pixelpipeline.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) irq.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) joypad.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) cpu.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) memorymux.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) psx_top.vhd ]
