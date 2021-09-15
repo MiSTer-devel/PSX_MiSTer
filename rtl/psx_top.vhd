@@ -247,13 +247,20 @@ begin
       
          ce        <= '1';
          ce_cpu    <= '1';
-         
-         cpuPaused <= '0';
-         if (dmaOn = '1' and memMuxIdle = '1' and mem_request = '0') then
-            cpuPaused <= '1';
-            ce_cpu    <= '0';
-         end if;
       
+         if (reset_intern = '1') then
+            cpuPaused <= '0';
+         else
+      
+            if ((cpuPaused = '1' and dmaOn = '1') or (dmaOn = '1' and memMuxIdle = '1' and mem_request = '0')) then
+               cpuPaused <= '1';
+               ce_cpu    <= '0';
+            elsif (dmaOn = '0') then
+               cpuPaused <= '0';
+               ce_cpu    <= '1';
+            end if;
+            
+         end if;
       end if;
    end process;
 
@@ -434,7 +441,7 @@ begin
    port map
    (
       clk1x                => clk1x,
-      ce                   => ce,   
+      ce                   => ce_cpu,   
       reset                => reset_intern,
       
       isIdle               => memMuxIdle,

@@ -127,6 +127,7 @@ architecture arch of cpu is
    signal cache_q_b                    : std_logic_vector(127 downto 0);
    
    signal FetchAddr                    : unsigned(31 downto 0) := (others => '0'); 
+   signal FetchLastAddr                : unsigned(31 downto 0) := (others => '0'); 
    
    signal cacheValueLast               : unsigned(31 downto 0) := (others => '0'); 
    signal cacheHitLast                 : std_logic := '0';
@@ -332,7 +333,8 @@ begin
                if (mem4_request = '1') then 
                   memoryMuxStage <= 4;
                else
-                  memoryMuxStage <= 1;
+                  memoryMuxStage  <= 1;
+                  FetchLastAddr   <= mem1_address;
                end if;
             end if;
    
@@ -376,8 +378,8 @@ begin
       q          => tag_q_b
 	);
 
-   tag_address_a <= std_logic_vector(PC(11 downto 4));
-   tag_data_a    <= std_logic_vector(PC(28 downto 12));
+   tag_address_a <= std_logic_vector(FetchLastAddr(11 downto 4));
+   tag_data_a    <= std_logic_vector(FetchLastAddr(28 downto 12));
    
    tag_address_b <= std_logic_vector(FetchAddr(11 downto 4));
 
@@ -401,7 +403,7 @@ begin
       );
    end generate; 
    
-   cache_address_a <= std_logic_vector(PC(11 downto 4));
+   cache_address_a <= std_logic_vector(FetchLastAddr(11 downto 4));
    
    FetchAddr       <= x"BFC00180" when (exception > 0 and cop0_SR(22) = '1') else
                       x"80000080" when (exception > 0 and cop0_SR(22) = '0') else
@@ -432,7 +434,7 @@ begin
       cache_wren_a    <= "0000";
       tag_wren_a      <= '0';
       if (mem_done = '1' and memoryMuxStage = 1) then 
-         case (to_integer(unsigned(PC(31 downto 29)))) is
+         case (to_integer(unsigned(FetchLastAddr(31 downto 29)))) is
             when 0 | 4 => -- cached
                cache_wren_a <= "1111";
                tag_wren_a   <= '1';

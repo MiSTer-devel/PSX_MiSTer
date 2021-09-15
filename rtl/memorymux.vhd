@@ -124,7 +124,7 @@ begin
       bus_exp1_addr      <= address(22 downto 0);
       bus_exp1_dataWrite <= mem_dataWrite;
       if (address >= 16#1F000000# and address < 16#1F800000#) then
-         if (mem_request = '1' and mem_isData = '1') then
+         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
             bus_exp1_read  <= mem_rnw;
             bus_exp1_write <= not mem_rnw;
          end if;
@@ -137,7 +137,7 @@ begin
       bus_pad_dataWrite <= mem_dataWrite;
       bus_pad_writeMask <= mem_writeMask;
       if (address >= 16#1F801040# and address < 16#1F801050#) then
-         if (mem_request = '1' and mem_isData = '1') then
+         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
             bus_pad_read  <= mem_rnw;
             bus_pad_write <= not mem_rnw;
          end if;
@@ -149,7 +149,7 @@ begin
       bus_irq_addr      <= address(3 downto 0);
       bus_irq_dataWrite <= mem_dataWrite;
       if (address >= 16#1F801070# and address < 16#1F801080#) then
-         if (mem_request = '1' and mem_isData = '1') then
+         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
             bus_irq_read  <= mem_rnw;
             bus_irq_write <= not mem_rnw;
          end if;
@@ -161,7 +161,7 @@ begin
       bus_dma_addr      <= address(6 downto 0);
       bus_dma_dataWrite <= mem_dataWrite;
       if (address >= 16#1F801080# and address < 16#1F801100#) then
-         if (mem_request = '1' and mem_isData = '1') then
+         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
             bus_dma_read  <= mem_rnw;
             bus_dma_write <= not mem_rnw;
          end if;
@@ -173,7 +173,7 @@ begin
       bus_gpu_addr      <= address(3 downto 0);
       bus_gpu_dataWrite <= mem_dataWrite;
       if (address >= 16#1F801810# and address < 16#1F801820#) then
-         if (mem_request = '1' and mem_isData = '1') then
+         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
             bus_gpu_read  <= mem_rnw;
             bus_gpu_write <= not mem_rnw;
          end if;
@@ -199,7 +199,7 @@ begin
 
             state <= IDLE;
 
-         else
+         elsif (ce = '1') then
          
             case (state) is
                when IDLE =>
