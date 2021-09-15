@@ -1,11 +1,16 @@
 library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all; 
+use STD.textio.all;
 
 library mem;
 use work.pGPU.all;
 
 entity gpu is
+   generic
+   (
+      REPRODUCIBLEGPUTIMING : std_logic
+   );
    port 
    (
       clk1x                : in  std_logic;
@@ -21,6 +26,12 @@ entity gpu is
       bus_read             : in  std_logic;
       bus_write            : in  std_logic;
       bus_dataRead         : out std_logic_vector(31 downto 0);
+      
+      gpu_dmaRequest       : out std_logic;
+      DMA_GPU_writeEna     : in  std_logic;
+      DMA_GPU_readEna      : in  std_logic;
+      DMA_GPU_write        : in  std_logic_vector(31 downto 0);
+      DMA_GPU_read         : out std_logic_vector(31 downto 0) := (others => '0');
       
       irq_VBLANK           : out std_logic := '0';
                      
@@ -45,7 +56,8 @@ entity gpu is
       
       export_gtm           : out unsigned(11 downto 0);
       export_line          : out unsigned(11 downto 0);
-      export_gpus          : out unsigned(31 downto 0)
+      export_gpus          : out unsigned(31 downto 0);
+      export_gobj          : out unsigned(15 downto 0) := (others => '0')
    );
 end entity;
 
@@ -298,6 +310,8 @@ begin
    export_gtm  <= to_unsigned(nextHCount, 12);
    export_line <= to_unsigned(vpos, 12);
    export_gpus <= unsigned(GPUSTAT);
+   
+   gpu_dmaRequest <= GPUSTAT_DMADataRequest;
 
    GPUSTAT(3 downto 0)     <= GPUSTAT_TextPageX;
    GPUSTAT(4)              <= GPUSTAT_TextPageY;
@@ -325,6 +339,11 @@ begin
    GPUSTAT(30 downto 29)   <= GPUSTAT_DMADirection;
    GPUSTAT(31)             <= GPUSTAT_DrawingOddline;
 
+   GPUSTAT_DMADataRequest <= '0' when (GPUSTAT_DMADirection = "00") else
+                             GPUSTAT_ReadyRecDMA when (GPUSTAT_DMADirection = "01") else
+                             GPUSTAT_ReadyRecDMA when (GPUSTAT_DMADirection = "10") else
+                             GPUSTAT_ReadySendVRAM;                   
+
    process (clk1x)
       variable mode480i                  : std_logic;
       variable isVsync                   : std_logic;
@@ -348,8 +367,7 @@ begin
          else
             if (vpos = vDisplayEnd - 4) then vsync <= '1'; end if; 
             if (vpos = vDisplayEnd - 2) then vsync <= '0'; end if; 
-         end if;
-         
+         end if;      
       
          if (reset = '1') then
                
@@ -562,7 +580,6 @@ begin
                GPUSTAT_VertInterlace  <= '0';
                GPUSTAT_DisplayDisable <= '1';
                GPUSTAT_IRQRequest     <= '0';
-               GPUSTAT_DMADataRequest <= '0';
                GPUSTAT_DMADirection   <= "00";
                GPUSTAT_DrawingOddline <= '0';
 
@@ -575,7 +592,8 @@ begin
    iSyncFifo_IN: entity mem.SyncFifo
    generic map
    (
-      SIZE             => 32, -- 16 is correct, but only allows 15 entries -> use nearfull or allow this big for broken homebrew -> some games seem to exceed it also with DMA, how is that possible?
+      --SIZE             => 32, -- 16 is correct, but only allows 15 entries -> use nearfull or allow this big for broken homebrew -> some games seem to exceed it also with DMA, how is that possible?
+      SIZE             => 256, -- using larger fifo because of broken homebrew depending on it, shouldn't matter for official games, simply unused there and the full blockram is free anyway
       DATAWIDTH        => 32,
       NEARFULLDISTANCE => 16
    )
@@ -603,10 +621,15 @@ begin
          elsif (ce = '1') then
          
             fifoIn_Wr  <= '0';
-            fifoIn_Din <= bus_dataWrite;
          
             if (clk2xIndex = '1' and bus_write = '1' and bus_addr = 0) then
-               fifoIn_Wr <= '1';
+               fifoIn_Wr  <= '1';
+               fifoIn_Din <= bus_dataWrite;
+            end if;
+            
+            if (clk2xIndex = '1' and DMA_GPU_writeEna = '1') then
+               fifoIn_Wr  <= '1';
+               fifoIn_Din <= DMA_GPU_write;
             end if;
             
          end if;
@@ -643,7 +666,7 @@ begin
                drawMode(11)         <= poly_drawModeRec(11);
             end if;
          
-            if (fifoIn_Valid = '1') then
+            if (fifoIn_Valid = '1' and proc_idle = '1') then
                
                cmdNew := unsigned(fifoIn_Dout(31 downto 24));
                
@@ -651,6 +674,7 @@ begin
                   
                   proc_idle           <= '0';
                   GPUSTAT_ReadyRecCmd <= '0';
+                  GPUSTAT_ReadyRecDMA <= '0';
                   
                elsif (cmdNew = 16#01#) then -- clear cache
                   -- todo
@@ -693,8 +717,16 @@ begin
             end if;
             
             if (proc_done = '1') then
+               export_gobj          <= export_gobj + 1;
                proc_idle            <= '1';
                GPUSTAT_ReadyRecCmd  <= '1';
+               if (fifoIn_Empty = '1') then
+                  GPUSTAT_ReadyRecDMA  <= '1';
+               end if;
+            end if;
+            
+            if (fifoIn_Empty = '1' and (cpu2vram_requestFifo = '1' or (fifoIn_Valid = '0' and proc_idle = '1'))) then
+               GPUSTAT_ReadyRecDMA <= '1';
             end if;
             
             if (softReset = '1') then
@@ -852,6 +884,10 @@ begin
    );
    
    igpu_rect : entity work.gpu_rect
+   generic map
+   (
+      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING
+   )
    port map
    (
       clk2x                => clk2x,     
@@ -904,6 +940,10 @@ begin
    );
    
    igpu_poly : entity work.gpu_poly
+   generic map
+   (
+      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING
+   )
    port map
    (
       clk2x                => clk2x,     
@@ -1254,6 +1294,46 @@ begin
       wren_b      => '0',
       q_b         => vramLineData
    );
+
+   -- synthesis translate_off
+   
+   goutput : if 1 = 1 generate
+   begin
+   
+      process
+         file outfile      : text;
+         variable f_status : FILE_OPEN_STATUS;
+         variable line_out : line;
+      begin
+   
+         file_open(f_status, outfile, "R:\\debug_gpufifo_sim.txt", write_mode);
+         file_close(outfile);
+         
+         file_open(f_status, outfile, "R:\\debug_gpufifo_sim.txt", append_mode);
+         
+         while (true) loop
+            
+            wait until rising_edge(clk1x);
+            
+            if (DMA_GPU_writeEna = '1') then
+               write(line_out, string'("Fifo: ")); 
+               write(line_out, to_hstring(DMA_GPU_write));
+               writeline(outfile, line_out);
+            end if;
+            
+            if (bus_write = '1' and bus_addr = 0) then
+               write(line_out, string'("Fifo: ")); 
+               write(line_out, to_hstring(bus_dataWrite));
+               writeline(outfile, line_out);
+            end if;
+            
+         end loop;
+         
+      end process;
+   
+   end generate goutput;
+   
+   -- synthesis translate_on
 
 end architecture;
 

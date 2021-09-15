@@ -5,6 +5,10 @@ use IEEE.numeric_std.all;
 library mem;
 
 entity gpu_rect is
+   generic
+   (
+      REPRODUCIBLEGPUTIMING : std_logic
+   );
    port 
    (
       clk2x                : in  std_logic;
@@ -67,9 +71,13 @@ architecture arch of gpu_rect is
       REQUESTSIZE,
       REQUESTLINE,
       READWAIT,
-      PROCPIXELS
+      PROCPIXELS,
+      WAITIMING
    );
    signal state : tState := IDLE;
+   
+   signal drawTiming          : unsigned(31 downto 0);
+   signal targetTiming        : unsigned(31 downto 0);
    
    signal rec_texture         : std_logic := '0';
    signal rec_size            : std_logic_vector(1 downto 0) := "00";
@@ -131,9 +139,14 @@ begin
             textPalX             <= (others => '0');
             textPalY             <= (others => '0');
          
+            if (state /= IDLE) then
+               drawTiming <= drawTiming + 1;
+            end if;
+         
             case (state) is
             
                when IDLE =>
+                  drawTiming   <= (others => '0');
                   if (proc_idle = '1' and fifo_Valid = '1' and fifo_data(31 downto 29) = "011") then
                      state             <= REQUESTPOS;
                      rec_texture       <= fifo_data(26);
@@ -216,7 +229,13 @@ begin
                   end if;
                
                when PROCPIXELS =>
-                   if (pipeline_stall = '0') then
+                  if (rec_transparency = '1' or rec_texture = '1') then 
+                     targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * 4), 32);
+                  else
+                     targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * 2), 32);
+                  end if;
+                  
+                  if (pipeline_stall = '0') then
                      xCnt  <= xCnt + 1;
                      xPos  <= xPos + 1;
                      uWork <= uWork + 1;
@@ -226,8 +245,12 @@ begin
                         ypos  <= yPos + 1;
                         vWork <= vWork + 1;
                         if (yCnt + 1 >= rec_sizey) then
-                           state <= IDLE;
-                           done  <= '1';
+                           if (REPRODUCIBLEGPUTIMING = '1') then
+                              state <= WAITIMING;
+                           else
+                              state <= IDLE;
+                              done  <= '1';
+                           end if;
                         else
                            xPos  <= rec_posx;
                            xCnt  <= (others => '0');
@@ -256,6 +279,16 @@ begin
                   end if;
                
                   if (drawingAreaLeft > drawingAreaRight or drawingAreaTop > drawingAreaBottom) then
+                     if (REPRODUCIBLEGPUTIMING = '1') then
+                        state <= WAITIMING;
+                     else
+                        state <= IDLE;
+                        done  <= '1';
+                     end if;
+                  end if;
+                  
+                when WAITIMING =>
+                  if (drawTiming + 2 >= targetTiming) then
                      state <= IDLE;
                      done  <= '1';
                   end if;

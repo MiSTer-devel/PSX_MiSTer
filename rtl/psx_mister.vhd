@@ -5,7 +5,8 @@ use IEEE.numeric_std.all;
 entity psx_mister is
    generic
    (
-      is_simu               : std_logic := '0'
+      is_simu               : std_logic := '0';
+      REPRODUCIBLEGPUTIMING : std_logic := '1'
    );
    port 
    (
@@ -15,6 +16,7 @@ entity psx_mister is
       -- commands 
       loadExe               : in  std_logic;
       -- RAM/BIOS interface      
+      ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
       ram_dataRead          : in  std_logic_vector(127 downto 0);
       ram_Adr               : out std_logic_vector(22 downto 0);
@@ -23,6 +25,7 @@ entity psx_mister is
       ram_ena               : out std_logic;
       ram_128               : out std_logic;
       ram_done              : in  std_logic;  
+      ram_reqprocessed      : in  std_logic;  
       -- vram/ddr3 interface
       DDRAM_BUSY            : in  std_logic;                    
       DDRAM_BURSTCNT        : out std_logic_vector(7 downto 0); 
@@ -83,7 +86,8 @@ begin
    ipsx_top : entity work.psx_top
    generic map
    (
-      is_simu               => is_simu
+      is_simu               => is_simu,
+      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING
    )
    port map
    (
@@ -93,6 +97,7 @@ begin
       -- commands 
       loadExe               => loadExe,
       -- RAM/BIOS interface        
+      ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 
       ram_Adr               => ram_Adr, 
@@ -101,6 +106,7 @@ begin
       ram_ena               => ram_ena,  
       ram_128               => ram_128,       
       ram_done              => ram_done,    
+      ram_reqprocessed      => ram_reqprocessed,    
       -- vram interface
       vram_BUSY             => DDRAM_BUSY,      
       vram_DOUT             => DDRAM_DOUT,      

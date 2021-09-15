@@ -12,6 +12,8 @@ entity memorymux is
       loadExe              : in  std_logic;
       reset_exe            : out std_logic := '0';
       
+      isIdle               : out std_logic;
+      
       ram_dataWrite        : out std_logic_vector(31 downto 0) := (others => '0');
       ram_dataRead         : in  std_logic_vector(127 downto 0);
       ram_Adr              : out std_logic_vector(22 downto 0) := (others => '0');
@@ -52,6 +54,12 @@ entity memorymux is
       bus_irq_read         : out std_logic;
       bus_irq_write        : out std_logic;
       bus_irq_dataRead     : in  std_logic_vector(31 downto 0);
+      
+      bus_dma_addr         : out unsigned(6 downto 0); 
+      bus_dma_dataWrite    : out std_logic_vector(31 downto 0);
+      bus_dma_read         : out std_logic;
+      bus_dma_write        : out std_logic;
+      bus_dma_dataRead     : in  std_logic_vector(31 downto 0);
       
       bus_gpu_addr         : out unsigned(3 downto 0); 
       bus_gpu_dataWrite    : out std_logic_vector(31 downto 0);
@@ -102,7 +110,7 @@ architecture arch of memorymux is
    
 begin 
 
-
+   isIdle <= '1' when (state = IDLE) else '0';
 
    process (state, mem_request, mem_rnw, mem_isData, mem_addressData, mem_reqsize, mem_writeMask, mem_dataWrite)
       variable address : unsigned(28 downto 0);
@@ -147,6 +155,18 @@ begin
          end if;
       end if;
       
+      -- dma
+      bus_dma_read      <= '0';
+      bus_dma_write     <= '0';
+      bus_dma_addr      <= address(6 downto 0);
+      bus_dma_dataWrite <= mem_dataWrite;
+      if (address >= 16#1F801080# and address < 16#1F801100#) then
+         if (mem_request = '1' and mem_isData = '1') then
+            bus_dma_read  <= mem_rnw;
+            bus_dma_write <= not mem_rnw;
+         end if;
+      end if;
+      
       -- gpu
       bus_gpu_read      <= '0';
       bus_gpu_write     <= '0';
@@ -161,7 +181,7 @@ begin
 
    end process;
    
-   dataFromBusses <= bus_exp1_dataRead or bus_pad_dataRead or bus_irq_dataRead or bus_gpu_dataRead;
+   dataFromBusses <= bus_exp1_dataRead or bus_pad_dataRead or bus_irq_dataRead or bus_dma_dataRead or bus_gpu_dataRead;
   
    process (clk1x)
    begin
@@ -210,11 +230,11 @@ begin
                            ram_rnw <= '1';
                            ram_Adr <= "01" & "00" & std_logic_vector(mem_addressInstr(18 downto 0));
                            state   <= READBIOS;
-                           waitcnt <= 19;
+                           waitcnt <= 16;
                            if (mem_isCache = '1') then
                               ram_Adr(3 downto 0) <= (others => '0');
                               state               <= READCACHE;
-                              waitcnt             <= 90;
+                              waitcnt             <= 87;
                               ram_128             <= '1';
                            end if;
                         else
@@ -243,8 +263,8 @@ begin
                            state   <= READBIOS;
                            case (mem_reqsize) is
                               when "00" => waitcnt <= 1;
-                              when "01" => waitcnt <= 7;
-                              when "10" => waitcnt <= 19;
+                              when "01" => waitcnt <= 4;
+                              when "10" => waitcnt <= 16;
                               when others => null;
                            end case;
                         else
@@ -334,7 +354,7 @@ begin
                when EXEREADHEADER1 =>
                   if (ram_done = '1') then
                      ram_ena <= '1';
-                     ram_Adr <= "10" & std_logic_vector(to_unsigned(16#28#, 21));
+                     ram_Adr <= "10" & std_logic_vector(to_unsigned(16#30#, 21));
                      state   <= EXEREADHEADER2;
                      
                      exe_initial_pc   <= unsigned(ram_dataRead( 31 downto  0));
@@ -347,7 +367,7 @@ begin
                   if (ram_done = '1') then
                      state   <= EXEPATCHBIOSWRITE;
                      
-                     exe_stackpointer <= unsigned(ram_dataRead(95 downto 64)) + unsigned(ram_dataRead(127 downto 96));
+                     exe_stackpointer <= unsigned(ram_dataRead(31 downto 0)) + unsigned(ram_dataRead(63 downto 32));
                      exe_file_size    <= (exe_file_size + 3);
                   end if;
                   

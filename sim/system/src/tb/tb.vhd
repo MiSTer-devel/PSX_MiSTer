@@ -80,6 +80,7 @@ architecture arch of etb is
    signal ram_rnw             : std_logic;
    signal ram_ena             : std_logic;
    signal ram_done            : std_logic;   
+   signal ram_reqprocessed    : std_logic;   
    
    -- ddrram
    signal DDRAM_CLK           : std_logic;
@@ -138,7 +139,8 @@ begin
    ipsx_mister : entity psx.psx_mister
    generic map
    (
-      is_simu               => '1'
+      is_simu               => '1',
+      REPRODUCIBLEGPUTIMING => '1'
    )
    port map
    (
@@ -155,6 +157,7 @@ begin
       ram_rnw               => ram_rnw,      
       ram_ena               => ram_ena,      
       ram_done              => ram_done,
+      ram_reqprocessed      => ram_reqprocessed,
       -- vram/ddr3 interface
       DDRAM_BUSY            => DDRAM_BUSY,      
       DDRAM_BURSTCNT        => DDRAM_BURSTCNT,  
@@ -276,14 +279,15 @@ begin
    isdram_model : entity tb.sdram_model 
    port map
    (
-      clk         => clk33,
-      addr        => ram_Adr,
-      req         => ram_ena,
-      rnw         => ram_rnw,
-      be          => ram_be,
-      di          => ram_dataWrite,
-      do          => ram_dataRead,
-      done        => ram_done
+      clk          => clk33,
+      addr         => ram_Adr,
+      req          => ram_ena,
+      rnw          => ram_rnw,
+      be           => ram_be,
+      di           => ram_dataWrite,
+      do           => ram_dataRead,
+      done         => ram_done,
+      reqprocessed => ram_reqprocessed
    );
    
    --iframebuffer : entity work.framebuffer

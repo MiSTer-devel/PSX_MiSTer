@@ -35,7 +35,9 @@ module sdram
 	output             SDRAM_nCAS,  // columns address select
 	output             SDRAM_CKE,   // clock enable
 	output             SDRAM_CLK,   // clock for chip
-                      
+
+	input              refreshForce,                   
+
 	input      [26:0]  ch1_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
 	output reg [127:0] ch1_dout,   // data output to cpu
 	input      [15:0]  ch1_din,     // data input from cpu
@@ -43,6 +45,7 @@ module sdram
 	input              ch1_rnw,     // 1 - read, 0 - write
 	input              ch1_128,     // 1 - read 128bit, 0 - read 32 bit
 	output reg         ch1_ready,
+	output reg         ch1_reqprocessed,
                       
 	input      [26:0]  ch2_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
 	output reg [31:0]  ch2_dout,    // data output to cpu
@@ -104,7 +107,11 @@ localparam STATE_IDLE_2  = 6;
 localparam STATE_IDLE_3  = 7;
 localparam STATE_IDLE_4  = 8;
 localparam STATE_IDLE_5  = 9;
-localparam STATE_RFSH    = 10;
+localparam STATE_IDLE_6  = 10;
+localparam STATE_IDLE_7  = 11;
+localparam STATE_IDLE_8  = 12;
+localparam STATE_IDLE_9  = 13;
+localparam STATE_RFSH    = 14;
 
 
 always @(posedge clk_base) begin
@@ -112,6 +119,8 @@ always @(posedge clk_base) begin
    ch1_ready <= ch1_ready_ramclock;
 	ch2_ready <= ch2_ready_ramclock;
 	ch3_ready <= ch3_ready_ramclock;
+
+	ch1_reqprocessed <= ch1_reqprocessed_ramclock;
 end
 
 reg ch1_ready_ramclock = 0;
@@ -120,6 +129,8 @@ reg ch3_ready_ramclock = 0;
 reg ch1_req_1 = 0;
 reg ch2_req_1 = 0;
 reg ch3_req_1 = 0;
+
+reg ch1_reqprocessed_ramclock = 0;
 
 reg req128    = 0;
 
@@ -146,6 +157,8 @@ always @(posedge clk) begin
 	if (ch1_ready) ch1_ready_ramclock <= 0;
 	if (ch2_ready) ch2_ready_ramclock <= 0;
 	if (ch3_ready) ch3_ready_ramclock <= 0;
+   
+	if (ch1_reqprocessed) ch1_reqprocessed_ramclock <= 0;
 
 	refresh_count <= refresh_count+1'b1;
 
@@ -175,7 +188,7 @@ always @(posedge clk) begin
 	if(data_ready_delay3[1]) ch3_ready_ramclock <= 1;
 
 	SDRAM_DQ <= 16'bZ;
-
+   
 	command <= CMD_NOP;
 	case (state)
 		STATE_STARTUP: begin
@@ -211,6 +224,10 @@ always @(posedge clk) begin
 			end
 		end
 
+		STATE_IDLE_9: state <= STATE_IDLE_8;
+		STATE_IDLE_8: state <= STATE_IDLE_7;
+		STATE_IDLE_7: state <= STATE_IDLE_6;
+		STATE_IDLE_6: state <= STATE_IDLE_5;
 		STATE_IDLE_5: state <= STATE_IDLE_4;
 		STATE_IDLE_4: state <= STATE_IDLE_3;
 		STATE_IDLE_3: state <= STATE_IDLE_2;
@@ -225,8 +242,8 @@ always @(posedge clk) begin
 				//------------------------------------------------------------------------
 				state    <= STATE_RFSH;
 				command  <= CMD_AUTO_REFRESH;
-				refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
 				chip     <= 0;
+				refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
 			end
 		end
 
@@ -237,9 +254,15 @@ always @(posedge clk) begin
 		end
 
 		STATE_IDLE: begin
-         if (refresh_count > (cycles_per_refresh << 1)) begin
-				// Priority is to issue a refresh if one is outstanding
-				state <= STATE_IDLE_1;
+			if (refreshForce || refresh_count > cycles_per_refresh) begin
+				state         <= STATE_RFSH;
+				command       <= CMD_AUTO_REFRESH;
+				chip          <= 0;
+				if (refresh_count > cycles_per_refresh)
+					refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
+				else
+					refresh_count <= 14'd0;
+
 			end else if(ch1_rq) begin
 				{cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, 1'b1, ch1_addr[25:1]};
 				chip       <= ch1_addr[26];
@@ -249,7 +272,8 @@ always @(posedge clk) begin
 				ch1_rq     <= 0;
 				command    <= CMD_ACTIVE;
 				state      <= STATE_WAIT;
-            req128     <= ch1_128;
+				req128     <= ch1_128;
+				ch1_reqprocessed_ramclock <= ch1_rnw;
 			end else if(ch2_rq) begin
 				{cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch2_be[1:0], ch2_rnw, ch2_addr[25:1]};
 				chip       <= ch2_addr[26];
@@ -287,7 +311,7 @@ always @(posedge clk) begin
 			end
 			else begin
 				command <= CMD_READ;
-				state   <= STATE_IDLE_5;
+				state   <= STATE_IDLE_9;
 				     if(ch == 0) data_ready_delay1[CAS_LATENCY+BURST_LENGTH] <= 1;
 				else if(ch == 1) data_ready_delay2[CAS_LATENCY+BURST_LENGTH] <= 1;
 				else             data_ready_delay3[CAS_LATENCY+BURST_LENGTH] <= 1;

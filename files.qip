@@ -3,4 +3,4 @@ set_global_assignment -name QIP_FILE rtl/mem.qip
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/sdram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/ddram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/savestate_ui.sv
-set_global_assignment -name SYSTEMVERILOG_FILE Playstation.sv
+set_global_assignment -name SYSTEMVERILOG_FILE PlayStation.sv

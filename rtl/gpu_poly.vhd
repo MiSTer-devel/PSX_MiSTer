@@ -6,6 +6,10 @@ library mem;
 use work.pGPU.all;
 
 entity gpu_poly is
+   generic
+   (
+      REPRODUCIBLEGPUTIMING : std_logic
+   );
    port 
    (
       clk2x                : in  std_logic;
@@ -95,9 +99,13 @@ architecture arch of gpu_poly is
       PREPARELINE,
       REQUESTLINE,
       READWAIT,
-      PROCPIXELS
+      PROCPIXELS,
+      WAITIMING
    );
    signal state     : tState := IDLE;
+   
+   signal drawTiming          : unsigned(31 downto 0);
+   signal targetTiming        : unsigned(31 downto 0);
    
    signal rec_shading         : std_logic := '0';
    signal rec_quad            : std_logic := '0';
@@ -195,7 +203,7 @@ architecture arch of gpu_poly is
    signal xPos                : signed(11 downto 0) := (others => '0'); 
    signal yPos                : signed(11 downto 0) := (others => '0'); 
    signal xStop               : signed(11 downto 0) := (others => '0'); 
-   signal xSize               : unsigned(10 downto 0) := (others => '0'); 
+   signal xSize               : unsigned(10 downto 0) := (others => '0');   
    
 begin 
 
@@ -210,6 +218,7 @@ begin
    vramLineAddr <= unsigned(xPos(9 downto 0)) when (state = PROCPIXELS) else (others => '0');
    
    process (clk2x)
+      variable xMax  : integer;
       variable dx1   : signed(44 downto 0);
       variable dx2   : signed(44 downto 0);
       variable dx3   : signed(44 downto 0);
@@ -271,10 +280,16 @@ begin
             div4.divisor         <= (others => '0');
             div5.divisor         <= (others => '0');
             div6.divisor         <= (others => '0');
+            
+            if (state /= IDLE) then
+               drawTiming <= drawTiming + 1;
+            end if;
          
             case (state) is
             
                when IDLE =>
+                  drawTiming   <= (others => '0');
+                  targetTiming <= to_unsigned(500, 32);
                   if (proc_idle = '1' and fifo_Valid = '1' and fifo_data(31 downto 29) = "001") then
                      state             <= REQUESTPOS;
                      rec_index         <= 0;
@@ -365,8 +380,12 @@ begin
                      vt(2) <= rec_vertices(3);
                   end if;
                   if (drawingAreaLeft > drawingAreaRight or drawingAreaTop > drawingAreaBottom) then
-                     state <= IDLE;
-                     done  <= '1';
+                     if (REPRODUCIBLEGPUTIMING = '1') then
+                        state <= WAITIMING;
+                     else
+                        state <= IDLE;
+                        done  <= '1';
+                     end if;
                   end if; 
 
                when SORTVERTICES =>
@@ -397,6 +416,15 @@ begin
                
                when CALCBOUNDARY1 =>
                   state <= CALCBOUNDARY2;
+                  
+                  xMax := abs(vt(0).x - vt(1).x);
+                  if (abs(vt(0).x - vt(2).x) > xMax) then xMax := abs(vt(0).x - vt(2).x); end if;
+                  if (abs(vt(1).x - vt(2).x) > xMax) then xMax := abs(vt(1).x - vt(2).x); end if;
+                  if (rec_transparency = '1' or rec_texture = '1') then 
+                     targetTiming <= targetTiming + (vt(2).y + 1 - vt(0).y) * xMax * 4;
+                  else
+                     targetTiming <= targetTiming + (vt(2).y + 1 - vt(0).y) * xMax * 2;
+                  end if;
                   
                   coreVertex <= 0;
                   vo         <= 0;
@@ -479,8 +507,12 @@ begin
                         if (nextQuad = '1') then 
                            state <= ISSUE;
                         else
-                           state <= IDLE;
-                           done  <= '1';
+                           if (REPRODUCIBLEGPUTIMING = '1') then
+                              state <= WAITIMING;
+                           else
+                              state <= IDLE;
+                              done  <= '1';
+                           end if;
                         end if;
                      elsif (rec_shading = '1') then
                         state <= CALCCOLOR1;
@@ -670,6 +702,10 @@ begin
                      state <= PROCPIXELS;
                   end if;
                   
+-- check required to prevent simulation errors for multiplying negative value with unsigned
+-- synthesis translate_off
+                  if (yCoord >= 0) then
+-- synthesis translate_on
                   if (rec_shading = '1') then
                      work_R <= base_R + resize(dxR * to_integer(xStart(43 downto 32)), 32) + resize(dyR * yCoord, 32);
                      work_G <= base_G + resize(dxG * to_integer(xStart(43 downto 32)), 32) + resize(dyG * yCoord, 32);
@@ -687,6 +723,10 @@ begin
                      work_U <= base_U;
                      work_V <= base_V;
                   end if;
+-- synthesis translate_off
+                  end if;
+-- synthesis translate_on
+                  
                   
                   stop := '0';
                   skip := '0';
@@ -704,11 +744,11 @@ begin
                   end if;
                   
                   if (decMode = 1) then
-                     if (yCoord < drawingAreaTop)    then stop := '1'; end if;
-                     if (yCoord > drawingAreaBottom) then skip := '1'; end if;
+                     if (yCoord < to_integer(drawingAreaTop))    then stop := '1'; end if;
+                     if (yCoord > to_integer(drawingAreaBottom)) then skip := '1'; end if;
                   else
-                     if (yCoord > drawingAreaBottom) then stop := '1'; end if;
-                     if (yCoord < drawingAreaTop)    then skip := '1'; end if;
+                     if (yCoord > to_integer(drawingAreaBottom)) then stop := '1'; end if;
+                     if (yCoord < to_integer(drawingAreaTop))    then skip := '1'; end if;
                   end if;
                   
                   if (skip = '1') then
@@ -737,8 +777,12 @@ begin
                         if (nextQuad = '1') then 
                            state <= ISSUE;
                         else
-                           state <= IDLE;
-                           done  <= '1';
+                           if (REPRODUCIBLEGPUTIMING = '1') then
+                              state <= WAITIMING;
+                           else
+                              state <= IDLE;
+                              done  <= '1';
+                           end if;
                         end if;
                      end if;
                   end if;
@@ -796,7 +840,13 @@ begin
                         pipeline_v           <= work_V(19 downto 12);
                      end if;
                   end if;
-                       
+                      
+               when WAITIMING =>
+                  if (drawTiming + 2 >= targetTiming) then
+                     state <= IDLE;
+                     done  <= '1';
+                  end if;
+                      
             end case;
          
          end if;

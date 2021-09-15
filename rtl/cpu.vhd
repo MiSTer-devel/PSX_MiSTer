@@ -57,7 +57,9 @@ architecture arch of cpu is
          
    signal CACHECONTROL                 : unsigned(31 downto 0) := (others => '0');
                
-   -- common            
+   -- common   
+   signal ce_1                         : std_logic := '0';
+   
    signal stallNew1                    : std_logic := '0';
    signal stallNew2                    : std_logic := '0';
    signal stallNew3                    : std_logic := '0';
@@ -548,6 +550,9 @@ begin
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
+         
+         ce_1 <= ce;
+      
          if (reset = '1') then
          
             tagValid      <= (others => '0');
@@ -607,6 +612,19 @@ begin
             
             if (writebackInvalidateCacheEna = '1') then
                tagValid(to_integer(writebackInvalidateCacheLine)) <= '0';
+            end if;
+            
+         elsif (ce_1 = '1') then
+            
+            if (cacheHit = '1') then
+               cacheHitLast   <= '1';
+               case (PCold0(3 downto 2)) is
+                  when "00" => cacheValueLast <= unsigned(cache_q_b( 31 downto  0));
+                  when "01" => cacheValueLast <= unsigned(cache_q_b( 63 downto 32));
+                  when "10" => cacheValueLast <= unsigned(cache_q_b( 95 downto 64));
+                  when "11" => cacheValueLast <= unsigned(cache_q_b(127 downto 96));
+                  when others => null;
+               end case;
             end if;
                
          end if;
@@ -1769,7 +1787,7 @@ begin
                
                -- todo: REMOVE!
                if (debugCnt(31) = '1' and writebackTarget = 0) then
-                  cop0_CAUSE(10) <= '0';
+                  cop0_CAUSE(9) <= '0';
                end if;
                
             end if;

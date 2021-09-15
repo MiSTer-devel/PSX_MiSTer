@@ -47,6 +47,7 @@ entity export is
       export_gtm       : in unsigned(11 downto 0);
       export_line      : in unsigned(11 downto 0);
       export_gpus      : in unsigned(31 downto 0);
+      export_gobj      : in unsigned(15 downto 0);
       
       export_8         : in std_logic_vector(7 downto 0);
       export_16        : in std_logic_vector(15 downto 0);
@@ -71,6 +72,7 @@ architecture arch of export is
    signal export_gtm_last  : unsigned(11 downto 0) := (others => '0');
    signal export_line_last : unsigned(11 downto 0) := (others => '0');
    signal export_gpus_last : unsigned(31 downto 0) := (others => '0');
+   signal export_gobj_last : unsigned(15 downto 0) := (others => '0');
    
    function to_lower(c: character) return character is
       variable l: character;
@@ -203,6 +205,7 @@ begin
             if (export_gtm /= export_gtm_last)   then write(line_out, string'("GTM "));  write(line_out, to_lower(to_hstring(export_gtm)) & " "); end if;
             if (export_line /= export_line_last) then write(line_out, string'("LINE ")); write(line_out, to_lower(to_hstring(export_line)) & " "); end if;
             if (export_gpus /= export_gpus_last) then write(line_out, string'("GPUS ")); write(line_out, to_lower(to_hstring(export_gpus)) & " "); end if;
+            if (export_gobj /= export_gobj_last) then write(line_out, string'("GOBJ ")); write(line_out, to_lower(to_hstring(export_gobj)) & " "); end if;
 
 
             writeline(outfile, line_out);
@@ -222,6 +225,7 @@ begin
             export_gtm_last   <= export_gtm;
             export_line_last  <= export_line;
             export_gpus_last  <= export_gpus;
+            export_gobj_last  <= export_gobj;
             
          end if;
             

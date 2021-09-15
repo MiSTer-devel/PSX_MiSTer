@@ -15,7 +15,8 @@ entity sdram_model is
       be                : in  std_logic_vector(3 downto 0);
       di                : in  std_logic_vector(31 downto 0);
       do                : out std_logic_vector(127 downto 0);
-      done              : out std_logic := '0'
+      done              : out std_logic := '0';
+      reqprocessed      : out std_logic := '0'
    );
 end entity;
 
@@ -26,6 +27,9 @@ architecture arch of sdram_model is
    type bit_vector_file is file of bit_vector;
    
    signal waitcnt    : integer range 0 to 8 := 0;
+   
+   signal req_buffer  : std_logic := '0';
+   signal addr_buffer : std_logic_vector(22 downto 0);
    
 begin
 
@@ -40,6 +44,8 @@ begin
       variable next_vector    : bit_vector (0 downto 0);
       variable actual_len     : natural;
       variable targetpos      : integer;
+      
+      variable addr_rotate    : std_logic_vector(22 downto 0);
       
       -- copy from std_logic_arith, not used here because numeric std is also included
       function CONV_STD_LOGIC_VECTOR(ARG: INTEGER; SIZE: INTEGER) return STD_LOGIC_VECTOR is
@@ -71,27 +77,43 @@ begin
    begin
       wait until rising_edge(clk);
       
-      done <= '0';
+      done         <= '0';
+      reqprocessed <= '0';
+      
+      if (req = '1') then
+         req_buffer <= '1';
+      end if;
       
       if (waitcnt > 0) then
          waitcnt <= waitcnt - 1;
          if (waitcnt = 1) then
             if (rnw = '1') then
-               for i in 0 to 15 loop
-                  do(7 + (i * 8) downto (i * 8))  <= std_logic_vector(to_unsigned(data(to_integer(unsigned(addr(22 downto 1)) & '0') + i), 8));
+               addr_rotate := addr_buffer;
+               for i in 0 to 7 loop
+                  do(7  + (i * 16) downto     (i * 16))  <= std_logic_vector(to_unsigned(data(to_integer(unsigned(addr_rotate(22 downto 1)) & '0') + 0), 8));
+                  do(15 + (i * 16) downto 8 + (i * 16))  <= std_logic_vector(to_unsigned(data(to_integer(unsigned(addr_rotate(22 downto 1)) & '0') + 1), 8));
+                  addr_rotate(3 downto 1) := std_logic_vector(unsigned(addr_rotate(3 downto 1)) + 1); 
                end loop;
             end if;
             done <= '1';
          end if;
-      elsif (req = '1' and rnw = '0') then
+      elsif ((req = '1' or req_buffer = '1') and rnw = '0') then
          if (be(3) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 3) := to_integer(unsigned(di(31 downto 24))); end if;
          if (be(2) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 2) := to_integer(unsigned(di(23 downto 16))); end if;
          if (be(1) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 1) := to_integer(unsigned(di(15 downto  8))); end if;
          if (be(0) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 0) := to_integer(unsigned(di( 7 downto  0))); end if;
-         waitcnt   <= 1;
-      elsif (req = '1' and rnw = '1') then
-         do        <= (others => 'X');
-         waitcnt   <= 1;
+         waitcnt   <= 3;
+         req_buffer <= '0';
+      elsif ((req = '1' or req_buffer = '1') and rnw = '1') then
+         do           <= (others => 'X');
+         if (req_buffer = '1') then
+            waitcnt      <= 3;
+         else
+            waitcnt      <= 4;
+         end if;
+         reqprocessed <= '1';
+         req_buffer   <= '0';
+         addr_buffer  <= addr;
       end if;
 
       COMMAND_FILE_ACK_1 <= '0';

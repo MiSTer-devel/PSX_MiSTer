@@ -496,6 +496,7 @@ psx
    // commands 
    .loadExe(loadExe),
    // RAM/BIOS interface      
+   .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),
    .ram_dataRead(sdr_sdram_dout),
    .ram_Adr(sdram_addr),
@@ -504,6 +505,7 @@ psx
    .ram_ena(sdram_req), 
    .ram_128(sdram_128), 
    .ram_done(sdram_ack),
+   .ram_reqprocessed(sdram_reqprocessed),
    // vram/ddr3
    .DDRAM_BUSY      (DDRAM_BUSY      ),
    .DDRAM_BURSTCNT  (DDRAM_BURSTCNT  ),
@@ -553,6 +555,7 @@ psx
 
 localparam ROM_START = (65536+131072)*4;
 
+wire         sdr_refresh;
 wire  [31:0] sdr_sdram_din;
 wire [127:0] sdr_sdram_dout;
 wire  [15:0] sdr_bram_din;
@@ -562,6 +565,7 @@ wire  [22:0] sdram_addr;
 wire   [3:0] sdram_be;
 wire         sdram_req;
 wire         sdram_ack;
+wire         sdram_reqprocessed;
 wire         sdram_readack;
 wire         sdram_writeack;
 wire         sdram_rnw;
@@ -575,6 +579,8 @@ sdram sdram
 	.init(~pll_locked),
 	.clk(clk_3x),
 	.clk_base(clk_1x),
+	
+	.refreshForce(sdr_refresh),
 
 	.ch1_addr(sdram_addr),
 	.ch1_din(),
@@ -583,6 +589,7 @@ sdram sdram
 	.ch1_rnw(1'b1),
 	.ch1_128(sdram_128),
 	.ch1_ready(sdram_readack),
+	.ch1_reqprocessed(sdram_reqprocessed),
 
 	.ch2_addr ((cart_download | bios_download) ? ramdownload_wraddr : sdram_addr),
 	.ch2_din  ((cart_download | bios_download) ? ramdownload_wrdata : sdr_sdram_din),

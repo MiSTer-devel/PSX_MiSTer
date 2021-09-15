@@ -35,6 +35,7 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/gpu.vhd ^
 ../../rtl/irq.vhd ^
 ../../rtl/joypad.vhd ^
+../../rtl/dma.vhd ^
 ../../rtl/cpu.vhd ^
 ../../rtl/memorymux.vhd ^
 ../../rtl/psx_top.vhd ^

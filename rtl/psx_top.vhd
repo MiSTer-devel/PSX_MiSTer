@@ -9,7 +9,8 @@ use work.pexport.all;
 entity psx_top is
    generic
    (
-      is_simu               : std_logic := '0'
+      is_simu               : std_logic := '0';
+      REPRODUCIBLEGPUTIMING : std_logic := '0'
    );
    port 
    (
@@ -19,6 +20,7 @@ entity psx_top is
       -- commands 
       loadExe               : in  std_logic;
       -- RAM/BIOS interface      
+      ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
       ram_dataRead          : in  std_logic_vector(127 downto 0);
       ram_Adr               : out std_logic_vector(22 downto 0);
@@ -27,6 +29,7 @@ entity psx_top is
       ram_ena               : out std_logic;
       ram_128               : out std_logic;
       ram_done              : in  std_logic;
+      ram_reqprocessed      : in  std_logic;
       -- vram interface
       vram_BUSY             : in  std_logic;                    
       vram_DOUT             : in  std_logic_vector(63 downto 0);
@@ -77,7 +80,7 @@ architecture arch of psx_top is
    signal reset_intern           : std_logic := '0';
    signal reset_exe              : std_logic;
    
-   signal ce                     : std_logic := '1';
+   signal ce                     : std_logic := '0';
    signal clk1xToggle            : std_logic := '0';
    signal clk1xToggle2X          : std_logic := '0';
    signal clk2xIndex             : std_logic := '0';
@@ -100,7 +103,13 @@ architecture arch of psx_top is
    signal bus_irq_dataWrite      : std_logic_vector(31 downto 0);
    signal bus_irq_read           : std_logic;
    signal bus_irq_write          : std_logic;
-   signal bus_irq_dataRead       : std_logic_vector(31 downto 0);
+   signal bus_irq_dataRead       : std_logic_vector(31 downto 0);   
+   
+   signal bus_dma_addr           : unsigned(6 downto 0); 
+   signal bus_dma_dataWrite      : std_logic_vector(31 downto 0);
+   signal bus_dma_read           : std_logic;
+   signal bus_dma_write          : std_logic;
+   signal bus_dma_dataRead       : std_logic_vector(31 downto 0);
    
    signal bus_gpu_addr           : unsigned(3 downto 0); 
    signal bus_gpu_dataWrite      : std_logic_vector(31 downto 0);
@@ -109,6 +118,8 @@ architecture arch of psx_top is
    signal bus_gpu_dataRead       : std_logic_vector(31 downto 0);
    
    -- Memory mux
+   signal memMuxIdle             : std_logic;
+   
    signal mem_request            : std_logic;
    signal mem_rnw                : std_logic; 
    signal mem_isData             : std_logic; 
@@ -121,6 +132,17 @@ architecture arch of psx_top is
    signal mem_dataRead           : std_logic_vector(31 downto 0); 
    signal mem_dataCache          : std_logic_vector(127 downto 0); 
    signal mem_done               : std_logic;
+   
+   signal ram_next_dma           : std_logic;
+   signal ram_next_cpu           : std_logic;
+   
+   signal ram_cpu_dataWrite      : std_logic_vector(31 downto 0);
+   signal ram_cpu_Adr            : std_logic_vector(22 downto 0);
+   signal ram_cpu_be             : std_logic_vector(3 downto 0);
+   signal ram_cpu_rnw            : std_logic;
+   signal ram_cpu_ena            : std_logic;
+   signal ram_cpu_128            : std_logic;
+   signal ram_cpu_done           : std_logic;
    
    -- irq
    signal irqRequest             : std_logic;
@@ -136,6 +158,28 @@ architecture arch of psx_top is
    signal irq_SPU                : std_logic;
    signal irq_LIGHTPEN           : std_logic;
    
+   -- dma
+   signal cpuPaused              : std_logic;
+   signal dmaOn                  : std_logic;
+   
+   signal ram_dma_dataWrite      : std_logic_vector(31 downto 0);
+   signal ram_dma_Adr            : std_logic_vector(22 downto 0);
+   signal ram_dma_be             : std_logic_vector(3 downto 0);
+   signal ram_dma_rnw            : std_logic;
+   signal ram_dma_ena            : std_logic;
+   signal ram_dma_128            : std_logic;
+   signal ram_dma_done           : std_logic;
+   
+   signal gpu_dmaRequest         : std_logic;
+   signal DMA_GPU_writeEna       : std_logic;
+   signal DMA_GPU_readEna        : std_logic;
+   signal DMA_GPU_write          : std_logic_vector(31 downto 0);
+   signal DMA_GPU_read           : std_logic_vector(31 downto 0);
+   
+   -- cpu
+   signal ce_intern              : std_logic := '0';
+   signal ce_cpu                 : std_logic := '0';
+   
    -- export
    signal cpu_done               : std_logic; 
    signal new_export             : std_logic; 
@@ -147,14 +191,13 @@ architecture arch of psx_top is
    signal export_gtm             : unsigned(11 downto 0);
    signal export_line            : unsigned(11 downto 0);
    signal export_gpus            : unsigned(31 downto 0);
+   signal export_gobj            : unsigned(15 downto 0);
    
    
 begin 
 
    sound_out_left   <= (others => '0');
    sound_out_right  <= (others => '0');
-   
-   ce <= '1';
    
    -- reset
    process (clk1x)
@@ -196,6 +239,23 @@ begin
       
       end if;
    end process;
+   
+   -- ce generation
+   process (clk1x)
+   begin
+      if rising_edge(clk1x) then
+      
+         ce        <= '1';
+         ce_cpu    <= '1';
+         
+         cpuPaused <= '0';
+         if (dmaOn = '1' and memMuxIdle = '1' and mem_request = '0') then
+            cpuPaused <= '1';
+            ce_cpu    <= '0';
+         end if;
+      
+      end if;
+   end process;
 
    ijoypad: entity work.joypad
    port map 
@@ -216,7 +276,6 @@ begin
    
    irq_GPU       <= '0'; -- todo
    irq_CDROM     <= '0'; -- todo
-   irq_DMA       <= '0'; -- todo
    irq_TIMER0    <= '0'; -- todo
    irq_TIMER1    <= '0'; -- todo
    irq_TIMER2    <= '0'; -- todo
@@ -254,7 +313,73 @@ begin
       export_irq           => export_irq
    );
    
+   idma : entity work.dma
+   port map
+   (
+      clk1x                => clk1x,
+      ce                   => ce,   
+      reset                => reset_intern,
+      
+      cpuPaused            => cpuPaused,
+      dmaOn                => dmaOn,
+      irqOut               => irq_DMA,
+      
+      ram_refresh          => ram_refresh,  
+      ram_dataWrite        => ram_dma_dataWrite,
+      ram_dataRead         => ram_dataRead, 
+      ram_Adr              => ram_dma_Adr,      
+      ram_be               => ram_dma_be,       
+      ram_rnw              => ram_dma_rnw,      
+      ram_ena              => ram_dma_ena,      
+      ram_128              => ram_dma_128,      
+      ram_done             => ram_dma_done, 
+      ram_reqprocessed     => ram_reqprocessed,
+      
+      gpu_dmaRequest       => gpu_dmaRequest,  
+      DMA_GPU_writeEna     => DMA_GPU_writeEna,
+      DMA_GPU_readEna      => DMA_GPU_readEna, 
+      DMA_GPU_write        => DMA_GPU_write,   
+      DMA_GPU_read         => DMA_GPU_read,   
+      
+      bus_addr             => bus_dma_addr,     
+      bus_dataWrite        => bus_dma_dataWrite,
+      bus_read             => bus_dma_read,     
+      bus_write            => bus_dma_write,    
+      bus_dataRead         => bus_dma_dataRead
+   );
+   
+   ram_dataWrite <= ram_dma_dataWrite when (dmaOn = '1') else ram_cpu_dataWrite;
+   ram_Adr       <= ram_dma_Adr       when (dmaOn = '1') else ram_cpu_Adr;      
+   ram_be        <= ram_dma_be        when (dmaOn = '1') else ram_cpu_be;       
+   ram_rnw       <= ram_dma_rnw       when (dmaOn = '1') else ram_cpu_rnw;      
+   ram_ena       <= ram_dma_ena       when (dmaOn = '1') else ram_cpu_ena;      
+   ram_128       <= ram_dma_128       when (dmaOn = '1') else ram_cpu_128;      
+   
+   process (clk1x)
+   begin
+      if rising_edge(clk1x) then
+      
+         if (ram_ena = '1') then
+            ram_next_dma <= '0';
+            ram_next_cpu <= '0';
+            if (dmaOn = '1') then
+               ram_next_dma <= '1';
+            else
+               ram_next_cpu <= '1';
+            end if;
+         end if;
+      
+      end if;
+   end process;
+   
+   ram_dma_done <= ram_done and ram_next_dma;
+   ram_cpu_done <= ram_done and ram_next_cpu;
+   
    igpu : entity work.gpu
+   generic map
+   (
+      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING
+   )
    port map
    (
       clk1x                => clk1x,
@@ -270,6 +395,12 @@ begin
       bus_read             => bus_gpu_read,     
       bus_write            => bus_gpu_write,    
       bus_dataRead         => bus_gpu_dataRead, 
+      
+      gpu_dmaRequest       => gpu_dmaRequest,  
+      DMA_GPU_writeEna     => DMA_GPU_writeEna,
+      DMA_GPU_readEna      => DMA_GPU_readEna, 
+      DMA_GPU_write        => DMA_GPU_write,   
+      DMA_GPU_read         => DMA_GPU_read,  
       
       irq_VBLANK           => irq_VBLANK,
       
@@ -294,7 +425,8 @@ begin
       
       export_gtm           => export_gtm,
       export_line          => export_line,
-      export_gpus          => export_gpus
+      export_gpus          => export_gpus,
+      export_gobj          => export_gobj
    );
    
 
@@ -304,18 +436,20 @@ begin
       clk1x                => clk1x,
       ce                   => ce,   
       reset                => reset_intern,
+      
+      isIdle               => memMuxIdle,
          
       loadExe              => loadExe,
       reset_exe            => reset_exe,
             
-      ram_dataWrite        => ram_dataWrite,
+      ram_dataWrite        => ram_cpu_dataWrite,
       ram_dataRead         => ram_dataRead, 
-      ram_Adr              => ram_Adr,  
-      ram_be               => ram_be,        
-      ram_rnw              => ram_rnw,      
-      ram_ena              => ram_ena,      
-      ram_128              => ram_128,      
-      ram_done             => ram_done,     
+      ram_Adr              => ram_cpu_Adr,  
+      ram_be               => ram_cpu_be,        
+      ram_rnw              => ram_cpu_rnw,      
+      ram_ena              => ram_cpu_ena,      
+      ram_128              => ram_cpu_128,      
+      ram_done             => ram_cpu_done,     
       
       mem_request          => mem_request,  
       mem_rnw              => mem_rnw,      
@@ -347,7 +481,13 @@ begin
       bus_irq_dataWrite    => bus_irq_dataWrite,
       bus_irq_read         => bus_irq_read,     
       bus_irq_write        => bus_irq_write,    
-      bus_irq_dataRead     => bus_irq_dataRead,      
+      bus_irq_dataRead     => bus_irq_dataRead,       
+      
+      bus_dma_addr         => bus_dma_addr,     
+      bus_dma_dataWrite    => bus_dma_dataWrite,
+      bus_dma_read         => bus_dma_read,     
+      bus_dma_write        => bus_dma_write,    
+      bus_dma_dataRead     => bus_dma_dataRead,      
       
       bus_gpu_addr         => bus_gpu_addr,     
       bus_gpu_dataWrite    => bus_gpu_dataWrite,
@@ -360,7 +500,7 @@ begin
    port map
    (
       clk1x             => clk1x,
-      ce                => ce,   
+      ce                => ce_cpu,   
       reset             => reset_intern,
          
       irqRequest        => irqRequest,
@@ -404,6 +544,7 @@ begin
          export_gtm     => export_gtm,
          export_line    => export_line,
          export_gpus    => export_gpus,
+         export_gobj    => export_gobj,
          
          export_8       => export_8,
          export_16      => export_16,
