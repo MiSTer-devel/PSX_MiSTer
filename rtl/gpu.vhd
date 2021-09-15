@@ -1221,7 +1221,7 @@ begin
                      if (reqVRAMSize(1 downto 0) /= "00") then -- round up read size to full 4*16bit
                         reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
                      end if;
-                     if ((to_integer(reqVRAMXPos(1 downto 0)) + to_integer(reqVRAMSize(1 downto 0))) > 4) then -- increase read size by 1 if 4 word boundary is crossed
+                     if (reqVRAMXPos(1 downto 0) /= "00" and ((to_integer(reqVRAMXPos(1 downto 0)) + to_integer(reqVRAMSize) > 4))) then 
                         reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
                      end if;
                      vramState     <= READVRAM;

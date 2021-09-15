@@ -46,5 +46,6 @@ Work in progress, don't report any bugs!
 - Memctrl: 0%
 - Timer  : 0%
 - GTE    : 0%
+- MDEC   : 0% 
 - CD     : 0%
 - SPU    : 0%

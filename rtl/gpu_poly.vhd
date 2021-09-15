@@ -191,6 +191,9 @@ architecture arch of gpu_poly is
 
    signal vo_diff             : integer range -4096 to 4095;
    signal vp_diff             : integer range -4096 to 4095;
+   
+   signal vo_diff_base        : signed(44 downto 0) := (others => '0');
+   signal vp_diff_base        : signed(44 downto 0) := (others => '0');
 
    signal yCoord              : integer range -2048 to 2047; 
    signal yBound              : integer range -2048 to 2047; 
@@ -491,6 +494,9 @@ begin
                   vo_diff <= vt(vo).y - vt(0).y;
                   vp_diff <= vt(1 + vp).y - vt(0).y;
                   
+                  vo_diff_base <= resize(vo_diff * baseStep, 45);
+                  vp_diff_base <= resize(vp_diff * baseStep, 45);
+                  
                   base_R <= x"000" & vt(coreVertex).r & x"800";
                   base_G <= x"000" & vt(coreVertex).g & x"800";
                   base_B <= x"000" & vt(coreVertex).b & x"800";
@@ -639,7 +645,7 @@ begin
                      yCoord     <= vt(vo).y;
                      yBound     <= vt(1-vo).y;
                      calc1      := (to_signed(vt(vo).x, 13) & x"00000000") + x"100000000" - 2048;
-                     calc2      := baseCoord + resize(vo_diff * baseStep, 45);
+                     calc2      := baseCoord + vo_diff_base;
                      if (rightFacing = 0) then
                         xStart     <= calc1;
                         xStepStart <= boundCoordUs;
@@ -660,7 +666,7 @@ begin
                      yCoord     <= vt(1 + vp).y;
                      yBound     <= vt(2 - vp).y;
                      calc3      := (to_signed(vt(1 + vp).x, 13) & x"00000000") + x"100000000" - 2048;
-                     calc4      := baseCoord + resize(vp_diff * baseStep, 45);
+                     calc4      := baseCoord + vp_diff_base;
                      if (rightFacing = 0) then
                         xStart     <= calc3;
                         xStepStart <= boundCoordLs;
