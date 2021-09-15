@@ -527,24 +527,24 @@ begin
                   
                   case (drawMode(6 downto 5)) is
                      when "00" => --  B/2+F/2
-                        colorMixr := to_integer(stage3_cr(4 downto 1)) + to_integer(colorBGr(4 downto 1));
-                        colorMixg := to_integer(stage3_cg(4 downto 1)) + to_integer(colorBGg(4 downto 1));
-                        colorMixb := to_integer(stage3_cb(4 downto 1)) + to_integer(colorBGb(4 downto 1));
+                        colorMixr := to_integer(colorBGr(4 downto 1)) + to_integer(stage3_cr(4 downto 1));
+                        colorMixg := to_integer(colorBGg(4 downto 1)) + to_integer(stage3_cg(4 downto 1));
+                        colorMixb := to_integer(colorBGb(4 downto 1)) + to_integer(stage3_cb(4 downto 1));
                         
                      when "01" => --  B+F
-                        colorMixr := to_integer(stage3_cr) + to_integer(colorBGr);
-                        colorMixg := to_integer(stage3_cg) + to_integer(colorBGg);
-                        colorMixb := to_integer(stage3_cb) + to_integer(colorBGb);
+                        colorMixr := to_integer(colorBGr) + to_integer(stage3_cr);
+                        colorMixg := to_integer(colorBGg) + to_integer(stage3_cg);
+                        colorMixb := to_integer(colorBGb) + to_integer(stage3_cb);
                         
                      when "10" => -- B-F
-                        colorMixr := to_integer(stage3_cr) - to_integer(colorBGr);
-                        colorMixg := to_integer(stage3_cg) - to_integer(colorBGg);
-                        colorMixb := to_integer(stage3_cb) - to_integer(colorBGb);
+                        colorMixr := to_integer(colorBGr) - to_integer(stage3_cr);
+                        colorMixg := to_integer(colorBGg) - to_integer(stage3_cg);
+                        colorMixb := to_integer(colorBGb) - to_integer(stage3_cb);
                         
                      when "11" => -- B+F/4
-                        colorMixr := to_integer(stage3_cr(4 downto 2)) + to_integer(colorBGr(4 downto 1));
-                        colorMixg := to_integer(stage3_cg(4 downto 2)) + to_integer(colorBGg(4 downto 1));
-                        colorMixb := to_integer(stage3_cb(4 downto 2)) + to_integer(colorBGb(4 downto 1));
+                        colorMixr := to_integer(colorBGr) + to_integer(stage3_cr(4 downto 2));
+                        colorMixg := to_integer(colorBGg) + to_integer(stage3_cg(4 downto 2));
+                        colorMixb := to_integer(colorBGb) + to_integer(stage3_cb(4 downto 2));
                   
                      when others => null;
                   end case;
