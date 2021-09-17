@@ -28,7 +28,7 @@ Work in progress, don't report any bugs!
 - polygon(triangle/quad), rectangle and line drawing working
 - Gouraud Shading and transparency working
 - direct, masked and palette color texturing and texture cache working
-- basic reading DMA working
+- basic reading/writing DMA working
 
 -- 
 
@@ -39,12 +39,12 @@ Work in progress, don't report any bugs!
 
 - CPU    : 60%
 - GPU    : 70%
-- Memory : 40%
-- IRQ    : 20%
-- PAD    : 20%
-- DMA    : 20%
+- Memory : 50%
+- IRQ    : 40%
+- PAD    : 30% (Digital Pad without memory card 100%)
+- DMA    : 30%
 - Memctrl: 0%
-- Timer  : 0%
+- Timer  : 50%
 - GTE    : 0%
 - MDEC   : 0% 
 - CD     : 0%
