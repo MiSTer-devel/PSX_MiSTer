@@ -15,7 +15,7 @@ entity psx_top is
    port 
    (
       clk1x                 : in  std_logic;  
-      clk2x                 : in  std_logic;  
+      clk2x                 : in  std_logic;   
       reset                 : in  std_logic; 
       -- commands 
       loadExe               : in  std_logic;
@@ -30,6 +30,7 @@ entity psx_top is
       ram_128               : out std_logic;
       ram_done              : in  std_logic;
       ram_reqprocessed      : in  std_logic;
+      ram_idle              : in  std_logic;
       -- vram interface
       vram_BUSY             : in  std_logic;                    
       vram_DOUT             : in  std_logic_vector(63 downto 0);
@@ -111,6 +112,12 @@ architecture arch of psx_top is
    signal bus_dma_write          : std_logic;
    signal bus_dma_dataRead       : std_logic_vector(31 downto 0);
    
+   signal bus_tmr_addr           : unsigned(5 downto 0); 
+   signal bus_tmr_dataWrite      : std_logic_vector(31 downto 0);
+   signal bus_tmr_read           : std_logic;
+   signal bus_tmr_write          : std_logic;
+   signal bus_tmr_dataRead       : std_logic_vector(31 downto 0);
+   
    signal bus_gpu_addr           : unsigned(3 downto 0); 
    signal bus_gpu_dataWrite      : std_logic_vector(31 downto 0);
    signal bus_gpu_read           : std_logic;
@@ -143,6 +150,10 @@ architecture arch of psx_top is
    signal ram_cpu_ena            : std_logic;
    signal ram_cpu_128            : std_logic;
    signal ram_cpu_done           : std_logic;
+   
+   -- gpu
+   signal hblank_intern          : std_logic;
+   signal vblank_intern          : std_logic;
    
    -- irq
    signal irqRequest             : std_logic;
@@ -273,6 +284,27 @@ begin
       
       irqRequest           => irq_PAD,
       
+      KeyTriangle          => KeyTriangle,           
+      KeyCircle            => KeyCircle,           
+      KeyCross             => KeyCross,           
+      KeySquare            => KeySquare,           
+      KeySelect            => KeySelect,      
+      KeyStart             => KeyStart,       
+      KeyRight             => KeyRight,       
+      KeyLeft              => KeyLeft,        
+      KeyUp                => KeyUp,          
+      KeyDown              => KeyDown,        
+      KeyR1                => KeyR1,           
+      KeyR2                => KeyR2,           
+      KeyR3                => KeyR3,           
+      KeyL1                => KeyL1,           
+      KeyL2                => KeyL2,           
+      KeyL3                => KeyL3,           
+      Analog1X             => Analog1X,       
+      Analog1Y             => Analog1Y,       
+      Analog2X             => Analog2X,       
+      Analog2Y             => Analog2Y,
+      
       bus_addr             => bus_pad_addr,     
       bus_dataWrite        => bus_pad_dataWrite,
       bus_read             => bus_pad_read,     
@@ -283,9 +315,6 @@ begin
    
    irq_GPU       <= '0'; -- todo
    irq_CDROM     <= '0'; -- todo
-   irq_TIMER0    <= '0'; -- todo
-   irq_TIMER1    <= '0'; -- todo
-   irq_TIMER2    <= '0'; -- todo
    irq_SIO       <= '0'; -- todo
    irq_SPU       <= '0'; -- todo
    irq_LIGHTPEN  <= '0'; -- todo
@@ -341,6 +370,7 @@ begin
       ram_128              => ram_dma_128,      
       ram_done             => ram_dma_done, 
       ram_reqprocessed     => ram_reqprocessed,
+      ram_idle             => ram_idle,
       
       gpu_dmaRequest       => gpu_dmaRequest,  
       DMA_GPU_writeEna     => DMA_GPU_writeEna,
@@ -355,12 +385,12 @@ begin
       bus_dataRead         => bus_dma_dataRead
    );
    
-   ram_dataWrite <= ram_dma_dataWrite when (dmaOn = '1') else ram_cpu_dataWrite;
-   ram_Adr       <= ram_dma_Adr       when (dmaOn = '1') else ram_cpu_Adr;      
-   ram_be        <= ram_dma_be        when (dmaOn = '1') else ram_cpu_be;       
-   ram_rnw       <= ram_dma_rnw       when (dmaOn = '1') else ram_cpu_rnw;      
-   ram_ena       <= ram_dma_ena       when (dmaOn = '1') else ram_cpu_ena;      
-   ram_128       <= ram_dma_128       when (dmaOn = '1') else ram_cpu_128;      
+   ram_dataWrite <= ram_dma_dataWrite when (cpuPaused = '1') else ram_cpu_dataWrite;
+   ram_Adr       <= ram_dma_Adr       when (cpuPaused = '1') else ram_cpu_Adr;      
+   ram_be        <= ram_dma_be        when (cpuPaused = '1') else ram_cpu_be;       
+   ram_rnw       <= ram_dma_rnw       when (cpuPaused = '1') else ram_cpu_rnw;      
+   ram_ena       <= ram_dma_ena       when (cpuPaused = '1') else ram_cpu_ena;      
+   ram_128       <= ram_dma_128       when (cpuPaused = '1') else ram_cpu_128;      
    
    process (clk1x)
    begin
@@ -369,7 +399,7 @@ begin
          if (ram_ena = '1') then
             ram_next_dma <= '0';
             ram_next_cpu <= '0';
-            if (dmaOn = '1') then
+            if (cpuPaused = '1') then
                ram_next_dma <= '1';
             else
                ram_next_cpu <= '1';
@@ -381,6 +411,31 @@ begin
    
    ram_dma_done <= ram_done and ram_next_dma;
    ram_cpu_done <= ram_done and ram_next_cpu;
+   
+   itimer : entity work.timer
+   port map
+   (
+      clk1x                => clk1x,
+      ce                   => ce,   
+      reset                => reset_intern,
+      
+      dotclock             => '0', -- todo
+      hblank               => hblank_intern,
+      vblank               => vblank_intern,
+      
+      irqRequest0          => irq_TIMER0,
+      irqRequest1          => irq_TIMER1,
+      irqRequest2          => irq_TIMER2,
+      
+      bus_addr             => bus_tmr_addr,     
+      bus_dataWrite        => bus_tmr_dataWrite,
+      bus_read             => bus_tmr_read,     
+      bus_write            => bus_tmr_write,       
+      bus_dataRead         => bus_tmr_dataRead
+   );
+   
+   hblank <= hblank_intern;
+   vblank <= vblank_intern;
    
    igpu : entity work.gpu
    generic map
@@ -423,8 +478,8 @@ begin
 
       hsync                => hsync, 
       vsync                => vsync, 
-      hblank               => hblank,
-      vblank               => vblank,
+      hblank               => hblank_intern,
+      vblank               => vblank_intern,
       DisplayWidth         => DisplayWidth, 
       DisplayHeight        => DisplayHeight,
       DisplayOffsetX       => DisplayOffsetX,
@@ -494,7 +549,13 @@ begin
       bus_dma_dataWrite    => bus_dma_dataWrite,
       bus_dma_read         => bus_dma_read,     
       bus_dma_write        => bus_dma_write,    
-      bus_dma_dataRead     => bus_dma_dataRead,      
+      bus_dma_dataRead     => bus_dma_dataRead,     
+
+      bus_tmr_addr         => bus_tmr_addr,     
+      bus_tmr_dataWrite    => bus_tmr_dataWrite,
+      bus_tmr_read         => bus_tmr_read,     
+      bus_tmr_write        => bus_tmr_write,    
+      bus_tmr_dataRead     => bus_tmr_dataRead,       
       
       bus_gpu_addr         => bus_gpu_addr,     
       bus_gpu_dataWrite    => bus_gpu_dataWrite,

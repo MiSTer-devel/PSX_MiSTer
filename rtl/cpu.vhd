@@ -415,7 +415,7 @@ begin
    mem1_address    <= FetchAddr;
 
    process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, branch, PCbranch, mem4_request, mem_done, mem_dataRead, memoryMuxStage, PC, fetchReady, stall1, exceptionNew, opcode0, mem_dataCache, reset, FetchAddr, 
-            cacheUpdate, tagValid, tag_q_b, blockirqCnt)
+            cacheUpdate, tagValid, tag_q_b, blockirqCnt, FetchLastAddr)
       variable request : std_logic;
    begin
       request         := '0';

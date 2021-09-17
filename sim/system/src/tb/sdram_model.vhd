@@ -16,7 +16,8 @@ entity sdram_model is
       di                : in  std_logic_vector(31 downto 0);
       do                : out std_logic_vector(127 downto 0);
       done              : out std_logic := '0';
-      reqprocessed      : out std_logic := '0'
+      reqprocessed      : out std_logic := '0';
+      ram_idle          : out std_logic := '0'
    );
 end entity;
 
@@ -84,7 +85,10 @@ begin
          req_buffer <= '1';
       end if;
       
+      ram_idle <= '1';
+      
       if (waitcnt > 0) then
+         ram_idle <= '0';
          waitcnt <= waitcnt - 1;
          if (waitcnt = 1) then
             if (rnw = '1') then
@@ -98,13 +102,15 @@ begin
             done <= '1';
          end if;
       elsif ((req = '1' or req_buffer = '1') and rnw = '0') then
+         ram_idle <= '0';
          if (be(3) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 3) := to_integer(unsigned(di(31 downto 24))); end if;
          if (be(2) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 2) := to_integer(unsigned(di(23 downto 16))); end if;
          if (be(1) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 1) := to_integer(unsigned(di(15 downto  8))); end if;
          if (be(0) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 0) := to_integer(unsigned(di( 7 downto  0))); end if;
-         waitcnt   <= 3;
+         waitcnt    <= 1;
          req_buffer <= '0';
       elsif ((req = '1' or req_buffer = '1') and rnw = '1') then
+         ram_idle     <= '0';
          do           <= (others => 'X');
          if (req_buffer = '1') then
             waitcnt      <= 3;

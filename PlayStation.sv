@@ -302,7 +302,7 @@ parameter CONF_STR = {
 	"- ;",
 	"R0,Reset;",
 	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Rewind,Savestates;",
-	"jn,A,B,L,R,Select,Start,X,X;",
+	"jn,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,X,X;",
 	"I,",
 	"Slot=DPAD|Save/Load=Start+DPAD,",
 	"Active Slot 1,",
@@ -506,6 +506,7 @@ psx
    .ram_128(sdram_128), 
    .ram_done(sdram_ack),
    .ram_reqprocessed(sdram_reqprocessed),
+   .ram_idle(ram_idle),
    // vram/ddr3
    .DDRAM_BUSY      (DDRAM_BUSY      ),
    .DDRAM_BURSTCNT  (DDRAM_BURSTCNT  ),
@@ -525,22 +526,22 @@ psx
    .DisplayOffsetX  (DisplayOffsetX),
    .DisplayOffsetY  (DisplayOffsetY),
    //Keys
-   .KeyTriangle(1'b0),    
-   .KeyCircle(1'b0),       
-   .KeyCross(1'b0),       
-   .KeySquare(1'b0),       
-   .KeySelect(1'b0),       
-   .KeyStart(1'b0),        
+   .KeyTriangle(joy[4]),    
+   .KeyCircle(joy[5]),       
+   .KeyCross(joy[6]),       
+   .KeySquare(joy[7]),       
+   .KeySelect(joy[8]),       
+   .KeyStart(joy[9]),        
 	.KeyRight(joy[0]),
 	.KeyLeft(joy[1]),
 	.KeyUp(joy[3]),
 	.KeyDown(joy[2]),      
-   .KeyR1(1'b0),          
-   .KeyR2(1'b0),          
-   .KeyR3(1'b0),          
-   .KeyL1(1'b0),          
-   .KeyL2(1'b0),          
-   .KeyL3(1'b0),          
+   .KeyR1(joy[11]),          
+   .KeyR2(joy[13]),          
+   .KeyR3(joy[15]),          
+   .KeyL1(joy[10]),          
+   .KeyL2(joy[12]),          
+   .KeyL3(joy[14]),          
    .Analog1X(joystick_analog_0[7:0]),       
    .Analog1Y(joystick_analog_0[15:8]),       
    .Analog2X(8'b0),       
@@ -570,6 +571,7 @@ wire         sdram_readack;
 wire         sdram_writeack;
 wire         sdram_rnw;
 wire         sdram_128;
+wire         ram_idle;
 
 assign sdram_ack = sdram_readack | sdram_writeack;
 
@@ -581,6 +583,7 @@ sdram sdram
 	.clk_base(clk_1x),
 	
 	.refreshForce(sdr_refresh),
+	.ram_idle(ram_idle),
 
 	.ch1_addr(sdram_addr),
 	.ch1_din(),

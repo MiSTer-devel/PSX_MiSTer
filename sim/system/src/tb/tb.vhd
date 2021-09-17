@@ -62,12 +62,6 @@ architecture arch of etb is
    signal pixel_out_y         : integer range 0 to 159;
    signal pixel_out_data      : std_logic_vector(17 downto 0);  
    signal pixel_out_we        : std_logic;
-      
-   signal largeimg_out_addr   : std_logic_vector(25 downto 0);
-   signal largeimg_out_data   : std_logic_vector(63 downto 0);
-   signal largeimg_out_req    : std_logic;
-   signal largeimg_out_done   : std_logic;
-   signal largeimg_newframe   : std_logic;
                            
    signal sound_out_left      : std_logic_vector(15 downto 0);
    signal sound_out_right     : std_logic_vector(15 downto 0);
@@ -81,6 +75,7 @@ architecture arch of etb is
    signal ram_ena             : std_logic;
    signal ram_done            : std_logic;   
    signal ram_reqprocessed    : std_logic;   
+   signal ram_idle            : std_logic;   
    
    -- ddrram
    signal DDRAM_CLK           : std_logic;
@@ -93,35 +88,28 @@ architecture arch of etb is
    signal DDRAM_DIN           : std_logic_vector(63 downto 0);
    signal DDRAM_BE            : std_logic_vector(7 downto 0);
    signal DDRAM_WE            : std_logic;
-                     
-   signal ch1_addr            : std_logic_vector(27 downto 1);
-   signal ch1_dout            : std_logic_vector(63 downto 0);
-   signal ch1_din             : std_logic_vector(15 downto 0);
-   signal ch1_req             : std_logic;
-   signal ch1_rnw             : std_logic;
-   signal ch1_ready           : std_logic;
-                           
-   signal ch2_addr            : std_logic_vector(27 downto 1);
-   signal ch2_dout            : std_logic_vector(31 downto 0);
-   signal ch2_din             : std_logic_vector(31 downto 0);
-   signal ch2_req             : std_logic;
-   signal ch2_rnw             : std_logic;
-   signal ch2_ready           : std_logic;
-                        
-   signal ch3_addr            : std_logic_vector(25 downto 1);
-   signal ch3_dout            : std_logic_vector(15 downto 0);
-   signal ch3_din             : std_logic_vector(15 downto 0);
-   signal ch3_req             : std_logic;
-   signal ch3_rnw             : std_logic;
-   signal ch3_ready           : std_logic;
-                        
-   signal ch4_addr            : std_logic_vector(27 downto 1);
-   signal ch4_dout            : std_logic_vector(63 downto 0);
-   signal ch4_din             : std_logic_vector(63 downto 0);
-   signal ch4_be              : std_logic_vector(7 downto 0);
-   signal ch4_req             : std_logic;
-   signal ch4_rnw             : std_logic;
-   signal ch4_ready           : std_logic;
+   
+   -- keys
+   signal KeyTriangle         : std_logic := '0'; 
+   signal KeyCircle           : std_logic := '0'; 
+   signal KeyCross            : std_logic := '0'; 
+   signal KeySquare           : std_logic := '0';
+   signal KeySelect           : std_logic := '0';
+   signal KeyStart            : std_logic := '0';
+   signal KeyRight            : std_logic := '0';
+   signal KeyLeft             : std_logic := '0';
+   signal KeyUp               : std_logic := '0';
+   signal KeyDown             : std_logic := '0';
+   signal KeyR1               : std_logic := '0';
+   signal KeyR2               : std_logic := '0';
+   signal KeyR3               : std_logic := '0';
+   signal KeyL1               : std_logic := '0';
+   signal KeyL2               : std_logic := '0';
+   signal KeyL3               : std_logic := '0';
+   signal Analog1X            : signed(7 downto 0) := (others => '0');
+   signal Analog1Y            : signed(7 downto 0) := (others => '0');
+   signal Analog2X            : signed(7 downto 0) := (others => '0');
+   signal Analog2Y            : signed(7 downto 0) := (others => '0'); 
    
    
 begin
@@ -132,6 +120,27 @@ begin
    
    reset  <= not psx_on(0);
    
+   KeyTriangle <= '0';
+   KeyCircle   <= '0';
+   KeyCross    <= '0';
+   KeySquare   <= '0';
+   KeySelect   <= '0';
+   KeyStart    <= '0';
+   KeyRight    <= '1' after 300 ms;
+   KeyLeft     <= '0';
+   KeyUp       <= '0';
+   KeyDown     <= '0';
+   KeyR1       <= '0';
+   KeyR2       <= '0';
+   KeyR3       <= '0';
+   KeyL1       <= '0';
+   KeyL2       <= '0';
+   KeyL3       <= '0';
+   Analog1X    <= (others => '0');
+   Analog1Y    <= (others => '0');
+   Analog2X    <= (others => '0');
+   Analog2Y    <= (others => '0');
+   
    -- registers
    iReg_psx_on            : entity procbus.eProcReg generic map (Reg_psx_on)       port map (clk100, proc_bus_in, psx_on     , psx_on);      
    iReg_psx_LoadExe       : entity procbus.eProcReg generic map (Reg_psx_LoadExe)  port map (clk100, proc_bus_in, psx_LoadExe, psx_LoadExe);      
@@ -140,7 +149,7 @@ begin
    generic map
    (
       is_simu               => '1',
-      REPRODUCIBLEGPUTIMING => '1'
+      REPRODUCIBLEGPUTIMING => '0'
    )
    port map
    (
@@ -158,6 +167,7 @@ begin
       ram_ena               => ram_ena,      
       ram_done              => ram_done,
       ram_reqprocessed      => ram_reqprocessed,
+      ram_idle              => ram_idle,
       -- vram/ddr3 interface
       DDRAM_BUSY            => DDRAM_BUSY,      
       DDRAM_BURSTCNT        => DDRAM_BURSTCNT,  
@@ -169,97 +179,30 @@ begin
       DDRAM_BE              => DDRAM_BE,        
       DDRAM_WE              => DDRAM_WE,
       -- Keys - all active high
-      KeyTriangle           => '0', --KeyTriangle,           
-      KeyCircle             => '0', --KeyCircle,           
-      KeyCross              => '0', --KeyCross,           
-      KeySquare             => '0', --KeySquare,           
-      KeySelect             => '0', --KeySelect,      
-      KeyStart              => '0', --KeyStart,       
-      KeyRight              => '0', --KeyRight,       
-      KeyLeft               => '0', --KeyLeft,        
-      KeyUp                 => '0', --KeyUp,          
-      KeyDown               => '0', --KeyDown,        
-      KeyR1                 => '0', --KeyR1,           
-      KeyR2                 => '0', --KeyR2,           
-      KeyR3                 => '0', --KeyR3,           
-      KeyL1                 => '0', --KeyL1,           
-      KeyL2                 => '0', --KeyL2,           
-      KeyL3                 => '0', --KeyL3,           
-      Analog1X              => x"00", --Analog1X,       
-      Analog1Y              => x"00", --Analog1Y,       
-      Analog2X              => x"00", --Analog2X,       
-      Analog2Y              => x"00", --Analog2Y,      
+      KeyTriangle           => KeyTriangle,           
+      KeyCircle             => KeyCircle,           
+      KeyCross              => KeyCross,           
+      KeySquare             => KeySquare,           
+      KeySelect             => KeySelect,      
+      KeyStart              => KeyStart,       
+      KeyRight              => KeyRight,       
+      KeyLeft               => KeyLeft,        
+      KeyUp                 => KeyUp,          
+      KeyDown               => KeyDown,        
+      KeyR1                 => KeyR1,           
+      KeyR2                 => KeyR2,           
+      KeyR3                 => KeyR3,           
+      KeyL1                 => KeyL1,           
+      KeyL2                 => KeyL2,           
+      KeyL3                 => KeyL3,           
+      Analog1X              => Analog1X,       
+      Analog1Y              => Analog1Y,       
+      Analog2X              => Analog2X,       
+      Analog2Y              => Analog2Y,      
       -- sound              => -- sound       
       sound_out_left        => sound_out_left, 
       sound_out_right       => sound_out_right
    );
-   
-   largeimg_newframe <= '1' when unsigned(largeimg_out_addr(19 downto 0)) = 0 else '0';
-   
-   ch1_req  <= '0';
-   
-   ch2_addr <= bus_out_Adr & "0";
-   ch2_din  <= bus_out_Din;
-   ch2_req  <= bus_out_ena;
-   ch2_rnw  <= bus_out_rnw;
-   bus_out_Dout <= ch2_dout;
-   bus_out_done <= ch2_ready;
-   
-   ch4_addr <= SAVE_out_Adr(25 downto 0) & "0";
-   ch4_din  <= SAVE_out_Din;
-   ch4_req  <= SAVE_out_ena;
-   ch4_rnw  <= SAVE_out_rnw;
-   ch4_be   <= SAVE_out_be;
-   SAVE_out_Dout <= ch4_dout;
-   SAVE_out_done <= ch4_ready;
-   
-   --iddrram : entity psx.ddram
-   --port map (
-   --   DDRAM_CLK        => clk100,      
-   --   DDRAM_BUSY       => DDRAM_BUSY,      
-   --   DDRAM_BURSTCNT   => DDRAM_BURSTCNT,  
-   --   DDRAM_ADDR       => DDRAM_ADDR,      
-   --   DDRAM_DOUT       => DDRAM_DOUT,      
-   --   DDRAM_DOUT_READY => DDRAM_DOUT_READY,
-   --   DDRAM_RD         => DDRAM_RD,        
-   --   DDRAM_DIN        => DDRAM_DIN,       
-   --   DDRAM_BE         => DDRAM_BE,        
-   --   DDRAM_WE         => DDRAM_WE,        
-   --                              
-   --   ch1_addr         => ch1_addr,        
-   --   ch1_dout         => ch1_dout,        
-   --   ch1_din          => ch1_din,         
-   --   ch1_req          => ch1_req,         
-   --   ch1_rnw          => ch1_rnw,         
-   --   ch1_ready        => ch1_ready,       
-   --                                     
-   --   ch2_addr         => ch2_addr,       
-   --   ch2_dout         => ch2_dout,        
-   --   ch2_din          => ch2_din,         
-   --   ch2_req          => ch2_req,         
-   --   ch2_rnw          => ch2_rnw,         
-   --   ch2_ready        => ch2_ready,       
-   --                                  
-   --   ch3_addr         => ch3_addr,        
-   --   ch3_dout         => ch3_dout,        
-   --   ch3_din          => ch3_din,         
-   --   ch3_req          => ch3_req,         
-   --   ch3_rnw          => ch3_rnw,         
-   --   ch3_ready        => ch3_ready,       
-   --                                
-   --   ch4_addr         => ch4_addr,        
-   --   ch4_dout         => ch4_dout,        
-   --   ch4_din          => ch4_din,         
-   --   ch4_req          => ch4_req,         
-   --   ch4_rnw          => ch4_rnw,         
-   --   ch4_be           => ch4_be,       
-   --   ch4_ready        => ch4_ready,       
-   --   
-   --   ch5_addr         => (27 downto 1 => '0'),        
-   --   ch5_din          => (63 downto 0 => '0'),               
-   --   ch5_req          => largeimg_out_req,                
-   --   ch5_ready        => largeimg_out_done  
-   --);
    
    iddrram_model : entity tb.ddrram_model
    port map
@@ -287,7 +230,8 @@ begin
       di           => ram_dataWrite,
       do           => ram_dataRead,
       done         => ram_done,
-      reqprocessed => ram_reqprocessed
+      reqprocessed => ram_reqprocessed,
+      ram_idle     => ram_idle
    );
    
    --iframebuffer : entity work.framebuffer

@@ -13,6 +13,7 @@ set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_pixelp
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) irq.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) joypad.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) timer.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) dma.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) cpu.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) memorymux.vhd ]

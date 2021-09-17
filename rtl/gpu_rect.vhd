@@ -12,7 +12,6 @@ entity gpu_rect is
    port 
    (
       clk2x                : in  std_logic;
-      clk2xIndex           : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
@@ -112,6 +111,7 @@ begin
    vramLineAddr <= unsigned(xPos(9 downto 0)) when (state = PROCPIXELS) else (others => '0');
    
    process (clk2x)
+      variable xcalc : signed(11 downto 0);
    begin
       if rising_edge(clk2x) then
          
@@ -176,9 +176,18 @@ begin
                   end case;
                
                   if (fifo_Valid = '1') then
-                     rec_posx   <= resize(signed(fifo_data(10 downto  0)),12) + resize(drawingOffsetX, 12);
-                     xPos       <= resize(signed(fifo_data(10 downto  0)),12) + resize(drawingOffsetX, 12);
+                     xcalc      := resize(signed(fifo_data(10 downto  0)),12) + resize(drawingOffsetX, 12);
+                     if (xcalc < to_integer(drawingAreaLeft)) then
+                        xcalc := resize(signed(drawingAreaLeft), 12);
+                     end if;
+                     rec_posx   <= xcalc;
+                     xPos       <= xcalc;
+                     
                      yPos       <= resize(signed(fifo_data(26 downto 16)),12) + resize(drawingOffsetY, 12);
+                     if (to_integer(resize(signed(fifo_data(26 downto 16)),12) + resize(drawingOffsetY, 12)) < to_integer(drawingAreaTop)) then
+                        yPos <= resize(signed(drawingAreaTop), 12);
+                     end if;
+                     
                      if (rec_texture = '1') then
                         state    <= REQUESTTEXTURE;  
                      elsif (rec_size = "00") then
@@ -240,11 +249,11 @@ begin
                      xPos  <= xPos + 1;
                      uWork <= uWork + 1;
                      
-                     if (xCnt + 1 >= rec_sizex) then
+                     if (xCnt + 1 >= rec_sizex or xPos + 1 > to_integer(drawingAreaRight)) then
                         yCnt  <= yCnt + 1;
                         ypos  <= yPos + 1;
                         vWork <= vWork + 1;
-                        if (yCnt + 1 >= rec_sizey) then
+                        if (yCnt + 1 >= rec_sizey or ypos + 1 > to_integer(drawingAreaBottom)) then
                            if (REPRODUCIBLEGPUTIMING = '1') then
                               state <= WAITIMING;
                            else

@@ -37,6 +37,7 @@ module sdram
 	output             SDRAM_CLK,   // clock for chip
 
 	input              refreshForce,                   
+	output             ram_idle,                   
 
 	input      [26:0]  ch1_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
 	output reg [127:0] ch1_dout,   // data output to cpu
@@ -134,6 +135,10 @@ reg ch1_reqprocessed_ramclock = 0;
 
 reg req128    = 0;
 
+reg  [3:0] state = STATE_STARTUP;
+
+assign ram_idle = (state == STATE_IDLE);
+
 always @(posedge clk) begin
 	reg [CAS_LATENCY+BURST_LENGTH:0] data_ready_delay1, data_ready_delay2, data_ready_delay3;
 
@@ -141,7 +146,6 @@ always @(posedge clk) begin
 	reg [12:0] cas_addr;
 	reg [31:0] saved_data;
 	reg [15:0] dq_reg;
-	reg  [3:0] state = STATE_STARTUP;
 
 	reg       ch1_rq, ch2_rq, ch3_rq;
 	reg [1:0] ch;

@@ -74,7 +74,7 @@ begin
    igpu : entity psx.gpu
    generic map
    (
-      REPRODUCIBLEGPUTIMING => '1'
+      REPRODUCIBLEGPUTIMING => '0'
    )
    port map
    (

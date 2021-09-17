@@ -6,7 +6,7 @@ entity psx_mister is
    generic
    (
       is_simu               : std_logic := '0';
-      REPRODUCIBLEGPUTIMING : std_logic := '1'
+      REPRODUCIBLEGPUTIMING : std_logic := '0'
    );
    port 
    (
@@ -26,6 +26,7 @@ entity psx_mister is
       ram_128               : out std_logic;
       ram_done              : in  std_logic;  
       ram_reqprocessed      : in  std_logic;  
+      ram_idle              : in  std_logic;  
       -- vram/ddr3 interface
       DDRAM_BUSY            : in  std_logic;                    
       DDRAM_BURSTCNT        : out std_logic_vector(7 downto 0); 
@@ -107,6 +108,7 @@ begin
       ram_128               => ram_128,       
       ram_done              => ram_done,    
       ram_reqprocessed      => ram_reqprocessed,    
+      ram_idle              => ram_idle,    
       -- vram interface
       vram_BUSY             => DDRAM_BUSY,      
       vram_DOUT             => DDRAM_DOUT,      

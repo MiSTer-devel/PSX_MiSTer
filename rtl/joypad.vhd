@@ -11,6 +11,27 @@ entity joypad is
       
       irqRequest           : out std_logic := '0';
       
+      KeyTriangle           : in  std_logic; 
+      KeyCircle             : in  std_logic; 
+      KeyCross              : in  std_logic; 
+      KeySquare             : in  std_logic;
+      KeySelect             : in  std_logic;
+      KeyStart              : in  std_logic;
+      KeyRight              : in  std_logic;
+      KeyLeft               : in  std_logic;
+      KeyUp                 : in  std_logic;
+      KeyDown               : in  std_logic;
+      KeyR1                 : in  std_logic;
+      KeyR2                 : in  std_logic;
+      KeyR3                 : in  std_logic;
+      KeyL1                 : in  std_logic;
+      KeyL2                 : in  std_logic;
+      KeyL3                 : in  std_logic;
+      Analog1X              : in  signed(7 downto 0);
+      Analog1Y              : in  signed(7 downto 0);
+      Analog2X              : in  signed(7 downto 0);
+      Analog2Y              : in  signed(7 downto 0);      
+      
       bus_addr             : in  unsigned(3 downto 0); 
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
       bus_read             : in  std_logic;
@@ -239,12 +260,26 @@ begin
                               ack := '1';
                               
                            when BUTTONLSB => 
-                              receiveBuffer   <= x"FF"; -- todo : keys
+                              receiveBuffer(0) <= not KeySelect;
+                              receiveBuffer(1) <= not KeyL3;
+                              receiveBuffer(2) <= not KeyR3;
+                              receiveBuffer(3) <= not KeyStart;
+                              receiveBuffer(4) <= not KeyUp;
+                              receiveBuffer(5) <= not KeyRight;
+                              receiveBuffer(6) <= not KeyDown;
+                              receiveBuffer(7) <= not KeyLeft;
                               controllerState <= BUTTONMSB;
                               ack := '1';
                               
                            when BUTTONMSB => 
-                              receiveBuffer   <= x"FF"; -- todo : keys
+                              receiveBuffer(0) <= not KeyL2;
+                              receiveBuffer(1) <= not KeyR2;
+                              receiveBuffer(2) <= not KeyL1;
+                              receiveBuffer(3) <= not KeyR1;
+                              receiveBuffer(4) <= not KeyTriangle;
+                              receiveBuffer(5) <= not KeyCircle;
+                              receiveBuffer(6) <= not KeyCross;
+                              receiveBuffer(7) <= not KeySquare;
                               controllerState <= IDLE;
                         end case;
                      end if;

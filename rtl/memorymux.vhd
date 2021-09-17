@@ -61,6 +61,12 @@ entity memorymux is
       bus_dma_write        : out std_logic;
       bus_dma_dataRead     : in  std_logic_vector(31 downto 0);
       
+      bus_tmr_addr         : out unsigned(5 downto 0); 
+      bus_tmr_dataWrite    : out std_logic_vector(31 downto 0);
+      bus_tmr_read         : out std_logic;
+      bus_tmr_write        : out std_logic;
+      bus_tmr_dataRead     : in  std_logic_vector(31 downto 0);
+      
       bus_gpu_addr         : out unsigned(3 downto 0); 
       bus_gpu_dataWrite    : out std_logic_vector(31 downto 0);
       bus_gpu_read         : out std_logic;
@@ -112,7 +118,7 @@ begin
 
    isIdle <= '1' when (state = IDLE) else '0';
 
-   process (state, mem_request, mem_rnw, mem_isData, mem_addressData, mem_reqsize, mem_writeMask, mem_dataWrite)
+   process (state, mem_request, mem_rnw, mem_isData, mem_addressData, mem_reqsize, mem_writeMask, mem_dataWrite, ce)
       variable address : unsigned(28 downto 0);
    begin
    
@@ -167,6 +173,18 @@ begin
          end if;
       end if;
       
+      -- timer
+      bus_tmr_read      <= '0';
+      bus_tmr_write     <= '0';
+      bus_tmr_addr      <= address(5 downto 0);
+      bus_tmr_dataWrite <= mem_dataWrite;
+      if (address >= 16#1F801100# and address < 16#1F801140#) then
+         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+            bus_tmr_read  <= mem_rnw;
+            bus_tmr_write <= not mem_rnw;
+         end if;
+      end if;
+      
       -- gpu
       bus_gpu_read      <= '0';
       bus_gpu_write     <= '0';
@@ -181,7 +199,7 @@ begin
 
    end process;
    
-   dataFromBusses <= bus_exp1_dataRead or bus_pad_dataRead or bus_irq_dataRead or bus_dma_dataRead or bus_gpu_dataRead;
+   dataFromBusses <= bus_exp1_dataRead or bus_pad_dataRead or bus_irq_dataRead or bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead;
   
    process (clk1x)
    begin

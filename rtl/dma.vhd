@@ -25,6 +25,7 @@ entity dma is
       ram_128              : out std_logic := '0';
       ram_done             : in  std_logic;
       ram_reqprocessed     : in  std_logic;
+      ram_idle             : in  std_logic;
       
       gpu_dmaRequest       : in  std_logic;
       DMA_GPU_writeEna     : out std_logic := '0';
@@ -68,48 +69,59 @@ architecture arch of dma is
    type tdmaArray is array (0 to 6) of dmaRecord;
    signal dmaArray : tdmaArray;
   
-   signal DPCR          : unsigned(31 downto 0);
-   signal DICR          : unsigned(31 downto 0);
-   signal DICR_readback : unsigned(31 downto 0);
-   signal DICR_IRQs     : unsigned(6 downto 0);
+   signal DPCR             : unsigned(31 downto 0);
+   signal DICR             : unsigned(31 downto 0);
+   signal DICR_readback    : unsigned(31 downto 0);
+   signal DICR_IRQs        : unsigned(6 downto 0);
+      
+   signal triggerDMA       : std_logic_vector(6 downto 0);
+      
+   signal isOn             : std_logic;
+   signal activeChannel    : integer range 0 to 6;
+   signal paused           : std_logic;
+   signal gpupaused        : std_logic;
+   signal waitcnt          : integer range 0 to 15;
+   signal dmaTime          : integer range 0 to 65535;
+   signal wordcount        : unsigned(16 downto 0);
+   signal toDevice         : std_logic;
+   signal directionNeg     : std_logic;
+   signal nextAddr         : std_logic_vector(23 downto 0);
+   signal blocksleft       : unsigned(15 downto 0);
+   signal dmacount         : unsigned(9 downto 0);
+      
+   signal autoread         : std_logic := '0';
+   signal readcount        : unsigned(9 downto 0);
+   signal readsize         : unsigned(9 downto 0);
+   signal firstword        : std_logic := '0';
    
-   signal triggerDMA    : std_logic_vector(6 downto 0);
+   signal dataNext         : std_logic_vector(95 downto 0);
+   signal dataCount        : integer range 0 to 3 := 0;
+   signal firstsize        : integer range 0 to 3 := 0;
    
-   signal isOn          : std_logic;
-   signal activeChannel : integer range 0 to 6;
-   signal paused        : std_logic;
-   signal gpupaused     : std_logic;
-   signal waitcnt       : integer range 0 to 15;
-   signal dmaTime       : integer range 0 to 65535;
-   signal wordcount     : unsigned(16 downto 0);
-   signal toDevice      : std_logic;
-   signal directionNeg  : std_logic;
-   signal nextAddr      : std_logic_vector(23 downto 0);
-   signal blocksleft    : unsigned(15 downto 0);
-   signal dmacount      : unsigned(9 downto 0);
+   signal fifoIn_reset     : std_logic := '0';
+   signal fifoIn_Din       : std_logic_vector(31 downto 0);
+   signal fifoIn_Wr        : std_logic; 
+   signal fifoIn_Full      : std_logic;
+   signal fifoIn_NearFull  : std_logic;
+   signal fifoIn_Dout      : std_logic_vector(31 downto 0);
+   signal fifoIn_Rd        : std_logic;
+   signal fifoIn_Empty     : std_logic;
+   signal fifoIn_Valid     : std_logic;   
    
-   signal autoread      : std_logic := '0';
-   signal readcount     : unsigned(9 downto 0);
-   signal readsize      : unsigned(9 downto 0);
-   signal firstword     : std_logic := '0';
-
-   signal dataNext      : std_logic_vector(95 downto 0);
-   signal dataCount     : integer range 0 to 3 := 0;
-   signal firstsize     : integer range 0 to 3 := 0;
-   
-   signal fifo_reset    : std_logic := '0';
-   signal fifo_Din      : std_logic_vector(31 downto 0);
-   signal fifo_Wr       : std_logic; 
-   signal fifo_Full     : std_logic;
-   signal fifo_NearFull : std_logic;
-   signal fifo_Dout     : std_logic_vector(31 downto 0);
-   signal fifo_Rd       : std_logic;
-   signal fifo_Empty    : std_logic;
-   signal fifo_Valid    : std_logic;
+   signal fifoOut_reset    : std_logic := '0';
+   signal fifoOut_Din      : std_logic_vector(50 downto 0);
+   signal fifoOut_Wr       : std_logic; 
+   signal fifoOut_Full     : std_logic;
+   signal fifoOut_NearFull : std_logic;
+   signal fifoOut_Dout     : std_logic_vector(50 downto 0);
+   signal fifoOut_Rd       : std_logic;
+   signal fifoOut_Empty    : std_logic;
+   signal fifoOut_Valid    : std_logic;
+   signal fifoOut_Done     : std_logic;
   
 begin 
 
-   dmaOn <= '1' when (dmaState = WAITING or dmaState = READHEADER or dmaState = WAITREAD or dmaState = WORKING) else '0';
+   dmaOn <= '1' when (dmaState = WAITING or dmaState = READHEADER or dmaState = WAITREAD or dmaState = WORKING or dmaState = STOPPING or dmaState = PAUSING) else '0';
 
    ram_refresh <= '1' when (dmaState = WAITING and cpuPaused = '1' and waitcnt = 9) else '0';
    ram_be      <= "1111";
@@ -122,8 +134,8 @@ begin
    DICR_readback(31)           <= irqOut;
    
    
-   DMA_GPU_writeEna <= '1' when (dmaState = working and fifo_Valid = '1' and activeChannel = 2 and toDevice = '1') else '0'; 
-   DMA_GPU_write    <= fifo_Dout;
+   DMA_GPU_writeEna <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 2 and toDevice = '1') else '0'; 
+   DMA_GPU_write    <= fifoIn_Dout;
 
    process (clk1x)
       variable channel        : integer range 0 to 7;
@@ -132,7 +144,10 @@ begin
    begin
       if rising_edge(clk1x) then
       
-         fifo_reset <= '0';
+         fifoIn_reset  <= '0';
+         fifoOut_reset <= '0';
+         
+         fifoOut_Wr    <= '0';
       
          if (reset = '1') then
          
@@ -163,8 +178,11 @@ begin
             
             autoread       <= '0';
             
-            fifo_reset     <= '1';
+            fifoIn_reset   <= '1';
             dataCount      <= 0;
+            
+            fifoOut_reset  <= '1';
+            fifoOut_Done   <= '1';
 
          elsif (ce = '1') then
          
@@ -184,7 +202,7 @@ begin
             dmaArray(3).request <= '0';
             dmaArray(4).request <= '0';
             dmaArray(5).request <= '0';
-            dmaArray(6).request <= '0';
+            dmaArray(6).request <= '1';
             
             -- bus read
             if (bus_read = '1') then
@@ -299,6 +317,21 @@ begin
                         ram_ena     <= '1';
                         ram_Adr     <= "00" & std_logic_vector(dmaArray(activeChannel).D_MADR(20 downto 2)) & "00";
                         autoread    <= '1';
+                     else
+                        case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
+                           when "00" => -- manual
+                              if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
+                                 wordcount <= '1' & x"0000";
+                              else
+                                 wordcount <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                              end if;
+                           
+                           when "01" => -- request
+                              blocksleft  <= dmaArray(activeChannel).D_BCR(31 downto 16) - 1;
+                              wordcount   <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                           
+                           when others => null;
+                        end case;
                      end if;
                      directionNeg <= '0';
                      if (dmaArray(activeChannel).D_CHCR(10) = '0' and dmaArray(activeChannel).D_CHCR(1) = '1') then
@@ -306,7 +339,7 @@ begin
                      end if;                         
                   end if;
                   if (waitcnt = 1) then
-                     if (fifo_Empty = '1') then
+                     if (fifoIn_Empty = '1' and toDevice = '1') then
                         waitcnt <= waitcnt;
                      else
                         case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
@@ -328,16 +361,16 @@ begin
                
                when READHEADER =>
                   dmacount  <= dmacount + 1;
-                  nextAddr  <= fifo_Dout(23 downto 0);
-                  if (unsigned(fifo_Dout(31 downto 24)) > 0) then
+                  nextAddr  <= fifoIn_Dout(23 downto 0);
+                  if (unsigned(fifoIn_Dout(31 downto 24)) > 0) then
                      dmaArray(activeChannel).D_MADR <= dmaArray(activeChannel).D_MADR + 4;
                      dmaState  <= WAITREAD;
                      waitcnt   <= 4;              
-                  elsif (fifo_Dout(23) = '1' or fifo_Dout(23 downto 0) = x"000000" or dmaArray(activeChannel).D_CHCR(0) = '0') then
+                  elsif (fifoIn_Dout(23) = '1' or fifoIn_Dout(23 downto 0) = x"000000" or dmaArray(activeChannel).D_CHCR(0) = '0') then
                      dmaState <= STOPPING;
                      autoread <= '0';
                   else
-                     dmaArray(activeChannel).D_MADR <= unsigned(fifo_Dout(23 downto 0));
+                     dmaArray(activeChannel).D_MADR <= unsigned(fifoIn_Dout(23 downto 0));
                      waitcnt   <= 9;
                      dmaState  <= WAITING;
                      autoread  <= '0';
@@ -353,13 +386,24 @@ begin
                   end if;
                
                when WORKING =>
-                  if (fifo_Valid = '1') then
+                  if (fifoIn_Valid = '1' or (toDevice = '0' and fifoOut_NearFull = '0')) then
                      dmacount    <= dmacount + 1;
                      case (activeChannel) is
                      
                         when 2 =>
                            if (toDevice = '0') then
                               report "GPU DMA read not implemented" severity failure; 
+                           end if;
+                           
+                        when 6 =>
+                           if (toDevice = '0') then
+                              fifoOut_Wr                <= '1';
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(6).D_MADR(20 downto 2));
+                              if (wordcount = 1) then
+                                 fifoOut_Din(31 downto 0) <= x"00FFFFFF";
+                              else
+                                 fifoOut_Din(31 downto 0) <= x"00" & std_logic_vector(dmaArray(6).D_MADR(23 downto 2) - 1) & "00";
+                              end if;
                            end if;
                      
                         when others => report "DMA channel not implemented" severity failure; 
@@ -375,7 +419,9 @@ begin
                      if (wordcount <= 1) then
                         case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
                            when "00" => -- manual
-                           
+                              dmaState <= STOPPING;
+                              autoread <= '0';
+                                 
                            when "01" => -- request
                               dmaArray(activeChannel).D_BCR(31 downto 16) <= blocksleft;
                               blocksleft <= blocksleft - 1;
@@ -419,21 +465,21 @@ begin
                   end if;
                
                when STOPPING =>
-                  dmaState <= OFF;
-                  isOn     <= '0';
-                  dmaArray(activeChannel).D_CHCR(24) <= '0';
-                  isOn <= '0';
-                  if (DICR(16 + activeChannel) = '1') then
-                     DICR(24 + activeChannel) <= '1';
-                     if (DICR(23) = '1') then
-                        irqOut <= '1';
+                  if (fifoOut_Done = '1' and fifoOut_Wr = '0') then
+                     dmaState <= OFF;
+                     isOn     <= '0';
+                     dmaArray(activeChannel).D_CHCR(24) <= '0';
+                     if (DICR(16 + activeChannel) = '1') then
+                        DICR(24 + activeChannel) <= '1';
+                        if (DICR(23) = '1') then
+                           irqOut <= '1';
+                        end if;
                      end if;
+                     
+                     -- todo: add check for gpubusy
+                     
+                     -- todo: add check for  pending requests
                   end if;
-                  
-                  -- todo: add check for gpubusy
-                  
-                  -- todo: add check for  pending requests
-                  
                
                when PAUSING =>
                
@@ -451,7 +497,7 @@ begin
             
          end if;
          
-         if (ram_done = '1') then
+         if (ram_done = '1' and toDevice = '1') then
             dataNext  <= ram_dataRead(127 downto 32);
             dataCount <= 3;
          
@@ -503,33 +549,49 @@ begin
          end if;
          
          if (dmaState = WAITING and waitcnt = 8) then
-            readsize    <= to_unsigned(8, 10); -- get the transfer pipeline running
-            readcount   <= (others => '0');
-            firstword   <= '1';
-            firstsize   <= to_integer(3 - dmaArray(activeChannel).D_MADR(3 downto 2));
-            fifo_reset  <= '1';
-            dataCount   <= 0;
+            readsize     <= to_unsigned(8, 10); -- get the transfer pipeline running
+            readcount    <= (others => '0');
+            firstword    <= '1';
+            firstsize    <= to_integer(3 - dmaArray(activeChannel).D_MADR(3 downto 2));
+            fifoIn_reset <= '1';
+            dataCount    <= 0;
          elsif (dataCount > 0) then
             readcount <= readcount + 1;
             dataCount <= dataCount- 1;
             dataNext  <= x"00000000" & dataNext(95 downto 32);
          end if;
          
-         fifo_Valid <= fifo_Rd;
+         fifoIn_Valid <= fifoIn_Rd;
+         
+         -- fifo Out
+         fifoOut_Valid <= fifoOut_Rd;
+         
+         if (fifoOut_Valid = '1') then
+            ram_rnw        <= '0';
+            ram_ena        <= '1';
+            ram_Adr        <= "00" & fifoOut_Dout(50 downto 32) & "00";
+            ram_dataWrite  <= fifoOut_Dout(31 downto 0);
+         end if; 
+         
+         if (fifoOut_Wr = '1') then
+            fifoOut_Done <= '0';
+         elsif (ram_done = '1' and fifoOut_Empty = '1') then
+            fifoOut_Done <= '1';
+         end if;
          
       end if;
    end process;
    
-   fifo_Wr  <= '1' when (ram_done = '1' or dataCount > 0) else '0'; 
+   fifoIn_Wr  <= '1' when (toDevice = '1' and (ram_done = '1' or dataCount > 0)) else '0'; 
    
-   fifo_Din <= ram_dataRead(31 downto 0) when ram_done = '1' else
+   fifoIn_Din <= ram_dataRead(31 downto 0) when ram_done = '1' else
                dataNext(31 downto 0);
    
    
-   fifo_Rd <= '1' when (fifo_Empty = '0' and ((dmaState = WAITING and waitcnt = 1) or (dmaState = WAITREAD and waitcnt = 1) or dmaState = working)) else '0';
+   fifoIn_Rd <= '1' when (fifoIn_Empty = '0' and ((dmaState = WAITING and waitcnt = 1) or (dmaState = WAITREAD and waitcnt = 1) or dmaState = working)) else '0';
 
    
-   iDMAFifo: entity mem.SyncFifo
+   iDMAfifoIn: entity mem.Syncfifo
    generic map
    (
       SIZE             => 64,
@@ -539,16 +601,37 @@ begin
    port map
    ( 
       clk      => clk1x,
-      reset    => fifo_reset,  
-      Din      => fifo_Din,     
-      Wr       => fifo_Wr,      
-      Full     => fifo_Full,    
-      NearFull => fifo_NearFull,
-      Dout     => fifo_Dout,    
-      Rd       => fifo_Rd,      
-      Empty    => fifo_Empty   
+      reset    => fifoIn_reset,  
+      Din      => fifoIn_Din,     
+      Wr       => fifoIn_Wr,      
+      Full     => fifoIn_Full,    
+      NearFull => fifoIn_NearFull,
+      Dout     => fifoIn_Dout,    
+      Rd       => fifoIn_Rd,      
+      Empty    => fifoIn_Empty   
    );
    
+   fifoOut_Rd <= '1' when (fifoOut_Empty = '0' and (ram_idle = '1' or ram_done = '1')) else '0';
+   
+   DMAfifoOut: entity mem.Syncfifo
+   generic map
+   (
+      SIZE             => 256,
+      DATAWIDTH        => 51,
+      NEARFULLDISTANCE => 250
+   )
+   port map
+   ( 
+      clk      => clk1x,
+      reset    => fifoOut_reset,  
+      Din      => fifoOut_Din,     
+      Wr       => fifoOut_Wr,      
+      Full     => fifoOut_Full,    
+      NearFull => fifoOut_NearFull,
+      Dout     => fifoOut_Dout,    
+      Rd       => fifoOut_Rd,      
+      Empty    => fifoOut_Empty   
+   );
 
 end architecture;
 
