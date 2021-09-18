@@ -6,6 +6,10 @@ library mem;
 use work.pGPU.all;
 
 entity gpu_line is
+   generic
+   (
+      REPRODUCIBLEGPUTIMING : std_logic
+   );
    port 
    (
       clk2x                : in  std_logic;
@@ -65,9 +69,14 @@ architecture arch of gpu_line is
       REQUESTIDLE,
       REQUESTPOS1,
       REQUESTCOLOR2,
-      REQUESTPOS2
+      REQUESTPOS2,
+      REQUESTWAITDONE,
+      REQUESTWAITIMING
    );
    signal recstate : trecState := REQUESTIDLE;
+   
+   signal drawTiming          : unsigned(31 downto 0);
+   signal targetTiming        : unsigned(31 downto 0);
    
    signal rec_polyline        : std_logic := '0';
    signal rec_shading         : std_logic := '0';
@@ -140,7 +149,7 @@ architecture arch of gpu_line is
 
 begin 
 
-   requestFifo <= '1' when (recstate /= REQUESTIDLE) else '0';
+   requestFifo <= '1' when (recstate = REQUESTPOS1 or recstate = REQUESTCOLOR2 or recstate = REQUESTPOS2) else '0';
    
    requestVRAMEnable <= '1'                           when (procstate = PROCREADLINE and pipeline_stall = '0') else '0';
    requestVRAMXPos   <= unsigned(workx(41 downto 32)) when (procstate = PROCREADLINE and pipeline_stall = '0') else (others => '0');
@@ -173,10 +182,16 @@ begin
                   rec_color1 <= rec_color2;
                end if;
             end if;
+            
+            if (recstate /= REQUESTIDLE) then
+               drawTiming <= drawTiming + 1;
+            end if;
          
             case (recstate) is
             
                when REQUESTIDLE =>
+                  drawTiming   <= (others => '0');
+                  targetTiming <= (others => '0');
                   if (proc_idle = '1' and fifo_Valid = '1' and fifo_data(31 downto 29) = "010") then
                      recstate          <= REQUESTPOS1;
                      rec_polyline      <= fifo_data(27);
@@ -202,8 +217,7 @@ begin
                      rec_color2     <= fifo_data(23 downto 0);
                      recstate       <= REQUESTPOS2;  
                      if (checkEnd = '1' and rec_shading = '1' and fifo_data(31 downto 28) = x"5" and fifo_data(15 downto 12) = x"5") then
-                        recstate  <= REQUESTIDLE;  
-                        done      <= '1';
+                        recstate  <= REQUESTWAITDONE;  
                      end if;
                   end if;
             
@@ -215,10 +229,10 @@ begin
                      if (rec_polyline = '1') then
                         checkEnd    <= '1';
                         if (checkEnd = '1' and rec_shading = '0' and fifo_data(31 downto 28) = x"5" and fifo_data(15 downto 12) = x"5") then
-                           recstate  <= REQUESTIDLE;  
-                           done      <= '1';
+                           recstate  <= REQUESTWAITDONE;  
                         else
-                           fifoLine_Wr <= '1';
+                           fifoLine_Wr  <= '1';
+                           targetTiming <= targetTiming + 1000;
                            if (rec_shading = '0') then
                               recstate    <= REQUESTPOS2;  
                            else
@@ -226,10 +240,26 @@ begin
                            end if;
                         end if;
                      else
+                        targetTiming <= targetTiming + 1000; 
                         fifoLine_Wr <= '1';
+                        recstate    <= REQUESTWAITDONE;  
+                     end if;
+                  end if;
+                  
+               when REQUESTWAITDONE =>
+                  if (procstate = PROCIDLE and fifoLine_Empty = '1' and fifoLine_Wr = '0') then
+                     if (REPRODUCIBLEGPUTIMING = '1') then
+                        recstate    <= REQUESTWAITIMING;  
+                     else
                         recstate    <= REQUESTIDLE;  
                         done        <= '1';
                      end if;
+                  end if;
+                  
+               when REQUESTWAITIMING =>
+                  if (drawTiming + 2 >= targetTiming) then
+                     recstate <= REQUESTIDLE;
+                     done     <= '1';
                   end if;
                        
             end case;
@@ -383,7 +413,7 @@ begin
                   -- calculate pixels per line for transparency readback
                   div6.start     <= '1';
                   div6.dividend  <= "000" & x"00000000" & signed(points);
-                  div6.divisor   <= "0" & x"000" & (abs(proc_pos2y - proc_pos1y) + 1);
+                  div6.divisor   <= "0" & x"000" & (abs(proc_pos2y - proc_pos1y));
                   
                when PROCCALC3 =>
                   pixelCnt  <= (others => '0');

@@ -833,6 +833,10 @@ begin
    );
    
    igpu_line : entity work.gpu_line
+   generic map
+   (
+      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING
+   )
    port map
    (
       clk2x                => clk2x,     

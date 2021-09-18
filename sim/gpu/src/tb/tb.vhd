@@ -113,6 +113,10 @@ begin
    DDRAM_ADDR(16 downto  0) <= vram_ADDR(19 downto 3);
    
    iddrram_model : entity work.ddrram_model
+   generic map
+   (
+      loadVram => '1'
+   )
    port map
    (
       DDRAM_CLK        => clk2x,      
