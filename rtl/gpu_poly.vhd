@@ -88,12 +88,10 @@ architecture arch of gpu_poly is
       CALCCOLOR2,
       CALCCOLOR3,
       CALCCOLOR4,
-      CALCCOLOR5,
       CALCTEXTURE1,
       CALCTEXTURE2,
       CALCTEXTURE3,
       CALCTEXTURE4,
-      CALCTEXTURE5,
       PREPAREHALF,
       PREPAREDECMODE,
       PREPARELINE,
@@ -103,6 +101,8 @@ architecture arch of gpu_poly is
       WAITIMING
    );
    signal state     : tState := IDLE;
+   
+   signal mulStep             : integer range 0 to 7;
    
    signal drawTiming          : unsigned(31 downto 0);
    signal targetTiming        : unsigned(31 downto 0);
@@ -183,6 +183,21 @@ architecture arch of gpu_poly is
    signal base_U              : unsigned(31 downto 0) := (others => '0');   
    signal base_V              : unsigned(31 downto 0) := (others => '0'); 
 
+   signal muldiv1In1          : signed(8 downto 0);
+   signal muldiv1In2          : signed(12 downto 0);
+   signal muldivResult1       : signed(21 downto 0) := (others => '0'); 
+   signal muldivResult1clk    : signed(21 downto 0) := (others => '0');      
+   
+   signal muldiv2In1          : signed(8 downto 0);
+   signal muldiv2In2          : signed(12 downto 0);
+   signal muldivResult2       : signed(21 downto 0) := (others => '0'); 
+   signal muldivResult2clk    : signed(21 downto 0) := (others => '0');    
+   
+   signal mulIn1              : unsigned(31 downto 0);
+   signal mulIn2              : integer range -2048 to 2047;
+   signal mulResult32         : unsigned(31 downto 0) := (others => '0'); 
+   signal mulResult32clk      : unsigned(31 downto 0) := (others => '0'); 
+
    signal work_R              : unsigned(31 downto 0) := (others => '0');   
    signal work_G              : unsigned(31 downto 0) := (others => '0');   
    signal work_B              : unsigned(31 downto 0) := (others => '0');   
@@ -219,6 +234,99 @@ begin
    
    vramLineEna  <= '1' when (state = PROCPIXELS) else '0';
    vramLineAddr <= unsigned(xPos(9 downto 0)) when (state = PROCPIXELS) else (others => '0');
+   
+   
+   
+   
+   imul9s1 : entity work.mul9s
+   port map 
+   (
+      mul1     => muldiv1In1,
+      mul2     => muldiv1In2,
+      result   => muldivResult1
+   );
+   
+   imul9s2 : entity work.mul9s
+   port map 
+   (
+      mul1     => muldiv2In1,
+      mul2     => muldiv2In2,
+      result   => muldivResult2
+   );
+     
+   muldiv1In1 <= diffU10 when (state = CALCTEXTURE2 and mulStep = 0) else
+                 diffU21 when (state = CALCTEXTURE2 and mulStep = 1) else
+                 diffV10 when (state = CALCTEXTURE2 and mulStep = 2) else
+                 diffV21 when (state = CALCTEXTURE2 and mulStep = 3) else
+                 diffR10 when (mulStep = 0) else
+                 diffR21 when (mulStep = 1) else
+                 diffG10 when (mulStep = 2) else
+                 diffG21 when (mulStep = 3) else
+                 diffB10 when (mulStep = 4) else
+                 diffB21;
+                 
+   muldiv1In2 <= diffY21 when (state = CALCTEXTURE2 and mulStep = 0) else
+                 diffX10 when (state = CALCTEXTURE2 and mulStep = 1) else
+                 diffY21 when (state = CALCTEXTURE2 and mulStep = 2) else
+                 diffX10 when (state = CALCTEXTURE2 and mulStep = 3) else
+                 diffY21 when (mulStep = 0) else
+                 diffX10 when (mulStep = 1) else
+                 diffY21 when (mulStep = 2) else
+                 diffX10 when (mulStep = 3) else
+                 diffY21 when (mulStep = 4) else
+                 diffX10;
+   
+   muldiv2In1 <= diffU21 when (state = CALCTEXTURE2 and mulStep = 0) else
+                 diffU10 when (state = CALCTEXTURE2 and mulStep = 1) else
+                 diffV21 when (state = CALCTEXTURE2 and mulStep = 2) else
+                 diffV10 when (state = CALCTEXTURE2 and mulStep = 3) else
+                 diffR21 when (mulStep = 0) else
+                 diffR10 when (mulStep = 1) else
+                 diffG21 when (mulStep = 2) else
+                 diffG10 when (mulStep = 3) else
+                 diffB21 when (mulStep = 4) else
+                 diffB10;
+                 
+   muldiv2In2 <= diffY10 when (state = CALCTEXTURE2 and mulStep = 0) else
+                 diffX21 when (state = CALCTEXTURE2 and mulStep = 1) else
+                 diffY10 when (state = CALCTEXTURE2 and mulStep = 2) else
+                 diffX21 when (state = CALCTEXTURE2 and mulStep = 3) else
+                 diffY10 when (mulStep = 0) else
+                 diffX21 when (mulStep = 1) else
+                 diffY10 when (mulStep = 2) else
+                 diffX21 when (mulStep = 3) else
+                 diffY10 when (mulStep = 4) else
+                 diffX21;
+   
+   imul32u : entity work.mul32u
+   port map 
+   (
+      mul1     => mulIn1,
+      mul2     => mulIn2,
+      result   => mulResult32
+   );
+   
+   mulIn1 <= dxU when (state = CALCTEXTURE4 and mulStep = 0) else
+             dxV when (state = CALCTEXTURE4 and mulStep = 1) else
+             dyU when (state = CALCTEXTURE4 and mulStep = 2) else
+             dyV when (state = CALCTEXTURE4 and mulStep = 3) else
+             dxR when (mulStep = 0) else 
+             dxG when (mulStep = 1) else 
+             dxB when (mulStep = 2) else 
+             dyR when (mulStep = 3) else 
+             dyG when (mulStep = 4) else 
+             dyB;
+             
+   mulIn2 <= vt(coreVertex).x when (state = CALCTEXTURE4 and mulStep = 0) else
+             vt(coreVertex).x when (state = CALCTEXTURE4 and mulStep = 1) else
+             vt(coreVertex).y when (state = CALCTEXTURE4 and mulStep = 2) else
+             vt(coreVertex).y when (state = CALCTEXTURE4 and mulStep = 3) else
+             vt(coreVertex).x when (mulStep = 0) else 
+             vt(coreVertex).x when (mulStep = 1) else 
+             vt(coreVertex).x when (mulStep = 2) else 
+             vt(coreVertex).y when (mulStep = 3) else 
+             vt(coreVertex).y when (mulStep = 4) else 
+             vt(coreVertex).y;
    
    process (clk2x)
       variable xMax  : integer;
@@ -270,12 +378,14 @@ begin
             div5.start           <= '0';
             div6.start           <= '0';
             
-            div1.dividend        <= (others => '0');
-            div2.dividend        <= (others => '0');
-            div3.dividend        <= (others => '0');
-            div4.dividend        <= (others => '0');
-            div5.dividend        <= (others => '0');
-            div6.dividend        <= (others => '0');
+            if (state /= CALCCOLOR2 and state /= CALCTEXTURE2) then
+               div1.dividend        <= (others => '0');
+               div2.dividend        <= (others => '0');
+               div3.dividend        <= (others => '0');
+               div4.dividend        <= (others => '0');
+               div5.dividend        <= (others => '0');
+               div6.dividend        <= (others => '0');
+            end if;
             
             div1.divisor         <= (others => '0');
             div2.divisor         <= (others => '0');
@@ -530,7 +640,8 @@ begin
                   end if;
                
                when CALCCOLOR1 =>
-                  state <= CALCCOLOR2;
+                  mulStep <= 0;
+                  state   <= CALCCOLOR2;
                   diffR10 <=  ('0' & signed(vt(1).r)) - ('0' & signed(vt(0).r));
                   diffR21 <=  ('0' & signed(vt(2).r)) - ('0' & signed(vt(1).r));
                   diffG10 <=  ('0' & signed(vt(1).g)) - ('0' & signed(vt(0).g));
@@ -539,31 +650,31 @@ begin
                   diffB21 <=  ('0' & signed(vt(2).b)) - ('0' & signed(vt(1).b));
                
                when CALCCOLOR2 =>
-                  state <= CALCCOLOR3;
-               
-                  div1.start     <= '1';
-                  div1.dividend  <= resize((diffR10 * diffY21) - (diffR21 * diffY10), 33) & x"000";
+                  mulStep <= mulStep + 1;
                   div1.divisor   <= to_signed(denom, 25);
-                  
-                  div2.start     <= '1';
-                  div2.dividend  <= resize((diffR21 * diffX10) - (diffR10 * diffX21), 33) & x"000";
                   div2.divisor   <= to_signed(denom, 25);
-                  
-                  div3.start     <= '1';
-                  div3.dividend  <= resize((diffG10 * diffY21) - (diffG21 * diffY10), 33) & x"000";
                   div3.divisor   <= to_signed(denom, 25);
-                                    
-                  div4.start     <= '1';
-                  div4.dividend  <= resize((diffG21 * diffX10) - (diffG10 * diffX21), 33) & x"000";
                   div4.divisor   <= to_signed(denom, 25);
-                  
-                  div5.start     <= '1';
-                  div5.dividend  <= resize((diffB10 * diffY21) - (diffB21 * diffY10), 33) & x"000";
                   div5.divisor   <= to_signed(denom, 25);
-                                    
-                  div6.start     <= '1';
-                  div6.dividend  <= resize((diffB21 * diffX10) - (diffB10 * diffX21), 33) & x"000";
                   div6.divisor   <= to_signed(denom, 25);
+                  case (mulStep) is
+                     when 0 => muldivResult1clk <= muldivResult1; muldivResult2clk <= muldivResult2;
+                     when 1 => muldivResult1clk <= muldivResult1; muldivResult2clk <= muldivResult2; div1.dividend <= resize(muldivResult1clk - muldivResult2clk, 33) & x"000";
+                     when 2 => muldivResult1clk <= muldivResult1; muldivResult2clk <= muldivResult2; div2.dividend <= resize(muldivResult1clk - muldivResult2clk, 33) & x"000";  
+                     when 3 => muldivResult1clk <= muldivResult1; muldivResult2clk <= muldivResult2; div3.dividend <= resize(muldivResult1clk - muldivResult2clk, 33) & x"000";
+                     when 4 => muldivResult1clk <= muldivResult1; muldivResult2clk <= muldivResult2; div4.dividend <= resize(muldivResult1clk - muldivResult2clk, 33) & x"000";
+                     when 5 => muldivResult1clk <= muldivResult1; muldivResult2clk <= muldivResult2; div5.dividend <= resize(muldivResult1clk - muldivResult2clk, 33) & x"000";
+                     when 6 =>                                                             
+                        div6.dividend <= resize(muldivResult1clk - muldivResult2clk, 33) & x"000";
+                        state  <= CALCCOLOR3;
+                        div1.start     <= '1';
+                        div2.start     <= '1';
+                        div3.start     <= '1';
+                        div4.start     <= '1';
+                        div5.start     <= '1';
+                        div6.start     <= '1';
+                     when others => null;
+                  end case;
                
                when CALCCOLOR3 =>
                   dxR <= unsigned(div1.quotient(31 downto 0));
@@ -572,70 +683,81 @@ begin
                   dyG <= unsigned(div4.quotient(31 downto 0));
                   dxB <= unsigned(div5.quotient(31 downto 0));
                   dyB <= unsigned(div6.quotient(31 downto 0));
+                  mulStep <= 0;
                   if (div1.done = '1') then
                      state <= CALCCOLOR4;
                   end if;
                   
                when CALCCOLOR4 =>
-                  state <= CALCCOLOR5;
-                  base_R <= base_R - resize(dxR * vt(coreVertex).x, 32);
-                  base_G <= base_G - resize(dxG * vt(coreVertex).x, 32);
-                  base_B <= base_B - resize(dxB * vt(coreVertex).x, 32);
-                     
-               when CALCCOLOR5 =>
-                  base_R <= base_R - resize(dyR * vt(coreVertex).y, 32);
-                  base_G <= base_G - resize(dyG * vt(coreVertex).y, 32);
-                  base_B <= base_B - resize(dyB * vt(coreVertex).y, 32);
-                  if (rec_texture = '1') then
-                     state <= CALCTEXTURE1;
-                  else
-                     state <= PREPAREHALF;
-                  end if;
+                  mulStep <= mulStep + 1;
+                  case (mulStep) is
+                     when 0 => mulResult32clk <= mulResult32;
+                     when 1 => mulResult32clk <= mulResult32; base_R <= base_R - mulResult32clk;
+                     when 2 => mulResult32clk <= mulResult32; base_G <= base_G - mulResult32clk;   
+                     when 3 => mulResult32clk <= mulResult32; base_B <= base_B - mulResult32clk;
+                     when 4 => mulResult32clk <= mulResult32; base_R <= base_R - mulResult32clk;
+                     when 5 => mulResult32clk <= mulResult32; base_G <= base_G - mulResult32clk;
+                     when 6 =>                                               
+                        base_B <= base_B - mulResult32clk;
+                        if (rec_texture = '1') then
+                           state <= CALCTEXTURE1;
+                        else
+                           state <= PREPAREHALF;
+                        end if;
+                     when others => null;
+                  end case;
                   
                when CALCTEXTURE1 =>
+                  mulStep <= 0;
+                  state   <= CALCTEXTURE2;
                   diffU10 <=  ('0' & signed(vt(1).u)) - ('0' & signed(vt(0).u));
                   diffU21 <=  ('0' & signed(vt(2).u)) - ('0' & signed(vt(1).u));
                   diffV10 <=  ('0' & signed(vt(1).v)) - ('0' & signed(vt(0).v));
                   diffV21 <=  ('0' & signed(vt(2).v)) - ('0' & signed(vt(1).v));
-                  state <= CALCTEXTURE2;
                   
                when CALCTEXTURE2 =>
-                  state <= CALCTEXTURE3;
-                  
-                  div1.start     <= '1';
-                  div1.dividend  <= resize((diffU10 * diffY21) - (diffU21 * diffY10), 33) & x"000";
+                  mulStep <= mulStep + 1;
                   div1.divisor   <= to_signed(denom, 25);
-                                    
-                  div2.start     <= '1';
-                  div2.dividend  <= resize((diffU21 * diffX10) - (diffU10 * diffX21), 33) & x"000";
                   div2.divisor   <= to_signed(denom, 25);
-                                    
-                  div3.start     <= '1';
-                  div3.dividend  <= resize((diffV10 * diffY21) - (diffV21 * diffY10), 33) & x"000";
                   div3.divisor   <= to_signed(denom, 25);
-                                    
-                  div4.start     <= '1';
-                  div4.dividend  <= resize((diffV21 * diffX10) - (diffV10 * diffX21), 33) & x"000";
                   div4.divisor   <= to_signed(denom, 25);
+                  case (mulStep) is
+                     when 0 => muldivResult1clk <= muldivResult1; muldivResult2clk <= muldivResult2;
+                     when 1 => muldivResult1clk <= muldivResult1; muldivResult2clk <= muldivResult2; div1.dividend <= resize(muldivResult1clk - muldivResult2clk, 33) & x"000";
+                     when 2 => muldivResult1clk <= muldivResult1; muldivResult2clk <= muldivResult2; div2.dividend <= resize(muldivResult1clk - muldivResult2clk, 33) & x"000";  
+                     when 3 => muldivResult1clk <= muldivResult1; muldivResult2clk <= muldivResult2; div3.dividend <= resize(muldivResult1clk - muldivResult2clk, 33) & x"000";
+                     when 4 =>                                                             
+                        div4.dividend <= resize(muldivResult1clk - muldivResult2clk, 33) & x"000";
+                        state  <= CALCTEXTURE3;
+                        div1.start     <= '1';
+                        div2.start     <= '1';
+                        div3.start     <= '1';
+                        div4.start     <= '1';
+                     when others => null;
+                  end case;
                
                when CALCTEXTURE3 =>
                   dxU <= unsigned(div1.quotient(31 downto 0));
                   dyU <= unsigned(div2.quotient(31 downto 0));
                   dxV <= unsigned(div3.quotient(31 downto 0));
                   dyV <= unsigned(div4.quotient(31 downto 0));
+                  mulStep <= 0;
                   if (div1.done = '1') then
                      state <= CALCTEXTURE4;
                   end if;
                   
                when CALCTEXTURE4 =>
-                  state <= CALCTEXTURE5;
-                  base_U <= base_U - resize(dxU * vt(coreVertex).x, 32);
-                  base_V <= base_V - resize(dxV * vt(coreVertex).x, 32);
-               
-               when CALCTEXTURE5 =>
-                  state <= PREPAREHALF;
-                  base_U <= base_U - resize(dyU * vt(coreVertex).y, 32);
-                  base_V <= base_V - resize(dyV * vt(coreVertex).y, 32);
+                  mulStep <= mulStep + 1;
+                  case (mulStep) is
+                     when 0 => mulResult32clk <= mulResult32;
+                     when 1 => mulResult32clk <= mulResult32; base_U <= base_U - mulResult32clk;
+                     when 2 => mulResult32clk <= mulResult32; base_V <= base_V - mulResult32clk;   
+                     when 3 => mulResult32clk <= mulResult32; base_U <= base_U - mulResult32clk;
+                     when 4 =>                                               
+                        base_V <= base_V - mulResult32clk;
+                        state <= PREPAREHALF;
+                     when others => null;
+                  end case;
                   
                when PREPAREHALF =>
                   state <= PREPARELINE;

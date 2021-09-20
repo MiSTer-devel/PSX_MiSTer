@@ -1184,7 +1184,7 @@ begin
    
    fifoOut_Rd <= '1' when (ce = '1' and vramState = IDLE and vram_BUSY = '0' and fifoOut_Empty = '0' and reqVRAMEnable = '0') else '0';
    
-   reqVRAMIdle <= '1' when vramState = IDLE else '0';
+   reqVRAMIdle <= '1' when (vramState = IDLE and (vram_WE = '0' or vram_BUSY = '0')) else '0';
    
    reqVRAMEnable <= vram2vram_reqVRAMEnable or line_reqVRAMEnable or rect_reqVRAMEnable or poly_reqVRAMEnable or pipeline_reqVRAMEnable;
    reqVRAMXPos   <= vram2vram_reqVRAMXPos   or line_reqVRAMXPos   or rect_reqVRAMXPos   or poly_reqVRAMXPos   or pipeline_reqVRAMXPos  ;  
@@ -1218,30 +1218,32 @@ begin
          
             case (vramState) is
                when IDLE =>
-                  if (reqVRAMEnable = '1') then
-                     reqVRAMStore <= not pipeline_reqVRAMEnable;
-                     reqVRAMSizeRounded := reqVRAMSize;
-                     if (reqVRAMSize(1 downto 0) /= "00") then -- round up read size to full 4*16bit
-                        reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
+                  if (vram_WE = '0' or vram_BUSY = '0') then
+                     if (reqVRAMEnable = '1') then
+                        reqVRAMStore <= not pipeline_reqVRAMEnable;
+                        reqVRAMSizeRounded := reqVRAMSize;
+                        if (reqVRAMSize(1 downto 0) /= "00") then -- round up read size to full 4*16bit
+                           reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
+                        end if;
+                        if (reqVRAMXPos(1 downto 0) /= "00" and ((to_integer(reqVRAMXPos(1 downto 0)) + to_integer(reqVRAMSize) > 4))) then 
+                           reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
+                        end if;
+                        vramState     <= READVRAM;
+                        vram_ADDR     <= std_logic_vector(reqVRAMYPos) & std_logic_vector(reqVRAMXPos(9 downto 2)) & "000";
+                        vram_RD       <= '1';
+                        reqVRAMaddr   <= reqVRAMXPos(9 downto 2);
+                        if (reqVRAMSizeRounded > 512) then
+                           vram_BURSTCNT <= x"80";
+                           reqVRAMremain <= x"80" - 1;
+                           reqVRAMnext   <= reqVRAMSizeRounded(8 downto 2);
+                        else
+                           vram_BURSTCNT <= std_logic_vector(reqVRAMSizeRounded(9 downto 2));
+                           reqVRAMremain <= reqVRAMSizeRounded(9 downto 2) - 1;
+                           reqVRAMnext   <= (others => '0');
+                        end if;
+                     elsif (fifoOut_Empty = '0') then
+                        vramState <= WRITEPIXEL;
                      end if;
-                     if (reqVRAMXPos(1 downto 0) /= "00" and ((to_integer(reqVRAMXPos(1 downto 0)) + to_integer(reqVRAMSize) > 4))) then 
-                        reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
-                     end if;
-                     vramState     <= READVRAM;
-                     vram_ADDR     <= std_logic_vector(reqVRAMYPos) & std_logic_vector(reqVRAMXPos(9 downto 2)) & "000";
-                     vram_RD       <= '1';
-                     reqVRAMaddr   <= reqVRAMXPos(9 downto 2);
-                     if (reqVRAMSizeRounded > 512) then
-                        vram_BURSTCNT <= x"80";
-                        reqVRAMremain <= x"80" - 1;
-                        reqVRAMnext   <= reqVRAMSizeRounded(8 downto 2);
-                     else
-                        vram_BURSTCNT <= std_logic_vector(reqVRAMSizeRounded(9 downto 2));
-                        reqVRAMremain <= reqVRAMSizeRounded(9 downto 2) - 1;
-                        reqVRAMnext   <= (others => '0');
-                     end if;
-                  elsif (fifoOut_Empty = '0') then
-                     vramState <= WRITEPIXEL;
                   end if;
                   
                when WRITEPIXEL =>
