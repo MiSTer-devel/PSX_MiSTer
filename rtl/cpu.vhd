@@ -28,7 +28,16 @@ entity cpu is
       mem_dataRead          : in  std_logic_vector(31 downto 0); 
       mem_dataCache         : in  std_logic_vector(127 downto 0);
       mem_done              : in  std_logic;
-
+      
+      gte_busy              : in  std_logic;
+      gte_readAddr          : out unsigned(5 downto 0);
+      gte_readData          : in  unsigned(31 downto 0);
+      gte_writeAddr         : out unsigned(5 downto 0);
+      gte_writeData         : out unsigned(31 downto 0);
+      gte_writeEna          : out std_logic := '0'; 
+      gte_cmdData           : out unsigned(31 downto 0);
+      gte_cmdEna            : out std_logic := '0'; 
+   
       cpu_done              : out std_logic := '0'; 
       cpu_export            : out cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'), (others => '0'))
    );
@@ -211,6 +220,7 @@ architecture arch of cpu is
    signal executeLoadType              : CPU_LOADTYPE;
    signal executeReadAddress           : unsigned(31 downto 0) := (others => '0');
    signal executeReadEnable            : std_logic := '0';
+   signal executeGTETarget             : unsigned(4 downto 0) := (others => '0');
    signal hiloWait                     : integer range 0 to 38;
    signal executeStalltype             : CPU_EXESTALLTYPE;
 
@@ -226,12 +236,15 @@ architecture arch of cpu is
    signal EXEMemWriteData              : unsigned(31 downto 0) := (others => '0');
    signal EXEMemWriteMask              : std_logic_vector(3 downto 0) := (others => '0');
    signal EXEMemWriteAddr              : unsigned(31 downto 0) := (others => '0');
+   signal EXEMemWriteException         : std_logic := '0';
    signal EXECOP0WriteEnable           : std_logic := '0';
    signal EXECOP0WriteDestination      : unsigned(4 downto 0) := (others => '0');
    signal EXECOP0WriteValue            : unsigned(31 downto 0) := (others => '0');
    signal EXELoadType                  : CPU_LOADTYPE;
    signal EXEReadAddress               : unsigned(31 downto 0) := (others => '0');
    signal EXEReadEnable                : std_logic := '0';
+   signal EXEReadException             : std_logic := '0';
+   signal EXEGTeReadEnable             : std_logic := '0';
    signal EXEcalcMULT                  : std_logic := '0';
    signal EXEcalcMULTU                 : std_logic := '0';
    signal EXEcalcDIV                   : std_logic := '0';
@@ -239,6 +252,9 @@ architecture arch of cpu is
    signal EXEhiUpdate                  : std_logic := '0';
    signal EXEloUpdate                  : std_logic := '0';
    signal EXEstalltype                 : CPU_EXESTALLTYPE;
+   signal EXEgte_writeAddr             : unsigned(5 downto 0);
+   signal EXEgte_writeData             : unsigned(31 downto 0);
+   signal EXEgte_writeEna              : std_logic := '0'; 
    
    --MULT/DIV
    type CPU_HILOCALC is
@@ -270,6 +286,7 @@ architecture arch of cpu is
    signal writebackTarget              : unsigned(4 downto 0) := (others => '0');
    signal writebackData                : unsigned(31 downto 0) := (others => '0');
    signal writebackWriteEnable         : std_logic := '0';
+   signal writebackGTEReadEnable       : std_logic := '0';
    signal writebackCOP0WriteEnable     : std_logic := '0';
    signal writebackCOP0WriteDestination: unsigned(4 downto 0) := (others => '0');
    signal writebackCOP0WriteValue      : unsigned(31 downto 0) := (others => '0');
@@ -290,6 +307,9 @@ architecture arch of cpu is
    signal WBCACHECONTROL               : unsigned(31 downto 0) := (others => '0');
    signal WBinvalidateCacheEna         : std_logic := '0';
    signal WBinvalidateCacheLine        : unsigned(7 downto 0) := (others => '0');
+   signal WBgte_writeAddr              : unsigned(5 downto 0);
+   signal WBgte_writeData              : unsigned(31 downto 0);
+   signal WBgte_writeEna               : std_logic := '0'; 
          
          
    -- stage 5     
@@ -314,6 +334,9 @@ begin
    mem_dataWrite     <= mem4_dataWrite;
    mem_writeMask     <= executeMemWriteMask;
    
+   gte_writeAddr  <= EXEgte_writeAddr when (EXEgte_writeEna = '1') else WBgte_writeAddr;
+   gte_writeData  <= EXEgte_writeData when (EXEgte_writeEna = '1') else WBgte_writeData;
+   gte_writeEna   <= EXEgte_writeEna  when (EXEgte_writeEna = '1') else WBgte_writeEna; 
 
    -- common
    stall        <= stall5 & stall4 & stall3 & stall2 & stall1;
@@ -712,6 +735,12 @@ begin
                   else
                      decodeTarget  <= opcodeCacheMuxed(15 downto 11);
                   end if;
+                                     
+                  if (opcodeCacheMuxed(31 downto 26) = 16#12#) then
+                     gte_readAddr     <= opcodeCacheMuxed(22) & opcodeCacheMuxed(15 downto 11); -- decodeSource1(1) & decodeRD 
+                  else
+                     gte_readAddr     <= '0' & opcodeCacheMuxed(20 downto 16); -- decodeSource2
+                  end if;
                   
                end if;
       
@@ -746,7 +775,7 @@ begin
    end process;
 
    process (decodeImmData, decodeTarget, decodeJumpTarget, decodeSource1, decodeSource2, decodeValue1, decodeValue2, decodeOP, decodeFunct, decodeShamt, decodeRD, exception, stall3, stall, value1, value2, pcOld0, resultData,
-            cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait)
+            cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait, opcode1, gte_readAddr)
       variable calcResult  : unsigned(31 downto 0);
       variable calcMemAddr : unsigned(31 downto 0);
    begin
@@ -764,10 +793,13 @@ begin
       EXEMemWriteEnable       <= '0';
       EXEMemWriteData         <= value2;
       EXEMemWriteMask         <= "1111";
+      EXEMemWriteException    <= '0';
       
       EXELoadType             <= LOADTYPE_DWORD;
       EXEReadAddress          <= calcMemAddr;
       EXEReadEnable           <= '0';
+      EXEReadException        <= '0';
+      EXEGTeReadEnable        <= '0';
       
       EXECOP0WriteEnable      <= '0';
       EXECOP0WriteDestination <= decodeRD;
@@ -783,6 +815,13 @@ begin
       
       EXEhiUpdate             <= '0';
       EXEloUpdate             <= '0';
+      
+      gte_cmdEna              <= '0';
+      gte_cmdData             <= opcode1;
+      
+      EXEgte_writeAddr        <= gte_readAddr;
+      EXEgte_writeData        <= value2;
+      EXEgte_writeEna         <= '0';
       
       exceptionCode_3         <= x"0";
       
@@ -824,7 +863,8 @@ begin
                      EXEBranchTaken     <= '1';               
                      PCbranch           <= value1;
                      if (value1(1 downto 0) > 0) then
-                        --report "should trigger exception" severity failure; 
+                        exceptionNew3   <= '1';
+                        exceptionCode_3 <= x"4";
                      else
                         branch <= '1';
                      end if;
@@ -837,7 +877,8 @@ begin
                      EXEresultData        <= PC;
                      EXEresultTarget      <= decodeRD;
                      if (value1(1 downto 0) > 0) then
-                        --report "should trigger exception" severity failure; 
+                        exceptionNew3   <= '1';
+                        exceptionCode_3 <= x"4";
                      else
                         branch <= '1';
                      end if;
@@ -890,7 +931,8 @@ begin
                      calcResult    := value1 + value2; 
                      EXEresultData <= calcResult;               
                      if (((calcResult(31) xor value1(31)) and (calcResult(31) xor value2(31))) = '1') then
-                        --report "should trigger exception" severity failure; 
+                        exceptionNew3   <= '1';
+                        exceptionCode_3 <= x"C";
                      else
                         EXEresultWriteEnable <= '1';
                      end if;
@@ -903,7 +945,8 @@ begin
                      calcResult    := value1 - value2; 
                      EXEresultData <= calcResult;               
                      if (((calcResult(31) xor value1(31)) and (value1(31) xor value2(31))) = '1') then
-                        --report "should trigger exception" severity failure; 
+                        exceptionNew3   <= '1';
+                        exceptionCode_3 <= x"C";
                      else
                         EXEresultWriteEnable <= '1';
                      end if;
@@ -944,14 +987,9 @@ begin
                         EXEresultData <= x"00000000";
                      end if;   
                      
-         
                   when others => 
--- synthesis translate_off
-                     report to_string(decodeFunct) severity warning;
-                     report "unknown extended instruction" severity failure; 
--- synthesis translate_on
-                     null;
-                     -- todo
+                     exceptionNew3   <= '1';
+                     exceptionCode_3 <= x"A";
                      
                end case;
                
@@ -1026,7 +1064,8 @@ begin
                calcResult    := value1 + unsigned(resize(signed(decodeImmData), 32)); 
                EXEresultData <= calcResult;               
                if (((calcResult(31) xor value1(31)) and (calcResult(31) xor decodeImmData(15))) = '1') then
-                  --report "should trigger exception" severity failure; 
+                  exceptionNew3   <= '1';
+                  exceptionCode_3 <= x"C";
                else
                   EXEresultWriteEnable <= '1';
                end if;
@@ -1069,20 +1108,14 @@ begin
                
             when 16#10# => -- COP0
                if (cop0_SR(1) = '1' and cop0_SR(28) = '0') then
-                  report "should trigger exception" severity failure; 
-                  --psx.log("COP0 usermode exception");
-                  --doException(0xB, pcOld[1], opcode[1], executeBranchTaken, executeBranchdelaySlot);
-                  --newException |= 0b00100;
-                  --lastExcIRQ = false;
+                  exceptionNew3   <= '1';
+                  exceptionCode_3 <= x"B";
                else
                   if (decodeSource1(4) = '1') then
                      case (to_integer(decodeImmData(6 downto 0))) is
                         when 1 | 2 | 4 | 8 =>
-                           report "should trigger exception" severity failure; 
-                           --psx.log("COP0 unknown code exception");
-                           --doException(0xA, pcOld[1], opcode[1], executeBranchTaken, executeBranchdelaySlot);
-                           --newException |= 0b00100;
-                           --lastExcIRQ = false;
+                           exceptionNew3   <= '1';
+                           exceptionCode_3 <= x"A";
 
                         when 16 => -- Cop0Op - rfe
                            EXECOP0WriteEnable      <= '1';
@@ -1125,7 +1158,32 @@ begin
                null; 
                
             when 16#12# => -- COP2
-               report "COP2 not implemented" severity failure;
+               if (cop0_SR(30) = '0') then -- COP2 disabled
+                  exceptionNew3   <= '1';
+                  exceptionCode_3 <= x"B";
+               else
+                  if (decodeSource1(4) = '1') then
+                     gte_cmdEna <= '1';
+                  else
+                     case (decodeSource1(3 downto 0)) is
+                        when x"0" => --mfcn
+                           EXEresultWriteEnable <= '1';
+                           EXEresultData        <= gte_readData;
+                        
+                        when x"2" => --cfcn
+                           EXEresultWriteEnable <= '1';
+                           EXEresultData        <= gte_readData;
+                        
+                        when x"4" => --mtcn
+                           EXEgte_writeEna      <= '1';
+                        
+                        when x"6" => --cfcn
+                           EXEgte_writeEna      <= '1';
+                        
+                        when others => null;
+                     end case;
+                  end if;
+               end if;
                
             when 16#13# => -- COP3 -> NOP 
                null; 
@@ -1137,7 +1195,9 @@ begin
              when 16#21# => -- LH
                EXELoadType <= LOADTYPE_SWORD;
                if (calcMemAddr(0) = '1') then
-                  --report "should trigger exception" severity failure;
+                  exceptionNew3    <= '1';
+                  exceptionCode_3  <= x"4";
+                  EXEReadException <= '1';
                else
                   EXEReadEnable <= '1';
                end if;  
@@ -1150,7 +1210,9 @@ begin
             when 16#23# => -- LW
                EXELoadType <= LOADTYPE_DWORD;
                if (calcMemAddr(1 downto 0) /= "00") then
-                  --report "should trigger exception" severity failure;
+                  exceptionNew3    <= '1';
+                  exceptionCode_3  <= x"4";
+                  EXEReadException <= '1';
                else
                   EXEReadEnable <= '1';
                end if;  
@@ -1162,7 +1224,9 @@ begin
             when 16#25# => -- LHU
                EXELoadType <= LOADTYPE_WORD;
                if (calcMemAddr(0) = '1') then
-                  --report "should trigger exception" severity failure;
+                  exceptionNew3    <= '1';
+                  exceptionCode_3  <= x"4";
+                  EXEReadException <= '1';
                else
                   EXEReadEnable <= '1';
                end if; 
@@ -1191,7 +1255,9 @@ begin
                   EXEMemWriteMask <= "0011";
                end if;
                if (calcMemAddr(0) = '1') then
-                  --report "should trigger exception" severity failure;
+                  exceptionNew3        <= '1';
+                  exceptionCode_3      <= x"5";
+                  EXEMemWriteException <= '1';
                else
                   EXEMemWriteEnable <= '1';
                end if;
@@ -1208,7 +1274,9 @@ begin
 
             when 16#2B# => -- SW
                if (calcMemAddr(1 downto 0) /= "00") then
-                  --report "should trigger exception" severity failure;
+                  exceptionNew3        <= '1';
+                  exceptionCode_3      <= x"5";
+                  EXEMemWriteException <= '1';
                else
                   EXEMemWriteEnable <= '1';
                end if;
@@ -1222,17 +1290,47 @@ begin
                   when others => null;
                end case;
                EXEMemWriteEnable <= '1';    
+            
+            when 16#30# => -- LWC0 -> NOP 
+               null;            
+
+            when 16#31# => -- LWC1 -> NOP 
+               null;    
+
+            when 16#32# => -- LWC2
+               if (cop0_SR(30) = '0') then -- COP2 disabled
+                  exceptionNew3   <= '1';
+                  exceptionCode_3 <= x"B";
+               else
+                  EXEGTeReadEnable <= '1';
+                  EXELoadType      <= LOADTYPE_DWORD;
+                  EXEReadEnable    <= '1';
+               end if;                        
                
+            when 16#33# => -- LWC3 -> NOP 
+               null;    
                
+            when 16#38# => -- SWC0 -> NOP 
+               null;    
+               
+            when 16#39# => -- SWC1 -> NOP 
+               null; 
+               
+            when 16#3A# => -- SWC2
+               if (cop0_SR(30) = '0') then -- COP2 disabled
+                  exceptionNew3   <= '1';
+                  exceptionCode_3 <= x"B";
+               else
+                  EXEMemWriteEnable <= '1';
+                  EXEMemWriteData   <= gte_readData;
+               end if; 
+               
+            when 16#3B# => -- SWC3 -> NOP 
+               null; 
                
             when others => 
--- synthesis translate_off
-               report to_string(decodeOP) severity warning;
-               report "unknown instruction" severity failure; 
--- synthesis translate_on
-               null;
-               -- todo
-            
+               exceptionNew3   <= '1';
+               exceptionCode_3 <= x"A";
          
          end case;
              
@@ -1320,6 +1418,9 @@ begin
                   executeLoadType               <= EXELoadType;   
                   executeReadAddress            <= EXEReadAddress;
                   executeReadEnable             <= EXEReadEnable; 
+                  
+                  executeGTEReadEnable          <= EXEGTeReadEnable;
+                  executeGTETarget              <= decodeSource2;
 
                   executeCOP0WriteEnable        <= EXECOP0WriteEnable;     
                   executeCOP0WriteDestination   <= EXECOP0WriteDestination;
@@ -1551,13 +1652,15 @@ begin
          elsif (ce = '1') then
          
             stall4         <= stallNew4;
-            dataReadEna       := '0';
+            dataReadEna    := '0';
             dataReadData   := unsigned(mem_dataRead);
             dataReadType   := writebackLoadType;
             oldData        := writebackData;
             
             writebackInvalidateCacheEna  <= WBinvalidateCacheEna; 
             writebackInvalidateCacheLine <= WBinvalidateCacheLine;   
+            
+            WBgte_writeEna  <= '0';
             
             if (stall = 0) then
             
@@ -1589,6 +1692,8 @@ begin
                   writeBackBranchdelaySlot      <= executeBranchdelaySlot;
                   writeBackBranchTaken          <= executeBranchTaken;     
                   
+                  writebackGTEReadEnable       <= executeGTEReadEnable;
+                  WBgte_writeAddr              <= '0' & executeGTETarget;
                   
                   writebackWriteEnable <= '0';
                   if (executeReadEnable = '1') then
@@ -1613,9 +1718,10 @@ begin
             end if;
             
             if (dataReadEna = '1') then
-               --if (writebackGTEReadEnable) then
-               --   -- todo
-               --else
+               if (writebackGTEReadEnable) then
+                  WBgte_writeData <= dataReadData;
+                  WBgte_writeEna  <= '1';
+               else
                   writebackWriteEnable <= '1';
                   if (writeDoneTarget = writebackTarget and writeDoneWriteEnable = '1') then
                      oldData := writeDoneData;
@@ -1646,9 +1752,7 @@ begin
                         end case;
                         
                   end case;
-                
-                  
-               --end if;   
+               end if;   
             end if;
    
          end if;
@@ -1753,12 +1857,20 @@ begin
                   exceptionCode     <= exceptionCode_3;
                   exceptionInstr    <= opcode1(27 downto 26);
                   if (EXEBranchTaken = '1') then
-                     exception_PC   <= PCbranch;
+                     exception_PC      <= PCbranch;
+                     exception_branch  <= '0';
+                     exception_brslot  <= '0';
+                     cop0_BADVADDR     <= PCbranch;
                   else
-                     exception_PC   <= PCold1;
+                     exception_PC      <= PCold1;
+                     exception_branch  <= executeBranchTaken;
+                     exception_brslot  <= executeBranchdelaySlot;
+                     if (EXEMemWriteException = '1') then
+                        cop0_BADVADDR  <= EXEMemWriteAddr;
+                     elsif (EXEReadException = '1') then
+                        cop0_BADVADDR  <= EXEReadAddress;
+                     end if;
                   end if;
-                  exception_branch  <= executeBranchTaken;
-                  exception_brslot  <= executeBranchdelaySlot;
                end if;
                exception_JMPnext <= PCold0;
                

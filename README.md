@@ -37,15 +37,16 @@ Work in progress, don't report any bugs!
 
 --
 
-- CPU    : 60%
+- CPU    : 65%
 - GPU    : 70%
 - Memory : 50%
 - IRQ    : 40%
 - PAD    : 30% (Digital Pad without memory card 100%)
 - DMA    : 30%
 - Memctrl: 0%
+- SIO    : 0%
 - Timer  : 50%
-- GTE    : 0%
+- GTE    : 5%
 - MDEC   : 0% 
 - CD     : 0%
 - SPU    : 0%

@@ -191,6 +191,17 @@ architecture arch of psx_top is
    signal ce_intern              : std_logic := '0';
    signal ce_cpu                 : std_logic := '0';
    
+   
+   -- GTE
+   signal gte_busy               : std_logic;
+   signal gte_readAddr           : unsigned(5 downto 0);
+   signal gte_readData           : unsigned(31 downto 0);
+   signal gte_writeAddr          : unsigned(5 downto 0);
+   signal gte_writeData          : unsigned(31 downto 0);
+   signal gte_writeEna           : std_logic; 
+   signal gte_cmdData            : unsigned(31 downto 0);
+   signal gte_cmdEna             : std_logic; 
+
    -- export
    signal cpu_done               : std_logic; 
    signal new_export             : std_logic; 
@@ -585,9 +596,36 @@ begin
       mem_dataRead      => mem_dataRead, 
       mem_dataCache     => mem_dataCache, 
       mem_done          => mem_done,
-   
+      
+      gte_busy          => gte_busy,     
+      gte_readAddr      => gte_readAddr, 
+      gte_readData      => gte_readData, 
+      gte_writeAddr     => gte_writeAddr,
+      gte_writeData     => gte_writeData,
+      gte_writeEna      => gte_writeEna, 
+      gte_cmdData       => gte_cmdData,  
+      gte_cmdEna        => gte_cmdEna,   
+      
       cpu_done          => cpu_done,  
       cpu_export        => cpu_export
+   );
+   
+   igte : entity work.gte
+   port map
+   (
+      clk2x                => clk2x,     
+      clk2xIndex           => clk2xIndex,
+      ce                   => ce,        
+      reset                => reset,     
+      
+      gte_busy             => gte_busy,     
+      gte_readAddr         => gte_readAddr, 
+      gte_readData         => gte_readData, 
+      gte_writeAddr        => gte_writeAddr,
+      gte_writeData        => gte_writeData,
+      gte_writeEna         => gte_writeEna, 
+      gte_cmdData          => gte_cmdData,  
+      gte_cmdEna           => gte_cmdEna  
    );
    
    -- export
