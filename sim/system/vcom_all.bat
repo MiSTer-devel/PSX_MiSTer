@@ -39,6 +39,7 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/joypad.vhd ^
 ../../rtl/timer.vhd ^
 ../../rtl/dma.vhd ^
+../../rtl/exp2.vhd ^
 ../../rtl/pGTE.vhd ^
 ../../rtl/gte_mac0.vhd ^
 ../../rtl/gte.vhd ^

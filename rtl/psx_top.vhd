@@ -124,6 +124,13 @@ architecture arch of psx_top is
    signal bus_gpu_write          : std_logic;
    signal bus_gpu_dataRead       : std_logic_vector(31 downto 0);
    
+   signal bus_exp2_addr          : unsigned(12 downto 0); 
+   signal bus_exp2_dataWrite     : std_logic_vector(31 downto 0);
+   signal bus_exp2_read          : std_logic;
+   signal bus_exp2_write         : std_logic;
+   signal bus_exp2_dataRead      : std_logic_vector(31 downto 0);
+   signal bus_exp2_writeMask     : std_logic_vector(3 downto 0);
+   
    -- Memory mux
    signal memMuxIdle             : std_logic;
    
@@ -502,6 +509,20 @@ begin
       export_gobj          => export_gobj
    );
    
+   iexp2 : entity work.exp2
+   port map
+   (
+      clk1x                => clk1x,
+      ce                   => ce,   
+      reset                => reset_intern,
+      
+      bus_addr             => bus_exp2_addr,     
+      bus_dataWrite        => bus_exp2_dataWrite,
+      bus_read             => bus_exp2_read,     
+      bus_write            => bus_exp2_write,    
+      bus_writeMask        => bus_exp2_writeMask, 
+      bus_dataRead         => bus_exp2_dataRead
+   );
 
    imemorymux : entity work.memorymux
    generic map
@@ -576,7 +597,14 @@ begin
       bus_gpu_dataWrite    => bus_gpu_dataWrite,
       bus_gpu_read         => bus_gpu_read,     
       bus_gpu_write        => bus_gpu_write,    
-      bus_gpu_dataRead     => bus_gpu_dataRead
+      bus_gpu_dataRead     => bus_gpu_dataRead,
+      
+      bus_exp2_addr        => bus_exp2_addr,     
+      bus_exp2_dataWrite   => bus_exp2_dataWrite,
+      bus_exp2_read        => bus_exp2_read,     
+      bus_exp2_write       => bus_exp2_write,    
+      bus_exp2_dataRead    => bus_exp2_dataRead, 
+      bus_exp2_writeMask   => bus_exp2_writeMask
    );
    
    icpu : entity work.cpu
