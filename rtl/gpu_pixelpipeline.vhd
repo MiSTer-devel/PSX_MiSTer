@@ -579,6 +579,7 @@ begin
    -- synthesis translate_off
    
    goutput : if 1 = 1 generate
+      signal pixelCount          : integer := 0;
    begin
    
       process
@@ -596,7 +597,7 @@ begin
             
             wait until rising_edge(clk2x);
             
-            if (pixelWrite = '1') then
+            if (pixelWrite = '1' and pixelCount >= 0) then
             
                write(line_out, to_integer(pixelAddr(10 downto 1)));
                write(line_out, string'(" ")); 
@@ -604,6 +605,7 @@ begin
                write(line_out, string'(" ")); 
                write(line_out, to_integer(unsigned(pixelColor)));
                writeline(outfile, line_out);
+               pixelCount <= pixelCount + 1;
    
             end if;
             

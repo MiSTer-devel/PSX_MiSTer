@@ -1264,6 +1264,7 @@ begin
                            vram_ADDR(10) <= '1';
                            vram_RD       <= '1';
                            vram_BURSTCNT <= '0' & std_logic_vector(reqVRAMnext);
+                           reqVRAMnext   <= (others => '0');
                         else
                            vramState   <= IDLE;
                            reqVRAMDone <= '1';

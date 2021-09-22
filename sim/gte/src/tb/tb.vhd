@@ -128,7 +128,7 @@ begin
       
       file_close(infile);
       
-      wait for 1 ms;
+      wait for 1 us;
       
       if (cmdCount >= 0) then
          report "DONE" severity failure;

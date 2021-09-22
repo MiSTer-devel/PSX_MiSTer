@@ -176,6 +176,7 @@ architecture arch of cpu is
    signal decodeRD                     : unsigned(4 downto 0) := (others => '0');
    signal decodeTarget                 : unsigned(4 downto 0) := (others => '0');
    signal decodeJumpTarget             : unsigned(25 downto 0) := (others => '0');
+   signal decode_gte_readAddr          : unsigned(5 downto 0) := (others => '0');
    
    -- wires
    signal opcodeCacheMuxed             : unsigned(31 downto 0) := (others => '0');
@@ -196,7 +197,8 @@ architecture arch of cpu is
    (
       EXESTALLTYPE_NONE,
       EXESTALLTYPE_READLO,
-      EXESTALLTYPE_READHI
+      EXESTALLTYPE_READHI,
+      EXESTALLTYPE_GTE
    );
    
    --regs         
@@ -223,6 +225,10 @@ architecture arch of cpu is
    signal executeGTETarget             : unsigned(4 downto 0) := (others => '0');
    signal hiloWait                     : integer range 0 to 38;
    signal executeStalltype             : CPU_EXESTALLTYPE;
+   signal execute_gte_readAddr         : unsigned(5 downto 0) := (others => '0');
+   signal execute_gte_writeAddr        : unsigned(5 downto 0) := (others => '0');
+   signal execute_gte_writeData        : unsigned(31 downto 0) := (others => '0');
+   signal execute_gte_writeEna         : std_logic := '0'; 
 
    --wires
    signal branch                       : std_logic := '0';
@@ -295,8 +301,7 @@ architecture arch of cpu is
    signal writebackReadAddress         : unsigned(31 downto 0) := (others => '0');
    signal writebackInvalidateCacheEna  : std_logic := '0';
    signal writebackInvalidateCacheLine : unsigned(7 downto 0) := (others => '0');
-   signal writeBackBranchdelaySlot     : std_logic;
-   signal writeBackBranchTaken         : std_logic;
+   signal WBgte_writeAddr              : unsigned(5 downto 0);
          
    -- wire     
    signal mem4_request                 : std_logic := '0';
@@ -307,9 +312,6 @@ architecture arch of cpu is
    signal WBCACHECONTROL               : unsigned(31 downto 0) := (others => '0');
    signal WBinvalidateCacheEna         : std_logic := '0';
    signal WBinvalidateCacheLine        : unsigned(7 downto 0) := (others => '0');
-   signal WBgte_writeAddr              : unsigned(5 downto 0);
-   signal WBgte_writeData              : unsigned(31 downto 0);
-   signal WBgte_writeEna               : std_logic := '0'; 
          
          
    -- stage 5     
@@ -333,10 +335,6 @@ begin
    mem_reqsize       <= mem4_reqsize when mem4_request = '1' else "10";
    mem_dataWrite     <= mem4_dataWrite;
    mem_writeMask     <= executeMemWriteMask;
-   
-   gte_writeAddr  <= EXEgte_writeAddr when (EXEgte_writeEna = '1') else WBgte_writeAddr;
-   gte_writeData  <= EXEgte_writeData when (EXEgte_writeEna = '1') else WBgte_writeData;
-   gte_writeEna   <= EXEgte_writeEna  when (EXEgte_writeEna = '1') else WBgte_writeEna; 
 
    -- common
    stall        <= stall5 & stall4 & stall3 & stall2 & stall1;
@@ -737,9 +735,9 @@ begin
                   end if;
                                      
                   if (opcodeCacheMuxed(31 downto 26) = 16#12#) then
-                     gte_readAddr     <= opcodeCacheMuxed(22) & opcodeCacheMuxed(15 downto 11); -- decodeSource1(1) & decodeRD 
+                     decode_gte_readAddr <= opcodeCacheMuxed(22) & opcodeCacheMuxed(15 downto 11); -- decodeSource1(1) & decodeRD 
                   else
-                     gte_readAddr     <= '0' & opcodeCacheMuxed(20 downto 16); -- decodeSource2
+                     decode_gte_readAddr <= '0' & opcodeCacheMuxed(20 downto 16); -- decodeSource2
                   end if;
                   
                end if;
@@ -775,7 +773,8 @@ begin
    end process;
 
    process (decodeImmData, decodeTarget, decodeJumpTarget, decodeSource1, decodeSource2, decodeValue1, decodeValue2, decodeOP, decodeFunct, decodeShamt, decodeRD, exception, stall3, stall, value1, value2, pcOld0, resultData,
-            cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait, opcode1, gte_readAddr)
+            cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait, opcode1, gte_readAddr, decode_gte_readAddr, gte_readData, 
+            execute_gte_readAddr, gte_busy)
       variable calcResult  : unsigned(31 downto 0);
       variable calcMemAddr : unsigned(31 downto 0);
    begin
@@ -826,6 +825,12 @@ begin
       exceptionCode_3         <= x"0";
       
       EXEstalltype            <= EXESTALLTYPE_NONE;
+      
+      if (stall = 0) then
+         gte_readAddr         <= decode_gte_readAddr;
+      else
+         gte_readAddr         <= execute_gte_readAddr;
+      end if;
        
       if (exception(4 downto 2) = 0 and stall = 0) then
              
@@ -1169,10 +1174,18 @@ begin
                         when x"0" => --mfcn
                            EXEresultWriteEnable <= '1';
                            EXEresultData        <= gte_readData;
+                           if (gte_busy = '1') then
+                              stallNew3    <= '1';
+                              EXEstalltype <= EXESTALLTYPE_GTE;
+                           end if;
                         
                         when x"2" => --cfcn
                            EXEresultWriteEnable <= '1';
                            EXEresultData        <= gte_readData;
+                           if (gte_busy = '1') then
+                              stallNew3    <= '1';
+                              EXEstalltype <= EXESTALLTYPE_GTE;
+                           end if;
                         
                         when x"4" => --mtcn
                            EXEgte_writeEna      <= '1';
@@ -1323,6 +1336,10 @@ begin
                else
                   EXEMemWriteEnable <= '1';
                   EXEMemWriteData   <= gte_readData;
+                  if (gte_busy = '1') then
+                     stallNew3    <= '1';
+                     EXEstalltype <= EXESTALLTYPE_GTE;
+                  end if;
                end if; 
                
             when 16#3B# => -- SWC3 -> NOP 
@@ -1426,7 +1443,13 @@ begin
                   executeCOP0WriteDestination   <= EXECOP0WriteDestination;
                   executeCOP0WriteValue         <= EXECOP0WriteValue; 
 
-                  executeStalltype              <= EXEstalltype;                  
+                  executeStalltype              <= EXEstalltype; 
+
+                  execute_gte_readAddr          <= decode_gte_readAddr;         
+
+                  execute_gte_writeAddr         <= EXEgte_writeAddr;
+                  execute_gte_writeData         <= EXEgte_writeData;
+                  execute_gte_writeEna          <= EXEgte_writeEna;                   
                   
                   -- new mul/div
                   if (EXEcalcMULT = '1') then
@@ -1518,7 +1541,13 @@ begin
                end case;
             end if;
             
-            
+            -- GTE
+            if (executeStalltype = EXESTALLTYPE_GTE and gte_busy = '0') then
+               resultData          <= gte_readData;
+               executeMemWriteData <= gte_readData;
+               stall3              <= '0';
+               executeStalltype    <= EXESTALLTYPE_NONE;
+            end if;
    
          end if;
          
@@ -1645,9 +1674,6 @@ begin
             writebackInvalidateCacheEna      <= '0';
             
             writebackException               <= '0';
-            
-            writeBackBranchdelaySlot         <= '0';
-            writeBackBranchTaken             <= '0';
          
          elsif (ce = '1') then
          
@@ -1660,7 +1686,7 @@ begin
             writebackInvalidateCacheEna  <= WBinvalidateCacheEna; 
             writebackInvalidateCacheLine <= WBinvalidateCacheLine;   
             
-            WBgte_writeEna  <= '0';
+            gte_writeEna  <= '0';
             
             if (stall = 0) then
             
@@ -1689,9 +1715,6 @@ begin
                   
                   writebackMemOPisRead          <= executeReadEnable;
                   
-                  writeBackBranchdelaySlot      <= executeBranchdelaySlot;
-                  writeBackBranchTaken          <= executeBranchTaken;     
-                  
                   writebackGTEReadEnable       <= executeGTEReadEnable;
                   WBgte_writeAddr              <= '0' & executeGTETarget;
                   
@@ -1702,6 +1725,12 @@ begin
                      writebackReadAddress <= executeReadAddress;
                   else
                      writebackWriteEnable <= resultWriteEnable;
+                  end if;
+                  
+                  if (execute_gte_writeEna = '1') then
+                     gte_writeAddr <= execute_gte_writeAddr;
+                     gte_writeData <= execute_gte_writeData;
+                     gte_writeEna  <= '1';
                   end if;
                   
                end if;
@@ -1718,9 +1747,10 @@ begin
             end if;
             
             if (dataReadEna = '1') then
-               if (writebackGTEReadEnable) then
-                  WBgte_writeData <= dataReadData;
-                  WBgte_writeEna  <= '1';
+               if (writebackGTEReadEnable = '1') then
+                  gte_writeAddr <= WBgte_writeAddr;
+                  gte_writeData <= dataReadData;
+                  gte_writeEna  <= '1';
                else
                   writebackWriteEnable <= '1';
                   if (writeDoneTarget = writebackTarget and writeDoneWriteEnable = '1') then

@@ -359,14 +359,24 @@ begin
                        
                when PROCCALC1 =>
                   procstate   <= PROCCALC2;
+                  workx       <= resize(proc_pos1x & x"80000000", 45) - 1024;
+                  worky       <= resize(proc_pos1y & x"80000000", 45); 
+                  workr       <= '0' & signed(proc_color1( 7 downto  0)) & x"800";
+                  workg       <= '0' & signed(proc_color1(15 downto  8)) & x"800";
+                  workb       <= '0' & signed(proc_color1(23 downto 16)) & x"800";
                   dx          := abs(proc_pos2x - proc_pos1x);
                   dy          := abs(proc_pos2y - proc_pos1y);
                   if (dx > dy) then 
-                     if (dx(9 downto 0) = 0) then procstate <= PROCIDLE; end if;
                      points            <= unsigned(dx(9 downto 0)); 
                      singlePixelLines  <= '0';
                   else
-                     if (dy(9 downto 0) = 0) then procstate <= PROCIDLE; end if;
+                     if (dy(9 downto 0) = 0) then 
+                        if (proc_transparency = '1' or DrawPixelsMask = '1') then
+                           procstate <= PROCREADLINE;
+                        else
+                           procstate <= PROCPIXELS;
+                        end if;
+                     end if;
                      points            <= unsigned(dy(9 downto 0));
                      singlePixelLines  <= '1';
                   end if;

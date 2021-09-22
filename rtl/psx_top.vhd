@@ -504,6 +504,10 @@ begin
    
 
    imemorymux : entity work.memorymux
+   generic map
+   (
+      NOMEMWAIT => '0' --is_simu
+   )
    port map
    (
       clk1x                => clk1x,

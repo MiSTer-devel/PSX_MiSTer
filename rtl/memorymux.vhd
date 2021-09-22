@@ -3,6 +3,10 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all; 
 
 entity memorymux is
+   generic
+   (
+      NOMEMWAIT : std_logic
+   );
    port 
    (
       clk1x                : in  std_logic;
@@ -307,7 +311,12 @@ begin
                when READCACHE =>
                   if (ram_done = '1') then
                      mem_dataCache <= ram_dataRead;
-                     state         <= WAITING;
+                     if (NOMEMWAIT = '1') then
+                        mem_done <= '1';
+                        state    <= IDLE;
+                     else
+                        state    <= WAITING;
+                     end if;
                   end if;                       
                   
                when WRITERAM =>
@@ -340,7 +349,12 @@ begin
                      else
                         mem_dataRead <= ram_dataRead(31 downto 0);
                      end if;
-                     state        <= WAITING;
+                     if (NOMEMWAIT = '1') then
+                        mem_done <= '1';
+                        state    <= IDLE;
+                     else
+                        state    <= WAITING;
+                     end if;
                   end if;
                   
                when BUSACTION =>
@@ -409,7 +423,7 @@ begin
                      when 8 => ram_Adr <= "01" & std_logic_vector(to_unsigned(16#7010#, 21)); ram_dataWrite <= x"37DE" & std_logic_vector(exe_stackpointer(15 downto  0));
                      when others => null;
                   end case;
-                  if (exe_stackpointer = 0 and (exestep = 4 or exestep = 5 or exestep = 4 or exestep = 5)) then
+                  if (exe_stackpointer = 0 and (exestep = 4 or exestep = 5 or exestep = 6 or exestep = 8)) then
                      ram_dataWrite <= (others => '0');
                   end if;
                   

@@ -3,6 +3,8 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all; 
 use STD.textio.all;
 
+use work.pGTE.all;
+
 entity gte is
    port 
    (
@@ -110,6 +112,29 @@ architecture arch of gte is
    signal REG_FLAG  : unsigned(31 downto 0);
    
   
+   -- calculation
+   type tstate is
+   (
+      IDLE,
+      CALC_NCLIP
+   );
+   signal state : tstate := IDLE;
+   
+   signal calcStep : integer range 0 to 15;
+   
+   signal cmdShift : std_logic;
+   signal cmdsatIR : std_logic;
+   signal cmdMM    : unsigned(1 downto 0);
+   signal cmdMV    : unsigned(1 downto 0);
+   signal cmdTV    : unsigned(1 downto 0);
+   
+   -- MACs
+   signal MAC0req          : tMAC0req;
+   signal mac0_result      : signed(31 downto 0);
+   signal mac0_writeback   : std_logic;
+   signal mac0Last         : signed(31 downto 0);
+   
+  
 begin 
 
    process (clk2x)
@@ -117,6 +142,8 @@ begin
       if rising_edge(clk2x) then
       
          if (reset = '1') then
+         
+            state    <= IDLE;
          
             gte_busy <= '0';
          
@@ -205,6 +232,8 @@ begin
             
          elsif (ce = '1') then
          
+            MAC0req.trigger <= '0';
+         
             case (to_integer(gte_readAddr)) is
                when 00 => gte_readData <= unsigned(REG_V0Y & REG_V0X);
                when 01 => gte_readData <= unsigned(x"0000" & REG_V0Z);
@@ -234,8 +263,12 @@ begin
                when 25 => gte_readData <= unsigned(REG_MAC1);
                when 26 => gte_readData <= unsigned(REG_MAC2);
                when 27 => gte_readData <= unsigned(REG_MAC3);
-               when 28 => gte_readData <= x"0000" & '0' & REG_IRGB; -- todo: special readout
-               when 29 => gte_readData <= x"0000" & '0' & REG_ORGB; -- todo: special readout
+               when 28 | 29 => 
+                  gte_readData(31 downto 15) <= (others => '0');
+                  if (REG_IR1 < 0) then gte_readData( 4 downto  0) <= "00000"; elsif (REG_IR1(15 downto 7) > 31) then gte_readData( 4 downto  0) <= "11111"; else gte_readData( 4 downto  0) <= unsigned(REG_IR1(11 downto 7)); end if;
+                  if (REG_IR2 < 0) then gte_readData( 9 downto  5) <= "00000"; elsif (REG_IR2(15 downto 7) > 31) then gte_readData( 9 downto  5) <= "11111"; else gte_readData( 9 downto  5) <= unsigned(REG_IR2(11 downto 7)); end if;
+                  if (REG_IR3 < 0) then gte_readData(14 downto 10) <= "00000"; elsif (REG_IR3(15 downto 7) > 31) then gte_readData(14 downto 10) <= "11111"; else gte_readData(14 downto 10) <= unsigned(REG_IR3(11 downto 7)); end if;
+
                when 30 => gte_readData <= unsigned(REG_LZCS);
                when 31 => gte_readData <= unsigned(REG_LZCR);
                when 32 => gte_readData <= unsigned(REG_RT12 & REG_RT11);
@@ -358,11 +391,76 @@ begin
                end case;
             
             end if;
+            
+            -- calculation
+            calcStep <= calcStep + 1; 
+            
+            case (state) is
+            
+               when IDLE =>
+                  calcStep <= 0;
+                  if (gte_cmdEna = '1' and clk2xIndex = '0') then
+                     gte_busy <= '1';
+                     cmdShift <= gte_cmdData(19);
+                     cmdsatIR <= gte_cmdData(10);
+                     cmdMM    <= gte_cmdData(18 downto 17);
+                     cmdMV    <= gte_cmdData(16 downto 15);
+                     cmdTV    <= gte_cmdData(14 downto 13);
+                     case (to_integer(gte_cmdData(5 downto 0))) is
+                        
+                        when 16#06# => state <= CALC_NCLIP; 
+                     
+                        when others => gte_busy <= '0';
+                     end case;
+                  end if;
+               
+               when CALC_NCLIP =>
+                  case (calcStep) is
+                     --                     mul1       mul2      add     sub  swap useIR IRs cOvf uRes trigger
+                     when 0 => MAC0req <= (REG_SX0, REG_SY1, x"00000000", '0', '0', '0', '0', '0', '0', '1'); 
+                     when 1 => MAC0req <= (REG_SX1, REG_SY2, x"00000000", '0', '0', '0', '0', '0', '1', '1'); 
+                     when 2 => MAC0req <= (REG_SX2, REG_SY0, x"00000000", '0', '0', '0', '0', '0', '1', '1'); 
+                     when 3 => MAC0req <= (REG_SX0, REG_SY2, x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
+                     when 4 => MAC0req <= (REG_SX1, REG_SY0, x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
+                     when 5 => MAC0req <= (REG_SX2, REG_SY1, x"00000000", '1', '0', '0', '0', '1', '1', '1'); 
+                     when 7 => state <= IDLE; gte_busy <= '0';
+                     when others => null;
+                  end case;
+               
+            
+            
+            end case;
+            
+            -- writebacks
+            if (mac0_writeback = '1') then
+               REG_MAC0 <= mac0_result;
+            end if;
+            
+         
          
          end if;
          
       end if;
    end process;
+   
+   -- processing units
+   igte_mac0 : entity work.gte_mac0
+   port map
+   (
+      clk2x          => clk2x,         
+      MAC0req        => MAC0req,       
+      mac0_result    => mac0_result,   
+      mac0_writeback => mac0_writeback,
+      mac0Last       => mac0Last
+   );
+   
+   
+   
+   
+   
+   
+   
+   
    
    -- synthesis translate_off
    
@@ -374,8 +472,9 @@ begin
          variable f_status       : FILE_OPEN_STATUS;
          variable line_out       : line;
          variable regcheck       : integer range 0 to 3; 
-         variable busy_1         : std_logic; 
-         variable gte_writeEna_1 : std_logic;
+         variable busy_1         : std_logic := '0'; 
+         variable gte_writeEna_1 : std_logic := '0';
+         variable gte_cmdEna_1   : std_logic := '0';
          
          variable var_V0X   : signed(15 downto 0)   := (others => '0');
          variable var_V0Y   : signed(15 downto 0)   := (others => '0');
@@ -469,13 +568,7 @@ begin
          while (true) loop
             
             wait until rising_edge(clk2x);
-            
-            if (gte_cmdEna = '1' and clk2xIndex = '1') then
-               write(line_out, string'("COMMAND: 00 ")); 
-               write(line_out, to_hstring(gte_cmdData));
-               writeline(outfile, line_out);
-            end if;
-            
+                        
             regcheck := 0;
             
             if (gte_writeEna_1 = '1') then
@@ -553,8 +646,15 @@ begin
                if (var_FLAG /= REG_FLAG                        ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("63 ")); write(line_out, to_hstring(std_logic_vector(REG_FLAG)));                 writeline(outfile, line_out); var_FLAG := REG_FLAG; end if;
             end if;
             
+            if (gte_cmdEna_1 = '1') then
+               write(line_out, string'("COMMAND: 00 ")); 
+               write(line_out, to_hstring(gte_cmdData));
+               writeline(outfile, line_out);
+            end if;
+            
             busy_1 := gte_busy;
             gte_writeEna_1 := gte_writeEna and clk2xIndex;
+            gte_cmdEna_1   := gte_cmdEna and clk2xIndex;
             
          end loop;
          
