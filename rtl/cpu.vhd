@@ -11,6 +11,7 @@ entity cpu is
    port 
    (
       clk1x                 : in  std_logic;
+      clk2x                 : in  std_logic;
       ce                    : in  std_logic;
       reset                 : in  std_logic;
       
@@ -286,7 +287,15 @@ architecture arch of cpu is
    signal DIV0quotient                 : unsigned(31 downto 0);
    signal DIV0remainder                : unsigned(31 downto 0);    
          
-   -- stage 4     
+   -- stage 4 
+   -- scratchpad
+   signal scratchpad_address_a         : std_logic_vector(7 downto 0);
+   signal scratchpad_data_a            : std_logic_vector(31 downto 0);
+   signal scratchpad_wren_a            : std_logic_vector(0 to 3);
+   signal scratchpad_address_b         : std_logic_vector(7 downto 0);
+   signal scratchpad_q_b               : std_logic_vector(31 downto 0);
+   signal scratchpad_dataread          : unsigned(31 downto 0);
+   
    -- reg      
    signal writebackException           : std_logic := '0';
    signal writebackTarget              : unsigned(4 downto 0) := (others => '0');
@@ -1559,7 +1568,34 @@ begin
 --############################### stage 4
 --##############################################################
    
-   process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType)
+   scratchpad_address_a <= std_logic_vector(executeMemWriteAddr(9 downto 2));
+   scratchpad_data_a    <= std_logic_vector(executeMemWriteData);
+   
+   scratchpad_address_b <= std_logic_vector(executeReadAddress(9 downto 2));
+   
+   gscratchpad: for i in 0 to 3 generate
+   begin
+      icache: entity work.dpram
+      generic map ( addr_width => 8, data_width => 8)
+      port map
+      (
+         clock_a     => clk1x,
+         clken_a     => ce,
+         address_a   => scratchpad_address_a,
+         data_a      => scratchpad_data_a((8*i) + 7 downto (8*i)),
+         wren_a      => scratchpad_wren_a(i),
+         
+         clock_b     => clk2x,
+         address_b   => scratchpad_address_b,
+         data_b      => x"00",
+         wren_b      => '0',
+         q_b         => scratchpad_q_b((8*i) + 7 downto (8*i))
+      );
+   end generate; 
+   
+   scratchpad_dataread <= unsigned(scratchpad_q_b);
+   
+   process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask)
       variable skipmem : std_logic;
    begin
    
@@ -1576,6 +1612,8 @@ begin
       WBinvalidateCacheEna  <= '0';
       WBinvalidateCacheLine <= executeMemWriteAddr(11 downto 4);
       
+      scratchpad_wren_a    <= "0000";
+      
       if (exception(4 downto 3) = 0 and stall = 0) then
       
          if (executeMemWriteEnable = '1') then
@@ -1591,7 +1629,7 @@ begin
                   
                   if (executeMemWriteAddr(28 downto 10) = 16#7E000#) then -- scratchpad
                      skipmem := '1';
-                     report "scratchpad access" severity failure;
+                     scratchpad_wren_a <= executeMemWriteMask;
                   end if;
                   
                when 6 | 7 => -- KSEG2
@@ -1627,10 +1665,7 @@ begin
             end case;
 
             if ((executeReadAddress(31 downto 29) = 0 or executeReadAddress(31 downto 29) = 4) and executeReadAddress(28 downto 10) = 16#7E000#) then
-               report "scratchpad access" severity failure;
-               --if (executeLoadType = LOADTYPE_LEFT or executeLoadType = LOADTYPE_RIGHT) then 
-               --   mem4_address(1 downto 0) <= "00";
-               --end if;
+               --report "scratchpad access" severity failure;
             else 
                mem4_request   <= '1';
                mem4_address   <= executeReadAddress;
@@ -1720,9 +1755,67 @@ begin
                   
                   writebackWriteEnable <= '0';
                   if (executeReadEnable = '1') then
-                     -- todo scratchpad read
-                     writebackLoadType    <= executeLoadType;
-                     writebackReadAddress <= executeReadAddress;
+                     if ((executeReadAddress(31 downto 29) = 0 or executeReadAddress(31 downto 29) = 4) and executeReadAddress(28 downto 10) = 16#7E000#) then -- scratchpad read
+                        writebackWriteEnable <= '1';
+
+                        case (executeLoadType) is
+                           when LOADTYPE_SBYTE => 
+                              case (executeReadAddress(1 downto 0)) is 
+                                 when "00" => writebackData <= unsigned(resize(signed(scratchpad_dataread( 7 downto  0)), 32));
+                                 when "01" => writebackData <= unsigned(resize(signed(scratchpad_dataread(15 downto  8)), 32));
+                                 when "10" => writebackData <= unsigned(resize(signed(scratchpad_dataread(23 downto 16)), 32));
+                                 when "11" => writebackData <= unsigned(resize(signed(scratchpad_dataread(31 downto 24)), 32));
+                                 when others => null;
+                              end case;  
+                                 
+                           when LOADTYPE_SWORD => 
+                              if (executeReadAddress(1) = '0') then
+                                 writebackData <= unsigned(resize(signed(scratchpad_dataread(15 downto 0)), 32));
+                              else
+                                 writebackData <= unsigned(resize(signed(scratchpad_dataread(31 downto 16)), 32));
+                              end if;
+                                 
+                           when LOADTYPE_LEFT =>
+                              case (to_integer(executeReadAddress(1 downto 0))) is
+                                 when 0 => writebackData <= scratchpad_dataread( 7 downto 0) & resultData(23 downto 0);
+                                 when 1 => writebackData <= scratchpad_dataread(15 downto 0) & resultData(15 downto 0);
+                                 when 2 => writebackData <= scratchpad_dataread(23 downto 0) & resultData( 7 downto 0); 
+                                 when 3 => writebackData <= scratchpad_dataread;
+                                 when others => null;
+                              end case;
+                                 
+                           when LOADTYPE_DWORD => writebackData <= scratchpad_dataread;
+                           
+                           when LOADTYPE_BYTE  =>
+                              case (executeReadAddress(1 downto 0)) is 
+                                 when "00" => writebackData <= x"000000" & scratchpad_dataread( 7 downto  0);
+                                 when "01" => writebackData <= x"000000" & scratchpad_dataread(15 downto  8);
+                                 when "10" => writebackData <= x"000000" & scratchpad_dataread(23 downto 16);
+                                 when "11" => writebackData <= x"000000" & scratchpad_dataread(31 downto 24);
+                                 when others => null;
+                              end case;  
+                           
+                           when LOADTYPE_WORD  => 
+                              if (executeReadAddress(1) = '0') then
+                                 writebackData <= x"0000" & scratchpad_dataread(15 downto 0);
+                              else
+                                 writebackData <= x"0000" & scratchpad_dataread(31 downto 16);
+                              end if;
+                           
+                           when LOADTYPE_RIGHT =>
+                              case (to_integer(writebackReadAddress(1 downto 0))) is
+                                 when 0 => writebackData <= scratchpad_dataread;
+                                 when 1 => writebackData <= resultData(31 downto 24) & scratchpad_dataread(31 downto  8);
+                                 when 2 => writebackData <= resultData(31 downto 16) & scratchpad_dataread(31 downto 16);
+                                 when 3 => writebackData <= resultData(31 downto  8) & scratchpad_dataread(31 downto 24);
+                                 when others => null;
+                              end case;
+                        end case;
+                     
+                     else
+                        writebackLoadType    <= executeLoadType;
+                        writebackReadAddress <= executeReadAddress;
+                     end if;
                   else
                      writebackWriteEnable <= resultWriteEnable;
                   end if;
@@ -1812,7 +1905,7 @@ begin
             cop0_BPCM            <= (others => '0');
             cop0_CAUSE           <= (others => '0');
             cop0_EPC             <= (others => '0');
-            cop0_PRID            <= (others => '0');
+            cop0_PRID            <= x"00000002";
             
             exception            <= (others => '0');
          

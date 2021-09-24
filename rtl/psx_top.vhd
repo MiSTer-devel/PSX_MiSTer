@@ -88,17 +88,30 @@ architecture arch of psx_top is
    
    -- Busses
    signal bus_exp1_addr          : unsigned(22 downto 0); 
-   signal bus_exp1_dataWrite     : std_logic_vector(31 downto 0);
+   --signal bus_exp1_dataWrite     : std_logic_vector(31 downto 0);
    signal bus_exp1_read          : std_logic;
-   signal bus_exp1_write         : std_logic;
+   --signal bus_exp1_write         : std_logic;
    signal bus_exp1_dataRead      : std_logic_vector(31 downto 0);
+   
+   signal bus_memc_addr          : unsigned(5 downto 0); 
+   signal bus_memc_dataWrite     : std_logic_vector(31 downto 0);
+   signal bus_memc_read          : std_logic;
+   signal bus_memc_write         : std_logic;
+   signal bus_memc_dataRead      : std_logic_vector(31 downto 0);
    
    signal bus_pad_addr           : unsigned(3 downto 0); 
    signal bus_pad_dataWrite      : std_logic_vector(31 downto 0);
    signal bus_pad_read           : std_logic;
    signal bus_pad_write          : std_logic;
    signal bus_pad_writeMask      : std_logic_vector(3 downto 0);
-   signal bus_pad_dataRead       : std_logic_vector(31 downto 0);
+   signal bus_pad_dataRead       : std_logic_vector(31 downto 0);   
+   
+   signal bus_sio_addr           : unsigned(3 downto 0); 
+   signal bus_sio_dataWrite      : std_logic_vector(31 downto 0);
+   signal bus_sio_read           : std_logic;
+   signal bus_sio_write          : std_logic;
+   signal bus_sio_writeMask      : std_logic_vector(3 downto 0);
+   signal bus_sio_dataRead       : std_logic_vector(31 downto 0);
    
    signal bus_irq_addr           : unsigned(3 downto 0); 
    signal bus_irq_dataWrite      : std_logic_vector(31 downto 0);
@@ -292,6 +305,20 @@ begin
          end if;
       end if;
    end process;
+   
+   imemctrl : entity work.memctrl
+   port map
+   (
+      clk1x                => clk1x,
+      ce                   => ce,   
+      reset                => reset_intern,
+
+      bus_addr             => bus_memc_addr,     
+      bus_dataWrite        => bus_memc_dataWrite,
+      bus_read             => bus_memc_read,     
+      bus_write            => bus_memc_write,    
+      bus_dataRead         => bus_memc_dataRead
+   );
 
    ijoypad: entity work.joypad
    port map 
@@ -329,6 +356,21 @@ begin
       bus_write            => bus_pad_write,    
       bus_writeMask        => bus_pad_writeMask,   
       bus_dataRead         => bus_pad_dataRead
+   );
+   
+   isio : entity work.sio
+   port map
+   (
+      clk1x                => clk1x,
+      ce                   => ce,   
+      reset                => reset_intern,
+      
+      bus_addr             => bus_sio_addr,     
+      bus_dataWrite        => bus_sio_dataWrite,
+      bus_read             => bus_sio_read,     
+      bus_write            => bus_sio_write,    
+      bus_writeMask        => bus_sio_writeMask,
+      bus_dataRead         => bus_sio_dataRead 
    );
    
    irq_GPU       <= '0'; -- todo
@@ -563,17 +605,30 @@ begin
       mem_done             => mem_done,
 
       bus_exp1_addr        => bus_exp1_addr,   
-      bus_exp1_dataWrite   => bus_exp1_dataWrite,
+      --bus_exp1_dataWrite   => bus_exp1_dataWrite,
       bus_exp1_read        => bus_exp1_read,   
-      bus_exp1_write       => bus_exp1_write,  
+      --bus_exp1_write       => bus_exp1_write,  
       bus_exp1_dataRead    => bus_exp1_dataRead,
+      
+      bus_memc_addr        => bus_memc_addr,     
+      bus_memc_dataWrite   => bus_memc_dataWrite,
+      bus_memc_read        => bus_memc_read,     
+      bus_memc_write       => bus_memc_write,    
+      bus_memc_dataRead    => bus_memc_dataRead,   
       
       bus_pad_addr         => bus_pad_addr,     
       bus_pad_dataWrite    => bus_pad_dataWrite,
       bus_pad_read         => bus_pad_read,     
       bus_pad_write        => bus_pad_write,    
       bus_pad_writeMask    => bus_pad_writeMask,
-      bus_pad_dataRead     => bus_pad_dataRead, 
+      bus_pad_dataRead     => bus_pad_dataRead,       
+      
+      bus_sio_addr         => bus_sio_addr,     
+      bus_sio_dataWrite    => bus_sio_dataWrite,
+      bus_sio_read         => bus_sio_read,     
+      bus_sio_write        => bus_sio_write,    
+      bus_sio_writeMask    => bus_sio_writeMask,
+      bus_sio_dataRead     => bus_sio_dataRead, 
 
       bus_irq_addr         => bus_irq_addr,     
       bus_irq_dataWrite    => bus_irq_dataWrite,
@@ -611,6 +666,7 @@ begin
    port map
    (
       clk1x             => clk1x,
+      clk2x             => clk2x,
       ce                => ce_cpu,   
       reset             => reset_intern,
          

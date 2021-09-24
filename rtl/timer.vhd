@@ -73,7 +73,7 @@ begin
             vblank_1        <= vblank;
             
             for i in 0 to 2 loop
-               if (timerArray(i).T_MODE(7) = '0') then -- not toggle mode _> reset irq
+               if (timerArray(i).T_MODE(7) = '0') then -- not toggle mode -> reset irq
                   timerArray(i).T_MODE(10) <= '1';
                end if;
             end loop;

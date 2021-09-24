@@ -432,7 +432,8 @@ begin
                         softReset <= '1';
                         
                      when 16#01# => -- clear fifo
-                        report "GP1 clear fifo not implemented" severity failure;    
+                        fifoIn_reset <= '1';   
+                        -- todo: must reset drawing units to idle?
                         
                      when 16#02# => -- ack irq
                         GPUSTAT_IRQRequest <= '0';

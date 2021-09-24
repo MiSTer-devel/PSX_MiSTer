@@ -29,6 +29,7 @@ Work in progress, don't report any bugs!
 - Gouraud Shading and transparency working
 - direct, masked and palette color texturing and texture cache working
 - basic reading/writing DMA working
+- first GTE test working
 
 -- 
 
@@ -37,16 +38,51 @@ Work in progress, don't report any bugs!
 
 --
 
-- CPU    : 65%
-- GPU    : 70%
-- Memory : 50%
-- IRQ    : 40%
-- PAD    : 30% (Digital Pad without memory card 100%)
-- DMA    : 30%
-- Memctrl: 0%
-- SIO    : 0%
-- Timer  : 50%
-- GTE    : 5%
+CPU    : 65%
+- dataread forward preventing missing
+- exception for read in invalid instruction and data area missing
+- scratchpad clear on reset?
+
+GPU    : 70%
+- VRAm2CPU missing
+- dithering missing
+- texture AND/OR mask missing
+- mask bits not implemented for special modules(e.g. cpu2vram)
+- vram2vram line wraparound not implemented
+
+Memory : 50%
+- DMA write performance only 32bit/2 cycles, should be 32Bit/1 cycle
+- SPU RAM not implemented
+- rotate register read16/32 missing
+
+IRQ    : 40%
+- irq_GPU missing    
+- irq_CDROM missing 
+- irq_SIO missing     
+- irq_SPU missing    
+- irq_LIGHTPEN missing
+
+PAD    : 30%
+- memory card not implemented
+- analog controller not implemented
+- all other special controllers not supported
+
+DMA    : 30%
+- only Mem->GPU and OTC->Mem implemented
+- DMA read prefetch must be fixed for long DMAs
+- DMA pausing and chopping not implemented 
+
+Memctrl: register stubs only
+
+SIO    : register stubs only
+
+Timer  : 50%
+- dotclock base missing
+- accuracy for start/wraparound not tested
+
+GTE    : 5%
+- Read/write of registers and NCLIP command only
+
 - MDEC   : 0% 
 - CD     : 0%
 - SPU    : 0%

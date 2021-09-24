@@ -43,6 +43,8 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/pGTE.vhd ^
 ../../rtl/gte_mac0.vhd ^
 ../../rtl/gte.vhd ^
+../../rtl/memctrl.vhd ^
+../../rtl/sio.vhd ^
 ../../rtl/cpu.vhd ^
 ../../rtl/memorymux.vhd ^
 ../../rtl/psx_top.vhd ^
