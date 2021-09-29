@@ -855,7 +855,7 @@ begin
    
    DMA_GPU_read <= vram2cpu_Fifo_Dout when (vram2cpu_Fifo_Empty = '0') else (others => '1');
    
-   GPUSTAT_ReadySendVRAM <= vram2cpu_Fifo_Empty;
+   GPUSTAT_ReadySendVRAM <= not vram2cpu_Fifo_Empty;
    
    igpu_vram2cpu : entity work.gpu_vram2cpu
    port map

@@ -335,7 +335,7 @@ begin
                            end if;
                            ram_be        <= mem_writeMask;
                            ram_dataWrite <= mem_dataWrite;
-                        elsif (ram_rnw = '1' and mem_addressData(28 downto 0) >= 16#1FC00000# and mem_addressData(28 downto 0) < 16#1FC80000#) then -- BIOS
+                        elsif (mem_rnw = '1' and mem_addressData(28 downto 0) >= 16#1FC00000# and mem_addressData(28 downto 0) < 16#1FC80000#) then -- BIOS
                            ram_ena <= '1';
                            ram_128 <= '0';
                            ram_rnw <= '1';
