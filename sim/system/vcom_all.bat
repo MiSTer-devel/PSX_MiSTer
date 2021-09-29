@@ -4,6 +4,7 @@ src/tb/globals.vhd
 
 vcom -93 -quiet -work  sim/mem ^
 ../../rtl/SyncFifo.vhd ^
+../../rtl/SyncFifoFallThrough.vhd ^
 ../../rtl/SyncRam.vhd
 
 vcom -quiet -work  sim/rs232 ^
@@ -30,6 +31,7 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/gpu_fillVram.vhd ^
 ../../rtl/gpu_cpu2vram.vhd ^
 ../../rtl/gpu_vram2vram.vhd ^
+../../rtl/gpu_vram2cpu.vhd ^
 ../../rtl/gpu_line.vhd ^
 ../../rtl/gpu_rect.vhd ^
 ../../rtl/gpu_poly.vhd ^

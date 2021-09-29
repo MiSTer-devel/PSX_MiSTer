@@ -31,7 +31,7 @@ entity gpu is
       DMA_GPU_writeEna     : in  std_logic;
       DMA_GPU_readEna      : in  std_logic;
       DMA_GPU_write        : in  std_logic_vector(31 downto 0);
-      DMA_GPU_read         : out std_logic_vector(31 downto 0) := (others => '0');
+      DMA_GPU_read         : out std_logic_vector(31 downto 0);
       
       irq_VBLANK           : out std_logic := '0';
                      
@@ -176,6 +176,18 @@ architecture arch of gpu is
    signal vram2vram_reqVRAMSize     : unsigned(10 downto 0);
    signal vram2vram_vramLineEna     : std_logic;
    signal vram2vram_vramLineAddr    : unsigned(9 downto 0);
+   
+   signal vram2cpu_requestFifo      : std_logic; 
+   signal vram2cpu_done             : std_logic; 
+   signal vram2cpu_reqVRAMEnable    : std_logic;
+   signal vram2cpu_reqVRAMXPos      : unsigned(9 downto 0);
+   signal vram2cpu_reqVRAMYPos      : unsigned(8 downto 0);
+   signal vram2cpu_reqVRAMSize      : unsigned(10 downto 0);
+   signal vram2cpu_vramLineEna      : std_logic;
+   signal vram2cpu_vramLineAddr     : unsigned(9 downto 0);
+   signal vram2cpu_Fifo_Dout        : std_logic_vector(31 downto 0);
+   signal vram2cpu_Fifo_Rd          : std_logic;
+   signal vram2cpu_Fifo_Empty       : std_logic;
    
    signal line_requestFifo          : std_logic; 
    signal line_done                 : std_logic;
@@ -414,7 +426,12 @@ begin
             -- bus read
             if (bus_read = '1') then
                if (bus_addr(3 downto 2) = "00") then
-                  bus_dataRead <= GPUREAD;
+                  if (vram2cpu_Fifo_Empty = '0') then
+                     bus_dataRead <= vram2cpu_Fifo_Dout;
+                     GPUREAD      <= vram2cpu_Fifo_Dout;
+                  else
+                     bus_dataRead <= GPUREAD;
+                  end if;
                elsif (bus_addr(3 downto 2) = "01") then
                   bus_dataRead <= GPUSTAT;
                else
@@ -742,7 +759,6 @@ begin
                GPUSTAT_DrawPixelsMask <= '0';
                GPUSTAT_TextureDisable <= '0';
                GPUSTAT_ReadyRecCmd    <= '1';
-               GPUSTAT_ReadySendVRAM  <= '0';
                GPUSTAT_ReadyRecDMA    <= '1';
             end if;
             
@@ -751,8 +767,8 @@ begin
       end if;
    end process; 
    
-   proc_done        <= vramFill_done        or cpu2vram_done        or vram2vram_done        or line_done        or rect_done        or poly_done       ;
-   proc_requestFifo <= vramFill_requestFifo or cpu2vram_requestFifo or vram2vram_requestFifo or line_requestFifo or rect_requestFifo or poly_requestFifo;
+   proc_done        <= vramFill_done        or cpu2vram_done        or vram2vram_done        or vram2cpu_done        or line_done        or rect_done        or poly_done       ;
+   proc_requestFifo <= vramFill_requestFifo or cpu2vram_requestFifo or vram2vram_requestFifo or vram2cpu_requestFifo or line_requestFifo or rect_requestFifo or poly_requestFifo;
    
    pixelStall <= fifoOut_NearFull;
    
@@ -831,6 +847,43 @@ begin
       pixelColor           => vram2vram_pixelColor,
       pixelAddr            => vram2vram_pixelAddr, 
       pixelWrite           => vram2vram_pixelWrite
+   );
+   
+   vram2cpu_Fifo_Rd <= '1' when (vram2cpu_Fifo_Empty = '0' and clk2xIndex = '0' and DMA_GPU_readEna = '1') else
+                       '1' when (vram2cpu_Fifo_Empty = '0' and clk2xIndex = '0' and bus_read = '1' and bus_addr(3 downto 2) = "00") else
+                       '0';
+   
+   DMA_GPU_read <= vram2cpu_Fifo_Dout when (vram2cpu_Fifo_Empty = '0') else (others => '1');
+   
+   GPUSTAT_ReadySendVRAM <= vram2cpu_Fifo_Empty;
+   
+   igpu_vram2cpu : entity work.gpu_vram2cpu
+   port map
+   (
+      clk2x                => clk2x,     
+      ce                   => ce,        
+      reset                => softreset,   
+
+      proc_idle            => proc_idle,
+      fifo_Valid           => fifoIn_Valid, 
+      fifo_data            => fifoIn_Dout,
+      requestFifo          => vram2cpu_requestFifo,
+      done                 => vram2cpu_done,
+      
+      requestVRAMEnable    => vram2cpu_reqVRAMEnable,
+      requestVRAMXPos      => vram2cpu_reqVRAMXPos,  
+      requestVRAMYPos      => vram2cpu_reqVRAMYPos,  
+      requestVRAMSize      => vram2cpu_reqVRAMSize,  
+      requestVRAMIdle      => reqVRAMIdle,
+      requestVRAMDone      => reqVRAMDone,
+      
+      vramLineEna          => vram2cpu_vramLineEna, 
+      vramLineAddr         => vram2cpu_vramLineAddr,
+      vramLineData         => vramLineData,
+      
+      Fifo_Dout            => vram2cpu_Fifo_Dout, 
+      Fifo_Rd              => vram2cpu_Fifo_Rd,   
+      Fifo_Empty           => vram2cpu_Fifo_Empty
    );
    
    igpu_line : entity work.gpu_line
@@ -1187,12 +1240,13 @@ begin
    
    reqVRAMIdle <= '1' when (vramState = IDLE and (vram_WE = '0' or vram_BUSY = '0')) else '0';
    
-   reqVRAMEnable <= vram2vram_reqVRAMEnable or line_reqVRAMEnable or rect_reqVRAMEnable or poly_reqVRAMEnable or pipeline_reqVRAMEnable;
-   reqVRAMXPos   <= vram2vram_reqVRAMXPos   or line_reqVRAMXPos   or rect_reqVRAMXPos   or poly_reqVRAMXPos   or pipeline_reqVRAMXPos  ;  
-   reqVRAMYPos   <= vram2vram_reqVRAMYPos   or line_reqVRAMYPos   or rect_reqVRAMYPos   or poly_reqVRAMYPos   or pipeline_reqVRAMYPos  ;  
-   reqVRAMSize   <= vram2vram_reqVRAMSize   or line_reqVRAMSize   or rect_reqVRAMSize   or poly_reqVRAMSize   or pipeline_reqVRAMSize  ;  
+   reqVRAMEnable <= vram2vram_reqVRAMEnable or vram2cpu_reqVRAMEnable or line_reqVRAMEnable or rect_reqVRAMEnable or poly_reqVRAMEnable or pipeline_reqVRAMEnable;
+   reqVRAMXPos   <= vram2vram_reqVRAMXPos   or vram2cpu_reqVRAMXPos   or line_reqVRAMXPos   or rect_reqVRAMXPos   or poly_reqVRAMXPos   or pipeline_reqVRAMXPos  ;  
+   reqVRAMYPos   <= vram2vram_reqVRAMYPos   or vram2cpu_reqVRAMYPos   or line_reqVRAMYPos   or rect_reqVRAMYPos   or poly_reqVRAMYPos   or pipeline_reqVRAMYPos  ;  
+   reqVRAMSize   <= vram2vram_reqVRAMSize   or vram2cpu_reqVRAMSize   or line_reqVRAMSize   or rect_reqVRAMSize   or poly_reqVRAMSize   or pipeline_reqVRAMSize  ;  
    
    vramLineAddr  <= vram2vram_vramLineAddr when vram2vram_vramLineEna else 
+                    vram2cpu_vramLineAddr when vram2cpu_vramLineEna else 
                     line_vramLineAddr  when line_vramLineEna else
                     rect_vramLineAddr  when rect_vramLineEna else
                     poly_vramLineAddr  when poly_vramLineEna else

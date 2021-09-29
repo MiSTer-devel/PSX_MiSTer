@@ -1,4 +1,5 @@
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) SyncFifo.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) SyncFifoFallThrough.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) SyncRam.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) SyncRamDual.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) SyncRamDualNotPow2.vhd ]
