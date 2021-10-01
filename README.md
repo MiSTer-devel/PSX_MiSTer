@@ -22,6 +22,7 @@ You can choose to view
 
 Work in progress, don't report any bugs!
 
+- Amidogs CPU test fully passed
 - All CPU testroms in .exe format working: https://github.com/RobertPeip/PSX/tree/master/CPUTest/CPU
 - HelloWorld in 16+24 bit working
 - ImageLoad/LZ77/Huffman in 16+24 bit working
@@ -38,8 +39,7 @@ Work in progress, don't report any bugs!
 
 --
 
-CPU    : 65%
-- dataread forward preventing missing
+CPU    : 90%
 - exception for read in invalid instruction and data area missing
 - scratchpad clear on reset?
 

@@ -207,11 +207,9 @@ architecture arch of cpu is
    signal executeException             : std_logic := '0';
    signal resultWriteEnable            : std_logic := '0';
    signal executeGTEReadEnable         : std_logic := '0';
-   signal executelastWasLoad           : std_logic := '0';
    signal executeBranchdelaySlot       : std_logic := '0';
    signal executeBranchTaken           : std_logic := '0';
    signal resultTarget                 : unsigned(4 downto 0) := (others => '0');
-   signal executelastLoadTarget        : unsigned(4 downto 0) := (others => '0');
    signal resultData                   : unsigned(31 downto 0) := (others => '0');
    signal executeMemWriteEnable        : std_logic;
    signal executeMemWriteData          : unsigned(31 downto 0) := (others => '0');
@@ -242,13 +240,12 @@ architecture arch of cpu is
    signal EXEMemWriteEnable            : std_logic := '0';
    signal EXEMemWriteData              : unsigned(31 downto 0) := (others => '0');
    signal EXEMemWriteMask              : std_logic_vector(3 downto 0) := (others => '0');
-   signal EXEMemWriteAddr              : unsigned(31 downto 0) := (others => '0');
+   signal EXEMemAddr                   : unsigned(31 downto 0) := (others => '0');
    signal EXEMemWriteException         : std_logic := '0';
    signal EXECOP0WriteEnable           : std_logic := '0';
    signal EXECOP0WriteDestination      : unsigned(4 downto 0) := (others => '0');
    signal EXECOP0WriteValue            : unsigned(31 downto 0) := (others => '0');
    signal EXELoadType                  : CPU_LOADTYPE;
-   signal EXEReadAddress               : unsigned(31 downto 0) := (others => '0');
    signal EXEReadEnable                : std_logic := '0';
    signal EXEReadException             : std_logic := '0';
    signal EXEGTeReadEnable             : std_logic := '0';
@@ -291,7 +288,7 @@ architecture arch of cpu is
    -- scratchpad
    signal scratchpad_address_a         : std_logic_vector(7 downto 0);
    signal scratchpad_data_a            : std_logic_vector(31 downto 0);
-   signal scratchpad_wren_a            : std_logic_vector(0 to 3);
+   signal scratchpad_wren_a            : std_logic_vector(3 downto 0);
    signal scratchpad_address_b         : std_logic_vector(7 downto 0);
    signal scratchpad_q_b               : std_logic_vector(31 downto 0);
    signal scratchpad_dataread          : unsigned(31 downto 0);
@@ -302,9 +299,6 @@ architecture arch of cpu is
    signal writebackData                : unsigned(31 downto 0) := (others => '0');
    signal writebackWriteEnable         : std_logic := '0';
    signal writebackGTEReadEnable       : std_logic := '0';
-   signal writebackCOP0WriteEnable     : std_logic := '0';
-   signal writebackCOP0WriteDestination: unsigned(4 downto 0) := (others => '0');
-   signal writebackCOP0WriteValue      : unsigned(31 downto 0) := (others => '0');
    signal writebackMemOPisRead         : std_logic := '0';
    signal writebackLoadType            : CPU_LOADTYPE;
    signal writebackReadAddress         : unsigned(31 downto 0) := (others => '0');
@@ -776,8 +770,6 @@ begin
       elsif (decodeSource2 > 0 and writebackTarget = decodeSource2 and writebackWriteEnable = '1' and blockLoadforward = '0') then value2 <= writebackData;
       elsif (decodeSource2 > 0 and writeDoneTarget = decodeSource2 and writeDoneWriteEnable = '1')                            then value2 <= writeDoneData;
       end if;
-    
-      -- todo blockLoadforward
       
    end process;
 
@@ -797,14 +789,14 @@ begin
       EXEresultWriteEnable    <= '0';          
             
       calcMemAddr             := value1 + unsigned(resize(signed(decodeImmData), 32));
-      EXEMemWriteAddr         <= calcMemAddr(31 downto 2) & "00";
+      EXEMemAddr              <= calcMemAddr;
+      
       EXEMemWriteEnable       <= '0';
       EXEMemWriteData         <= value2;
       EXEMemWriteMask         <= "1111";
       EXEMemWriteException    <= '0';
       
       EXELoadType             <= LOADTYPE_DWORD;
-      EXEReadAddress          <= calcMemAddr;
       EXEReadEnable           <= '0';
       EXEReadException        <= '0';
       EXEGTeReadEnable        <= '0';
@@ -1377,8 +1369,6 @@ begin
             blockLoadforward              <= '0';
                   
             executeException              <= '0';
-            executelastWasLoad            <= '0';
-            executelastLoadTarget         <= (others => '0');
             resultWriteEnable             <= '0';
             resultData                    <= (others => '0');
             resultTarget                  <= (others => '0');
@@ -1413,15 +1403,12 @@ begin
                   executeMemWriteEnable         <= '0';
                   executeGTEReadEnable          <= '0';
                   executeCOP0WriteEnable        <= '0';
-                  executelastWasLoad            <= '0';
                   
                   executeStalltype              <= EXESTALLTYPE_NONE;
                         
                else     
                      
                   executeException              <= decodeException;
-                  executelastWasLoad            <= executeReadEnable;
-                  executelastLoadTarget         <= resultTarget;
                   pcOld2                        <= pcOld1;
                   opcode2                       <= opcode1;
                         
@@ -1438,11 +1425,11 @@ begin
       
                   executeMemWriteData           <= EXEMemWriteData;             
                   executeMemWriteMask           <= EXEMemWriteMask;             
-                  executeMemWriteAddr           <= EXEMemWriteAddr;             
+                  executeMemWriteAddr           <= EXEMemAddr(31 downto 2) & "00";             
                   executeMemWriteEnable         <= EXEMemWriteEnable;  
 
                   executeLoadType               <= EXELoadType;   
-                  executeReadAddress            <= EXEReadAddress;
+                  executeReadAddress            <= EXEMemAddr;
                   executeReadEnable             <= EXEReadEnable; 
                   
                   executeGTEReadEnable          <= EXEGTeReadEnable;
@@ -1458,7 +1445,12 @@ begin
 
                   execute_gte_writeAddr         <= EXEgte_writeAddr;
                   execute_gte_writeData         <= EXEgte_writeData;
-                  execute_gte_writeEna          <= EXEgte_writeEna;                   
+                  execute_gte_writeEna          <= EXEgte_writeEna;   
+
+                  blockLoadforward <= '0';
+                  if (executeReadEnable = '1' and EXEReadEnable = '1' and resultTarget = EXEresultTarget) then
+                     blockLoadforward <= '1';
+                  end if;                 
                   
                   -- new mul/div
                   if (EXEcalcMULT = '1') then
@@ -1696,15 +1688,22 @@ begin
             pcOld3                           <= (others => '0');
             opcode3                          <= (others => '0');
                               
+            cop0_SR                          <= (others => '0');
+            cop0_BPC                         <= (others => '0');
+            cop0_BDA                         <= (others => '0');
+            cop0_JUMPDEST                    <= (others => '0');
+            cop0_DCIC                        <= (others => '0');
+            cop0_BDAM                        <= (others => '0');
+            cop0_BPCM                        <= (others => '0');
+            cop0_CAUSE                       <= (others => '0');
+            cop0_EPC                         <= (others => '0');
+            cop0_PRID                        <= x"00000002";
+                              
             CACHECONTROL                     <= (others => '0');
                         
             writebackTarget                  <= (others => '0');
             writebackData                    <= (others => '0');
             writebackWriteEnable             <= '0';
-                     
-            writebackCOP0WriteEnable         <= '0';
-            writebackCOP0WriteDestination    <= (others => '0');
-            writebackCOP0WriteValue          <= (others => '0');
          
             writebackInvalidateCacheEna      <= '0';
             
@@ -1727,11 +1726,7 @@ begin
             
                if (exception(4 downto 3) > 0) then
                
-                  writebackException            <= '1';
-                  
-                  writebackMemOPisRead          <= '0';
-                  writebackCOP0WriteEnable      <= '0';
-                  writebackWriteEnable          <= '0';
+                  writebackException            <= '1'; 
                   
                else
                
@@ -1744,19 +1739,39 @@ begin
                            
                   CACHECONTROL                  <= WBCACHECONTROL;
                   
-                  writebackCOP0WriteEnable      <= executeCOP0WriteEnable;
-                  writebackCOP0WriteDestination <= executeCOP0WriteDestination;
-                  writebackCOP0WriteValue       <= executeCOP0WriteValue;
-                  
                   writebackMemOPisRead          <= executeReadEnable;
                   
                   writebackGTEReadEnable       <= executeGTEReadEnable;
                   WBgte_writeAddr              <= '0' & executeGTETarget;
                   
+                  if (executeCOP0WriteEnable = '1') then
+                     case (to_integer(executeCOP0WriteDestination)) is
+                        when 16#3# => cop0_BPC   <= executeCOP0WriteValue;
+                        when 16#5# => cop0_BDA   <= executeCOP0WriteValue;
+                        when 16#7# => cop0_DCIC  <= executeCOP0WriteValue and x"FF80F03F";
+                        when 16#9# => cop0_BDAM  <= executeCOP0WriteValue;
+                        when 16#B# => cop0_BPCM  <= executeCOP0WriteValue;
+                        when 16#C# => cop0_SR    <= executeCOP0WriteValue and x"F27FFF3F";
+                        when 16#D# => cop0_CAUSE <= executeCOP0WriteValue and x"00000300";
+                        when others => null;
+                     end case;
+                  end if;
+                  
+                  if (executeException = '1') then
+                     cop0_SR        <= exception_SR;
+                     cop0_CAUSE     <= exception_CAUSE;
+                     cop0_EPC       <= exception_EPC;  
+                     cop0_JUMPDEST  <= exception_JMP;  
+                  end if;
+                  
                   writebackWriteEnable <= '0';
                   if (executeReadEnable = '1') then
                      if ((executeReadAddress(31 downto 29) = 0 or executeReadAddress(31 downto 29) = 4) and executeReadAddress(28 downto 10) = 16#7E000#) then -- scratchpad read
                         writebackWriteEnable <= '1';
+                        oldData := resultData;
+                        if (writebackTarget = resultTarget and writebackWriteEnable = '1') then
+                           oldData := writebackData;
+                        end if;
 
                         case (executeLoadType) is
                            when LOADTYPE_SBYTE => 
@@ -1777,9 +1792,9 @@ begin
                                  
                            when LOADTYPE_LEFT =>
                               case (to_integer(executeReadAddress(1 downto 0))) is
-                                 when 0 => writebackData <= scratchpad_dataread( 7 downto 0) & resultData(23 downto 0);
-                                 when 1 => writebackData <= scratchpad_dataread(15 downto 0) & resultData(15 downto 0);
-                                 when 2 => writebackData <= scratchpad_dataread(23 downto 0) & resultData( 7 downto 0); 
+                                 when 0 => writebackData <= scratchpad_dataread( 7 downto 0) & oldData(23 downto 0);
+                                 when 1 => writebackData <= scratchpad_dataread(15 downto 0) & oldData(15 downto 0);
+                                 when 2 => writebackData <= scratchpad_dataread(23 downto 0) & oldData( 7 downto 0); 
                                  when 3 => writebackData <= scratchpad_dataread;
                                  when others => null;
                               end case;
@@ -1803,11 +1818,11 @@ begin
                               end if;
                            
                            when LOADTYPE_RIGHT =>
-                              case (to_integer(writebackReadAddress(1 downto 0))) is
+                              case (to_integer(executeReadAddress(1 downto 0))) is
                                  when 0 => writebackData <= scratchpad_dataread;
-                                 when 1 => writebackData <= resultData(31 downto 24) & scratchpad_dataread(31 downto  8);
-                                 when 2 => writebackData <= resultData(31 downto 16) & scratchpad_dataread(31 downto 16);
-                                 when 3 => writebackData <= resultData(31 downto  8) & scratchpad_dataread(31 downto 24);
+                                 when 1 => writebackData <= oldData(31 downto 24) & scratchpad_dataread(31 downto  8);
+                                 when 2 => writebackData <= oldData(31 downto 16) & scratchpad_dataread(31 downto 16);
+                                 when 3 => writebackData <= oldData(31 downto  8) & scratchpad_dataread(31 downto 24);
                                  when others => null;
                               end case;
                         end case;
@@ -1878,6 +1893,8 @@ begin
                end if;   
             end if;
    
+            cop0_CAUSE(10) <= irqRequest;
+   
          end if;
       end if;
    end process;
@@ -1894,20 +1911,6 @@ begin
          cpu_done <= '0';
       
          if (reset = '1') then
-         
-            cop0_SR              <= (others => '0');
-            cop0_BPC             <= (others => '0');
-            cop0_BDA             <= (others => '0');
-            cop0_JUMPDEST        <= (others => '0');
-            cop0_DCIC            <= (others => '0');
-            cop0_BADVADDR        <= (others => '0');
-            cop0_BDAM            <= (others => '0');
-            cop0_BPCM            <= (others => '0');
-            cop0_CAUSE           <= (others => '0');
-            cop0_EPC             <= (others => '0');
-            cop0_PRID            <= x"00000002";
-            
-            exception            <= (others => '0');
          
             stall5               <= '0';
             
@@ -1935,34 +1938,50 @@ begin
                writeDoneData        <= writebackData;       
                writeDoneWriteEnable <= writebackWriteEnable;
                
-            
                if (writebackWriteEnable = '1' and writebackException = '0') then 
                   if (writebackTarget > 0) then
                      regs(to_integer(writebackTarget)) <= writebackData;
                   end if;
                end if;
                
-               if (writebackCOP0WriteEnable = '1') then
-                  case (to_integer(writebackCOP0WriteDestination)) is
-                     when 16#3# => cop0_BPC   <= writebackCOP0WriteValue;
-                     when 16#5# => cop0_BDA   <= writebackCOP0WriteValue;
-                     when 16#7# => cop0_DCIC  <= writebackCOP0WriteValue and x"FF80F03F";
-                     when 16#9# => cop0_BDAM  <= writebackCOP0WriteValue;
-                     when 16#B# => cop0_BPCM  <= writebackCOP0WriteValue;
-                     when 16#C# => cop0_SR    <= writebackCOP0WriteValue and x"F27FFF3F";
-                     when 16#D# => cop0_CAUSE <= writebackCOP0WriteValue and x"00000300";
-                     when others => null;
-                  end case;
-               end if;
+               -- export
+               debugCnt          <= debugCnt+ 1;
+               cpu_done          <= '1';
+               cpu_export.pc     <= pcOld4;
+               cpu_export.opcode <= opcode4;
+               cpu_export.cause  <= cop0_CAUSE;
+               for i in 0 to 31 loop
+                  cpu_export.regs(i) <= regs(i);
+               end loop;
                
-               -- exception handling
-               if (writebackException = '1') then
-                  cop0_SR        <= exception_SR;
-                  cop0_CAUSE     <= exception_CAUSE;
-                  cop0_EPC       <= exception_EPC;  
-                  cop0_JUMPDEST  <= exception_JMP;  
-               end if;
+               -- todo: REMOVE!
+               --if (debugCnt(31) = '1' and writebackTarget = 0) then
+               --   cop0_CAUSE(9) <= '0';
+               --end if;
                
+            end if;
+   
+         end if;
+      end if;
+   end process;
+   
+--##############################################################
+--############################### exception handling
+--##############################################################
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         if (reset = '1') then
+         
+            exception            <= (others => '0');
+         
+            cop0_BADVADDR        <= (others => '0');
+
+         elsif (ce = '1') then
+            
+            if (stall = 0) then
+         
                exception <= exceptionNew;
                if (exceptionNew1 = '1') then    -- PC out of bounds
                   exceptionCode     <= x"6";
@@ -1983,15 +2002,15 @@ begin
                      exception_PC      <= PCbranch;
                      exception_branch  <= '0';
                      exception_brslot  <= '0';
-                     cop0_BADVADDR     <= PCbranch;
+                     if (exceptionNew3 = '1') then
+                        cop0_BADVADDR     <= PCbranch;
+                     end if;
                   else
                      exception_PC      <= PCold1;
                      exception_branch  <= executeBranchTaken;
                      exception_brslot  <= executeBranchdelaySlot;
-                     if (EXEMemWriteException = '1') then
-                        cop0_BADVADDR  <= EXEMemWriteAddr;
-                     elsif (EXEReadException = '1') then
-                        cop0_BADVADDR  <= EXEReadAddress;
+                     if (EXEMemWriteException = '1' or EXEReadException = '1') then
+                        cop0_BADVADDR  <= EXEMemAddr;
                      end if;
                   end if;
                end if;
@@ -2012,30 +2031,11 @@ begin
                   end if;
                end if;
                
-               -- export
-               debugCnt          <= debugCnt+ 1;
-               cpu_done          <= '1';
-               cpu_export.pc     <= pcOld4;
-               cpu_export.opcode <= opcode4;
-               cpu_export.cause  <= cop0_CAUSE;
-               for i in 0 to 31 loop
-                  cpu_export.regs(i) <= regs(i);
-               end loop;
-               
-               -- todo: REMOVE!
-               if (debugCnt(31) = '1' and writebackTarget = 0) then
-                  cop0_CAUSE(9) <= '0';
-               end if;
-               
             end if;
-            
-            cop0_CAUSE(10) <= irqRequest;
    
          end if;
       end if;
    end process;
-   
-
    
    idivider : entity work.divider
    port map

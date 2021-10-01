@@ -569,7 +569,7 @@ begin
    imemorymux : entity work.memorymux
    generic map
    (
-      NOMEMWAIT => '0' --is_simu
+      NOMEMWAIT => is_simu
    )
    port map
    (
