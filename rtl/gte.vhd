@@ -116,7 +116,8 @@ architecture arch of gte is
    type tstate is
    (
       IDLE,
-      CALC_NCLIP
+      CALC_NCLIP,
+      CALC_SQR
    );
    signal state : tstate := IDLE;
    
@@ -135,6 +136,36 @@ architecture arch of gte is
    signal mac0Last         : signed(31 downto 0);
    signal flagMac0UF       : std_logic;
    signal flagMac0OF       : std_logic;
+   
+   signal MAC1req          : tMAC123req;
+   signal mac1_result      : signed(31 downto 0);
+   signal mac1_writeback   : std_logic;
+   signal ir1_result       : signed(15 downto 0);
+   signal ir1_writeback    : std_logic;
+   signal mac1Last         : signed(31 downto 0);
+   signal flagMac1UF       : std_logic;
+   signal flagMac1OF       : std_logic;
+   signal flagIR1          : std_logic;
+   
+   signal MAC2req          : tMAC123req;
+   signal mac2_result      : signed(31 downto 0);
+   signal mac2_writeback   : std_logic;
+   signal ir2_result       : signed(15 downto 0);
+   signal ir2_writeback    : std_logic;
+   signal mac2Last         : signed(31 downto 0);
+   signal flagMac2UF       : std_logic;
+   signal flagMac2OF       : std_logic;
+   signal flagIR2          : std_logic;
+   
+   signal MAC3req          : tMAC123req;
+   signal mac3_result      : signed(31 downto 0);
+   signal mac3_writeback   : std_logic;
+   signal ir3_result       : signed(15 downto 0);
+   signal ir3_writeback    : std_logic;
+   signal mac3Last         : signed(31 downto 0);
+   signal flagMac3UF       : std_logic;
+   signal flagMac3OF       : std_logic;
+   signal flagIR3          : std_logic;
   
 begin 
 
@@ -235,6 +266,9 @@ begin
          elsif (ce = '1') then
          
             MAC0req.trigger <= '0';
+            MAC1req.trigger <= '0';
+            MAC2req.trigger <= '0';
+            MAC3req.trigger <= '0';
          
             case (to_integer(gte_readAddr)) is
                when 00 => gte_readData <= unsigned(REG_V0Y & REG_V0X);
@@ -422,6 +456,8 @@ begin
                      case (to_integer(gte_cmdData(5 downto 0))) is
                         
                         when 16#06# => state <= CALC_NCLIP; 
+                        
+                        when 16#28# => state <= CALC_SQR; 
                      
                         when others => gte_busy <= '0';
                      end case;
@@ -440,18 +476,44 @@ begin
                      when others => null;
                   end case;
                
-            
+               when CALC_SQR =>
+                  case (calcStep) is
+                     --                     mul1                       mul2               add     sub  swap    svSh  useIR    IRs    IRsF        satIR     satIRF  uRes trigger
+                     when 0 => MAC1req <= (resize(REG_IR1, 32), resize(REG_IR1, 32), x"00000000", '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '0',  '1'); 
+                               MAC2req <= (resize(REG_IR2, 32), resize(REG_IR2, 32), x"00000000", '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '0',  '1'); 
+                               MAC3req <= (resize(REG_IR3, 32), resize(REG_IR3, 32), x"00000000", '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '0',  '1'); 
+                     when 2 => state <= IDLE; gte_busy <= '0';
+                     when others => null;
+                  end case;
             
             end case;
             
             -- writebacks
-            if (mac0_writeback = '1') then
-               REG_MAC0 <= mac0_result;
-            end if;
+            if (mac0_writeback = '1') then REG_MAC0 <= mac0_result; end if;
+            if (mac1_writeback = '1') then REG_MAC1 <= mac1_result; end if;
+            if (mac2_writeback = '1') then REG_MAC2 <= mac2_result; end if;
+            if (mac3_writeback = '1') then REG_MAC3 <= mac3_result; end if;            
+            
+            if (ir1_writeback = '1') then REG_IR1 <= ir1_result; end if;
+            if (ir2_writeback = '1') then REG_IR2 <= ir2_result; end if;
+            if (ir3_writeback = '1') then REG_IR3 <= ir3_result; end if;
             
             -- flags
             if (flagMac0UF = '1') then REG_FLAG(15) <= '1'; REG_FLAG(31) <= '1'; end if;
-            if (flagMac0OF = '1') then REG_FLAG(16) <= '1'; REG_FLAG(31) <= '1'; end if;
+            if (flagMac0OF = '1') then REG_FLAG(16) <= '1'; REG_FLAG(31) <= '1'; end if;            
+            
+            if (flagMac1UF = '1') then REG_FLAG(27) <= '1'; REG_FLAG(31) <= '1'; end if;
+            if (flagMac1OF = '1') then REG_FLAG(30) <= '1'; REG_FLAG(31) <= '1'; end if;
+            
+            if (flagMac2UF = '1') then REG_FLAG(26) <= '1'; REG_FLAG(31) <= '1'; end if;
+            if (flagMac2OF = '1') then REG_FLAG(29) <= '1'; REG_FLAG(31) <= '1'; end if;
+            
+            if (flagMac3UF = '1') then REG_FLAG(25) <= '1'; REG_FLAG(31) <= '1'; end if;
+            if (flagMac3OF = '1') then REG_FLAG(28) <= '1'; REG_FLAG(31) <= '1'; end if;
+            
+            if (flagIR1 = '1') then REG_FLAG(24) <= '1'; REG_FLAG(31) <= '1'; end if;
+            if (flagIR2 = '1') then REG_FLAG(23) <= '1'; REG_FLAG(31) <= '1'; end if;
+            if (flagIR3 = '1') then REG_FLAG(22) <= '1'; end if;
          
          end if;
          
@@ -471,13 +533,52 @@ begin
       flagMac0OF     => flagMac0OF
    );
    
+   igte_mac1 : entity work.gte_mac123
+   port map
+   (
+      clk2x          => clk2x,         
+      MACreq         => MAC1req,       
+      mac_result     => mac1_result,   
+      mac_writeback  => mac1_writeback,
+      ir_result      => ir1_result,   
+      ir_writeback   => ir1_writeback,
+      macLast        => mac1Last,
+      flagMacUF      => flagMac1UF,
+      flagMacOF      => flagMac1OF,
+      flagIR         => flagIR1
+   );
    
+   igte_mac2 : entity work.gte_mac123
+   port map
+   (
+      clk2x          => clk2x,         
+      MACreq         => MAC2req,       
+      mac_result     => mac2_result,   
+      mac_writeback  => mac2_writeback,
+      ir_result      => ir2_result,   
+      ir_writeback   => ir2_writeback,
+      macLast        => mac2Last,
+      flagMacUF      => flagMac2UF,
+      flagMacOF      => flagMac2OF,
+      flagIR         => flagIR2
+   );
    
+   igte_mac3 : entity work.gte_mac123
+   port map
+   (
+      clk2x          => clk2x,         
+      MACreq         => MAC3req,       
+      mac_result     => mac3_result,   
+      mac_writeback  => mac3_writeback,
+      ir_result      => ir3_result,   
+      ir_writeback   => ir3_writeback,
+      macLast        => mac3Last,
+      flagMacUF      => flagMac3UF,
+      flagMacOF      => flagMac3OF,
+      flagIR         => flagIR3
+   );
    
-   
-   
-   
-   
+
    
    -- synthesis translate_off
    

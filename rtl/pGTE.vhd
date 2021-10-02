@@ -16,5 +16,21 @@ package pGTE is
       useResult   : std_logic; 
       trigger     : std_logic; 
    end record;
+   
+   type tMAC123req is record
+      mul1        : signed(31 downto 0);
+      mul2        : signed(31 downto 0);
+      add         : signed(31 downto 0);
+      sub         : std_logic;
+      swap        : std_logic;
+      saveShifted : std_logic;
+      useIR       : std_logic;
+      IRshift     : std_logic;
+      IRshiftFlag : std_logic;
+      satIR       : std_logic;
+      satIRFlag   : std_logic;
+      useResult   : std_logic; 
+      trigger     : std_logic; 
+   end record;
   
 end package;
