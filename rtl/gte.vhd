@@ -133,7 +133,8 @@ architecture arch of gte is
    signal mac0_result      : signed(31 downto 0);
    signal mac0_writeback   : std_logic;
    signal mac0Last         : signed(31 downto 0);
-   
+   signal flagMac0UF       : std_logic;
+   signal flagMac0OF       : std_logic;
   
 begin 
 
@@ -412,6 +413,7 @@ begin
                   calcStep <= 0;
                   if (gte_cmdEna = '1' and clk2xIndex = '0') then
                      gte_busy <= '1';
+                     REG_FLAG <= (others => '0');
                      cmdShift <= gte_cmdData(19);
                      cmdsatIR <= gte_cmdData(10);
                      cmdMM    <= gte_cmdData(18 downto 17);
@@ -434,7 +436,7 @@ begin
                      when 3 => MAC0req <= (REG_SX0, REG_SY2, x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
                      when 4 => MAC0req <= (REG_SX1, REG_SY0, x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
                      when 5 => MAC0req <= (REG_SX2, REG_SY1, x"00000000", '1', '0', '0', '0', '1', '1', '1'); 
-                     when 7 => state <= IDLE; gte_busy <= '0';
+                     when 8 => state <= IDLE; gte_busy <= '0';
                      when others => null;
                   end case;
                
@@ -447,7 +449,9 @@ begin
                REG_MAC0 <= mac0_result;
             end if;
             
-         
+            -- flags
+            if (flagMac0UF = '1') then REG_FLAG(15) <= '1'; REG_FLAG(31) <= '1'; end if;
+            if (flagMac0OF = '1') then REG_FLAG(16) <= '1'; REG_FLAG(31) <= '1'; end if;
          
          end if;
          
@@ -462,7 +466,9 @@ begin
       MAC0req        => MAC0req,       
       mac0_result    => mac0_result,   
       mac0_writeback => mac0_writeback,
-      mac0Last       => mac0Last
+      mac0Last       => mac0Last,
+      flagMac0UF     => flagMac0UF,
+      flagMac0OF     => flagMac0OF
    );
    
    
