@@ -709,6 +709,7 @@ begin
       gte_busy             => gte_busy,     
       gte_readAddr         => gte_readAddr, 
       gte_readData         => gte_readData, 
+      gte_readEna          => '0',
       gte_writeAddr        => gte_writeAddr,
       gte_writeData        => gte_writeData,
       gte_writeEna         => gte_writeEna, 

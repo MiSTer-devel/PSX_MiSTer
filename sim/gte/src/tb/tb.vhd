@@ -25,6 +25,7 @@ architecture arch of etb is
    signal gte_busy            : std_logic;
    signal gte_readAddr        : unsigned(5 downto 0) := (others => '0');
    signal gte_readData        : unsigned(31 downto 0);
+   signal gte_readEna         : std_logic;
    signal gte_writeAddr       : unsigned(5 downto 0);
    signal gte_writeData       : unsigned(31 downto 0);
    signal gte_writeEna        : std_logic; 
@@ -71,6 +72,7 @@ begin
       gte_busy             => gte_busy,     
       gte_readAddr         => gte_readAddr, 
       gte_readData         => gte_readData, 
+      gte_readEna          => gte_readEna, 
       gte_writeAddr        => gte_writeAddr,
       gte_writeData        => gte_writeData,
       gte_writeEna         => gte_writeEna, 
@@ -88,6 +90,7 @@ begin
       variable space       : character;
    begin
       
+      gte_readEna  <= '0';
       gte_writeEna <= '0';
       gte_cmdEna   <= '0';
       
@@ -108,10 +111,21 @@ begin
          if (para_type = x"01") then
             gte_cmdData <= unsigned(para_data);
             gte_cmdEna  <= '1';
-         elsif (para_type = x"02") then
+         elsif (para_type = x"04") then
             gte_writeAddr <= unsigned(para_addr(5 downto 0));
             gte_writeData <= unsigned(para_data);
             gte_writeEna  <= '1';
+         elsif (para_type = x"05") then
+            gte_readAddr <= unsigned(para_addr(5 downto 0));
+            gte_readEna  <= '1';
+            wait until rising_edge(clk1x);
+            gte_readEna  <= '0';
+            if (gte_readData /= unsigned(para_data)) then
+               report "wrong read value" severity warning;
+               wait until rising_edge(clk1x);
+               wait until rising_edge(clk1x);
+               report "stopping test" severity failure;
+            end if;
          end if;
          
          cmdCount <= cmdCount + 1;
@@ -119,6 +133,8 @@ begin
          
          gte_writeEna <= '0';
          gte_cmdEna   <= '0';
+         
+         wait until rising_edge(clk1x);
          
          while (gte_busy = '1') loop
             wait until rising_edge(clk1x);

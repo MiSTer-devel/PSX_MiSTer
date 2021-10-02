@@ -16,6 +16,7 @@ entity gte is
       gte_busy             : out std_logic;
       gte_readAddr         : in  unsigned(5 downto 0);
       gte_readData         : out unsigned(31 downto 0);
+      gte_readEna          : in  std_logic; -- used in testbench only!
       gte_writeAddr        : in  unsigned(5 downto 0);
       gte_writeData        : in  unsigned(31 downto 0);
       gte_writeEna         : in  std_logic; 
@@ -110,7 +111,6 @@ architecture arch of gte is
    signal REG_ZSF3  : signed(15 downto 0);
    signal REG_ZSF4  : signed(15 downto 0);
    signal REG_FLAG  : unsigned(31 downto 0);
-   
   
    -- calculation
    type tstate is
@@ -138,6 +138,7 @@ architecture arch of gte is
 begin 
 
    process (clk2x)
+      variable leadCountData : unsigned(31 downto 0);
    begin
       if rising_edge(clk2x) then
       
@@ -146,7 +147,7 @@ begin
             state    <= IDLE;
          
             gte_busy <= '0';
-         
+
             REG_V0X  <= (others => '0');
             REG_V0Y  <= (others => '0');
             REG_V0Z  <= (others => '0');
@@ -236,11 +237,11 @@ begin
          
             case (to_integer(gte_readAddr)) is
                when 00 => gte_readData <= unsigned(REG_V0Y & REG_V0X);
-               when 01 => gte_readData <= unsigned(x"0000" & REG_V0Z);
+               when 01 => gte_readData <= unsigned(resize(REG_V0Z, 32));
                when 02 => gte_readData <= unsigned(REG_V1Y & REG_V1X);
-               when 03 => gte_readData <= unsigned(x"0000" & REG_V1Z);
+               when 03 => gte_readData <= unsigned(resize(REG_V1Z, 32));
                when 04 => gte_readData <= unsigned(REG_V2Y & REG_V2X);
-               when 05 => gte_readData <= unsigned(x"0000" & REG_V2Z);
+               when 05 => gte_readData <= unsigned(resize(REG_V2Z, 32));
                when 06 => gte_readData <= REG_RGBC;
                when 07 => gte_readData <= x"0000" & REG_OTZ;
                when 08 => gte_readData <= unsigned(resize(REG_IR0, 32));
@@ -275,7 +276,7 @@ begin
                when 33 => gte_readData <= unsigned(REG_RT21 & REG_RT13);
                when 34 => gte_readData <= unsigned(REG_RT23 & REG_RT22);
                when 35 => gte_readData <= unsigned(REG_RT32 & REG_RT31);
-               when 36 => gte_readData <= unsigned(x"0000"  & REG_RT33);
+               when 36 => gte_readData <= unsigned(resize(REG_RT33, 32));
                when 37 => gte_readData <= REG_TR0;
                when 38 => gte_readData <= REG_TR1;
                when 39 => gte_readData <= REG_TR2;
@@ -283,7 +284,7 @@ begin
                when 41 => gte_readData <= unsigned(REG_LL21 & REG_LL13);
                when 42 => gte_readData <= unsigned(REG_LL23 & REG_LL22);
                when 43 => gte_readData <= unsigned(REG_LL32 & REG_LL31);
-               when 44 => gte_readData <= unsigned(x"0000"  & REG_LL33);
+               when 44 => gte_readData <= unsigned(resize(REG_LL33, 32));
                when 45 => gte_readData <= REG_BK0;
                when 46 => gte_readData <= REG_BK1;
                when 47 => gte_readData <= REG_BK2;
@@ -291,7 +292,7 @@ begin
                when 49 => gte_readData <= unsigned(REG_LC21 & REG_LC13);
                when 50 => gte_readData <= unsigned(REG_LC23 & REG_LC22);
                when 51 => gte_readData <= unsigned(REG_LC32 & REG_LC31);
-               when 52 => gte_readData <= unsigned(x"0000"  & REG_LC33);
+               when 52 => gte_readData <= unsigned(resize(REG_LC33, 32));
                when 53 => gte_readData <= REG_FC0;
                when 54 => gte_readData <= REG_FC1;
                when 55 => gte_readData <= REG_FC2;
@@ -325,7 +326,7 @@ begin
                   when 13 => REG_SX1  <= signed(gte_writeData(15 downto 0)); REG_SY1 <= signed(gte_writeData(31 downto 16));
                   when 14 => REG_SX2  <= signed(gte_writeData(15 downto 0)); REG_SY2 <= signed(gte_writeData(31 downto 16));
                   when 15 => 
-                     REG_SX2  <= signed(gte_writeData(15 downto 0)); REG_SY0 <= signed(gte_writeData(31 downto 16));
+                     REG_SX2  <= signed(gte_writeData(15 downto 0)); REG_SY2 <= signed(gte_writeData(31 downto 16));
                      REG_SX1  <= REG_SX2; REG_SY1 <= REG_SY2;
                      REG_SX0  <= REG_SX1; REG_SY0 <= REG_SY1;
                   when 16 => REG_SZ0  <= gte_writeData(15 downto 0);
@@ -348,28 +349,38 @@ begin
                   when 29 => -- read only
                   when 30 =>
                      REG_LZCS <= signed(gte_writeData);
-                     -- todo: trigger counting
+                     leadCountData := gte_writeData;
+                     if (gte_writeData(31) = '1') then
+                        leadCountData := not gte_writeData;
+                     end if;
+                     REG_LZCR <= signed(to_unsigned(32, 32));
+                     for i in 0 to 31 loop
+                        if (leadCountData(i) = '1') then
+                           REG_LZCR <= signed(to_unsigned(31 - i, 32));
+                        end if;
+                     end loop;
+                     
                   when 31 => -- read only
                   when 32 => REG_RT11 <= signed(gte_writeData(15 downto 0)); REG_RT12 <= signed(gte_writeData(31 downto 16));
-                  when 33 => REG_RT21 <= signed(gte_writeData(15 downto 0)); REG_RT13 <= signed(gte_writeData(31 downto 16));
-                  when 34 => REG_RT23 <= signed(gte_writeData(15 downto 0)); REG_RT22 <= signed(gte_writeData(31 downto 16));
-                  when 35 => REG_RT32 <= signed(gte_writeData(15 downto 0)); REG_RT31 <= signed(gte_writeData(31 downto 16));
+                  when 33 => REG_RT13 <= signed(gte_writeData(15 downto 0)); REG_RT21 <= signed(gte_writeData(31 downto 16));
+                  when 34 => REG_RT22 <= signed(gte_writeData(15 downto 0)); REG_RT23 <= signed(gte_writeData(31 downto 16));
+                  when 35 => REG_RT31 <= signed(gte_writeData(15 downto 0)); REG_RT32 <= signed(gte_writeData(31 downto 16));
                   when 36 => REG_RT33 <= signed(gte_writeData(15 downto 0));
                   when 37 => REG_TR0  <= gte_writeData;
                   when 38 => REG_TR1  <= gte_writeData;
                   when 39 => REG_TR2  <= gte_writeData;
                   when 40 => REG_LL11 <= signed(gte_writeData(15 downto 0)); REG_LL12 <= signed(gte_writeData(31 downto 16));
-                  when 41 => REG_LL21 <= signed(gte_writeData(15 downto 0)); REG_LL13 <= signed(gte_writeData(31 downto 16));
-                  when 42 => REG_LL23 <= signed(gte_writeData(15 downto 0)); REG_LL22 <= signed(gte_writeData(31 downto 16));
-                  when 43 => REG_LL32 <= signed(gte_writeData(15 downto 0)); REG_LL31 <= signed(gte_writeData(31 downto 16));
+                  when 41 => REG_LL13 <= signed(gte_writeData(15 downto 0)); REG_LL21 <= signed(gte_writeData(31 downto 16));
+                  when 42 => REG_LL22 <= signed(gte_writeData(15 downto 0)); REG_LL23 <= signed(gte_writeData(31 downto 16));
+                  when 43 => REG_LL31 <= signed(gte_writeData(15 downto 0)); REG_LL32 <= signed(gte_writeData(31 downto 16));
                   when 44 => REG_LL33 <= signed(gte_writeData(15 downto 0));
                   when 45 => REG_BK0  <= gte_writeData;
                   when 46 => REG_BK1  <= gte_writeData;
                   when 47 => REG_BK2  <= gte_writeData;
                   when 48 => REG_LC11 <= signed(gte_writeData(15 downto 0)); REG_LC12 <= signed(gte_writeData(31 downto 16));
-                  when 49 => REG_LC21 <= signed(gte_writeData(15 downto 0)); REG_LC13 <= signed(gte_writeData(31 downto 16));
-                  when 50 => REG_LC23 <= signed(gte_writeData(15 downto 0)); REG_LC22 <= signed(gte_writeData(31 downto 16));
-                  when 51 => REG_LC32 <= signed(gte_writeData(15 downto 0)); REG_LC31 <= signed(gte_writeData(31 downto 16));
+                  when 49 => REG_LC13 <= signed(gte_writeData(15 downto 0)); REG_LC21 <= signed(gte_writeData(31 downto 16));
+                  when 50 => REG_LC22 <= signed(gte_writeData(15 downto 0)); REG_LC23 <= signed(gte_writeData(31 downto 16));
+                  when 51 => REG_LC31 <= signed(gte_writeData(15 downto 0)); REG_LC32 <= signed(gte_writeData(31 downto 16));
                   when 52 => REG_LC33 <= signed(gte_writeData(15 downto 0));
                   when 53 => REG_FC0  <= gte_writeData;
                   when 54 => REG_FC1  <= gte_writeData;
@@ -474,6 +485,7 @@ begin
          variable regcheck       : integer range 0 to 3; 
          variable busy_1         : std_logic := '0'; 
          variable gte_writeEna_1 : std_logic := '0';
+         variable gte_readEna_1  : std_logic := '0';
          variable gte_cmdEna_1   : std_logic := '0';
          
          variable var_V0X   : signed(15 downto 0)   := (others => '0');
@@ -581,12 +593,11 @@ begin
 
             if (regcheck > 0) then
                if (var_V0X  /= REG_V0X or var_V0Y  /= REG_V0Y  ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("00 ")); write(line_out, to_hstring(std_logic_vector(REG_V0Y & REG_V0X)));        writeline(outfile, line_out); var_V0X  := REG_V0X ; var_V0Y  := REG_V0Y ; end if;
-               if (var_V0Z  /= REG_V0Z                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("01 ")); write(line_out, to_hstring(std_logic_vector(x"0000" & REG_V0Z)));        writeline(outfile, line_out); var_V0Z  := REG_V0Z ; end if;
+               if (var_V0Z  /= REG_V0Z                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("01 ")); write(line_out, to_hstring(std_logic_vector(resize(REG_V0Z, 32))));      writeline(outfile, line_out); var_V0Z  := REG_V0Z ; end if;
                if (var_V1X  /= REG_V1X or var_V1Y  /= REG_V1Y  ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("02 ")); write(line_out, to_hstring(std_logic_vector(REG_V1Y & REG_V1X)));        writeline(outfile, line_out); var_V1X  := REG_V1X ; var_V1Y  := REG_V1Y ; end if;
-               if (var_V1Z  /= REG_V1Z                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("03 ")); write(line_out, to_hstring(std_logic_vector(x"0000" & REG_V1Z)));        writeline(outfile, line_out); var_V1Z  := REG_V1Z ; end if;
-               if (var_V2X  /= REG_V2X                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("04 ")); write(line_out, to_hstring(std_logic_vector(REG_V2Y & REG_V2X)));        writeline(outfile, line_out); var_V2X  := REG_V2X ; var_V2Y  := REG_V2Y ; end if;
-               if (var_V2Y  /= REG_V2Y                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("04 ")); write(line_out, to_hstring(std_logic_vector(REG_V2Y & REG_V2X)));        writeline(outfile, line_out); var_V2Y  := REG_V2Y ; end if;
-               if (var_V2Z  /= REG_V2Z                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("05 ")); write(line_out, to_hstring(std_logic_vector(x"0000" & REG_V2Z)));        writeline(outfile, line_out); var_V2Z  := REG_V2Z ; end if;
+               if (var_V1Z  /= REG_V1Z                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("03 ")); write(line_out, to_hstring(std_logic_vector(resize(REG_V1Z, 32))));      writeline(outfile, line_out); var_V1Z  := REG_V1Z ; end if;
+               if (var_V2X  /= REG_V2X or var_V2Y  /= REG_V2Y  ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("04 ")); write(line_out, to_hstring(std_logic_vector(REG_V2Y & REG_V2X)));        writeline(outfile, line_out); var_V2X  := REG_V2X ; var_V2Y  := REG_V2Y ; end if;
+               if (var_V2Z  /= REG_V2Z                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("05 ")); write(line_out, to_hstring(std_logic_vector(resize(REG_V2Z, 32))));      writeline(outfile, line_out); var_V2Z  := REG_V2Z ; end if;
                if (var_RGBC /= REG_RGBC                        ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("06 ")); write(line_out, to_hstring(std_logic_vector(REG_RGBC)));                 writeline(outfile, line_out); var_RGBC := REG_RGBC; end if;
                if (var_OTZ  /= REG_OTZ                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("07 ")); write(line_out, to_hstring(std_logic_vector(x"0000" & REG_OTZ)));        writeline(outfile, line_out); var_OTZ  := REG_OTZ ; end if;
                if (var_IR0  /= REG_IR0                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("08 ")); write(line_out, to_hstring(std_logic_vector(resize(REG_IR0, 32))));      writeline(outfile, line_out); var_IR0  := REG_IR0 ; end if;
@@ -616,7 +627,7 @@ begin
                if (var_RT13 /= REG_RT13 or var_RT21 /= REG_RT21) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("33 ")); write(line_out, to_hstring(std_logic_vector(REG_RT21 & REG_RT13)));      writeline(outfile, line_out); var_RT13 := REG_RT13; var_RT21 := REG_RT21; end if;
                if (var_RT22 /= REG_RT22 or var_RT23 /= REG_RT23) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("34 ")); write(line_out, to_hstring(std_logic_vector(REG_RT23 & REG_RT22)));      writeline(outfile, line_out); var_RT22 := REG_RT22; var_RT23 := REG_RT23; end if;
                if (var_RT31 /= REG_RT31 or var_RT32 /= REG_RT32) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("35 ")); write(line_out, to_hstring(std_logic_vector(REG_RT32 & REG_RT31)));      writeline(outfile, line_out); var_RT31 := REG_RT31; var_RT32 := REG_RT32; end if;
-               if (var_RT33 /= REG_RT33                        ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("36 ")); write(line_out, to_hstring(std_logic_vector(x"0000"  & REG_RT33)));      writeline(outfile, line_out); var_RT33 := REG_RT33; end if;
+               if (var_RT33 /= REG_RT33                        ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("36 ")); write(line_out, to_hstring(std_logic_vector(resize(REG_RT33, 32))));     writeline(outfile, line_out); var_RT33 := REG_RT33; end if;
                if (var_TR0  /= REG_TR0                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("37 ")); write(line_out, to_hstring(std_logic_vector(REG_TR0)));                  writeline(outfile, line_out); var_TR0  := REG_TR0 ; end if;
                if (var_TR1  /= REG_TR1                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("38 ")); write(line_out, to_hstring(std_logic_vector(REG_TR1)));                  writeline(outfile, line_out); var_TR1  := REG_TR1 ; end if;
                if (var_TR2  /= REG_TR2                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("39 ")); write(line_out, to_hstring(std_logic_vector(REG_TR2)));                  writeline(outfile, line_out); var_TR2  := REG_TR2 ; end if;
@@ -624,7 +635,7 @@ begin
                if (var_LL13 /= REG_LL13 or var_LL21 /= REG_LL21) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("41 ")); write(line_out, to_hstring(std_logic_vector(REG_LL21 & REG_LL13)));      writeline(outfile, line_out); var_LL13 := REG_LL13; var_LL21 := REG_LL21; end if;
                if (var_LL22 /= REG_LL22 or var_LL23 /= REG_LL23) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("42 ")); write(line_out, to_hstring(std_logic_vector(REG_LL23 & REG_LL22)));      writeline(outfile, line_out); var_LL22 := REG_LL22; var_LL23 := REG_LL23; end if;
                if (var_LL31 /= REG_LL31 or var_LL32 /= REG_LL32) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("43 ")); write(line_out, to_hstring(std_logic_vector(REG_LL32 & REG_LL31)));      writeline(outfile, line_out); var_LL31 := REG_LL31; var_LL32 := REG_LL32; end if;
-               if (var_LL33 /= REG_LL33                        ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("44 ")); write(line_out, to_hstring(std_logic_vector(x"0000"  & REG_LL33)));      writeline(outfile, line_out); var_LL33 := REG_LL33; end if;
+               if (var_LL33 /= REG_LL33                        ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("44 ")); write(line_out, to_hstring(std_logic_vector(resize(REG_LL33, 32))));     writeline(outfile, line_out); var_LL33 := REG_LL33; end if;
                if (var_BK0  /= REG_BK0                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("45 ")); write(line_out, to_hstring(std_logic_vector(REG_BK0)));                  writeline(outfile, line_out); var_BK0  := REG_BK0 ; end if;
                if (var_BK1  /= REG_BK1                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("46 ")); write(line_out, to_hstring(std_logic_vector(REG_BK1)));                  writeline(outfile, line_out); var_BK1  := REG_BK1 ; end if;
                if (var_BK2  /= REG_BK2                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("47 ")); write(line_out, to_hstring(std_logic_vector(REG_BK2)));                  writeline(outfile, line_out); var_BK2  := REG_BK2 ; end if;
@@ -632,7 +643,7 @@ begin
                if (var_LC13 /= REG_LC13 or var_LC21 /= REG_LC21) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("49 ")); write(line_out, to_hstring(std_logic_vector(REG_LC21 & REG_LC13)));      writeline(outfile, line_out); var_LC13 := REG_LC13; var_LC21 := REG_LC21; end if;
                if (var_LC22 /= REG_LC22 or var_LC23 /= REG_LC23) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("50 ")); write(line_out, to_hstring(std_logic_vector(REG_LC23 & REG_LC22)));      writeline(outfile, line_out); var_LC22 := REG_LC22; var_LC23 := REG_LC23; end if;
                if (var_LC31 /= REG_LC31 or var_LC32 /= REG_LC32) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("51 ")); write(line_out, to_hstring(std_logic_vector(REG_LC32 & REG_LC31)));      writeline(outfile, line_out); var_LC31 := REG_LC31; var_LC32 := REG_LC32; end if;
-               if (var_LC33 /= REG_LC33                        ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("52 ")); write(line_out, to_hstring(std_logic_vector(x"0000"  & REG_LC33)));      writeline(outfile, line_out); var_LC33 := REG_LC33; end if;
+               if (var_LC33 /= REG_LC33                        ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("52 ")); write(line_out, to_hstring(std_logic_vector(resize(REG_LC33, 32))));     writeline(outfile, line_out); var_LC33 := REG_LC33; end if;
                if (var_FC0  /= REG_FC0                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("53 ")); write(line_out, to_hstring(std_logic_vector(REG_FC0)));                  writeline(outfile, line_out); var_FC0  := REG_FC0 ; end if;
                if (var_FC1  /= REG_FC1                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("54 ")); write(line_out, to_hstring(std_logic_vector(REG_FC1)));                  writeline(outfile, line_out); var_FC1  := REG_FC1 ; end if;
                if (var_FC2  /= REG_FC2                         ) then if (regcheck = 2) then write(line_out, string'("WRITE REG: ")); end if; if (regcheck = 3) then write(line_out, string'("COMMAND REG: ")); end if; write(line_out, string'("55 ")); write(line_out, to_hstring(std_logic_vector(REG_FC2)));                  writeline(outfile, line_out); var_FC2  := REG_FC2 ; end if;
@@ -652,8 +663,31 @@ begin
                writeline(outfile, line_out);
             end if;
             
+            if (gte_writeEna = '1' and clk2xIndex = '1') then
+               write(line_out, string'("REG IN: "));
+               if (gte_writeAddr < 10) then
+                  write(line_out, string'("0"));
+               end if;
+               write(line_out, to_integer(gte_writeAddr));
+               write(line_out, string'(" "));
+               write(line_out, to_hstring(gte_writeData));
+               writeline(outfile, line_out);
+            end if;
+            
+            if (gte_readEna_1 = '1') then
+               write(line_out, string'("REG READ: "));
+               if (gte_readAddr < 10) then
+                  write(line_out, string'("0"));
+               end if;
+               write(line_out, to_integer(gte_readAddr));
+               write(line_out, string'(" "));
+               write(line_out, to_hstring(gte_readData));
+               writeline(outfile, line_out);
+            end if;
+            
             busy_1 := gte_busy;
             gte_writeEna_1 := gte_writeEna and clk2xIndex;
+            gte_readEna_1  := gte_readEna and clk2xIndex;
             gte_cmdEna_1   := gte_cmdEna and clk2xIndex;
             
          end loop;
