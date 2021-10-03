@@ -31,6 +31,7 @@ entity cpu is
       mem_done              : in  std_logic;
       
       gte_busy              : in  std_logic;
+      gte_readEna           : out std_logic := '0';
       gte_readAddr          : out unsigned(5 downto 0);
       gte_readData          : in  unsigned(31 downto 0);
       gte_writeAddr         : out unsigned(5 downto 0);
@@ -224,10 +225,11 @@ architecture arch of cpu is
    signal executeGTETarget             : unsigned(4 downto 0) := (others => '0');
    signal hiloWait                     : integer range 0 to 38;
    signal executeStalltype             : CPU_EXESTALLTYPE;
-   signal execute_gte_readAddr         : unsigned(5 downto 0) := (others => '0');
    signal execute_gte_writeAddr        : unsigned(5 downto 0) := (others => '0');
    signal execute_gte_writeData        : unsigned(31 downto 0) := (others => '0');
    signal execute_gte_writeEna         : std_logic := '0'; 
+   signal execute_gte_cmdData          : unsigned(31 downto 0);
+   signal execute_gte_cmdEna           : std_logic := '0'; 
 
    --wires
    signal branch                       : std_logic := '0';
@@ -258,7 +260,9 @@ architecture arch of cpu is
    signal EXEstalltype                 : CPU_EXESTALLTYPE;
    signal EXEgte_writeAddr             : unsigned(5 downto 0);
    signal EXEgte_writeData             : unsigned(31 downto 0);
-   signal EXEgte_writeEna              : std_logic := '0'; 
+   signal EXEgte_writeEna              : std_logic := '0';    
+   signal EXEgte_cmdData               : unsigned(31 downto 0);
+   signal EXEgte_cmdEna                : std_logic := '0'; 
    
    --MULT/DIV
    type CPU_HILOCALC is
@@ -773,9 +777,8 @@ begin
       
    end process;
 
-   process (decodeImmData, decodeTarget, decodeJumpTarget, decodeSource1, decodeSource2, decodeValue1, decodeValue2, decodeOP, decodeFunct, decodeShamt, decodeRD, exception, stall3, stall, value1, value2, pcOld0, resultData,
-            cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait, opcode1, gte_readAddr, decode_gte_readAddr, gte_readData, 
-            execute_gte_readAddr, gte_busy)
+   process (decodeImmData, decodeTarget, decodeJumpTarget, decodeSource1, decodeSource2, decodeValue1, decodeValue2, decodeOP, decodeFunct, decodeShamt, decodeRD, exception, stall3, stall, value1, value2, pcOld0, resultData, executeStalltype,
+            cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait, opcode1, gte_readAddr, decode_gte_readAddr, gte_readData, gte_busy)
       variable calcResult  : unsigned(31 downto 0);
       variable calcMemAddr : unsigned(31 downto 0);
    begin
@@ -816,8 +819,8 @@ begin
       EXEhiUpdate             <= '0';
       EXEloUpdate             <= '0';
       
-      gte_cmdEna              <= '0';
-      gte_cmdData             <= opcode1;
+      EXEgte_cmdEna           <= '0';
+      EXEgte_cmdData          <= opcode1;
       
       EXEgte_writeAddr        <= gte_readAddr;
       EXEgte_writeData        <= value2;
@@ -827,12 +830,13 @@ begin
       
       EXEstalltype            <= EXESTALLTYPE_NONE;
       
-      if (stall = 0) then
-         gte_readAddr         <= decode_gte_readAddr;
-      else
-         gte_readAddr         <= execute_gte_readAddr;
+      gte_readAddr            <= decode_gte_readAddr;
+      gte_readEna             <= '0';
+      
+      if (executeStalltype = EXESTALLTYPE_GTE and gte_busy = '0') then
+         gte_readEna         <= '1';
       end if;
-       
+
       if (exception(4 downto 2) = 0 and stall = 0) then
              
          case (to_integer(decodeOP)) is
@@ -1169,11 +1173,12 @@ begin
                   exceptionCode_3 <= x"B";
                else
                   if (decodeSource1(4) = '1') then
-                     gte_cmdEna <= '1';
+                     EXEgte_cmdEna <= '1';
                   else
                      case (decodeSource1(3 downto 0)) is
                         when x"0" => --mfcn
                            EXEresultWriteEnable <= '1';
+                           gte_readEna          <= '1';
                            EXEresultData        <= gte_readData;
                            if (gte_busy = '1') then
                               stallNew3    <= '1';
@@ -1182,6 +1187,7 @@ begin
                         
                         when x"2" => --cfcn
                            EXEresultWriteEnable <= '1';
+                           gte_readEna          <= '1';
                            EXEresultData        <= gte_readData;
                            if (gte_busy = '1') then
                               stallNew3    <= '1';
@@ -1336,6 +1342,7 @@ begin
                   exceptionCode_3 <= x"B";
                else
                   EXEMemWriteEnable <= '1';
+                  gte_readEna       <= '1';
                   EXEMemWriteData   <= gte_readData;
                   if (gte_busy = '1') then
                      stallNew3    <= '1';
@@ -1441,11 +1448,12 @@ begin
 
                   executeStalltype              <= EXEstalltype; 
 
-                  execute_gte_readAddr          <= decode_gte_readAddr;         
-
                   execute_gte_writeAddr         <= EXEgte_writeAddr;
                   execute_gte_writeData         <= EXEgte_writeData;
-                  execute_gte_writeEna          <= EXEgte_writeEna;   
+                  execute_gte_writeEna          <= EXEgte_writeEna;
+
+                  execute_gte_cmdData           <= EXEgte_cmdData;
+                  execute_gte_cmdEna            <= EXEgte_cmdEna;                   
 
                   blockLoadforward <= '0';
                   if (executeReadEnable = '1' and EXEReadEnable = '1' and resultTarget = EXEresultTarget) then
@@ -1721,6 +1729,7 @@ begin
             writebackInvalidateCacheLine <= WBinvalidateCacheLine;   
             
             gte_writeEna  <= '0';
+            gte_cmdEna    <= '0';
             
             if (stall = 0) then
             
@@ -1840,6 +1849,12 @@ begin
                      gte_writeData <= execute_gte_writeData;
                      gte_writeEna  <= '1';
                   end if;
+                  
+                  if (execute_gte_cmdEna = '1') then
+                     gte_cmdData <= execute_gte_cmdData;
+                     gte_cmdEna  <= '1';
+                  end if;
+                  
                   
                end if;
                

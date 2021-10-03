@@ -214,6 +214,7 @@ architecture arch of psx_top is
    
    -- GTE
    signal gte_busy               : std_logic;
+   signal gte_readEna            : std_logic;
    signal gte_readAddr           : unsigned(5 downto 0);
    signal gte_readData           : unsigned(31 downto 0);
    signal gte_writeAddr          : unsigned(5 downto 0);
@@ -685,7 +686,8 @@ begin
       mem_dataCache     => mem_dataCache, 
       mem_done          => mem_done,
       
-      gte_busy          => gte_busy,     
+      gte_busy          => gte_busy, 
+      gte_readEna       => gte_readEna,
       gte_readAddr      => gte_readAddr, 
       gte_readData      => gte_readData, 
       gte_writeAddr     => gte_writeAddr,
@@ -709,7 +711,7 @@ begin
       gte_busy             => gte_busy,     
       gte_readAddr         => gte_readAddr, 
       gte_readData         => gte_readData, 
-      gte_readEna          => '0',
+      gte_readEna          => gte_readEna,
       gte_writeAddr        => gte_writeAddr,
       gte_writeData        => gte_writeData,
       gte_writeEna         => gte_writeEna, 

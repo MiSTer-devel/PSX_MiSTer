@@ -5,8 +5,8 @@ use IEEE.numeric_std.all;
 package pGTE is
 
    type tMAC0req is record
-      mul1        : signed(15 downto 0);
-      mul2        : signed(15 downto 0);
+      mul1        : signed(16 downto 0);
+      mul2        : signed(17 downto 0);
       add         : signed(31 downto 0);
       sub         : std_logic;
       swap        : std_logic;
@@ -20,7 +20,7 @@ package pGTE is
    type tMAC123req is record
       mul1        : signed(31 downto 0);
       mul2        : signed(31 downto 0);
-      add         : signed(31 downto 0);
+      add         : signed(44 downto 0);
       sub         : std_logic;
       swap        : std_logic;
       saveShifted : std_logic;

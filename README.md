@@ -80,8 +80,9 @@ Timer  : 50%
 - dotclock base missing
 - accuracy for start/wraparound not tested
 
-GTE    : 5%
-- Read/write of registers and NCLIP command only
+GTE    : 50%
+- access bugs remaining
+- timing not correct
 
 - MDEC   : 0% 
 - CD     : 0%
