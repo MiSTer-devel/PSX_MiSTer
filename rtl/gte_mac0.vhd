@@ -94,7 +94,7 @@ begin
       if (ir_writeback = '1') then
          IRresult := mac0Result_1(31 downto 0);
          if (IRshift_1 = '1') then
-            IRresult := resize(mac0Result_1 / 4096, 32);
+            IRresult := resize(mac0Result_1(34 downto 12), 32);
          end if;
          
          if (IRresult < 0) then

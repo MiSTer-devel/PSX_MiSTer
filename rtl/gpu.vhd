@@ -54,6 +54,14 @@ entity gpu is
       DisplayOffsetX       : out unsigned( 9 downto 0);
       DisplayOffsetY       : out unsigned( 8 downto 0);
       
+      loading_savestate    : in  std_logic;
+      SS_reset             : in  std_logic;
+      SS_DataWrite         : in  std_logic_vector(31 downto 0);
+      SS_Adr               : in  unsigned(2 downto 0);
+      SS_wren_GPU          : in  std_logic;
+      SS_wren_Timing       : in  std_logic;
+      SS_DataRead          : out std_logic_vector(31 downto 0);
+      
       export_gtm           : out unsigned(11 downto 0);
       export_line          : out unsigned(11 downto 0);
       export_gpus          : out unsigned(31 downto 0);
@@ -316,6 +324,10 @@ architecture arch of gpu is
    
    signal vramLineData              : std_logic_vector(15 downto 0);
    
+   -- savestates
+   type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
+   signal ss_gpu_in     : t_ssarray;
+   signal ss_timing_in  : t_ssarray;
    
 begin 
 
@@ -383,16 +395,39 @@ begin
       
          if (reset = '1') then
                
-            GPUSTAT_PalVideoMode    <= isPal;
+            interlacedDisplayField  <= ss_timing_in(4)(19);
             
-            interlacedDisplayField  <= '0';
-            
-            softReset               <= '1';
+            softReset               <= not loading_savestate;
             
             fifoIn_reset            <= '1';
             fifoOut_reset           <= '1';
             
             irq_VBLANK              <= '0';
+            
+            vramRange               <= unsigned(ss_timing_in(2)(18 downto 0));
+            hDisplayRange           <= unsigned(ss_timing_in(1)(23 downto 0)); -- x"C60260";
+            vDisplayRange           <= unsigned(ss_timing_in(0)(19 downto 0)); -- x"3FC10";
+
+            nextHCount              <= to_integer(unsigned(ss_timing_in(4)(11 downto 0))) + 1;
+
+            vpos                    <= to_integer(unsigned(ss_timing_in(3)(24 downto 16)));
+            inVsync                 <= ss_timing_in(4)(17);
+            activeLineLSB           <= ss_timing_in(4)(20);
+                  
+            GPUSTAT_InterlaceField  <= ss_gpu_in(1)(13);
+            GPUSTAT_ReverseFlag     <= ss_gpu_in(1)(14);
+            GPUSTAT_HorRes2         <= ss_gpu_in(1)(16);
+            GPUSTAT_HorRes1         <= ss_gpu_in(1)(18 downto 17);
+            GPUSTAT_VerRes          <= ss_gpu_in(1)(19);
+            GPUSTAT_PalVideoMode    <= ss_gpu_in(1)(20); --isPal;
+            GPUSTAT_ColorDepth24    <= ss_gpu_in(1)(21);
+            GPUSTAT_VertInterlace   <= ss_gpu_in(1)(22);
+            GPUSTAT_DisplayDisable  <= ss_gpu_in(1)(23);
+            GPUSTAT_IRQRequest      <= ss_gpu_in(1)(24);
+            GPUSTAT_DMADirection    <= ss_gpu_in(1)(30 downto 29);
+            GPUSTAT_DrawingOddline  <= ss_gpu_in(1)(31);
+            
+            GPUREAD                 <= ss_gpu_in(0);       
 
          elsif (ce = '1') then
          
@@ -666,16 +701,33 @@ begin
          
             proc_idle <= '1';
             
-            textureWindow           <= (others => '0');
+            textureWindow           <= unsigned(ss_gpu_in(2)(19 downto 0));  
             textureWindow_AND_X     <= (others => '1');
             textureWindow_AND_Y     <= (others => '1');
                
-            drawingAreaLeft         <= (others => '0');
-            drawingAreaRight        <= (others => '0');
-            drawingAreaTop          <= (others => '0');
-            drawingAreaBottom       <= (others => '0');
-            drawingOffsetX          <= (others => '0');
-            drawingOffsetY          <= (others => '0');
+            drawingAreaLeft         <= unsigned(ss_gpu_in(4)(9 downto 0)); 
+            drawingAreaRight        <= unsigned(ss_gpu_in(5)(9 downto 0)); 
+            drawingAreaTop          <= unsigned(ss_gpu_in(4)(24 downto 16)); 
+            drawingAreaBottom       <= unsigned(ss_gpu_in(5)(24 downto 16)); 
+            drawingOffsetX          <= signed(ss_gpu_in(6)(10 downto 0)); 
+            drawingOffsetY          <= signed(ss_gpu_in(6)(26 downto 16)); 
+            
+            drawMode                <= unsigned(ss_gpu_in(3)(13 downto 0));  
+            
+            --GPUSTAT_DrawPixelsMask  <= ss_gpu_in(3)(16);
+            --GPUSTAT_TextureDisable  <= ss_gpu_in(3)(17);
+            
+            GPUSTAT_TextPageX       <= ss_gpu_in(1)(3 downto 0);
+            GPUSTAT_TextPageY       <= ss_gpu_in(1)(4);
+            GPUSTAT_Transparency    <= ss_gpu_in(1)(6 downto 5);
+            GPUSTAT_TextPageColors  <= ss_gpu_in(1)(8 downto 7);
+            GPUSTAT_Dither          <= ss_gpu_in(1)(9);
+            GPUSTAT_DrawToDisplay   <= ss_gpu_in(1)(10);
+            GPUSTAT_SetMask         <= ss_gpu_in(1)(11);
+            GPUSTAT_DrawPixelsMask  <= ss_gpu_in(1)(12);
+            GPUSTAT_TextureDisable  <= ss_gpu_in(1)(15);
+            GPUSTAT_ReadyRecCmd     <= '1'; --ss_gpu_in(1)(26); -- in savestate should never be busy
+            GPUSTAT_ReadyRecDMA     <= '1'; --ss_gpu_in(1)(28);
             
          elsif (ce = '1') then
          
@@ -1355,6 +1407,37 @@ begin
       wren_b      => '0',
       q_b         => vramLineData
    );
+   
+   
+--##############################################################
+--############################### savestates
+--##############################################################
+
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         if (SS_reset = '1') then
+         
+            for i in 0 to 7 loop
+               ss_gpu_in(i)    <= (others => '0');
+               ss_timing_in(i) <= (others => '0');
+            end loop;
+            
+            ss_timing_in(0) <= x"0003FC10"; -- vDisplayRange
+            ss_timing_in(1) <= x"00C60260"; -- hDisplayRange
+            
+         else
+            if (SS_wren_GPU = '1') then
+               ss_gpu_in(to_integer(SS_Adr)) <= SS_DataWrite;
+            end if;
+            if (SS_wren_Timing = '1') then
+               ss_timing_in(to_integer(SS_Adr)) <= SS_DataWrite;
+            end if;
+         end if;
+      
+      end if;
+   end process;
 
    -- synthesis translate_off
    

@@ -28,6 +28,8 @@ set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) memctrl.vh
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) sio.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) cpu.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) memorymux.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) statemanager.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) savestates.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) psx_top.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) psx_mister.vhd ]
 

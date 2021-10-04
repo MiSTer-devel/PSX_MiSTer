@@ -45,6 +45,7 @@ begin
       variable next_vector    : bit_vector (0 downto 0);
       variable actual_len     : natural;
       variable targetpos      : integer;
+      variable loadcount      : integer;
       
       variable addr_rotate    : std_logic_vector(22 downto 0);
       
@@ -113,9 +114,9 @@ begin
          ram_idle     <= '0';
          do           <= (others => 'X');
          if (req_buffer = '1') then
-            waitcnt      <= 3;
+            waitcnt      <= 1;
          else
-            waitcnt      <= 4;
+            waitcnt      <= 2;
          end if;
          reqprocessed <= '1';
          req_buffer   <= '0';
@@ -133,8 +134,14 @@ begin
          targetpos := COMMAND_FILE_TARGET;
          
          wait until rising_edge(clk);
+         
+         for i in 1 to COMMAND_FILE_OFFSET loop
+            read(infile, next_vector, actual_len); 
+         end loop;
+         
+         loadcount := 0;
      
-         while (not endfile(infile)) loop
+         while (not endfile(infile) and (COMMAND_FILE_SIZE = 0 or loadcount < COMMAND_FILE_SIZE)) loop
             
             read(infile, next_vector, actual_len);  
              
@@ -144,6 +151,7 @@ begin
             
             data(targetpos) := to_integer(unsigned(read_byte));
             targetpos       := targetpos + 1;
+            loadcount       := loadcount + 1;
             
          end loop;
          

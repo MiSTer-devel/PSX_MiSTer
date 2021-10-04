@@ -343,8 +343,8 @@ wire        ioctl_wr;
 wire  [7:0] ioctl_index;
 reg         ioctl_wait = 0;
 
-wire [15:0] joy;
-wire [15:0] joy_unmod;
+wire [16:0] joy;
+wire [16:0] joy_unmod;
 wire [10:0] ps2_key;
 
 wire [21:0] gamma_bus;
@@ -403,7 +403,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
    .joystick_analog_0(joystick_analog_0)
 );
 
-assign joy = joy_unmod[12] ? 16'b0 : joy_unmod;
+assign joy = joy_unmod[16] ? 16'b0 : joy_unmod;
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
@@ -463,10 +463,10 @@ wire statusUpdate;
 
 savestate_ui savestate_ui
 (
-	.clk            (clk_1x       ),
+	.clk            (clk_1x        ),
 	.ps2_key        (ps2_key[10:0] ),
 	.allow_ss       (cart_loaded   ),
-	.joySS          (joy_unmod[12] ),
+	.joySS          (joy_unmod[16] ),
 	.joyRight       (joy_unmod[0]  ),
 	.joyLeft        (joy_unmod[1]  ),
 	.joyDown        (joy_unmod[2]  ),
@@ -548,7 +548,15 @@ psx
    .Analog2Y(8'b0),       
    //sound       
 	.sound_out_left(AUDIO_L),
-	.sound_out_right(AUDIO_R)
+	.sound_out_right(AUDIO_R),
+   //savestates
+   .increaseSSHeaderCount (!status[36]),
+   .save_state            (0), //(ss_save),
+   .load_state            (0), //(ss_load),
+   .savestate_number      (ss_slot),
+   .state_loaded          (),
+   .rewind_on             (0), //(status[27]),
+   .rewind_active         (0)  //(status[27] & joy[15])
 );
 
 

@@ -29,6 +29,12 @@ entity irq is
       
       irqRequest           : out std_logic := '0';
       
+      SS_reset             : in  std_logic;
+      SS_DataWrite         : in  std_logic_vector(31 downto 0);
+      SS_Adr               : in  unsigned(0 downto 0);
+      SS_wren              : in  std_logic;
+      SS_DataRead          : out std_logic_vector(31 downto 0);
+      
       export_irq           : out unsigned(15 downto 0)
    );
 end entity;
@@ -41,6 +47,9 @@ architecture arch of irq is
    signal irqIn    : unsigned(10 downto 0);
    signal irqIn_1  : unsigned(10 downto 0);
    
+   -- savestates
+   type t_ssarray is array(0 to 1) of std_logic_vector(31 downto 0);
+   signal ss_in  : t_ssarray;
   
 begin 
 
@@ -67,8 +76,8 @@ begin
       
          if (reset = '1') then
                
-            I_STATUS    <= (others => '0');
-            I_MASK      <= (others => '0');
+            I_STATUS    <= unsigned(ss_in(0)(10 downto 0));
+            I_MASK      <= unsigned(ss_in(1)(10 downto 0));
             irqIn_1     <= (others => '0');
 
          elsif (ce = '1') then
@@ -105,6 +114,27 @@ begin
             I_STATUS <= I_STATUSNew;
             
          end if;
+      end if;
+   end process;
+   
+--##############################################################
+--############################### savestates
+--##############################################################
+
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         if (SS_reset = '1') then
+         
+            for i in 0 to 1 loop
+               ss_in(i) <= (others => '0');
+            end loop;
+            
+         elsif (SS_wren = '1') then
+            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+      
       end if;
    end process;
 

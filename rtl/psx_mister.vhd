@@ -41,10 +41,10 @@ entity psx_mister is
       vsync                 : out std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
-      DisplayWidth         : out unsigned( 9 downto 0);
-      DisplayHeight        : out unsigned( 8 downto 0);
-      DisplayOffsetX       : out unsigned( 9 downto 0);
-      DisplayOffsetY       : out unsigned( 8 downto 0);
+      DisplayWidth          : out unsigned( 9 downto 0);
+      DisplayHeight         : out unsigned( 8 downto 0);
+      DisplayOffsetX        : out unsigned( 9 downto 0);
+      DisplayOffsetY        : out unsigned( 8 downto 0);
       -- Keys - all active high   
       KeyTriangle           : in  std_logic; 
       KeyCircle             : in  std_logic; 
@@ -68,21 +68,27 @@ entity psx_mister is
       Analog2Y              : in  signed(7 downto 0);                  
       -- sound                          
       sound_out_left        : out std_logic_vector(15 downto 0) := (others => '0');
-      sound_out_right       : out std_logic_vector(15 downto 0) := (others => '0')
+      sound_out_right       : out std_logic_vector(15 downto 0) := (others => '0');
+      -- savestates
+      increaseSSHeaderCount : in  std_logic;
+      save_state            : in  std_logic;
+      load_state            : in  std_logic;
+      savestate_number      : in  integer range 0 to 3;
+      state_loaded          : out std_logic;
+      rewind_on             : in  std_logic;
+      rewind_active         : in  std_logic
    );
 end entity;
 
 architecture arch of psx_mister is
 
-   signal vram_ADDR : std_logic_vector(19 downto 0);
+   signal ddr3_ADDR : std_logic_vector(27 downto 0);
    
 begin 
 
    -- vram is at 0x30000000
    DDRAM_ADDR(28 downto 25) <= "0011";
-   DDRAM_ADDR(24 downto 17) <= (others => '0');
-   
-   DDRAM_ADDR(16 downto 0) <= vram_ADDR(19 downto 3);
+   DDRAM_ADDR(24 downto  0) <= ddr3_ADDR(27 downto 3);
 
    ipsx_top : entity work.psx_top
    generic map
@@ -110,15 +116,15 @@ begin
       ram_reqprocessed      => ram_reqprocessed,    
       ram_idle              => ram_idle,    
       -- vram interface
-      vram_BUSY             => DDRAM_BUSY,      
-      vram_DOUT             => DDRAM_DOUT,      
-      vram_DOUT_READY       => DDRAM_DOUT_READY,
-      vram_BURSTCNT         => DDRAM_BURSTCNT,  
-      vram_ADDR             => vram_ADDR,      
-      vram_DIN              => DDRAM_DIN,       
-      vram_BE               => DDRAM_BE,        
-      vram_WE               => DDRAM_WE,        
-      vram_RD               => DDRAM_RD,   
+      ddr3_BUSY             => DDRAM_BUSY,      
+      ddr3_DOUT             => DDRAM_DOUT,      
+      ddr3_DOUT_READY       => DDRAM_DOUT_READY,
+      ddr3_BURSTCNT         => DDRAM_BURSTCNT,  
+      ddr3_ADDR             => ddr3_ADDR,      
+      ddr3_DIN              => DDRAM_DIN,       
+      ddr3_BE               => DDRAM_BE,        
+      ddr3_WE               => DDRAM_WE,        
+      ddr3_RD               => DDRAM_RD,   
       hsync                 => hsync, 
       vsync                 => vsync, 
       hblank                => hblank,
@@ -150,8 +156,16 @@ begin
       Analog2Y              => Analog2Y,      
       -- sound              => -- sound       
       sound_out_left        => sound_out_left, 
-      sound_out_right       => sound_out_right
-   );
+      sound_out_right       => sound_out_right,
+      -- savestates         
+      increaseSSHeaderCount => increaseSSHeaderCount,
+      save_state            => save_state,           
+      load_state            => load_state,           
+      savestate_number      => savestate_number,     
+      state_loaded          => state_loaded,
+      rewind_on             => rewind_on,    
+      rewind_active         => rewind_active
+   );                          
 
 end architecture;
 

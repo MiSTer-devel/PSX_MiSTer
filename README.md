@@ -80,8 +80,7 @@ Timer  : 50%
 - dotclock base missing
 - accuracy for start/wraparound not tested
 
-GTE    : 50%
-- access bugs remaining
+GTE    : 80%
 - timing not correct
 
 - MDEC   : 0% 

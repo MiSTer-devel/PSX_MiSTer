@@ -136,6 +136,7 @@ begin
             cmd_address_save := intern_addr;
             cmd_burst_save   := DDRAM_BURSTCNT;
             wait until rising_edge(DDRAM_CLK);
+            --report "read from " & integer'image(to_integer(unsigned(cmd_address_save)));
             for i in 0 to (to_integer(unsigned(cmd_burst_save)) - 1) loop
                DDRAM_DOUT       <= std_logic_vector(to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 2) + 1), 32)) & 
                                    std_logic_vector(to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 2) + 0), 32));
@@ -177,7 +178,7 @@ begin
                   data(to_integer(unsigned(cmd_address_save)) + (i * 2) + 1) := to_integer(signed(DDRAM_DIN(63 downto 48)) & readval(15 downto 0));
                end if;
                
-               if (DDRAM_ADDR(28 downto 25) = "0011") then
+               if (DDRAM_ADDR(28 downto 24) = "00110") then
                   for i in 0 to 3 loop
                      if (cmd_be_save(i * 2) = '1') then
                         color := x"00" & cmd_din_save((i * 16) + 4 downto (i * 16)) & "000" & cmd_din_save((i * 16) + 9 downto (i * 16) + 5) & "000" & cmd_din_save((i * 16) + 14 downto (i * 16) + 10) & "000";
@@ -218,6 +219,8 @@ begin
             file_open(f_status, infile, COMMAND_FILE_NAME(1 to COMMAND_FILE_NAMELEN), read_mode);
          
             targetpos := COMMAND_FILE_TARGET;
+            
+            --report "written to " & integer'image(targetpos);
          
             while (not endfile(infile)) loop
                

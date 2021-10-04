@@ -21,7 +21,9 @@ entity gte is
       gte_writeData        : in  unsigned(31 downto 0);
       gte_writeEna         : in  std_logic; 
       gte_cmdData          : in  unsigned(31 downto 0);
-      gte_cmdEna           : in  std_logic
+      gte_cmdEna           : in  std_logic;
+      
+      debug_firstGTE       : out std_logic
    );
 end entity;
 
@@ -511,12 +513,14 @@ begin
             -- calculation
             calcStep <= calcStep + 1; 
             
+            debug_firstGTE <= '0';
+            
             case (state) is
             
                when IDLE =>
                   calcStep   <= 0;
                   batchCount <= 0;
-                  if (gte_cmdEna = '1' and clk2xIndex = '0') then
+                  if (gte_cmdEna = '1' and clk2xIndex = '1') then
                      gte_busy <= '1';
                      REG_FLAG <= (others => '0');
                      cmdShift <= gte_cmdData(19);
@@ -524,12 +528,6 @@ begin
                      cmdMM    <= gte_cmdData(18 downto 17);
                      cmdMV    <= gte_cmdData(16 downto 15);
                      cmdTV    <= gte_cmdData(14 downto 13);
-                     
-                     debugCnt <= debugCnt + 1;
-                     if (debugCnt(31) = '1') then -- todo : remove!!
-                        cmdMM <= "00";
-                     end if;
-                     
                      case (to_integer(gte_cmdData(5 downto 0))) is
                         when 16#01# => state <= CALC_RTPS; 
                         when 16#06# => state <= CALC_NCLIP; 
@@ -555,6 +553,12 @@ begin
                         when 16#3F# => state <= CALC_NCCT;                        
                         when others => gte_busy <= '0';
                      end case;
+                     
+                     debugCnt <= debugCnt + 1;
+                     if (debugCnt = 0) then
+                        debug_firstGTE <= '1';
+                     end if;
+                     
                   end if;
                   
                when CALC_RTPS | CALC_RTPT =>
@@ -1212,7 +1216,7 @@ begin
             if (flagMac3UF = '1') then REG_FLAG(25) <= '1'; REG_FLAG(31) <= '1'; end if;
             if (flagMac3OF = '1') then REG_FLAG(28) <= '1'; REG_FLAG(31) <= '1'; end if;
             
-            if (flagIR0 = '1') then REG_FLAG(12) <= '1'; REG_FLAG(31) <= '1'; end if;
+            if (flagIR0 = '1') then REG_FLAG(12) <= '1'; end if;
             if (flagIR1 = '1') then REG_FLAG(24) <= '1'; REG_FLAG(31) <= '1'; end if;
             if (flagIR2 = '1') then REG_FLAG(23) <= '1'; REG_FLAG(31) <= '1'; end if;
             if (flagIR3 = '1') then REG_FLAG(22) <= '1'; end if;

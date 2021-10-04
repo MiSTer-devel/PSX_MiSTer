@@ -35,6 +35,8 @@ architecture arch of etb is
    -- settings
    signal psx_on              : std_logic_vector(Reg_psx_on.upper             downto Reg_psx_on.lower)             := (others => '0');
    signal psx_LoadExe         : std_logic_vector(Reg_psx_LoadExe.upper        downto Reg_psx_LoadExe.lower)        := (others => '0');
+   signal psx_SaveState       : std_logic_vector(Reg_psx_SaveState.upper      downto Reg_psx_SaveState.lower)      := (others => '0');
+   signal psx_LoadState       : std_logic_vector(Reg_psx_LoadState.upper      downto Reg_psx_LoadState.lower)      := (others => '0');
    
    signal bus_out_Din         : std_logic_vector(31 downto 0);
    signal bus_out_Dout        : std_logic_vector(31 downto 0);
@@ -142,8 +144,10 @@ begin
    Analog2Y    <= (others => '0');
    
    -- registers
-   iReg_psx_on            : entity procbus.eProcReg generic map (Reg_psx_on)       port map (clk100, proc_bus_in, psx_on     , psx_on);      
-   iReg_psx_LoadExe       : entity procbus.eProcReg generic map (Reg_psx_LoadExe)  port map (clk100, proc_bus_in, psx_LoadExe, psx_LoadExe);      
+   iReg_psx_on            : entity procbus.eProcReg generic map (Reg_psx_on)        port map (clk100, proc_bus_in, psx_on        , psx_on);      
+   iReg_psx_LoadExe       : entity procbus.eProcReg generic map (Reg_psx_LoadExe)   port map (clk100, proc_bus_in, psx_LoadExe   , psx_LoadExe); 
+   iReg_psx_SaveState     : entity procbus.eProcReg generic map (Reg_psx_SaveState) port map (clk100, proc_bus_in, psx_SaveState , psx_SaveState);      
+   iReg_psx_LoadState     : entity procbus.eProcReg generic map (Reg_psx_LoadState) port map (clk100, proc_bus_in, psx_LoadState , psx_LoadState);   
      
    ipsx_mister : entity psx.psx_mister
    generic map
@@ -201,7 +205,15 @@ begin
       Analog2Y              => Analog2Y,      
       -- sound              => -- sound       
       sound_out_left        => sound_out_left, 
-      sound_out_right       => sound_out_right
+      sound_out_right       => sound_out_right,
+      -- savestates              
+      increaseSSHeaderCount => '0',
+      save_state            => psx_SaveState(0),
+      load_state            => psx_LoadState(0),
+      savestate_number      => 0,
+      state_loaded          => open,
+      rewind_on             => '0',
+      rewind_active         => '0'
    );
    
    iddrram_model : entity tb.ddrram_model

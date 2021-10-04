@@ -60,7 +60,7 @@ architecture arch of gte_UNRDivide is
    signal calc_rhs      : unsigned(15 downto 0);
    signal tableValue    : unsigned(7 downto 0);
    signal divisor       : signed(16 downto 0);
-   signal calc_val_x    : signed(9 downto 0);
+   signal calc_val_x    : signed(10 downto 0);
    signal calc_val_xn   : signed(10 downto 0);
    signal calc_val_d    : signed(19 downto 0);
    signal calc_val_r    : unsigned(19 downto 0);
@@ -69,6 +69,8 @@ architecture arch of gte_UNRDivide is
 begin 
 
    process (clk2x)
+      variable var_calc_d : signed(27 downto 0);
+      variable var_calc_r : signed(27 downto 0);
    begin
       if rising_edge(clk2x) then
       
@@ -107,16 +109,18 @@ begin
                
             when CALC_X =>
                state       <= CALC_D;
-               calc_val_x  <= signed(resize(tableValue, 10) + 16#101#);
+               calc_val_x  <= signed(resize(tableValue, 11) + 16#101#);
                calc_val_xn <= -signed((resize(tableValue, 11) + 16#101#));
             
             when CALC_D =>
                state      <= CALC_R;
-               calc_val_d <= x"20000" + resize(((divisor * calc_val_xn) + 16#80#) / 256, 20);
+               var_calc_d := resize(((divisor * calc_val_xn) + 16#80#), 28);
+               calc_val_d <= x"20000" + var_calc_d(27 downto 8); 
 
             when CALC_R =>
                state      <= CALCRESULT;
-               calc_val_r <= unsigned(resize(((calc_val_x * calc_val_d) + x"80") / 256, 20));
+               var_calc_r := resize(((calc_val_x * calc_val_d) + 16#80#), 28);
+               calc_val_r <= unsigned(var_calc_r(27 downto 8));
 
             when CALCRESULT =>
                state       <= CLIP;

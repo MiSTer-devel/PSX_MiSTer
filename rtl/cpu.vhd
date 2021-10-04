@@ -39,6 +39,14 @@ entity cpu is
       gte_writeEna          : out std_logic := '0'; 
       gte_cmdData           : out unsigned(31 downto 0);
       gte_cmdEna            : out std_logic := '0'; 
+      
+      SS_reset              : in  std_logic;
+      SS_DataWrite          : in  std_logic_vector(31 downto 0);
+      SS_Adr                : in  unsigned(6 downto 0);
+      SS_wren               : in  std_logic;
+      SS_DataRead           : out std_logic_vector(31 downto 0);
+      
+      debug_firstGTE        : in  std_logic;
    
       cpu_done              : out std_logic := '0'; 
       cpu_export            : out cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'), (others => '0'))
@@ -327,8 +335,13 @@ architecture arch of cpu is
    signal writeDoneData                : unsigned(31 downto 0) := (others => '0');
    signal writeDoneWriteEnable         : std_logic := '0';
    
+   -- savestates
+   type t_ssarray is array(0 to 88) of std_logic_vector(31 downto 0);
+   signal ss_in  : t_ssarray;
+   
    -- debug
    signal debugCnt                     : unsigned(31 downto 0);
+   signal debugSum                     : unsigned(31 downto 0);
    
 begin 
 
@@ -353,7 +366,7 @@ begin
       if (rising_edge(clk1x)) then
          if (reset = '1') then
          
-            memoryMuxStage <= 1;
+            memoryMuxStage <= 1; -- no ss when stalled -> not relevant
          
          elsif (ce = '1') then
             
@@ -587,13 +600,13 @@ begin
          
             tagValid      <= (others => '0');
          
-            stall1        <= '0';
-            PC            <= x"BFC00000";
+            stall1        <= ss_in(24)(0);
+            PC            <= unsigned(ss_in(0)); -- x"BFC00000";
                         
-            blockIRQ      <= '0';
-            fetchReady    <= '0';
-            opcode0       <= (others => '0');
-            PCold0        <= (others => '0');
+            blockIRQ      <= '0'; -- todo: busy for savestate?
+            fetchReady    <= ss_in(25)(0);
+            opcode0       <= unsigned(ss_in(14));
+            PCold0        <= unsigned(ss_in(19));
             
             cacheHit      <= '0';
             cacheUpdate   <= '0';
@@ -679,23 +692,23 @@ begin
       if (rising_edge(clk1x)) then
          if (reset = '1') then
          
-            stall2     <= '0';
+            stall2     <= '0'; -- unused
             
-            pcOld1  <= (others => '0');
-            opcode1 <= (others => '0');
+            pcOld1  <= unsigned(ss_in(20));
+            opcode1 <= unsigned(ss_in(15));
             
-            decodeException  <= '0';
-            decodeImmData    <= (others => '0');
-            decodeSource1    <= (others => '0');
-            decodeSource2    <= (others => '0');
-            decodeValue1     <= (others => '0');
-            decodeValue2     <= (others => '0');
-            decodeOP         <= (others => '0');
-            decodeFunct      <= (others => '0');
-            decodeShamt      <= (others => '0');
-            decodeRD         <= (others => '0');
-            decodeTarget     <= (others => '0');
-            decodeJumpTarget <= (others => '0');
+            decodeException  <= ss_in(32)(25);
+            decodeImmData    <= unsigned(ss_in(26)(15 downto 0));
+            decodeSource1    <= unsigned(ss_in(31)(4 downto 0));
+            decodeSource2    <= unsigned(ss_in(31)(12 downto 8));
+            decodeValue1     <= unsigned(ss_in(27));
+            decodeValue2     <= unsigned(ss_in(28));
+            decodeOP         <= unsigned(ss_in(31)(29 downto 24));
+            decodeFunct      <= unsigned(ss_in(32)(13 downto 8));
+            decodeShamt      <= unsigned(ss_in(31)(20 downto 16));
+            decodeRD         <= unsigned(ss_in(32)(4 downto 0));
+            decodeTarget     <= unsigned(ss_in(31)(20 downto 16));
+            decodeJumpTarget <= unsigned(ss_in(29)(25 downto 0));
          
          elsif (ce = '1') then
             
@@ -903,7 +916,7 @@ begin
 
                   when 16#10# => -- MFHI
                      EXEresultWriteEnable <= '1';
-                     if (hiloWait > 0) then
+                     if (hiloWait > 1) then
                         stallNew3    <= '1';
                         EXEstalltype <= EXESTALLTYPE_READHI;
                      else
@@ -915,7 +928,7 @@ begin
                      
                   when 16#12# => -- MFLO
                      EXEresultWriteEnable <= '1';
-                     if (hiloWait > 0) then
+                     if (hiloWait > 1) then
                         stallNew3    <= '1';
                         EXEstalltype <= EXESTALLTYPE_READLO;
                      else
@@ -1368,30 +1381,45 @@ begin
       if (rising_edge(clk1x)) then
          if (reset = '1') then
          
-            stall3                        <= '0';
+            stall3                        <= ss_in(24)(2);
                        
-            pcOld2                        <= (others => '0');
-            opcode2                       <= (others => '0');
+            pcOld2                        <= unsigned(ss_in(21));
+            opcode2                       <= unsigned(ss_in(16));
                         
-            blockLoadforward              <= '0';
+            blockLoadforward              <= ss_in(24)(13);
                   
-            executeException              <= '0';
-            resultWriteEnable             <= '0';
-            resultData                    <= (others => '0');
-            resultTarget                  <= (others => '0');
-            executeBranchdelaySlot        <= '0';
-            executeBranchTaken            <= '0';
-            executeMemWriteData           <= (others => '0');
-            executeMemWriteMask           <= (others => '0');
-            executeMemWriteAddr           <= (others => '0');
-            executeMemWriteEnable         <= '0';
-            executeLoadType               <= LOADTYPE_DWORD;
-            executeReadAddress            <= (others => '0');
-            executeReadEnable             <= '0';
-            executeCOP0WriteEnable        <= '0';
-            executeCOP0WriteDestination   <= (others => '0');
-            executeCOP0WriteValue         <= (others => '0');
+            executeException              <= ss_in(41)(24);
+            resultWriteEnable             <= ss_in(41)(20);
+            resultData                    <= unsigned(ss_in(33));
+            resultTarget                  <= unsigned(ss_in(40)(4 downto 0));
+            executeBranchdelaySlot        <= ss_in(41)(27);
+            executeBranchTaken            <= ss_in(41)(26);
+            executeMemWriteData           <= unsigned(ss_in(35));
+            executeMemWriteMask           <= ss_in(40)(19 downto 16);
+            executeMemWriteAddr           <= unsigned(ss_in(36));
+            executeMemWriteEnable         <= ss_in(41)(23);
+            executeLoadType               <= CPU_LOADTYPE'VAL(to_integer(unsigned(ss_in(41)(18 downto 16))));
+            executeReadAddress            <= unsigned(ss_in(34));
+            executeReadEnable             <= ss_in(41)(21);
+            executeCOP0WriteEnable        <= ss_in(41)(25);
+            executeCOP0WriteDestination   <= unsigned(ss_in(40)(28 downto 24));
+            executeCOP0WriteValue         <= unsigned(ss_in(37));
             hiloWait                      <= 0;
+            
+            hi                            <= unsigned(ss_in(1));
+            lo                            <= unsigned(ss_in(2));
+            
+            executeStalltype              <= EXESTALLTYPE_NONE;
+            
+            executeGTEReadEnable          <= ss_in(41)(22);
+            executeGTETarget              <= unsigned(ss_in(40)(12 downto 8));
+            
+            execute_gte_writeAddr         <= (others => '0'); -- todo -> savestate 
+            execute_gte_writeData         <= (others => '0'); -- todo -> savestate 
+            execute_gte_writeEna          <= '0';             -- todo -> savestate 
+                                   
+            execute_gte_cmdData           <= (others => '0'); -- todo -> savestate 
+            execute_gte_cmdEna            <= '0';             -- todo -> savestate 
             
          elsif (ce = '1') then
          
@@ -1691,32 +1719,35 @@ begin
       if (rising_edge(clk1x)) then
          if (reset = '1') then
          
-            stall4                           <= '0';
+            stall4                           <= ss_in(24)(3);
                               
-            pcOld3                           <= (others => '0');
-            opcode3                          <= (others => '0');
+            pcOld3                           <= unsigned(ss_in(22));
+            opcode3                          <= unsigned(ss_in(17));
                               
-            cop0_SR                          <= (others => '0');
-            cop0_BPC                         <= (others => '0');
-            cop0_BDA                         <= (others => '0');
-            cop0_JUMPDEST                    <= (others => '0');
-            cop0_DCIC                        <= (others => '0');
-            cop0_BDAM                        <= (others => '0');
-            cop0_BPCM                        <= (others => '0');
-            cop0_CAUSE                       <= (others => '0');
-            cop0_EPC                         <= (others => '0');
-            cop0_PRID                        <= x"00000002";
+            cop0_BPC                         <= unsigned(ss_in(3));
+            cop0_BDA                         <= unsigned(ss_in(4));
+            cop0_JUMPDEST                    <= unsigned(ss_in(5));
+            cop0_DCIC                        <= unsigned(ss_in(6));
+            cop0_BDAM                        <= unsigned(ss_in(8));
+            cop0_BPCM                        <= unsigned(ss_in(9));
+            cop0_SR                          <= unsigned(ss_in(10));
+            cop0_CAUSE                       <= unsigned(ss_in(11));
+            cop0_EPC                         <= unsigned(ss_in(12));
+            cop0_PRID                        <= unsigned(ss_in(13)); -- x"00000002";
                               
-            CACHECONTROL                     <= (others => '0');
+            CACHECONTROL                     <= unsigned(ss_in(56));
                         
-            writebackTarget                  <= (others => '0');
-            writebackData                    <= (others => '0');
-            writebackWriteEnable             <= '0';
+            writebackTarget                  <= unsigned(ss_in(47)(4 downto 0));
+            writebackData                    <= unsigned(ss_in(42));
+            writebackWriteEnable             <= ss_in(47)(24);
          
-            writebackInvalidateCacheEna      <= '0';
+            writebackInvalidateCacheEna      <= '0'; -- todo: only used in BIOS?
             
-            writebackException               <= '0';
-         
+            writebackException               <= ss_in(47)(26);
+            
+            writebackGTEReadEnable           <= ss_in(47)(30);
+            WBgte_writeAddr                  <= unsigned(ss_in(48)(5 downto 0));
+            
          elsif (ce = '1') then
          
             stall4         <= stallNew4;
@@ -1927,20 +1958,21 @@ begin
       
          if (reset = '1') then
          
-            stall5               <= '0';
+            stall5               <= '0'; -- unused
             
-            pcOld4               <= (others => '0');
-            opcode4              <= (others => '0');
+            pcOld4               <= unsigned(ss_in(23));
+            opcode4              <= unsigned(ss_in(18));
             
             for i in 0 to 31 loop
-               regs(i) <= (others => '0');
+               regs(i) <= unsigned(ss_in(57 + i));
             end loop;
             
-            writeDoneTarget      <= (others => '0');
-            writeDoneData        <= (others => '0');
-            writeDoneWriteEnable <= '0';
+            writeDoneTarget      <= unsigned(ss_in(50)(12 downto 8));
+            writeDoneData        <= unsigned(ss_in(49));
+            writeDoneWriteEnable <= ss_in(50)(16);
             
             debugCnt             <= (others => '0');
+            debugSum             <= (others => '0');
          
          elsif (ce = '1') then
             
@@ -1956,6 +1988,7 @@ begin
                if (writebackWriteEnable = '1' and writebackException = '0') then 
                   if (writebackTarget > 0) then
                      regs(to_integer(writebackTarget)) <= writebackData;
+                     debugSum <= debugSum + writebackData;
                   end if;
                end if;
                
@@ -1970,13 +2003,19 @@ begin
                end loop;
                
                -- todo: REMOVE!
-               --if (debugCnt(31) = '1' and writebackTarget = 0) then
-               --   cop0_CAUSE(9) <= '0';
-               --end if;
+               if (debugCnt(31) = '1' and debugSum(31) = '1' and writebackTarget = 0) then
+                  writeDoneWriteEnable <= '0';
+               end if;
                
             end if;
    
          end if;
+         
+         if (debug_firstGTE = '1') then
+            debugCnt <= (others => '0');
+            debugSum <= (others => '0');
+         end if;
+         
       end if;
    end process;
    
@@ -1989,9 +2028,14 @@ begin
       
          if (reset = '1') then
          
-            exception            <= (others => '0');
+            exception            <= unsigned(ss_in(24)(9 downto 5));
          
-            cop0_BADVADDR        <= (others => '0');
+            cop0_BADVADDR        <= unsigned(ss_in(7));
+            
+            exception_SR         <= unsigned(ss_in(51));
+            exception_CAUSE      <= unsigned(ss_in(52));
+            exception_EPC        <= unsigned(ss_in(53));
+            exception_JMP        <= unsigned(ss_in(54));
 
          elsif (ce = '1') then
             
@@ -2052,6 +2096,10 @@ begin
       end if;
    end process;
    
+--##############################################################
+--############################### submodules
+--##############################################################
+   
    idivider : entity work.divider
    port map
    (
@@ -2064,6 +2112,30 @@ begin
       quotient  => DIVquotient, 
       remainder => DIVremainder
    );
+   
+--##############################################################
+--############################### savestates
+--##############################################################
+
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         if (SS_reset = '1') then
+         
+            for i in 0 to 88 loop
+               ss_in(i) <= (others => '0');
+            end loop;
+            
+            ss_in(0)  <= x"BFC00000"; -- PC
+            ss_in(13) <= x"00000002"; -- cop0_PRID
+            
+         elsif (SS_wren = '1' and SS_Adr < 89) then
+            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+      
+      end if;
+   end process;
    
 
 end architecture;

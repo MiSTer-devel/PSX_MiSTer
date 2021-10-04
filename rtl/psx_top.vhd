@@ -31,16 +31,16 @@ entity psx_top is
       ram_done              : in  std_logic;
       ram_reqprocessed      : in  std_logic;
       ram_idle              : in  std_logic;
-      -- vram interface
-      vram_BUSY             : in  std_logic;                    
-      vram_DOUT             : in  std_logic_vector(63 downto 0);
-      vram_DOUT_READY       : in  std_logic;
-      vram_BURSTCNT         : out std_logic_vector(7 downto 0) := (others => '0'); 
-      vram_ADDR             : out std_logic_vector(19 downto 0) := (others => '0');                       
-      vram_DIN              : out std_logic_vector(63 downto 0) := (others => '0');
-      vram_BE               : out std_logic_vector(7 downto 0) := (others => '0'); 
-      vram_WE               : out std_logic := '0';
-      vram_RD               : out std_logic := '0'; 
+      -- vram/savestate interface
+      ddr3_BUSY             : in  std_logic;                    
+      ddr3_DOUT             : in  std_logic_vector(63 downto 0);
+      ddr3_DOUT_READY       : in  std_logic;
+      ddr3_BURSTCNT         : out std_logic_vector(7 downto 0) := (others => '0'); 
+      ddr3_ADDR             : out std_logic_vector(27 downto 0) := (others => '0');                       
+      ddr3_DIN              : out std_logic_vector(63 downto 0) := (others => '0');
+      ddr3_BE               : out std_logic_vector(7 downto 0) := (others => '0'); 
+      ddr3_WE               : out std_logic := '0';
+      ddr3_RD               : out std_logic := '0'; 
       hsync                 : out std_logic;
       vsync                 : out std_logic;
       hblank                : out std_logic;
@@ -72,12 +72,21 @@ entity psx_top is
       Analog2Y              : in  signed(7 downto 0);                 
       -- sound                            
       sound_out_left        : out std_logic_vector(15 downto 0) := (others => '0');
-      sound_out_right       : out std_logic_vector(15 downto 0) := (others => '0')
+      sound_out_right       : out std_logic_vector(15 downto 0) := (others => '0');
+       -- savestates
+      increaseSSHeaderCount : in  std_logic;
+      save_state            : in  std_logic;
+      load_state            : in  std_logic;
+      savestate_number      : in  integer range 0 to 3;
+      state_loaded          : out std_logic;
+      rewind_on             : in  std_logic;
+      rewind_active         : in  std_logic
    );
 end entity;
 
 architecture arch of psx_top is
 
+   signal reset_in               : std_logic := '0';
    signal reset_intern           : std_logic := '0';
    signal reset_exe              : std_logic;
    
@@ -175,6 +184,16 @@ architecture arch of psx_top is
    signal hblank_intern          : std_logic;
    signal vblank_intern          : std_logic;
    
+   signal vram_BUSY              : std_logic;                    
+   signal vram_DOUT              : std_logic_vector(63 downto 0);
+   signal vram_DOUT_READY        : std_logic;
+   signal vram_BURSTCNT          : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal vram_ADDR              : std_logic_vector(19 downto 0) := (others => '0');                       
+   signal vram_DIN               : std_logic_vector(63 downto 0) := (others => '0');
+   signal vram_BE                : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal vram_WE                : std_logic := '0';
+   signal vram_RD                : std_logic := '0'; 
+   
    -- irq
    signal irqRequest             : std_logic;
    signal irq_VBLANK             : std_logic;
@@ -223,6 +242,36 @@ architecture arch of psx_top is
    signal gte_cmdData            : unsigned(31 downto 0);
    signal gte_cmdEna             : std_logic; 
 
+   -- savestates
+   signal loading_savestate      : std_logic;
+   signal sleep_savestate        : std_logic;
+   signal sleep_rewind           : std_logic;
+   
+   signal SS_reset               : std_logic;
+   
+   signal savestate_savestate    : std_logic; 
+   signal savestate_loadstate    : std_logic; 
+   signal savestate_address      : integer; 
+   signal savestate_busy         : std_logic; 
+   
+   signal SS_DataWrite           : std_logic_vector(31 downto 0);
+   signal SS_Adr                 : unsigned(18 downto 0);
+   signal SS_wren                : std_logic_vector(12 downto 0);
+   signal SS_DataRead_CPU        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_GPU        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_IRQ        : std_logic_vector(31 downto 0);
+   signal SS_busy                : std_logic;
+   
+   signal ss_ram_BUSY            : std_logic;                    
+   signal ss_ram_DOUT            : std_logic_vector(63 downto 0);
+   signal ss_ram_DOUT_READY      : std_logic;
+   signal ss_ram_BURSTCNT        : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal ss_ram_ADDR            : std_logic_vector(25 downto 0) := (others => '0');                       
+   signal ss_ram_DIN             : std_logic_vector(63 downto 0) := (others => '0');
+   signal ss_ram_BE              : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal ss_ram_WE              : std_logic := '0';
+   signal ss_ram_RD              : std_logic := '0'; 
+
    -- export
    signal cpu_done               : std_logic; 
    signal new_export             : std_logic; 
@@ -236,6 +285,7 @@ architecture arch of psx_top is
    signal export_gpus            : unsigned(31 downto 0);
    signal export_gobj            : unsigned(15 downto 0);
    
+   signal debug_firstGTE         : std_logic;
    
 begin 
 
@@ -246,7 +296,7 @@ begin
    process (clk1x)
    begin
       if rising_edge(clk1x) then
-         reset_intern <= reset or reset_exe;
+         reset_in <= reset or reset_exe;
       end if;
    end process;
    
@@ -288,22 +338,32 @@ begin
    begin
       if rising_edge(clk1x) then
       
-         ce        <= '1';
-         ce_cpu    <= '1';
-      
-         if (reset_intern = '1') then
-            cpuPaused <= '0';
+         if (sleep_savestate = '1' or sleep_rewind = '1') then
+         
+            ce        <= '0';
+            ce_cpu    <= '0';
+         
          else
       
-            if ((cpuPaused = '1' and dmaOn = '1') or (dmaOn = '1' and memMuxIdle = '1' and mem_request = '0')) then
-               cpuPaused <= '1';
-               ce_cpu    <= '0';
-            elsif (dmaOn = '0') then
+            ce        <= '1';
+            ce_cpu    <= '1';
+         
+            if (reset_intern = '1') then
                cpuPaused <= '0';
-               ce_cpu    <= '1';
+            else
+         
+               if ((cpuPaused = '1' and dmaOn = '1') or (dmaOn = '1' and memMuxIdle = '1' and mem_request = '0')) then
+                  cpuPaused <= '1';
+                  ce_cpu    <= '0';
+               elsif (dmaOn = '0') then
+                  cpuPaused <= '0';
+                  ce_cpu    <= '1';
+               end if;
+               
             end if;
             
-         end if;
+         end if;   
+         
       end if;
    end process;
    
@@ -406,6 +466,12 @@ begin
       bus_dataRead         => bus_irq_dataRead,
       
       irqRequest           => irqRequest,
+      
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(0 downto 0),      
+      SS_wren              => SS_wren(10),     
+      SS_DataRead          => SS_DataRead_IRQ,
       
       export_irq           => export_irq
    );
@@ -527,9 +593,9 @@ begin
       
       irq_VBLANK           => irq_VBLANK,
       
-      vram_BUSY            => vram_BUSY,      
-      vram_DOUT            => vram_DOUT,      
-      vram_DOUT_READY      => vram_DOUT_READY,
+      vram_BUSY            => ddr3_BUSY,       
+      vram_DOUT            => ddr3_DOUT,       
+      vram_DOUT_READY      => ddr3_DOUT_READY,
       vram_BURSTCNT        => vram_BURSTCNT,  
       vram_ADDR            => vram_ADDR,      
       vram_DIN             => vram_DIN,       
@@ -545,6 +611,14 @@ begin
       DisplayHeight        => DisplayHeight,
       DisplayOffsetX       => DisplayOffsetX,
       DisplayOffsetY       => DisplayOffsetY,
+      
+      loading_savestate    => loading_savestate,
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(2 downto 0),
+      SS_wren_GPU          => SS_wren(1),     
+      SS_wren_Timing       => SS_wren(2),
+      SS_DataRead          => SS_DataRead_GPU,
       
       export_gtm           => export_gtm,
       export_line          => export_line,
@@ -694,7 +768,15 @@ begin
       gte_writeData     => gte_writeData,
       gte_writeEna      => gte_writeEna, 
       gte_cmdData       => gte_cmdData,  
-      gte_cmdEna        => gte_cmdEna,   
+      gte_cmdEna        => gte_cmdEna, 
+
+      SS_reset          => SS_reset,
+      SS_DataWrite      => SS_DataWrite,
+      SS_Adr            => SS_Adr(6 downto 0),      
+      SS_wren           => SS_wren(0),     
+      SS_DataRead       => SS_DataRead_CPU,
+      
+      debug_firstGTE    => debug_firstGTE,
       
       cpu_done          => cpu_done,  
       cpu_export        => cpu_export
@@ -706,7 +788,7 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => reset,     
+      reset                => reset_intern,     
       
       gte_busy             => gte_busy,     
       gte_readAddr         => gte_readAddr, 
@@ -716,7 +798,89 @@ begin
       gte_writeData        => gte_writeData,
       gte_writeEna         => gte_writeEna, 
       gte_cmdData          => gte_cmdData,  
-      gte_cmdEna           => gte_cmdEna  
+      gte_cmdEna           => gte_cmdEna,
+      
+      debug_firstGTE       => debug_firstGTE
+   );
+   
+   ddr3_BURSTCNT <= ss_ram_BURSTCNT     when (sleep_savestate = '1') else vram_BURSTCNT;  
+   ddr3_ADDR     <= ss_ram_ADDR & "00"  when (sleep_savestate = '1') else x"00" & vram_ADDR;      
+   ddr3_DIN      <= ss_ram_DIN          when (sleep_savestate = '1') else vram_DIN;       
+   ddr3_BE       <= ss_ram_BE           when (sleep_savestate = '1') else vram_BE;        
+   ddr3_WE       <= ss_ram_WE           when (sleep_savestate = '1') else vram_WE;        
+   ddr3_RD       <= ss_ram_RD           when (sleep_savestate = '1') else vram_RD;        
+   
+   isavestates : entity work.savestates
+   port map
+   (
+      clk1x                   => clk1x,
+      clk2x                   => clk2x,
+      clk2xIndex              => clk2xIndex,
+      ce                      => ce,
+      reset_in                => reset_in,
+      reset_out               => reset_intern,
+      ss_reset                => SS_reset,
+           
+      load_done               => state_loaded,
+            
+      increaseSSHeaderCount   => increaseSSHeaderCount,
+      save                    => savestate_savestate,
+      load                    => savestate_loadstate,
+      savestate_address       => savestate_address,  
+      savestate_busy          => savestate_busy,    
+
+      system_idle             => '1',
+      savestate_slow          => open,
+      
+      SS_DataWrite            => SS_DataWrite,   
+      SS_Adr                  => SS_Adr,         
+      SS_wren                 => SS_wren,       
+      SS_DataRead_CPU         => SS_DataRead_CPU,
+      SS_DataRead_GPU         => SS_DataRead_GPU,
+      SS_busy                 => '0', --SS_busy,        
+      
+      loading_savestate       => loading_savestate,
+      saving_savestate        => open,
+      sleep_savestate         => sleep_savestate,
+            
+      ddr3_BUSY               => ddr3_BUSY,      
+      ddr3_DOUT               => ddr3_DOUT,      
+      ddr3_DOUT_READY         => ddr3_DOUT_READY,
+      ddr3_BURSTCNT           => ss_ram_BURSTCNT,
+      ddr3_ADDR               => ss_ram_ADDR,    
+      ddr3_DIN                => ss_ram_DIN,     
+      ddr3_BE                 => ss_ram_BE,      
+      ddr3_WE                 => ss_ram_WE,      
+      ddr3_RD                 => ss_ram_RD      
+   );  
+
+   istatemanager : entity work.statemanager
+   generic map
+   (
+      Softmap_SaveState_ADDR   => 58720256,
+      Softmap_Rewind_ADDR      => 33554432
+   )
+   port map
+   (
+      clk                 => clk2x,  
+      ce                  => ce,  
+      reset               => reset_in,
+                         
+      rewind_on           => rewind_on,    
+      rewind_active       => rewind_active,
+                        
+      savestate_number    => savestate_number,
+      save                => save_state,
+      load                => load_state,
+                       
+      sleep_rewind        => sleep_rewind,
+      vsync               => IRQ_VBlank,
+      system_idle         => '1',
+                 
+      request_savestate   => savestate_savestate,
+      request_loadstate   => savestate_loadstate,
+      request_address     => savestate_address,  
+      request_busy        => savestate_busy    
    );
    
    -- export

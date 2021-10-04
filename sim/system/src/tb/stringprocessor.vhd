@@ -282,6 +282,12 @@ begin
                -- endianess
                Read(buf, para_int2, OK);
                Read(buf, dev_null_str3);
+               -- offset
+               Read(buf, para_int3, OK);
+               Read(buf, dev_null_str3);
+               -- size
+               Read(buf, para_int4, OK);
+               Read(buf, dev_null_str3);
                -- address in target space
                Read(buf, address, OK);
                Read(buf, dev_null_str3);
@@ -290,12 +296,14 @@ begin
                COMMAND_FILE_NAME(1 to buf'length) <= buf(1 to buf'length);
                COMMAND_FILE_NAMELEN <= buf'length;
                COMMAND_FILE_TARGET <= address;
+               COMMAND_FILE_OFFSET <= para_int3;
+               COMMAND_FILE_SIZE   <= para_int4;
                if (para_int2 = 1) then
                   COMMAND_FILE_ENDIAN <= '1';
                else
                   COMMAND_FILE_ENDIAN <= '0';
                end if;
-               if (address <= 8388608) then -- sdram
+               if (address < 8388608) then -- sdram
                   COMMAND_FILE_START_1  <= '1';
                   wait until COMMAND_FILE_ACK_1 = '1';
                   COMMAND_FILE_START_1  <= '0';

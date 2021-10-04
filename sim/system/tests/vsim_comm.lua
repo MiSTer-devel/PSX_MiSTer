@@ -364,11 +364,13 @@ function compare_reg(target, reg, index)
    end
 end
 
-function reg_set_file(filename, baseaddress, index, endian)
+function reg_set_file(filename, baseaddress, index, endian, offset, size)
    if (index  == null) then index = 0 end
    if (endian == null) then endian = 0 end
+   if (offset == null) then offset = 0 end
+   if (size == null) then size = 0 end
    command_nr = command_nr + 1
-   command = "fil # "..command_nr.." # "..process_id.." # "..endian.." # "..(baseaddress + index).." # "..filename
+   command = "fil # "..command_nr.." # "..process_id.." # "..endian.." # "..offset.." # "..size.." # "..(baseaddress + index).." # "..filename
    command = command.."&"
    write_one(command)
    if (wait_on_writeblock) then
