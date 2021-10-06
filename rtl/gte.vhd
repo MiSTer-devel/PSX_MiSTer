@@ -17,17 +17,29 @@ entity gte is
       gte_readAddr         : in  unsigned(5 downto 0);
       gte_readData         : out unsigned(31 downto 0);
       gte_readEna          : in  std_logic; -- used in testbench only!
-      gte_writeAddr        : in  unsigned(5 downto 0);
-      gte_writeData        : in  unsigned(31 downto 0);
-      gte_writeEna         : in  std_logic; 
+      gte_writeAddr_in     : in  unsigned(5 downto 0);
+      gte_writeData_in     : in  unsigned(31 downto 0);
+      gte_writeEna_in      : in  std_logic; 
       gte_cmdData          : in  unsigned(31 downto 0);
       gte_cmdEna           : in  std_logic;
+      
+      loading_savestate    : in  std_logic;
+      SS_reset             : in  std_logic;
+      SS_DataWrite         : in  std_logic_vector(31 downto 0);
+      SS_Adr               : in  unsigned(5 downto 0);
+      SS_wren              : in  std_logic;
+      SS_DataRead          : out std_logic_vector(31 downto 0);
       
       debug_firstGTE       : out std_logic
    );
 end entity;
 
 architecture arch of gte is
+   
+   -- input
+   signal gte_writeAddr : unsigned(5 downto 0);
+   signal gte_writeData : unsigned(31 downto 0);
+   signal gte_writeEna  : std_logic;
 
    -- GTE data regs
    signal REG_V0X  : signed(15 downto 0);
@@ -230,6 +242,10 @@ architecture arch of gte is
   
 begin 
 
+   gte_writeAddr <= SS_Adr                 when (loading_savestate = '1') else gte_writeAddr_in;
+   gte_writeData <= unsigned(SS_DataWrite) when (loading_savestate = '1') else gte_writeData_in;
+   gte_writeEna  <= SS_wren                when (loading_savestate = '1') else gte_writeEna_in; 
+   
    process (clk2x)
       variable leadCountData : unsigned(31 downto 0);
       variable colorNewR     : unsigned(7 downto 0);
@@ -238,7 +254,7 @@ begin
    begin
       if rising_edge(clk2x) then
       
-         if (reset = '1') then
+         if (reset = '1' and loading_savestate = '0') then
          
             state    <= IDLE;
          
@@ -329,7 +345,7 @@ begin
             REG_ZSF4 <= (others => '0');
             REG_FLAG <= (others => '0');
             
-         elsif (ce = '1') then
+         elsif (ce = '1' or loading_savestate = '1') then
          
             MAC0req.trigger <= '0';
             MAC1req.trigger <= '0';
@@ -433,9 +449,11 @@ begin
                   when 13 => REG_SX1  <= signed(gte_writeData(15 downto 0)); REG_SY1 <= signed(gte_writeData(31 downto 16));
                   when 14 => REG_SX2  <= signed(gte_writeData(15 downto 0)); REG_SY2 <= signed(gte_writeData(31 downto 16));
                   when 15 => 
-                     REG_SX2  <= signed(gte_writeData(15 downto 0)); REG_SY2 <= signed(gte_writeData(31 downto 16));
-                     REG_SX1  <= REG_SX2; REG_SY1 <= REG_SY2;
-                     REG_SX0  <= REG_SX1; REG_SY0 <= REG_SY1;
+                     if (loading_savestate = '0') then
+                        REG_SX2  <= signed(gte_writeData(15 downto 0)); REG_SY2 <= signed(gte_writeData(31 downto 16));
+                        REG_SX1  <= REG_SX2; REG_SY1 <= REG_SY2;
+                        REG_SX0  <= REG_SX1; REG_SY0 <= REG_SY1;
+                     end if;
                   when 16 => REG_SZ0  <= gte_writeData(15 downto 0);
                   when 17 => REG_SZ1  <= gte_writeData(15 downto 0);
                   when 18 => REG_SZ2  <= gte_writeData(15 downto 0);
@@ -1315,7 +1333,14 @@ begin
          variable busy_1         : std_logic := '0'; 
          variable gte_writeEna_1 : std_logic := '0';
          variable gte_readEna_1  : std_logic := '0';
+         variable gte_readEna_2  : std_logic := '0';
+         variable gte_readEna_3  : std_logic := '0';
          variable gte_cmdEna_1   : std_logic := '0';
+         
+         variable gte_readAddr_1 : unsigned(5 downto 0);
+         variable gte_readAddr_2 : unsigned(5 downto 0);
+         variable gte_readData_2 : unsigned(31 downto 0);
+         variable gte_readData_1 : unsigned(31 downto 0);
          
          variable var_V0X   : signed(15 downto 0)   := (others => '0');
          variable var_V0Y   : signed(15 downto 0)   := (others => '0');
@@ -1503,21 +1528,29 @@ begin
                writeline(outfile, line_out);
             end if;
             
-            if (gte_readEna_1 = '1') then
+            if (gte_readEna_3 = '1') then
                write(line_out, string'("REG READ: "));
-               if (gte_readAddr < 10) then
+               if (gte_readAddr_2 < 10) then
                   write(line_out, string'("0"));
                end if;
-               write(line_out, to_integer(gte_readAddr));
+               write(line_out, to_integer(gte_readAddr_2));
                write(line_out, string'(" "));
-               write(line_out, to_hstring(gte_readData));
+               write(line_out, to_hstring(gte_readData_2));
                writeline(outfile, line_out);
             end if;
             
             busy_1 := gte_busy;
             gte_writeEna_1 := gte_writeEna and clk2xIndex;
-            gte_readEna_1  := gte_readEna and clk2xIndex;
             gte_cmdEna_1   := gte_cmdEna and clk2xIndex;
+            
+            gte_readEna_3  := gte_readEna_2 and (not gte_cmdEna) and (not gte_busy);
+            gte_readEna_2  := gte_readEna_1 and (not gte_cmdEna) and (not gte_busy);
+            gte_readEna_1  := gte_readEna and clk2xIndex and (not gte_cmdEna) and (not gte_busy);
+            gte_readAddr_2 := gte_readAddr_1;
+            gte_readAddr_1 := gte_readAddr;
+            
+            gte_readData_2 := gte_readData_1;
+            gte_readData_1 := gte_readData;
             
          end loop;
          

@@ -183,6 +183,7 @@ architecture arch of psx_top is
    -- gpu
    signal hblank_intern          : std_logic;
    signal vblank_intern          : std_logic;
+   signal hblank_tmr             : std_logic;
    
    signal vram_BUSY              : std_logic;                    
    signal vram_DOUT              : std_logic_vector(63 downto 0);
@@ -256,11 +257,15 @@ architecture arch of psx_top is
    
    signal SS_DataWrite           : std_logic_vector(31 downto 0);
    signal SS_Adr                 : unsigned(18 downto 0);
-   signal SS_wren                : std_logic_vector(12 downto 0);
+   signal SS_wren                : std_logic_vector(16 downto 0);
    signal SS_DataRead_CPU        : std_logic_vector(31 downto 0);
    signal SS_DataRead_GPU        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_DMA        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_GTE        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_PAD        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_TMR        : std_logic_vector(31 downto 0);
    signal SS_DataRead_IRQ        : std_logic_vector(31 downto 0);
-   signal SS_busy                : std_logic;
+   signal SS_DataRead_SDRam      : std_logic_vector(31 downto 0);
    
    signal ss_ram_BUSY            : std_logic;                    
    signal ss_ram_DOUT            : std_logic_vector(63 downto 0);
@@ -284,6 +289,9 @@ architecture arch of psx_top is
    signal export_line            : unsigned(11 downto 0);
    signal export_gpus            : unsigned(31 downto 0);
    signal export_gobj            : unsigned(15 downto 0);
+   signal export_t_current0      : unsigned(15 downto 0);
+   signal export_t_current1      : unsigned(15 downto 0);
+   signal export_t_current2      : unsigned(15 downto 0);
    
    signal debug_firstGTE         : std_logic;
    
@@ -342,6 +350,9 @@ begin
          
             ce        <= '0';
             ce_cpu    <= '0';
+            if (reset_intern = '1') then
+               cpuPaused <= '0';
+            end if;
          
          else
       
@@ -416,7 +427,13 @@ begin
       bus_read             => bus_pad_read,     
       bus_write            => bus_pad_write,    
       bus_writeMask        => bus_pad_writeMask,   
-      bus_dataRead         => bus_pad_dataRead
+      bus_dataRead         => bus_pad_dataRead,
+      
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(2 downto 0),      
+      SS_wren              => SS_wren(5),     
+      SS_DataRead          => SS_DataRead_PAD
    );
    
    isio : entity work.sio
@@ -509,7 +526,13 @@ begin
       bus_dataWrite        => bus_dma_dataWrite,
       bus_read             => bus_dma_read,     
       bus_write            => bus_dma_write,    
-      bus_dataRead         => bus_dma_dataRead
+      bus_dataRead         => bus_dma_dataRead,
+      
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(5 downto 0),      
+      SS_wren              => SS_wren(3),     
+      SS_DataRead          => SS_DataRead_DMA
    );
    
    ram_dataWrite <= ram_dma_dataWrite when (cpuPaused = '1') else ram_cpu_dataWrite;
@@ -547,7 +570,7 @@ begin
       reset                => reset_intern,
       
       dotclock             => '0', -- todo
-      hblank               => hblank_intern,
+      hblank               => hblank_tmr,
       vblank               => vblank_intern,
       
       irqRequest0          => irq_TIMER0,
@@ -558,7 +581,17 @@ begin
       bus_dataWrite        => bus_tmr_dataWrite,
       bus_read             => bus_tmr_read,     
       bus_write            => bus_tmr_write,       
-      bus_dataRead         => bus_tmr_dataRead
+      bus_dataRead         => bus_tmr_dataRead,
+      
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(3 downto 0),      
+      SS_wren              => SS_wren(8),     
+      SS_DataRead          => SS_DataRead_TMR,
+      
+      export_t_current0    => export_t_current0,
+      export_t_current1    => export_t_current1,
+      export_t_current2    => export_t_current2
    );
    
    hblank <= hblank_intern;
@@ -606,6 +639,7 @@ begin
       hsync                => hsync, 
       vsync                => vsync, 
       hblank               => hblank_intern,
+      hblank_tmr           => hblank_tmr,
       vblank               => vblank_intern,
       DisplayWidth         => DisplayWidth, 
       DisplayHeight        => DisplayHeight,
@@ -644,7 +678,7 @@ begin
    imemorymux : entity work.memorymux
    generic map
    (
-      NOMEMWAIT => is_simu
+      NOMEMWAIT => '1' --is_simu
    )
    port map
    (
@@ -734,7 +768,14 @@ begin
       bus_exp2_read        => bus_exp2_read,     
       bus_exp2_write       => bus_exp2_write,    
       bus_exp2_dataRead    => bus_exp2_dataRead, 
-      bus_exp2_writeMask   => bus_exp2_writeMask
+      bus_exp2_writeMask   => bus_exp2_writeMask,
+      
+      loading_savestate    => loading_savestate,
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(18 downto 0),
+      SS_wren_SDRam        => SS_wren(16),     
+      SS_DataRead          => SS_DataRead_SDRam
    );
    
    icpu : entity work.cpu
@@ -772,8 +813,9 @@ begin
 
       SS_reset          => SS_reset,
       SS_DataWrite      => SS_DataWrite,
-      SS_Adr            => SS_Adr(6 downto 0),      
-      SS_wren           => SS_wren(0),     
+      SS_Adr            => SS_Adr(7 downto 0),   
+      SS_wren_CPU       => SS_wren(0),     
+      SS_wren_SCP       => SS_wren(12),     
       SS_DataRead       => SS_DataRead_CPU,
       
       debug_firstGTE    => debug_firstGTE,
@@ -794,11 +836,18 @@ begin
       gte_readAddr         => gte_readAddr, 
       gte_readData         => gte_readData, 
       gte_readEna          => gte_readEna,
-      gte_writeAddr        => gte_writeAddr,
-      gte_writeData        => gte_writeData,
-      gte_writeEna         => gte_writeEna, 
+      gte_writeAddr_in     => gte_writeAddr,
+      gte_writeData_in     => gte_writeData,
+      gte_writeEna_in      => gte_writeEna, 
       gte_cmdData          => gte_cmdData,  
       gte_cmdEna           => gte_cmdEna,
+      
+      loading_savestate    => loading_savestate,
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(5 downto 0),
+      SS_wren              => SS_wren(4),     
+      SS_DataRead          => SS_DataRead_GTE,
       
       debug_firstGTE       => debug_firstGTE
    );
@@ -811,6 +860,10 @@ begin
    ddr3_RD       <= ss_ram_RD           when (sleep_savestate = '1') else vram_RD;        
    
    isavestates : entity work.savestates
+   generic map
+   (
+      FASTSIM => is_simu
+   )
    port map
    (
       clk1x                   => clk1x,
@@ -837,7 +890,8 @@ begin
       SS_wren                 => SS_wren,       
       SS_DataRead_CPU         => SS_DataRead_CPU,
       SS_DataRead_GPU         => SS_DataRead_GPU,
-      SS_busy                 => '0', --SS_busy,        
+
+      sdram_done              => ram_done,
       
       loading_savestate       => loading_savestate,
       saving_savestate        => open,
@@ -893,23 +947,27 @@ begin
       iexport : entity work.export
       port map
       (
-         clk            => clk1x,
-         ce             => ce,
-         reset          => reset_intern,
+         clk               => clk1x,
+         ce                => ce,
+         reset             => reset_intern,
+            
+         new_export        => cpu_done,
+         export_cpu        => cpu_export,
+            
+         export_irq        => export_irq,
+            
+         export_gtm        => export_gtm,
+         export_line       => export_line,
+         export_gpus       => export_gpus,
+         export_gobj       => export_gobj,
          
-         new_export     => cpu_done,
-         export_cpu     => cpu_export,
-         
-         export_irq     => export_irq,
-         
-         export_gtm     => export_gtm,
-         export_line    => export_line,
-         export_gpus    => export_gpus,
-         export_gobj    => export_gobj,
-         
-         export_8       => export_8,
-         export_16      => export_16,
-         export_32      => export_32
+         export_t_current0 => export_t_current0,
+         export_t_current1 => export_t_current1,
+         export_t_current2 => export_t_current2,
+            
+         export_8          => export_8,
+         export_16         => export_16,
+         export_32         => export_32
       );
    
    

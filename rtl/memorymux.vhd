@@ -95,7 +95,14 @@ entity memorymux is
       bus_exp2_read        : out std_logic;
       bus_exp2_write       : out std_logic;
       bus_exp2_dataRead    : in  std_logic_vector(31 downto 0);
-      bus_exp2_writeMask   : out std_logic_vector(3 downto 0)
+      bus_exp2_writeMask   : out std_logic_vector(3 downto 0);
+      
+      loading_savestate    : in  std_logic;
+      SS_reset             : in  std_logic;
+      SS_DataWrite         : in  std_logic_vector(31 downto 0);
+      SS_Adr               : in  unsigned(18 downto 0);
+      SS_wren_SDRam        : in  std_logic;
+      SS_DataRead          : out std_logic_vector(31 downto 0)
    );
 end entity;
 
@@ -277,7 +284,7 @@ begin
       
          if (reset = '1') then
 
-            state <= IDLE;
+            state   <= IDLE;
 
          elsif (ce = '1') then
          
@@ -285,7 +292,6 @@ begin
                when IDLE =>
                   if (loadExe_latched = '1') then
                      
-                     loadExe_latched <= '0';
                      state           <= EXEREADHEADER;
                
                   elsif (mem_request = '1') then
@@ -500,8 +506,9 @@ begin
                when EXECOPYREAD =>
                   if (ram_done = '1') then
                      if (execopycnt >= exe_file_size) then
-                        state     <= IDLE;
-                        reset_exe <= '1';
+                        state           <= IDLE;
+                        reset_exe       <= '1';
+                        loadExe_latched <= '0';
                      else
                         state      <= EXECOPYWRITE;
                         ram_ena    <= '1';
@@ -523,6 +530,22 @@ begin
                   
                when others => null;
             
+            end case;
+            
+         else
+         
+            case (state) is
+               when IDLE =>
+                  if (SS_wren_SDRam = '1') then
+                     ram_ena       <= '1';
+                     ram_128       <= '0';
+                     ram_rnw       <= '0';
+                     ram_Adr       <= "00" & std_logic_vector(SS_Adr(18 downto 0)) & "00";
+                     ram_be        <= "1111";
+                     ram_dataWrite <= SS_DataWrite;
+                  end if;
+            
+               when others => null;
             end case;
 
          end if;

@@ -88,6 +88,8 @@ begin
       variable para_int3      : integer;
       variable para_int4      : integer;
       
+      variable targetmem      : integer;
+      
       variable address        : integer;
       variable data           : integer;
       variable count          : integer;
@@ -288,6 +290,9 @@ begin
                -- size
                Read(buf, para_int4, OK);
                Read(buf, dev_null_str3);
+               -- targetmem
+               Read(buf, targetmem, OK);
+               Read(buf, dev_null_str3);
                -- address in target space
                Read(buf, address, OK);
                Read(buf, dev_null_str3);
@@ -303,12 +308,12 @@ begin
                else
                   COMMAND_FILE_ENDIAN <= '0';
                end if;
-               if (address < 8388608) then -- sdram
+               if (targetmem = 1 or (targetmem = 0 and address < 8388608)) then -- sdram
                   COMMAND_FILE_START_1  <= '1';
                   wait until COMMAND_FILE_ACK_1 = '1';
                   COMMAND_FILE_START_1  <= '0';
                   wait for 20 ns;
-                else
+               else
                    COMMAND_FILE_START_2  <= '1';
                   wait until COMMAND_FILE_ACK_2 = '1';
                   COMMAND_FILE_START_2  <= '0';

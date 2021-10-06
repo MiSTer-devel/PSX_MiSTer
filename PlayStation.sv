@@ -270,7 +270,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading;
 
 `include "build_id.v"
 parameter CONF_STR = {
-	"PlayStation;SS3E000000:80000;",
+	"PlayStation;SS3E000000:400000;",
 	"FS,EXE,Load Exe;",
 	"-;",
 	"D0RC,Reload Backup RAM;",
@@ -279,9 +279,8 @@ parameter CONF_STR = {
 	"D0-;",
 	"o4,Savestates to SDCard,On,Off;",
 	"o56,Savestate Slot,1,2,3,4;",
-	"h4H3RH,Save state (Alt-F1);",
-	"h4H3RI,Restore state (F1);",
-	"h4H3-;",
+	"RH,Save state (Alt-F1);",
+	"RI,Restore state (F1);",
 	"- ;",
 	"OA,Color,16,24;",
 	"OB,VRAMViewer,Off,On;",
@@ -551,8 +550,8 @@ psx
 	.sound_out_right(AUDIO_R),
    //savestates
    .increaseSSHeaderCount (!status[36]),
-   .save_state            (0), //(ss_save),
-   .load_state            (0), //(ss_load),
+   .save_state            (ss_save),
+   .load_state            (ss_load),
    .savestate_number      (ss_slot),
    .state_loaded          (),
    .rewind_on             (0), //(status[27]),

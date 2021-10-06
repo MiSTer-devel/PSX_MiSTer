@@ -55,15 +55,18 @@ begin
       variable next_vector    : bit_vector (3 downto 0);
       variable actual_len     : natural;
       variable targetpos      : integer;
+      variable loadcount      : integer;
       
-      file outfile: text;
-      variable line_out : line;
-      variable color : std_logic_vector(31 downto 0);
+      file outfile            : text;
+      variable line_out       : line;
+      variable color          : std_logic_vector(31 downto 0);
       variable linecounter_int : integer;
-      variable pixelTimeout : integer; 
-      variable pixelCount   : integer; 
+      variable pixelTimeout   : integer; 
+      variable pixelCount     : integer; 
+         
+      variable readval        : signed(31 downto 0); 
       
-      variable readval      : signed(31 downto 0); 
+      variable dumpVRAMimage  : std_logic;
       
       -- copy from std_logic_arith, not used here because numeric std is also included
       function CONV_STD_LOGIC_VECTOR(ARG: INTEGER; SIZE: INTEGER) return STD_LOGIC_VECTOR is
@@ -101,6 +104,8 @@ begin
       write(line_out, string'("1024#512#1")); 
       writeline(outfile, line_out);
       
+      dumpVRAMimage := '0';
+      
       if (loadVram = '1') then
          file_open(f_status, infile, "R:\\gpu_vram_FPSXA.bin", read_mode);
          
@@ -123,6 +128,7 @@ begin
             file_close(infile);
             
             report "VRAM loaded";
+            dumpVRAMimage := '1';
          
       end if;
       
@@ -222,7 +228,17 @@ begin
             
             --report "written to " & integer'image(targetpos);
          
-            while (not endfile(infile)) loop
+            for i in 1 to (COMMAND_FILE_OFFSET / 4) loop
+               read(infile, next_vector, actual_len); 
+            end loop;
+         
+            loadcount := 0;
+            
+            if (targetpos = 0) then
+               dumpVRAMimage := '1';
+            end if;
+         
+            while (not endfile(infile) and (COMMAND_FILE_SIZE = 0 or loadcount < COMMAND_FILE_SIZE)) loop
                
                read(infile, next_vector, actual_len);  
                
@@ -238,12 +254,33 @@ begin
                end if;
                targetpos       := targetpos + 1;
                
+               loadcount       := loadcount + 4;
+               
             end loop;
          
             file_close(infile);
          
             COMMAND_FILE_ACK_2 <= '1';
          
+         end if;
+         
+         if (dumpVRAMimage = '1') then
+            dumpVRAMimage := '0';
+            for x in 0 to 511 loop
+               for y in 0 to 511 loop
+                  cmd_din_save(31 downto 0) := std_logic_vector(to_signed(data(y * 512 + x), 32));
+                  for i in 0 to 1 loop
+                     color := x"00" & cmd_din_save((i * 16) + 4 downto (i * 16)) & "000" & cmd_din_save((i * 16) + 9 downto (i * 16) + 5) & "000" & cmd_din_save((i * 16) + 14 downto (i * 16) + 10) & "000";
+                     write(line_out, to_integer(unsigned(color)));
+                     write(line_out, string'("#"));
+                     write(line_out, (x * 2 + i));
+                     write(line_out, string'("#")); 
+                     write(line_out, y);
+                     writeline(outfile, line_out);
+                  end loop;
+               end loop;
+            end loop;
+            pixelTimeout := 1;
          end if;
       
       end loop;

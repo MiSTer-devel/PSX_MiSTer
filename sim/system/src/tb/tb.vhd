@@ -75,6 +75,7 @@ architecture arch of etb is
    signal ram_be              : std_logic_vector(3 downto 0);
    signal ram_rnw             : std_logic;
    signal ram_ena             : std_logic;
+   signal ram_128             : std_logic;
    signal ram_done            : std_logic;   
    signal ram_reqprocessed    : std_logic;   
    signal ram_idle            : std_logic;   
@@ -128,7 +129,7 @@ begin
    KeySquare   <= '0';
    KeySelect   <= '0';
    KeyStart    <= '0';
-   KeyRight    <= '1' after 300 ms;
+   KeyRight    <= '0'; --'1' after 300 ms;
    KeyLeft     <= '0';
    KeyUp       <= '0';
    KeyDown     <= '0';
@@ -169,6 +170,7 @@ begin
       ram_be                => ram_be,      
       ram_rnw               => ram_rnw,      
       ram_ena               => ram_ena,      
+      ram_128               => ram_128,      
       ram_done              => ram_done,
       ram_reqprocessed      => ram_reqprocessed,
       ram_idle              => ram_idle,
@@ -237,6 +239,7 @@ begin
       clk          => clk33,
       addr         => ram_Adr,
       req          => ram_ena,
+      ram_128      => ram_128,
       rnw          => ram_rnw,
       be           => ram_be,
       di           => ram_dataWrite,

@@ -420,6 +420,7 @@ begin
                   end if;
                               
                when REQUESTCOLOR =>
+                  drawTiming   <= (others => '0');
                   if (fifo_Valid = '1') then
                      state             <= REQUESTPOS;
                      rec_vertices(rec_index).r <= unsigned(fifo_data( 7 downto  0));
@@ -428,6 +429,7 @@ begin
                   end if;   
                   
                when REQUESTPOS =>
+                  drawTiming   <= (others => '0');
                   if (fifo_Valid = '1') then
                      rec_vertices(rec_index).x <= to_integer(resize(signed(fifo_data(10 downto  0)),12) + resize(drawingOffsetX, 12));
                      rec_vertices(rec_index).y <= to_integer(resize(signed(fifo_data(26 downto 16)),12) + resize(drawingOffsetY, 12));
@@ -447,6 +449,7 @@ begin
                   end if;
                   
                when REQUESTTEXTURE =>
+                  drawTiming   <= (others => '0');
                   if (fifo_Valid = '1') then
                      rec_vertices(rec_index).u <= unsigned(fifo_data( 7 downto  0));
                      rec_vertices(rec_index).v <= unsigned(fifo_data(15 downto  8));

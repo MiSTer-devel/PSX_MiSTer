@@ -49,8 +49,8 @@ architecture arch of irq is
    
    -- savestates
    type t_ssarray is array(0 to 1) of std_logic_vector(31 downto 0);
-   signal ss_in  : t_ssarray;
-  
+   signal ss_in  : t_ssarray := (others => (others => '0'));  
+   
 begin 
 
    export_irq  <= "00000" & I_STATUS;

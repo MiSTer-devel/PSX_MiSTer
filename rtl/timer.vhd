@@ -21,7 +21,17 @@ entity timer is
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
       bus_read             : in  std_logic;
       bus_write            : in  std_logic;
-      bus_dataRead         : out std_logic_vector(31 downto 0)
+      bus_dataRead         : out std_logic_vector(31 downto 0);
+      
+      SS_reset             : in  std_logic;
+      SS_DataWrite         : in  std_logic_vector(31 downto 0);
+      SS_Adr               : in  unsigned(3 downto 0);
+      SS_wren              : in  std_logic;
+      SS_DataRead          : out std_logic_vector(31 downto 0);
+      
+      export_t_current0    : out unsigned(15 downto 0);
+      export_t_current1    : out unsigned(15 downto 0);
+      export_t_current2    : out unsigned(15 downto 0)
    );
 end entity;
 
@@ -35,17 +45,25 @@ architecture arch of timer is
    end record;
   
    type ttimerArray is array (0 to 2) of timerRecord;
-   signal timerArray : ttimerArray;
+   signal timerArray : ttimerArray := (others => ((others => '0'), (others => '0'), (others => '0'), '0'));
   
    signal timer2_subcount : unsigned(2 downto 0);
    signal hblank_1        : std_logic;
    signal vblank_1        : std_logic;
-  
+   
+   -- savestates
+   type t_ssarray is array(0 to 15) of std_logic_vector(31 downto 0);
+   signal ss_in  : t_ssarray := (others => (others => '0'));  
+   
 begin 
 
    irqRequest0 <= not timerArray(0).T_MODE(10);
    irqRequest1 <= not timerArray(1).T_MODE(10);
    irqRequest2 <= not timerArray(2).T_MODE(10);
+   
+   export_t_current0 <= timerArray(0).T_CURRENT;
+   export_t_current1 <= timerArray(1).T_CURRENT;
+   export_t_current2 <= timerArray(2).T_CURRENT;
 
    process (clk1x)
       variable channel  : integer range 0 to 3;
@@ -57,14 +75,23 @@ begin
       
          if (reset = '1') then
          
-            for i in 0 to 2 loop
-               timerArray(i).T_CURRENT <= (others => '0');
-               timerArray(i).T_MODE    <= x"0400";
-               timerArray(i).T_TARGET  <= (others => '0');
-               timerArray(i).irqDone   <= '0';
-            end loop;
+            timerArray(0).T_CURRENT <= unsigned(ss_in(0)(15 downto 0));
+            timerArray(0).T_MODE    <= unsigned(ss_in(3)(15 downto 0)); -- x"0400";
+            timerArray(0).T_TARGET  <= unsigned(ss_in(6)(15 downto 0));
+            timerArray(0).irqDone   <= ss_in(9)(11);
             
-            timer2_subcount <= (others => '0');
+            timerArray(1).T_CURRENT <= unsigned(ss_in(1)(15 downto 0));
+            timerArray(1).T_MODE    <= unsigned(ss_in(4)(15 downto 0)); -- x"0400";
+            timerArray(1).T_TARGET  <= unsigned(ss_in(7)(15 downto 0));
+            timerArray(1).irqDone   <= ss_in(9)(12);
+            
+            timerArray(2).T_CURRENT <= unsigned(ss_in(2)(15 downto 0));
+            timerArray(2).T_MODE    <= unsigned(ss_in(5)(15 downto 0)); -- x"0400";
+            timerArray(2).T_TARGET  <= unsigned(ss_in(8)(15 downto 0));
+            timerArray(2).irqDone   <= ss_in(9)(13);
+         
+            
+            timer2_subcount <= unsigned(ss_in(9)(2 downto 0));
 
          elsif (ce = '1') then
          
@@ -87,7 +114,7 @@ begin
             end if;
             
             if (timerArray(1).T_MODE(8) = '1') then
-               if (hblank_1 = '0' and hblank = '1') then
+               if (hblank_1 = '0' and hblank = '1') then  -- todo: correct hblank timer tick position to be found
                   newTick(1) := '1';
                end if;
             else
@@ -146,8 +173,9 @@ begin
                      end if;
                   end if;  
 
-                  if (timerArray(i).T_CURRENT = x"FFFF") then
+                  if (timerArray(i).T_CURRENT = x"FFFE") then -- todo: wraparound at 0xFFFF or 0x0000 ?
                      timerArray(i).T_MODE(12) <= '1';
+                     newValue := (others => '0');
                      if (timerArray(i).T_MODE(5) = '1') then
                         newIRQ := '1';
                      end if;
@@ -220,6 +248,31 @@ begin
             end if;
             
          end if;
+      end if;
+   end process;
+   
+--##############################################################
+--############################### savestates
+--##############################################################
+
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         if (SS_reset = '1') then
+         
+            for i in 0 to 1 loop
+               ss_in(i) <= (others => '0');
+            end loop;
+            
+            ss_in(3)(15 downto 0) <= x"0400"; -- T_MODE0
+            ss_in(4)(15 downto 0) <= x"0400"; -- T_MODE1
+            ss_in(5)(15 downto 0) <= x"0400"; -- T_MODE2
+            
+         elsif (SS_wren = '1') then
+            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+      
       end if;
    end process;
 

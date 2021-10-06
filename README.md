@@ -83,6 +83,6 @@ Timer  : 50%
 GTE    : 80%
 - timing not correct
 
-- MDEC   : 0% 
-- CD     : 0%
-- SPU    : 0%
+MDEC   : 0% 
+CD     : 0%
+SPU    : 0%

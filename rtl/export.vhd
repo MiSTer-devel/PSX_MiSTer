@@ -35,44 +35,51 @@ use work.pexport.all;
 entity export is
    port 
    (
-      clk              : in std_logic;
-      ce               : in std_logic;
-      reset            : in std_logic;
+      clk               : in std_logic;
+      ce                : in std_logic;
+      reset             : in std_logic;
+         
+      new_export        : in std_logic;
+      export_cpu        : in cpu_export_type;    
+         
+      export_irq        : in unsigned(15 downto 0);
+         
+      export_gtm        : in unsigned(11 downto 0);
+      export_line       : in unsigned(11 downto 0);
+      export_gpus       : in unsigned(31 downto 0);
+      export_gobj       : in unsigned(15 downto 0);
       
-      new_export       : in std_logic;
-      export_cpu       : in cpu_export_type;    
+      export_t_current0 : in unsigned(15 downto 0);
+      export_t_current1 : in unsigned(15 downto 0);
+      export_t_current2 : in unsigned(15 downto 0);
       
-      export_irq       : in unsigned(15 downto 0);
-      
-      export_gtm       : in unsigned(11 downto 0);
-      export_line      : in unsigned(11 downto 0);
-      export_gpus      : in unsigned(31 downto 0);
-      export_gobj      : in unsigned(15 downto 0);
-      
-      export_8         : in std_logic_vector(7 downto 0);
-      export_16        : in std_logic_vector(15 downto 0);
-      export_32        : in std_logic_vector(31 downto 0)
+      export_8          : in std_logic_vector(7 downto 0);
+      export_16         : in std_logic_vector(15 downto 0);
+      export_32         : in std_logic_vector(31 downto 0)
    );
 end entity;
 
 architecture arch of export is
      
-   signal newticks         : unsigned(11 downto 0) := (others => '0');
-   signal totalticks       : unsigned(31 downto 0) := (others => '0');
-   signal cyclenr          : unsigned(31 downto 0) := x"00000001";
+   signal newticks               : unsigned(11 downto 0) := (others => '0');
+   signal totalticks             : unsigned(31 downto 0) := (others => '0');
+   signal cyclenr                : unsigned(31 downto 0) := x"00000001";
+                  
+   signal reset_1                : std_logic := '0';
+   signal export_reset           : std_logic := '0';
+   signal exportnow              : std_logic;
+            
+   signal export_cpu_last        : cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'), (others => '0'));   
          
-   signal reset_1          : std_logic := '0';
-   signal export_reset     : std_logic := '0';
-   signal exportnow        : std_logic;
-   
-   signal export_cpu_last  : cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'), (others => '0'));   
-
-   signal export_irq_last  : unsigned(15 downto 0) := (others => '0');
-   
-   signal export_gtm_last  : unsigned(11 downto 0) := (others => '0');
-   signal export_line_last : unsigned(11 downto 0) := (others => '0');
-   signal export_gpus_last : unsigned(31 downto 0) := (others => '0');
-   signal export_gobj_last : unsigned(15 downto 0) := (others => '0');
+   signal export_irq_last        : unsigned(15 downto 0) := (others => '0');
+            
+   signal export_gtm_last        : unsigned(11 downto 0) := (others => '0');
+   signal export_line_last       : unsigned(11 downto 0) := (others => '0');
+   signal export_gpus_last       : unsigned(31 downto 0) := (others => '0');
+   signal export_gobj_last       : unsigned(15 downto 0) := (others => '0');
+   signal export_t_current0_last : unsigned(15 downto 0) := (others => '0');
+   signal export_t_current1_last : unsigned(15 downto 0) := (others => '0');
+   signal export_t_current2_last : unsigned(15 downto 0) := (others => '0');
    
    function to_lower(c: character) return character is
       variable l: character;
@@ -206,6 +213,10 @@ begin
             if (export_line /= export_line_last) then write(line_out, string'("LINE ")); write(line_out, to_lower(to_hstring(export_line)) & " "); end if;
             if (export_gpus /= export_gpus_last) then write(line_out, string'("GPUS ")); write(line_out, to_lower(to_hstring(export_gpus)) & " "); end if;
             if (export_gobj /= export_gobj_last) then write(line_out, string'("GOBJ ")); write(line_out, to_lower(to_hstring(export_gobj)) & " "); end if;
+            
+            if (export_t_current0 /= export_t_current0_last) then write(line_out, string'("T0 ")); write(line_out, to_lower(to_hstring(export_t_current0)) & " "); end if;
+            if (export_t_current1 /= export_t_current1_last) then write(line_out, string'("T1 ")); write(line_out, to_lower(to_hstring(export_t_current1)) & " "); end if;
+            if (export_t_current2 /= export_t_current2_last) then write(line_out, string'("T2 ")); write(line_out, to_lower(to_hstring(export_t_current2)) & " "); end if;
 
 
             writeline(outfile, line_out);
@@ -220,12 +231,15 @@ begin
                file_open(f_status, outfile, filename_current, append_mode);
             end if;
             
-            export_cpu_last   <= export_cpu;
-            export_irq_last   <= export_irq;
-            export_gtm_last   <= export_gtm;
-            export_line_last  <= export_line;
-            export_gpus_last  <= export_gpus;
-            export_gobj_last  <= export_gobj;
+            export_cpu_last         <= export_cpu;
+            export_irq_last         <= export_irq;
+            export_gtm_last         <= export_gtm;
+            export_line_last        <= export_line;
+            export_gpus_last        <= export_gpus;
+            export_gobj_last        <= export_gobj;
+            export_t_current0_last  <= export_t_current0;
+            export_t_current1_last  <= export_t_current1;
+            export_t_current2_last  <= export_t_current2;
             
          end if;
             

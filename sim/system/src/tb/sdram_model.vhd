@@ -11,6 +11,7 @@ entity sdram_model is
       clk               : in  std_logic;
       addr              : in  std_logic_vector(22 downto 0);
       req               : in  std_logic;
+      ram_128           : in  std_logic;
       rnw               : in  std_logic;
       be                : in  std_logic_vector(3 downto 0);
       di                : in  std_logic_vector(31 downto 0);
@@ -113,10 +114,18 @@ begin
       elsif ((req = '1' or req_buffer = '1') and rnw = '1') then
          ram_idle     <= '0';
          do           <= (others => 'X');
-         if (req_buffer = '1') then
-            waitcnt      <= 1;
+         if (ram_128 = '1') then
+            if (req_buffer = '1') then
+               waitcnt      <= 3;
+            else
+               waitcnt      <= 4;
+            end if;
          else
-            waitcnt      <= 2;
+            if (req_buffer = '1') then
+               waitcnt      <= 1;
+            else
+               waitcnt      <= 2;
+            end if;
          end if;
          reqprocessed <= '1';
          req_buffer   <= '0';

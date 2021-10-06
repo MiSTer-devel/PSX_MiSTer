@@ -5,7 +5,8 @@ use IEEE.numeric_std.all;
 entity savestates is
    generic 
    (
-      SAVETYPESCOUNT : integer := 13
+      FASTSIM        : std_logic;
+      SAVETYPESCOUNT : integer := 17
    );
    port 
    (
@@ -33,7 +34,8 @@ entity savestates is
       SS_wren                 : out std_logic_vector(SAVETYPESCOUNT - 1 downto 0);
       SS_DataRead_CPU         : in  std_logic_vector(31 downto 0) := (others => '0');
       SS_DataRead_GPU         : in  std_logic_vector(31 downto 0) := (others => '0');
-      SS_busy                 : in  std_logic;
+            
+      sdram_done              : in  std_logic;
             
       loading_savestate       : out std_logic := '0';
       saving_savestate        : out std_logic := '0';
@@ -67,19 +69,23 @@ architecture arch of savestates is
    type t_savetypes is array(0 to SAVETYPESCOUNT - 1) of tsavetype;
    constant savetypes : t_savetypes := 
    (
-      ( 1024, 128),    -- CPU          0 
-      ( 2048,   8),    -- GPU          1 
-      ( 3072,   8),    -- GPUTiming    2 
-      ( 4096,  64),    -- DMA          3 
-      ( 5120,  64),    -- GTE          4 
-      ( 6144,   8),    -- Joypad       5 
-      ( 7168, 256),    -- MDEC         6 
-      ( 8192,  16),    -- Memory       7 
-      ( 9216,  16),    -- Timer        8 
-      (10240, 256),    -- Sound        9 
-      (11264,   2),    -- IRQ          10
-      (12288,   8),    -- SIO          11
-      (31744,1024)     -- Scratchpad   12
+      (  1024,   128),    -- CPU          0 
+      (  2048,     8),    -- GPU          1 
+      (  3072,     8),    -- GPUTiming    2 
+      (  4096,    64),    -- DMA          3 
+      (  5120,    64),    -- GTE          4 
+      (  6144,     8),    -- Joypad       5 
+      (  7168,   256),    -- MDEC         6 
+      (  8192,    16),    -- Memory       7 
+      (  9216,    16),    -- Timer        8 
+      ( 10240,   256),    -- Sound        9 
+      ( 11264,     2),    -- IRQ          10
+      ( 12288,     8),    -- SIO          11
+      ( 31744,   256),    -- Scratchpad   12   
+      ( 32768,     2),    -- CDROM        13  -- size should be  32768
+      (131072,     2),    -- SPURAM       14  -- size should be 131072
+      (262144,262144),    -- VRAM         15
+      (524288,524288)     -- RAM          16
    );
 
    type tstate is
@@ -99,9 +105,9 @@ architecture arch of savestates is
       LOAD_HEADERAMOUNTCHECK,
       LOADMEMORY_NEXT,
       LOADMEMORY_READ,
-      LOADMEMORY_READY,
       LOADMEMORY_WRITE,
-      LOADMEMORY_WRITE_SLOW,
+      LOADMEMORY_WRITE_VRAM,
+      LOADMEMORY_WRITE_SDRAM,
       LOADMEMORY_WRITE_NEXT
    );
    signal state : tstate := IDLE;
@@ -118,6 +124,7 @@ architecture arch of savestates is
    signal SS_Adr_2x           : unsigned(18 downto 0) := (others => '0');
    signal SS_wren_2x          : std_logic_vector(SAVETYPESCOUNT - 1 downto 0);
    
+   signal ddr3_ADDR_save      : std_logic_vector(25 downto 0) := (others => '0');
    signal ddr3_DOUT_saved     : std_logic_vector(63 downto 0);
    signal dwordcounter        : integer range 0 to 1 := 0;
    signal SS_DataRead         : std_logic_vector(31 downto 0);
@@ -343,7 +350,7 @@ begin
                end if;
             
             when LOADMEMORY_NEXT =>
-               if (savetype_counter < SAVETYPESCOUNT) then
+               if ((FASTSIM = '0' and savetype_counter < SAVETYPESCOUNT) or (FASTSIM = '1' and savetype_counter < 15)) then
                   ddr3_ADDR      <= std_logic_vector(to_unsigned(savestate_address + savetypes(savetype_counter).offset, 26));
                   ddr3_RD        <= '1';
                   state          <= LOADMEMORY_READ;
@@ -360,14 +367,18 @@ begin
                end if;
             
             when LOADMEMORY_READ =>
+               ddr3_ADDR_save <= ddr3_ADDR;
                if (ddr3_DOUT_READY = '1') then
-                  state             <= LOADMEMORY_READY;
-                  ddr3_DOUT_saved   <= ddr3_DOUT;
-               end if;
-               
-            when LOADMEMORY_READY =>
-               if (SS_busy = '0') then
                   state             <= LOADMEMORY_WRITE;
+                  ddr3_DOUT_saved   <= ddr3_DOUT;
+                  if (savetype_counter = 15) then -- vram
+                     dwordcounter <= 1;
+                     state        <= LOADMEMORY_WRITE_VRAM;
+                     ddr3_WE      <= '1';
+                     ddr3_DIN     <= ddr3_DOUT;
+                     ddr3_ADDR    <= "0000000" & std_logic_vector(RAMAddrNext);
+                     RAMAddrNext  <= RAMAddrNext + 2;
+                  end if;
                end if;
                
             when LOADMEMORY_WRITE =>
@@ -377,17 +388,27 @@ begin
                   SS_Adr_2x        <= RAMAddrNext;
                   SS_wren_2x(savetype_counter) <= '1';
                   state            <= LOADMEMORY_WRITE_NEXT;
+                  if (savetype_counter = 16) then -- sdram
+                     state <= LOADMEMORY_WRITE_SDRAM;
+                  end if;
                end if;
          
-            when LOADMEMORY_WRITE_SLOW =>
-               state <= LOADMEMORY_WRITE_NEXT;
+            when LOADMEMORY_WRITE_VRAM =>
+               if (ddr3_BUSY = '0') then
+                  state <= LOADMEMORY_WRITE_NEXT;
+               end if;
+               
+            when LOADMEMORY_WRITE_SDRAM =>
+               if (sdram_done = '1') then
+                  state <= LOADMEMORY_WRITE_NEXT;
+               end if;
                
             when LOADMEMORY_WRITE_NEXT =>
                state <= LOADMEMORY_WRITE;
                if (dwordcounter < 1) then
                   dwordcounter <= dwordcounter + 1;
                else
-                  ddr3_ADDR  <= std_logic_vector(unsigned(ddr3_ADDR) + 2);
+                  ddr3_ADDR  <= std_logic_vector(unsigned(ddr3_ADDR_save) + 2);
                   if (count < maxcount) then
                      state          <= LOADMEMORY_READ;
                      count          <= count + 2;

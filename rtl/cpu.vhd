@@ -42,8 +42,9 @@ entity cpu is
       
       SS_reset              : in  std_logic;
       SS_DataWrite          : in  std_logic_vector(31 downto 0);
-      SS_Adr                : in  unsigned(6 downto 0);
-      SS_wren               : in  std_logic;
+      SS_Adr                : in  unsigned(7 downto 0);
+      SS_wren_CPU           : in  std_logic;
+      SS_wren_SCP           : in  std_logic;
       SS_DataRead           : out std_logic_vector(31 downto 0);
       
       debug_firstGTE        : in  std_logic;
@@ -238,6 +239,7 @@ architecture arch of cpu is
    signal execute_gte_writeEna         : std_logic := '0'; 
    signal execute_gte_cmdData          : unsigned(31 downto 0);
    signal execute_gte_cmdEna           : std_logic := '0'; 
+   signal execute_gte_readAddr         : unsigned(5 downto 0) := (others => '0');
 
    --wires
    signal branch                       : std_logic := '0';
@@ -337,7 +339,7 @@ architecture arch of cpu is
    
    -- savestates
    type t_ssarray is array(0 to 88) of std_logic_vector(31 downto 0);
-   signal ss_in  : t_ssarray;
+   signal ss_in  : t_ssarray := (others => (others => '0'));  
    
    -- debug
    signal debugCnt                     : unsigned(31 downto 0);
@@ -600,7 +602,7 @@ begin
          
             tagValid      <= (others => '0');
          
-            stall1        <= ss_in(24)(0);
+            stall1        <= '0';
             PC            <= unsigned(ss_in(0)); -- x"BFC00000";
                         
             blockIRQ      <= '0'; -- todo: busy for savestate?
@@ -791,7 +793,7 @@ begin
    end process;
 
    process (decodeImmData, decodeTarget, decodeJumpTarget, decodeSource1, decodeSource2, decodeValue1, decodeValue2, decodeOP, decodeFunct, decodeShamt, decodeRD, exception, stall3, stall, value1, value2, pcOld0, resultData, executeStalltype,
-            cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait, opcode1, gte_readAddr, decode_gte_readAddr, gte_readData, gte_busy)
+            cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait, opcode1, gte_readAddr, decode_gte_readAddr, gte_readData, gte_busy, execute_gte_cmdEna)
       variable calcResult  : unsigned(31 downto 0);
       variable calcMemAddr : unsigned(31 downto 0);
    begin
@@ -848,6 +850,7 @@ begin
       
       if (executeStalltype = EXESTALLTYPE_GTE and gte_busy = '0') then
          gte_readEna         <= '1';
+         gte_readAddr        <= execute_gte_readAddr;
       end if;
 
       if (exception(4 downto 2) = 0 and stall = 0) then
@@ -1193,7 +1196,7 @@ begin
                            EXEresultWriteEnable <= '1';
                            gte_readEna          <= '1';
                            EXEresultData        <= gte_readData;
-                           if (gte_busy = '1') then
+                           if (gte_busy = '1' or execute_gte_cmdEna = '1') then
                               stallNew3    <= '1';
                               EXEstalltype <= EXESTALLTYPE_GTE;
                            end if;
@@ -1202,7 +1205,7 @@ begin
                            EXEresultWriteEnable <= '1';
                            gte_readEna          <= '1';
                            EXEresultData        <= gte_readData;
-                           if (gte_busy = '1') then
+                           if (gte_busy = '1' or execute_gte_cmdEna = '1') then
                               stallNew3    <= '1';
                               EXEstalltype <= EXESTALLTYPE_GTE;
                            end if;
@@ -1357,7 +1360,7 @@ begin
                   EXEMemWriteEnable <= '1';
                   gte_readEna       <= '1';
                   EXEMemWriteData   <= gte_readData;
-                  if (gte_busy = '1') then
+                  if (gte_busy = '1' or execute_gte_cmdEna = '1') then
                      stallNew3    <= '1';
                      EXEstalltype <= EXESTALLTYPE_GTE;
                   end if;
@@ -1381,7 +1384,7 @@ begin
       if (rising_edge(clk1x)) then
          if (reset = '1') then
          
-            stall3                        <= ss_in(24)(2);
+            stall3                        <= '0';
                        
             pcOld2                        <= unsigned(ss_in(21));
             opcode2                       <= unsigned(ss_in(16));
@@ -1481,7 +1484,9 @@ begin
                   execute_gte_writeEna          <= EXEgte_writeEna;
 
                   execute_gte_cmdData           <= EXEgte_cmdData;
-                  execute_gte_cmdEna            <= EXEgte_cmdEna;                   
+                  execute_gte_cmdEna            <= EXEgte_cmdEna;  
+
+                  execute_gte_readAddr          <= decode_gte_readAddr;       
 
                   blockLoadforward <= '0';
                   if (executeReadEnable = '1' and EXEReadEnable = '1' and resultTarget = EXEresultTarget) then
@@ -1596,8 +1601,8 @@ begin
 --############################### stage 4
 --##############################################################
    
-   scratchpad_address_a <= std_logic_vector(executeMemWriteAddr(9 downto 2));
-   scratchpad_data_a    <= std_logic_vector(executeMemWriteData);
+   scratchpad_address_a <= std_logic_vector(SS_Adr(7 downto 0)) when (SS_wren_SCP = '1') else std_logic_vector(executeMemWriteAddr(9 downto 2));
+   scratchpad_data_a    <= SS_DataWrite                         when (SS_wren_SCP = '1') else std_logic_vector(executeMemWriteData);
    
    scratchpad_address_b <= std_logic_vector(executeReadAddress(9 downto 2));
    
@@ -1608,7 +1613,7 @@ begin
       port map
       (
          clock_a     => clk1x,
-         clken_a     => ce,
+         clken_a     => ce or SS_wren_SCP,
          address_a   => scratchpad_address_a,
          data_a      => scratchpad_data_a((8*i) + 7 downto (8*i)),
          wren_a      => scratchpad_wren_a(i),
@@ -1623,7 +1628,7 @@ begin
    
    scratchpad_dataread <= unsigned(scratchpad_q_b);
    
-   process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask)
+   process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask, SS_wren_SCP)
       variable skipmem : std_logic;
    begin
    
@@ -1641,6 +1646,10 @@ begin
       WBinvalidateCacheLine <= executeMemWriteAddr(11 downto 4);
       
       scratchpad_wren_a    <= "0000";
+      
+      if (SS_wren_SCP = '1') then
+         scratchpad_wren_a <= "1111";
+      end if;
       
       if (exception(4 downto 3) = 0 and stall = 0) then
       
@@ -1719,7 +1728,7 @@ begin
       if (rising_edge(clk1x)) then
          if (reset = '1') then
          
-            stall4                           <= ss_in(24)(3);
+            stall4                           <= '0';
                               
             pcOld3                           <= unsigned(ss_in(22));
             opcode3                          <= unsigned(ss_in(17));
@@ -1807,66 +1816,71 @@ begin
                   writebackWriteEnable <= '0';
                   if (executeReadEnable = '1') then
                      if ((executeReadAddress(31 downto 29) = 0 or executeReadAddress(31 downto 29) = 4) and executeReadAddress(28 downto 10) = 16#7E000#) then -- scratchpad read
-                        writebackWriteEnable <= '1';
-                        oldData := resultData;
-                        if (writebackTarget = resultTarget and writebackWriteEnable = '1') then
-                           oldData := writebackData;
+                        if (executeGTEReadEnable = '1') then
+                           gte_writeAddr <= '0' & executeGTETarget;
+                           gte_writeData <= scratchpad_dataread;
+                           gte_writeEna  <= '1';
+                        else
+                           writebackWriteEnable <= '1';
+                           oldData := resultData;
+                           if (writebackTarget = resultTarget and writebackWriteEnable = '1') then
+                              oldData := writebackData;
+                           end if;
+   
+                           case (executeLoadType) is
+                              when LOADTYPE_SBYTE => 
+                                 case (executeReadAddress(1 downto 0)) is 
+                                    when "00" => writebackData <= unsigned(resize(signed(scratchpad_dataread( 7 downto  0)), 32));
+                                    when "01" => writebackData <= unsigned(resize(signed(scratchpad_dataread(15 downto  8)), 32));
+                                    when "10" => writebackData <= unsigned(resize(signed(scratchpad_dataread(23 downto 16)), 32));
+                                    when "11" => writebackData <= unsigned(resize(signed(scratchpad_dataread(31 downto 24)), 32));
+                                    when others => null;
+                                 end case;  
+                                    
+                              when LOADTYPE_SWORD => 
+                                 if (executeReadAddress(1) = '0') then
+                                    writebackData <= unsigned(resize(signed(scratchpad_dataread(15 downto 0)), 32));
+                                 else
+                                    writebackData <= unsigned(resize(signed(scratchpad_dataread(31 downto 16)), 32));
+                                 end if;
+                                    
+                              when LOADTYPE_LEFT =>
+                                 case (to_integer(executeReadAddress(1 downto 0))) is
+                                    when 0 => writebackData <= scratchpad_dataread( 7 downto 0) & oldData(23 downto 0);
+                                    when 1 => writebackData <= scratchpad_dataread(15 downto 0) & oldData(15 downto 0);
+                                    when 2 => writebackData <= scratchpad_dataread(23 downto 0) & oldData( 7 downto 0); 
+                                    when 3 => writebackData <= scratchpad_dataread;
+                                    when others => null;
+                                 end case;
+                                    
+                              when LOADTYPE_DWORD => writebackData <= scratchpad_dataread;
+                              
+                              when LOADTYPE_BYTE  =>
+                                 case (executeReadAddress(1 downto 0)) is 
+                                    when "00" => writebackData <= x"000000" & scratchpad_dataread( 7 downto  0);
+                                    when "01" => writebackData <= x"000000" & scratchpad_dataread(15 downto  8);
+                                    when "10" => writebackData <= x"000000" & scratchpad_dataread(23 downto 16);
+                                    when "11" => writebackData <= x"000000" & scratchpad_dataread(31 downto 24);
+                                    when others => null;
+                                 end case;  
+                              
+                              when LOADTYPE_WORD  => 
+                                 if (executeReadAddress(1) = '0') then
+                                    writebackData <= x"0000" & scratchpad_dataread(15 downto 0);
+                                 else
+                                    writebackData <= x"0000" & scratchpad_dataread(31 downto 16);
+                                 end if;
+                              
+                              when LOADTYPE_RIGHT =>
+                                 case (to_integer(executeReadAddress(1 downto 0))) is
+                                    when 0 => writebackData <= scratchpad_dataread;
+                                    when 1 => writebackData <= oldData(31 downto 24) & scratchpad_dataread(31 downto  8);
+                                    when 2 => writebackData <= oldData(31 downto 16) & scratchpad_dataread(31 downto 16);
+                                    when 3 => writebackData <= oldData(31 downto  8) & scratchpad_dataread(31 downto 24);
+                                    when others => null;
+                                 end case;
+                           end case;
                         end if;
-
-                        case (executeLoadType) is
-                           when LOADTYPE_SBYTE => 
-                              case (executeReadAddress(1 downto 0)) is 
-                                 when "00" => writebackData <= unsigned(resize(signed(scratchpad_dataread( 7 downto  0)), 32));
-                                 when "01" => writebackData <= unsigned(resize(signed(scratchpad_dataread(15 downto  8)), 32));
-                                 when "10" => writebackData <= unsigned(resize(signed(scratchpad_dataread(23 downto 16)), 32));
-                                 when "11" => writebackData <= unsigned(resize(signed(scratchpad_dataread(31 downto 24)), 32));
-                                 when others => null;
-                              end case;  
-                                 
-                           when LOADTYPE_SWORD => 
-                              if (executeReadAddress(1) = '0') then
-                                 writebackData <= unsigned(resize(signed(scratchpad_dataread(15 downto 0)), 32));
-                              else
-                                 writebackData <= unsigned(resize(signed(scratchpad_dataread(31 downto 16)), 32));
-                              end if;
-                                 
-                           when LOADTYPE_LEFT =>
-                              case (to_integer(executeReadAddress(1 downto 0))) is
-                                 when 0 => writebackData <= scratchpad_dataread( 7 downto 0) & oldData(23 downto 0);
-                                 when 1 => writebackData <= scratchpad_dataread(15 downto 0) & oldData(15 downto 0);
-                                 when 2 => writebackData <= scratchpad_dataread(23 downto 0) & oldData( 7 downto 0); 
-                                 when 3 => writebackData <= scratchpad_dataread;
-                                 when others => null;
-                              end case;
-                                 
-                           when LOADTYPE_DWORD => writebackData <= scratchpad_dataread;
-                           
-                           when LOADTYPE_BYTE  =>
-                              case (executeReadAddress(1 downto 0)) is 
-                                 when "00" => writebackData <= x"000000" & scratchpad_dataread( 7 downto  0);
-                                 when "01" => writebackData <= x"000000" & scratchpad_dataread(15 downto  8);
-                                 when "10" => writebackData <= x"000000" & scratchpad_dataread(23 downto 16);
-                                 when "11" => writebackData <= x"000000" & scratchpad_dataread(31 downto 24);
-                                 when others => null;
-                              end case;  
-                           
-                           when LOADTYPE_WORD  => 
-                              if (executeReadAddress(1) = '0') then
-                                 writebackData <= x"0000" & scratchpad_dataread(15 downto 0);
-                              else
-                                 writebackData <= x"0000" & scratchpad_dataread(31 downto 16);
-                              end if;
-                           
-                           when LOADTYPE_RIGHT =>
-                              case (to_integer(executeReadAddress(1 downto 0))) is
-                                 when 0 => writebackData <= scratchpad_dataread;
-                                 when 1 => writebackData <= oldData(31 downto 24) & scratchpad_dataread(31 downto  8);
-                                 when 2 => writebackData <= oldData(31 downto 16) & scratchpad_dataread(31 downto 16);
-                                 when 3 => writebackData <= oldData(31 downto  8) & scratchpad_dataread(31 downto 24);
-                                 when others => null;
-                              end case;
-                        end case;
-                     
                      else
                         writebackLoadType    <= executeLoadType;
                         writebackReadAddress <= executeReadAddress;
@@ -2130,7 +2144,7 @@ begin
             ss_in(0)  <= x"BFC00000"; -- PC
             ss_in(13) <= x"00000002"; -- cop0_PRID
             
-         elsif (SS_wren = '1' and SS_Adr < 89) then
+         elsif (SS_wren_CPU = '1' and SS_Adr < 89) then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
          end if;
       

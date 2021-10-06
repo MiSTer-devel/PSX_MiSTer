@@ -37,7 +37,13 @@ entity dma is
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
       bus_read             : in  std_logic;
       bus_write            : in  std_logic;
-      bus_dataRead         : out std_logic_vector(31 downto 0)
+      bus_dataRead         : out std_logic_vector(31 downto 0);
+      
+      SS_reset             : in  std_logic;
+      SS_DataWrite         : in  std_logic_vector(31 downto 0);
+      SS_Adr               : in  unsigned(5 downto 0);
+      SS_wren              : in  std_logic;
+      SS_DataRead          : out std_logic_vector(31 downto 0)
    );
 end entity;
 
@@ -118,6 +124,10 @@ architecture arch of dma is
    signal fifoOut_Empty    : std_logic;
    signal fifoOut_Valid    : std_logic;
    signal fifoOut_Done     : std_logic;
+   
+   -- savestates
+   type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
+   signal ss_in  : t_ssarray := (others => (others => '0'));  
   
 begin 
 
@@ -149,30 +159,33 @@ begin
          
          fifoOut_Wr    <= '0';
       
+         irqOut   <= '0';
+      
          if (reset = '1') then
          
             dmaState <= OFF;
-            
-            irqOut   <= '0';
+            if (ss_in(4)(7 downto 0) = x"07") then
+               dmaState <= GPUBUSY;
+            end if;
          
             for i in 0 to 6 loop
-               dmaArray(i).D_MADR            <= (others => '0');
-               dmaArray(i).D_BCR             <= (others => '0');
-               dmaArray(i).D_CHCR            <= (others => '0');
-               dmaArray(i).request           <= '0';
-               dmaArray(i).timeupPending     <= '0';
-               dmaArray(i).requestsPending   <= '0';
+               dmaArray(i).D_MADR            <= unsigned(ss_in(28 + i)(23 downto 0));
+               dmaArray(i).D_BCR             <= unsigned(ss_in(35 + i));
+               dmaArray(i).D_CHCR            <= unsigned(ss_in(42 + i));
+               dmaArray(i).request           <= ss_in(19 + i)(8);
+               dmaArray(i).timeupPending     <= ss_in(19 + i)(10);
+               dmaArray(i).requestsPending   <= ss_in(19 + i)(9);
             end loop;
             
-            DPCR           <= x"07654321";
-            DICR           <= (others => '0');
+            DPCR           <= unsigned(ss_in(26)); -- x"07654321";
+            DICR           <= unsigned(ss_in(27));
             DICR_IRQs      <= (others => '0');
                
             triggerDMA     <= (others => '0');
-            isOn           <= '0';
-            activeChannel  <= 0;
-            paused         <= '0';
-            gpupaused      <= '0';
+            isOn           <= ss_in(4)(8);
+            activeChannel  <= to_integer(unsigned(ss_in(2)(18 downto 16)));
+            paused         <= ss_in(4)(9);
+            gpupaused      <= ss_in(4)(10);
             waitcnt        <= 0;
             dmaTime        <= 0;
             
@@ -476,9 +489,16 @@ begin
                         end if;
                      end if;
                      
-                     -- todo: add check for gpubusy
+                     if (gpupaused = '1') then
+                        isOn          <= '1';
+                        paused        <= '1';
+                        dmaState      <= GPUBUSY;
+                        activeChannel <= 2;
+                        gpupaused     <= '0';
+                     end if;
                      
-                     -- todo: add check for  pending requests
+                     -- todo: add check for gpubusy
+
                   end if;
                
                when PAUSING =>
@@ -611,7 +631,7 @@ begin
       Empty    => fifoIn_Empty   
    );
    
-   fifoOut_Rd <= '1' when (fifoOut_Empty = '0' and (ram_idle = '1' or ram_done = '1')) else '0';
+   fifoOut_Rd <= '1' when (fifoOut_Empty = '0' and (ram_idle = '1' or ram_done = '1') and fifoOut_Valid = '0') else '0';
    
    DMAfifoOut: entity mem.Syncfifo
    generic map
@@ -632,6 +652,29 @@ begin
       Rd       => fifoOut_Rd,      
       Empty    => fifoOut_Empty   
    );
+
+--##############################################################
+--############################### savestates
+--##############################################################
+
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         if (SS_reset = '1') then
+         
+            for i in 0 to 1 loop
+               ss_in(i) <= (others => '0');
+            end loop;
+            
+            ss_in(26) <= x"07654321"; -- DPCR
+            
+         elsif (SS_wren = '1') then
+            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+      
+      end if;
+   end process;
 
 end architecture;
 

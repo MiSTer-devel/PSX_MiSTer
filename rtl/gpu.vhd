@@ -48,6 +48,7 @@ entity gpu is
       hsync                : out std_logic := '0';
       vsync                : out std_logic := '0';
       hblank               : out std_logic := '0';
+      hblank_tmr           : out std_logic := '0';
       vblank               : out std_logic := '0';
       DisplayWidth         : out unsigned( 9 downto 0);
       DisplayHeight        : out unsigned( 8 downto 0);
@@ -326,8 +327,8 @@ architecture arch of gpu is
    
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
-   signal ss_gpu_in     : t_ssarray;
-   signal ss_timing_in  : t_ssarray;
+   signal ss_gpu_in     : t_ssarray := (others => (others => '0'));
+   signal ss_timing_in  : t_ssarray := (others => (others => '0'));
    
 begin 
 
@@ -381,8 +382,9 @@ begin
          fifoIn_reset  <= '0';
          fifoOut_reset <= '0';
          
-         if (nextHCount < 200) then hsync  <= '1'; else hsync  <= '0'; end if;
-         if (nextHCount < 400) then hblank <= '1'; else hblank <= '0'; end if;
+         if (nextHCount < 200) then hsync      <= '1'; else hsync      <= '0'; end if;
+         if (nextHCount < 400) then hblank     <= '1'; else hblank     <= '0'; end if;
+         if (nextHCount <   3) then hblank_tmr <= '1'; else hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
          
          vblank <= inVsync;
          if (vDisplayStart >= 4) then
@@ -408,7 +410,7 @@ begin
             hDisplayRange           <= unsigned(ss_timing_in(1)(23 downto 0)); -- x"C60260";
             vDisplayRange           <= unsigned(ss_timing_in(0)(19 downto 0)); -- x"3FC10";
 
-            nextHCount              <= to_integer(unsigned(ss_timing_in(4)(11 downto 0))) + 1;
+            nextHCount              <= to_integer(unsigned(ss_timing_in(4)(11 downto 0)));
 
             vpos                    <= to_integer(unsigned(ss_timing_in(3)(24 downto 16)));
             inVsync                 <= ss_timing_in(4)(17);
