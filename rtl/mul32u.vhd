@@ -6,7 +6,7 @@ entity mul32u is
    port 
    (
       mul1     : in  unsigned(31 downto 0);
-      mul2     : in  integer range -2048 to 2047;
+      mul2     : in  unsigned(31 downto 0);
       result   : out unsigned(31 downto 0)
    );
 end entity;

@@ -194,7 +194,7 @@ architecture arch of gpu_poly is
    signal muldivResult2clk    : signed(21 downto 0) := (others => '0');    
    
    signal mulIn1              : unsigned(31 downto 0);
-   signal mulIn2              : integer range -2048 to 2047;
+   signal mulIn2              : unsigned(31 downto 0);
    signal mulResult32         : unsigned(31 downto 0) := (others => '0'); 
    signal mulResult32clk      : unsigned(31 downto 0) := (others => '0'); 
 
@@ -317,16 +317,16 @@ begin
              dyG when (mulStep = 4) else 
              dyB;
              
-   mulIn2 <= vt(coreVertex).x when (state = CALCTEXTURE4 and mulStep = 0) else
-             vt(coreVertex).x when (state = CALCTEXTURE4 and mulStep = 1) else
-             vt(coreVertex).y when (state = CALCTEXTURE4 and mulStep = 2) else
-             vt(coreVertex).y when (state = CALCTEXTURE4 and mulStep = 3) else
-             vt(coreVertex).x when (mulStep = 0) else 
-             vt(coreVertex).x when (mulStep = 1) else 
-             vt(coreVertex).x when (mulStep = 2) else 
-             vt(coreVertex).y when (mulStep = 3) else 
-             vt(coreVertex).y when (mulStep = 4) else 
-             vt(coreVertex).y;
+   mulIn2 <= unsigned(to_signed(-vt(coreVertex).x, 32)) when (state = CALCTEXTURE4 and mulStep = 0) else
+             unsigned(to_signed(-vt(coreVertex).x, 32)) when (state = CALCTEXTURE4 and mulStep = 1) else
+             unsigned(to_signed(-vt(coreVertex).y, 32)) when (state = CALCTEXTURE4 and mulStep = 2) else
+             unsigned(to_signed(-vt(coreVertex).y, 32)) when (state = CALCTEXTURE4 and mulStep = 3) else
+             unsigned(to_signed(-vt(coreVertex).x, 32)) when (mulStep = 0) else 
+             unsigned(to_signed(-vt(coreVertex).x, 32)) when (mulStep = 1) else 
+             unsigned(to_signed(-vt(coreVertex).x, 32)) when (mulStep = 2) else 
+             unsigned(to_signed(-vt(coreVertex).y, 32)) when (mulStep = 3) else 
+             unsigned(to_signed(-vt(coreVertex).y, 32)) when (mulStep = 4) else 
+             unsigned(to_signed(-vt(coreVertex).y, 32));
    
    process (clk2x)
       variable xMax  : integer;
@@ -695,13 +695,13 @@ begin
                   mulStep <= mulStep + 1;
                   case (mulStep) is
                      when 0 => mulResult32clk <= mulResult32;
-                     when 1 => mulResult32clk <= mulResult32; base_R <= base_R - mulResult32clk;
-                     when 2 => mulResult32clk <= mulResult32; base_G <= base_G - mulResult32clk;   
-                     when 3 => mulResult32clk <= mulResult32; base_B <= base_B - mulResult32clk;
-                     when 4 => mulResult32clk <= mulResult32; base_R <= base_R - mulResult32clk;
-                     when 5 => mulResult32clk <= mulResult32; base_G <= base_G - mulResult32clk;
+                     when 1 => mulResult32clk <= mulResult32; base_R <= base_R + mulResult32clk;
+                     when 2 => mulResult32clk <= mulResult32; base_G <= base_G + mulResult32clk;   
+                     when 3 => mulResult32clk <= mulResult32; base_B <= base_B + mulResult32clk;
+                     when 4 => mulResult32clk <= mulResult32; base_R <= base_R + mulResult32clk;
+                     when 5 => mulResult32clk <= mulResult32; base_G <= base_G + mulResult32clk;
                      when 6 =>                                               
-                        base_B <= base_B - mulResult32clk;
+                        base_B <= base_B + mulResult32clk;
                         if (rec_texture = '1') then
                            state <= CALCTEXTURE1;
                         else
@@ -753,11 +753,11 @@ begin
                   mulStep <= mulStep + 1;
                   case (mulStep) is
                      when 0 => mulResult32clk <= mulResult32;
-                     when 1 => mulResult32clk <= mulResult32; base_U <= base_U - mulResult32clk;
-                     when 2 => mulResult32clk <= mulResult32; base_V <= base_V - mulResult32clk;   
-                     when 3 => mulResult32clk <= mulResult32; base_U <= base_U - mulResult32clk;
+                     when 1 => mulResult32clk <= mulResult32; base_U <= base_U + mulResult32clk;
+                     when 2 => mulResult32clk <= mulResult32; base_V <= base_V + mulResult32clk;   
+                     when 3 => mulResult32clk <= mulResult32; base_U <= base_U + mulResult32clk;
                      when 4 =>                                               
-                        base_V <= base_V - mulResult32clk;
+                        base_V <= base_V + mulResult32clk;
                         state <= PREPAREHALF;
                      when others => null;
                   end case;
@@ -816,7 +816,11 @@ begin
                   xEnd   <= xEnd   - xStepEnd;
                   
                when PREPARELINE =>
-                  xPos  <= xStart(43 downto 32);
+                  if (xStart(43 downto 32) < 0) then
+                     xPos  <= (others => '0');
+                  else
+                     xPos  <= xStart(43 downto 32);
+                  end if;
                   yPos  <= to_signed(yCoord, 12);
                   xStop <= xEnd(43 downto 32);
                   if (xStart(43 downto 32) < 0 and xEnd(43 downto 32) > 1023) then
@@ -838,9 +842,15 @@ begin
                   if (yCoord >= 0) then
 -- synthesis translate_on
                   if (rec_shading = '1') then
-                     work_R <= base_R + resize(dxR * to_integer(xStart(43 downto 32)), 32) + resize(dyR * yCoord, 32);
-                     work_G <= base_G + resize(dxG * to_integer(xStart(43 downto 32)), 32) + resize(dyG * yCoord, 32);
-                     work_B <= base_B + resize(dxB * to_integer(xStart(43 downto 32)), 32) + resize(dyB * yCoord, 32);
+                     if (xStart(43 downto 32) < 0) then
+                        work_R <= base_R + resize(dyR * yCoord, 32);
+                        work_G <= base_G + resize(dyG * yCoord, 32);
+                        work_B <= base_B + resize(dyB * yCoord, 32);
+                     else
+                        work_R <= base_R + resize(dxR * to_integer(xStart(43 downto 32)), 32) + resize(dyR * yCoord, 32);
+                        work_G <= base_G + resize(dxG * to_integer(xStart(43 downto 32)), 32) + resize(dyG * yCoord, 32);
+                        work_B <= base_B + resize(dxB * to_integer(xStart(43 downto 32)), 32) + resize(dyB * yCoord, 32);
+                     end if;
                   else
                      work_R <= base_R;
                      work_G <= base_G;
@@ -848,8 +858,13 @@ begin
                   end if;
                   
                   if (rec_texture = '1') then
-                     work_U <= base_U + resize(dxU * to_integer(xStart(43 downto 32)), 32) + resize(dyU * yCoord, 32);
-                     work_V <= base_V + resize(dxV * to_integer(xStart(43 downto 32)), 32) + resize(dyV * yCoord, 32);
+                     if (xStart(43 downto 32) < 0) then
+                        work_U <= base_U + resize(dyU * yCoord, 32);
+                        work_V <= base_V + resize(dyV * yCoord, 32);
+                     else
+                        work_U <= base_U + resize(dxU * to_integer(xStart(43 downto 32)), 32) + resize(dyU * yCoord, 32);
+                        work_V <= base_V + resize(dxV * to_integer(xStart(43 downto 32)), 32) + resize(dyV * yCoord, 32);
+                     end if;
                   else
                      work_U <= base_U;
                      work_V <= base_V;
@@ -867,6 +882,10 @@ begin
                   end if;
                   
                   if (to_integer(xStart(43 downto 32)) > drawingAreaRight) then
+                     skip := '1';
+                  end if;                  
+                  
+                  if (xEnd(43 downto 32) <= 0) then
                      skip := '1';
                   end if;
                   

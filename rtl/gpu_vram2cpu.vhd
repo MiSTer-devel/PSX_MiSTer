@@ -78,7 +78,7 @@ begin
    vramLineEna       <= '1'  when (state = WRITING or state = WAITREAD) else '0';
    vramLineAddr      <= xSrc when (state = WRITING or state = WAITREAD) else (others => '0');
    
-   -- fifo has size of two full lines. Filling can start whenever at least a full line would in.
+   -- fifo has size of two full lines. Filling can start whenever at least a full line fits in.
    ififo: entity mem.SyncFifoFallThrough
    generic map
    (

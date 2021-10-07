@@ -103,6 +103,7 @@ architecture arch of dma is
    signal dataNext         : std_logic_vector(95 downto 0);
    signal dataCount        : integer range 0 to 3 := 0;
    signal firstsize        : integer range 0 to 3 := 0;
+   signal requestOnFly     : integer range 0 to 2;
    
    signal fifoIn_reset     : std_logic := '0';
    signal fifoIn_Din       : std_logic_vector(31 downto 0);
@@ -122,8 +123,9 @@ architecture arch of dma is
    signal fifoOut_Dout     : std_logic_vector(50 downto 0);
    signal fifoOut_Rd       : std_logic;
    signal fifoOut_Empty    : std_logic;
-   signal fifoOut_Valid    : std_logic;
    signal fifoOut_Done     : std_logic;
+   
+   signal ramwrite_pending : std_logic;
    
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
@@ -148,9 +150,10 @@ begin
    DMA_GPU_write    <= fifoIn_Dout;
 
    process (clk1x)
-      variable channel        : integer range 0 to 7;
-      variable triggerNew     : std_logic;
-      variable triggerchannel : integer range 0 to 6;
+      variable channel         : integer range 0 to 7;
+      variable triggerNew      : std_logic;
+      variable triggerchannel  : integer range 0 to 6;
+      variable requestOnFlyNew : integer range 0 to 2;
    begin
       if rising_edge(clk1x) then
       
@@ -193,9 +196,12 @@ begin
             
             fifoIn_reset   <= '1';
             dataCount      <= 0;
+            requestOnFly   <= 0;
             
             fifoOut_reset  <= '1';
             fifoOut_Done   <= '1';
+            
+            ramwrite_pending <= '0';
 
          elsif (ce = '1') then
          
@@ -216,6 +222,8 @@ begin
             dmaArray(4).request <= '0';
             dmaArray(5).request <= '0';
             dmaArray(6).request <= '1';
+            
+            requestOnFlyNew := requestOnFly;
             
             -- bus read
             if (bus_read = '1') then
@@ -326,10 +334,15 @@ begin
                      dmacount     <= (others => '0');
                      toDevice     <= dmaArray(activeChannel).D_CHCR(0);
                      if (dmaArray(activeChannel).D_CHCR(0) = '1') then
-                        ram_rnw     <= '1';
-                        ram_ena     <= '1';
-                        ram_Adr     <= "00" & std_logic_vector(dmaArray(activeChannel).D_MADR(20 downto 2)) & "00";
-                        autoread    <= '1';
+                        if (requestOnFly = 0) then
+                           ram_rnw         <= '1';
+                           ram_ena         <= '1';
+                           ram_Adr         <= "00" & std_logic_vector(dmaArray(activeChannel).D_MADR(20 downto 2)) & "00";
+                           autoread        <= '1';
+                           requestOnFlyNew := 1;
+                        else
+                           waitcnt <= waitcnt;
+                        end if;
                      else
                         case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
                            when "00" => -- manual
@@ -478,7 +491,7 @@ begin
                   end if;
                
                when STOPPING =>
-                  if (fifoOut_Done = '1' and fifoOut_Wr = '0') then
+                  if (fifoOut_Done = '1' and fifoOut_Wr = '0' and requestOnFly = 0) then
                      dmaState <= OFF;
                      isOn     <= '0';
                      dmaArray(activeChannel).D_CHCR(24) <= '0';
@@ -518,8 +531,9 @@ begin
          end if;
          
          if (ram_done = '1' and toDevice = '1') then
-            dataNext  <= ram_dataRead(127 downto 32);
-            dataCount <= 3;
+            requestOnFlyNew := requestOnFlyNew - 1;
+            dataNext        <= ram_dataRead(127 downto 32);
+            dataCount       <= 3;
          
             readcount <= readcount + 1;
             if (firstword = '1') then
@@ -559,7 +573,8 @@ begin
          
          if (ram_reqprocessed = '1' and autoread = '1') then
             if (readcount + 4 + dataCount < readsize) then
-               ram_ena <= '1';
+               ram_ena         <= '1';
+               requestOnFlyNew := requestOnFlyNew + 1;
             end if;
             if (directionNeg = '1') then
                ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
@@ -581,16 +596,21 @@ begin
             dataNext  <= x"00000000" & dataNext(95 downto 32);
          end if;
          
+         requestOnFly <= requestOnFlyNew;
+         
          fifoIn_Valid <= fifoIn_Rd;
          
          -- fifo Out
-         fifoOut_Valid <= fifoOut_Rd;
+         if (ram_done = '1') then
+            ramwrite_pending <= '0';
+         end if;
          
-         if (fifoOut_Valid = '1') then
-            ram_rnw        <= '0';
-            ram_ena        <= '1';
-            ram_Adr        <= "00" & fifoOut_Dout(50 downto 32) & "00";
-            ram_dataWrite  <= fifoOut_Dout(31 downto 0);
+         if (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_done = '1')) then
+            ram_rnw          <= '0';
+            ram_ena          <= '1';
+            ram_Adr          <= "00" & fifoOut_Dout(50 downto 32) & "00";
+            ram_dataWrite    <= fifoOut_Dout(31 downto 0);
+            ramwrite_pending <= '1';
          end if; 
          
          if (fifoOut_Wr = '1') then
@@ -631,9 +651,9 @@ begin
       Empty    => fifoIn_Empty   
    );
    
-   fifoOut_Rd <= '1' when (fifoOut_Empty = '0' and (ram_idle = '1' or ram_done = '1') and fifoOut_Valid = '0') else '0';
+   fifoOut_Rd <= '1' when (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_done = '1')) else '0';
    
-   DMAfifoOut: entity mem.Syncfifo
+   DMAfifoOut: entity mem.SyncFifoFallThrough
    generic map
    (
       SIZE             => 256,

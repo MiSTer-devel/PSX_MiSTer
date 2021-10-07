@@ -6,6 +6,10 @@ library tb;
 use tb.globals.all;
 
 entity sdram_model is
+   generic
+   (
+      DOREFRESH         : std_logic := '0'
+   );
    port 
    (
       clk               : in  std_logic;
@@ -32,6 +36,8 @@ architecture arch of sdram_model is
    
    signal req_buffer  : std_logic := '0';
    signal addr_buffer : std_logic_vector(22 downto 0);
+   
+   signal refreshcnt  : integer range 0 to 260 := 0;
    
 begin
 
@@ -89,6 +95,10 @@ begin
       
       ram_idle <= '1';
       
+      if (DOREFRESH = '1' and refreshcnt < 260) then
+         refreshcnt <= refreshcnt + 1;
+      end if;
+      
       if (waitcnt > 0) then
          ram_idle <= '0';
          waitcnt <= waitcnt - 1;
@@ -111,6 +121,10 @@ begin
          if (be(0) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 0) := to_integer(unsigned(di( 7 downto  0))); end if;
          waitcnt    <= 1;
          req_buffer <= '0';
+         if (refreshcnt >= 260) then
+            refreshcnt <= 0;
+            waitcnt    <= 3;
+         end if;
       elsif ((req = '1' or req_buffer = '1') and rnw = '1') then
          ram_idle     <= '0';
          do           <= (others => 'X');
@@ -120,12 +134,20 @@ begin
             else
                waitcnt      <= 4;
             end if;
+            if (refreshcnt >= 260) then
+               refreshcnt <= 0;
+               waitcnt    <= 6;
+            end if;
          else
             if (req_buffer = '1') then
                waitcnt      <= 1;
             else
                waitcnt      <= 2;
             end if;
+            --if (refreshcnt >= 260) then
+            --   refreshcnt <= 0;
+            --   waitcnt    <= 4;
+            --end if;
          end if;
          reqprocessed <= '1';
          req_buffer   <= '0';

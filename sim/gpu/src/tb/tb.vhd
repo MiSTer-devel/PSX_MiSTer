@@ -104,7 +104,14 @@ begin
       vram_DIN              => DDRAM_DIN,       
       vram_BE               => DDRAM_BE,        
       vram_WE               => DDRAM_WE,        
-      vram_RD               => DDRAM_RD
+      vram_RD               => DDRAM_RD,
+      
+      loading_savestate     => '0',
+      SS_reset              => '0',
+      SS_DataWrite          => (31 downto 0 => '0'),
+      SS_Adr                => (2 downto 0 => '0'),
+      SS_wren_GPU           => '0',
+      SS_wren_Timing        => '0'
    );
    
    -- vram is at 0x30000000
