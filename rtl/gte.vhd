@@ -16,7 +16,7 @@ entity gte is
       gte_busy             : out std_logic;
       gte_readAddr         : in  unsigned(5 downto 0);
       gte_readData         : out unsigned(31 downto 0);
-      gte_readEna          : in  std_logic; -- used in testbench only!
+      gte_readEna          : in  std_logic;
       gte_writeAddr_in     : in  unsigned(5 downto 0);
       gte_writeData_in     : in  unsigned(31 downto 0);
       gte_writeEna_in      : in  std_logic; 
@@ -356,7 +356,7 @@ begin
             pushRGBfromMAC  <= '0';
             setOTZ          <= '0';
             
-            if (gte_readEna = '1' and clk2xIndex = '1') then
+            if (gte_readEna = '1') then
                case (to_integer(gte_readAddr)) is
                   when 00 => gte_readData <= unsigned(REG_V0Y & REG_V0X);
                   when 01 => gte_readData <= unsigned(resize(REG_V0Z, 32));
@@ -468,9 +468,11 @@ begin
                   when 27 => REG_MAC3 <= signed(gte_writeData);
                   when 28 => 
                      REG_IRGB <= gte_writeData(14 downto 0);
-                     REG_IR1  <= signed("0000" & gte_writeData( 4 downto  0) & "0000000");
-                     REG_IR2  <= signed("0000" & gte_writeData( 9 downto  5) & "0000000");
-                     REG_IR3  <= signed("0000" & gte_writeData(14 downto 10) & "0000000");
+                     if (loading_savestate = '0') then
+                        REG_IR1  <= signed("0000" & gte_writeData( 4 downto  0) & "0000000");
+                        REG_IR2  <= signed("0000" & gte_writeData( 9 downto  5) & "0000000");
+                        REG_IR3  <= signed("0000" & gte_writeData(14 downto 10) & "0000000");
+                     end if;
                   when 29 => -- read only
                   when 30 =>
                      REG_LZCS <= signed(gte_writeData);
@@ -577,6 +579,8 @@ begin
                         debug_firstGTE <= '1';
                      end if;
                      
+                  elsif (clk2xIndex = '0') then
+                     gte_busy <= '0';
                   end if;
                   
                when CALC_RTPS | CALC_RTPT =>
@@ -650,7 +654,7 @@ begin
                                
                      when 20 =>
                         if (state = CALC_RTPS or batchCount = 2) then
-                           state <= IDLE; gte_busy <= '0';
+                           state <= IDLE;
                         else
                            calcStep   <= 0;
                            batchCount <= batchCount + 1;
@@ -667,7 +671,7 @@ begin
                      when 3 => MAC0req <= (resize(REG_SX0, 17), resize(REG_SY2,18), x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
                      when 4 => MAC0req <= (resize(REG_SX1, 17), resize(REG_SY0,18), x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
                      when 5 => MAC0req <= (resize(REG_SX2, 17), resize(REG_SY1,18), x"00000000", '1', '0', '0', '0', '1', '1', '1'); 
-                     when 8 => state <= IDLE; gte_busy <= '0';
+                     when 8 => state <= IDLE;
                      when others => null;
                   end case;
                   
@@ -682,7 +686,7 @@ begin
                                MAC2req <= (resize(REG_RT11, 32), resize(REG_IR3, 32), to_signed(0, 45), '1', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
                                MAC3req <= (resize(REG_RT22, 32), resize(REG_IR1, 32), to_signed(0, 45), '1', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1');
                      
-                     when 3 => state <= IDLE; gte_busy <= '0';
+                     when 3 => state <= IDLE;
                      when others => null;
                   end case;
                   
@@ -705,7 +709,7 @@ begin
                     
                      when 8 => 
                         if (state = CALC_DPCS or batchCount = 2) then
-                           state <= IDLE; gte_busy <= '0';
+                           state <= IDLE;
                         else
                            calcStep   <= 0;
                            batchCount <= batchCount + 1;
@@ -731,7 +735,7 @@ begin
                      
                      when 5 => pushRGBfromMAC <= '1';
                     
-                     when 8 => state <= IDLE; gte_busy <= '0';
+                     when 8 => state <= IDLE;
                      when others => null;
                   end case;
                   
@@ -802,7 +806,7 @@ begin
                                MAC2req <= (resize(matrix12, 32), resize(vector2, 32), to_signed(0, 45), '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1');
                                MAC3req <= (resize(matrix22, 32), resize(vector2, 32), to_signed(0, 45), '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1');
                     
-                     when 6 => state <= IDLE; gte_busy <= '0';
+                     when 6 => state <= IDLE;
                      when others => null;
                   end case;
                
@@ -867,7 +871,7 @@ begin
                                
                      when 21 => 
                         if (state = CALC_NCDS or batchCount = 2) then
-                           state <= IDLE; gte_busy <= '0';
+                           state <= IDLE;
                         else
                            calcStep   <= 0;
                            batchCount <= batchCount + 1;
@@ -915,7 +919,7 @@ begin
 
                      when 13 => pushRGBfromMAC <= '1';
                                
-                     when 16 => state <= IDLE; gte_busy <= '0';
+                     when 16 => state <= IDLE;
                      when others => null;
                   end case;   
 
@@ -971,7 +975,7 @@ begin
                                
                      when 17 => 
                         if (state = CALC_NCCS or batchCount = 2) then
-                           state <= IDLE; gte_busy <= '0';
+                           state <= IDLE;
                         else
                            calcStep   <= 0;
                            batchCount <= batchCount + 1;
@@ -1010,7 +1014,7 @@ begin
 
                      when 9 => pushRGBfromMAC <= '1';
                                
-                     when 12 => state <= IDLE; gte_busy <= '0';
+                     when 12 => state <= IDLE;
                      when others => null;
                   end case; 
 
@@ -1057,7 +1061,7 @@ begin
                                
                      when 12 => 
                         if (state = CALC_NCS or batchCount = 2) then
-                           state <= IDLE; gte_busy <= '0';
+                           state <= IDLE;
                         else
                            calcStep   <= 0;
                            batchCount <= batchCount + 1;
@@ -1097,7 +1101,7 @@ begin
                                 MAC3req <= (resize(REG_IR3, 32), resize(REG_IR0, 32),                        mac3Last,         '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '0',  '1');
 
                      when 7  => pushRGBfromMAC <= '1';
-                     when 10 => state <= IDLE; gte_busy <= '0';
+                     when 10 => state <= IDLE;
                      when others => null;
                   end case;
 
@@ -1108,7 +1112,7 @@ begin
                      when 1 => MAC0req <= ('0' & signed(REG_SZ2), resize(REG_ZSF3,18), x"00000000", '0', '0', '0', '0', '1', '1', '1'); 
                      when 2 => MAC0req <= ('0' & signed(REG_SZ3), resize(REG_ZSF3,18), x"00000000", '0', '0', '0', '0', '1', '1', '1'); 
                      when 3 => setOTZ <= '1';
-                     when 6 => state <= IDLE; gte_busy <= '0';
+                     when 6 => state <= IDLE;
                      when others => null;
                   end case;                  
                
@@ -1120,7 +1124,7 @@ begin
                      when 2 => MAC0req <= ('0' & signed(REG_SZ2), resize(REG_ZSF4,18), x"00000000", '0', '0', '0', '0', '1', '1', '1'); 
                      when 3 => MAC0req <= ('0' & signed(REG_SZ3), resize(REG_ZSF4,18), x"00000000", '0', '0', '0', '0', '1', '1', '1'); 
                      when 4 => setOTZ <= '1';
-                     when 7 => state <= IDLE; gte_busy <= '0';
+                     when 7 => state <= IDLE;
                      when others => null;
                   end case;  
             
@@ -1132,7 +1136,7 @@ begin
                                MAC3req <= (resize(REG_IR3, 32), resize(REG_IR0, 32), to_signed(0, 45), '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '0',  '1');
 
                      when 1 => pushRGBfromMAC <= '1';
-                     when 4 => state <= IDLE; gte_busy <= '0';
+                     when 4 => state <= IDLE;
                      when others => null;
                   end case;
                
@@ -1154,7 +1158,7 @@ begin
                                MAC3req <= (resize(REG_IR3, 32), resize(REG_IR0, 32), to_signed(0, 45), '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1');
 
                      when 3 => pushRGBfromMAC <= '1';
-                     when 6 => state <= IDLE; gte_busy <= '0';
+                     when 6 => state <= IDLE;
                      when others => null;
                   end case;
             
@@ -1333,14 +1337,7 @@ begin
          variable busy_1         : std_logic := '0'; 
          variable gte_writeEna_1 : std_logic := '0';
          variable gte_readEna_1  : std_logic := '0';
-         variable gte_readEna_2  : std_logic := '0';
-         variable gte_readEna_3  : std_logic := '0';
          variable gte_cmdEna_1   : std_logic := '0';
-         
-         variable gte_readAddr_1 : unsigned(5 downto 0);
-         variable gte_readAddr_2 : unsigned(5 downto 0);
-         variable gte_readData_2 : unsigned(31 downto 0);
-         variable gte_readData_1 : unsigned(31 downto 0);
          
          variable var_V0X   : signed(15 downto 0)   := (others => '0');
          variable var_V0Y   : signed(15 downto 0)   := (others => '0');
@@ -1528,29 +1525,21 @@ begin
                writeline(outfile, line_out);
             end if;
             
-            if (gte_readEna_3 = '1') then
+            if (gte_readEna_1 = '1') then
                write(line_out, string'("REG READ: "));
-               if (gte_readAddr_2 < 10) then
+               if (gte_readAddr < 10) then
                   write(line_out, string'("0"));
                end if;
-               write(line_out, to_integer(gte_readAddr_2));
+               write(line_out, to_integer(gte_readAddr));
                write(line_out, string'(" "));
-               write(line_out, to_hstring(gte_readData_2));
+               write(line_out, to_hstring(gte_readData));
                writeline(outfile, line_out);
             end if;
             
             busy_1 := gte_busy;
             gte_writeEna_1 := gte_writeEna and clk2xIndex;
             gte_cmdEna_1   := gte_cmdEna and clk2xIndex;
-            
-            gte_readEna_3  := gte_readEna_2 and (not gte_cmdEna) and (not gte_busy);
-            gte_readEna_2  := gte_readEna_1 and (not gte_cmdEna) and (not gte_busy);
-            gte_readEna_1  := gte_readEna and clk2xIndex and (not gte_cmdEna) and (not gte_busy);
-            gte_readAddr_2 := gte_readAddr_1;
-            gte_readAddr_1 := gte_readAddr;
-            
-            gte_readData_2 := gte_readData_1;
-            gte_readData_1 := gte_readData;
+            gte_readEna_1  := gte_readEna and clk2xIndex; 
             
          end loop;
          

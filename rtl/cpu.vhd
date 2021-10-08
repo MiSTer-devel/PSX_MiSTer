@@ -30,6 +30,8 @@ entity cpu is
       mem_dataCache         : in  std_logic_vector(127 downto 0);
       mem_done              : in  std_logic;
       
+      stallNext             : out std_logic;
+      
       gte_busy              : in  std_logic;
       gte_readEna           : out std_logic := '0';
       gte_readAddr          : out unsigned(5 downto 0);
@@ -344,6 +346,7 @@ architecture arch of cpu is
    -- debug
    signal debugCnt                     : unsigned(31 downto 0);
    signal debugSum                     : unsigned(31 downto 0);
+   signal debugTmr                     : unsigned(31 downto 0);
    
 begin 
 
@@ -357,6 +360,8 @@ begin
    mem_reqsize       <= mem4_reqsize when mem4_request = '1' else "10";
    mem_dataWrite     <= mem4_dataWrite;
    mem_writeMask     <= executeMemWriteMask;
+
+   stallNext         <= mem_request or stallNew3;
 
    -- common
    stall        <= stall5 & stall4 & stall3 & stall2 & stall1;
@@ -793,7 +798,8 @@ begin
    end process;
 
    process (decodeImmData, decodeTarget, decodeJumpTarget, decodeSource1, decodeSource2, decodeValue1, decodeValue2, decodeOP, decodeFunct, decodeShamt, decodeRD, exception, stall3, stall, value1, value2, pcOld0, resultData, executeStalltype,
-            cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait, opcode1, gte_readAddr, decode_gte_readAddr, gte_readData, gte_busy, execute_gte_cmdEna)
+            cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait, 
+            opcode1, gte_readAddr, decode_gte_readAddr, gte_readData, gte_busy, execute_gte_cmdEna, ce, execute_gte_readAddr)
       variable calcResult  : unsigned(31 downto 0);
       variable calcMemAddr : unsigned(31 downto 0);
    begin
@@ -848,7 +854,7 @@ begin
       gte_readAddr            <= decode_gte_readAddr;
       gte_readEna             <= '0';
       
-      if (executeStalltype = EXESTALLTYPE_GTE and gte_busy = '0') then
+      if (executeStalltype = EXESTALLTYPE_GTE and gte_busy = '0' and gte_cmdEna = '0' and ce = '1') then
          gte_readEna         <= '1';
          gte_readAddr        <= execute_gte_readAddr;
       end if;
@@ -1194,20 +1200,22 @@ begin
                      case (decodeSource1(3 downto 0)) is
                         when x"0" => --mfcn
                            EXEresultWriteEnable <= '1';
-                           gte_readEna          <= '1';
                            EXEresultData        <= gte_readData;
-                           if (gte_busy = '1' or execute_gte_cmdEna = '1') then
+                           if (gte_busy = '1' or gte_cmdEna = '1' or execute_gte_cmdEna = '1') then
                               stallNew3    <= '1';
                               EXEstalltype <= EXESTALLTYPE_GTE;
+                           else
+                              gte_readEna          <= ce;
                            end if;
                         
                         when x"2" => --cfcn
                            EXEresultWriteEnable <= '1';
-                           gte_readEna          <= '1';
                            EXEresultData        <= gte_readData;
-                           if (gte_busy = '1' or execute_gte_cmdEna = '1') then
+                           if (gte_busy = '1' or gte_cmdEna = '1' or execute_gte_cmdEna = '1') then
                               stallNew3    <= '1';
                               EXEstalltype <= EXESTALLTYPE_GTE;
+                           else
+                              gte_readEna          <= ce;
                            end if;
                         
                         when x"4" => --mtcn
@@ -1358,11 +1366,12 @@ begin
                   exceptionCode_3 <= x"B";
                else
                   EXEMemWriteEnable <= '1';
-                  gte_readEna       <= '1';
                   EXEMemWriteData   <= gte_readData;
                   if (gte_busy = '1' or execute_gte_cmdEna = '1') then
                      stallNew3    <= '1';
                      EXEstalltype <= EXESTALLTYPE_GTE;
+                  else
+                     gte_readEna          <= ce;
                   end if;
                end if; 
                
@@ -1427,6 +1436,40 @@ begin
          elsif (ce = '1') then
          
             DIVstart    <= '0';
+            
+            -- mul/div calc/wait
+            if (hiloWait > 0) then
+               hiloWait <= hiloWait - 1;
+               if (hiloWait = 1) then
+                  stall3 <= '0';
+                  case (executeStalltype) is
+                     when EXESTALLTYPE_READHI => resultData <= hi;
+                     when EXESTALLTYPE_READLO => resultData <= lo;
+                     when others => null;
+                  end case;
+               end if;
+            end if;
+            
+            mulResultS <= signed(mul1) * signed(mul2);
+            mulResultU <= mul1 * mul2;
+            
+            if (hiloWait = 2) then
+               case (hilocalc) is
+                  when HILOCALC_MULT  => hi <=   unsigned(mulResultS(63 downto 32));  lo <=    unsigned(mulResultS(31 downto 0));
+                  when HILOCALC_MULTU => hi <=            mulResultU(63 downto 32);   lo <=             mulResultU(31 downto 0);
+                  when HILOCALC_DIV   => hi <=  unsigned(DIVremainder(31 downto  0)); lo <=   unsigned(DIVquotient(31 downto 0));
+                  when HILOCALC_DIVU  => hi <=  unsigned(DIVremainder(31 downto  0)); lo <=   unsigned(DIVquotient(31 downto 0));
+                  when HILOCALC_DIV0  => hi <=           DIV0remainder;               lo <=            DIV0quotient;
+               end case;
+            end if;
+            
+            -- GTE
+            if (executeStalltype = EXESTALLTYPE_GTE and gte_readEna = '1') then
+               resultData          <= gte_readData;
+               executeMemWriteData <= gte_readData;
+               stall3              <= '0';
+               executeStalltype    <= EXESTALLTYPE_NONE;
+            end if;
                
             if (stall = 0) then
             
@@ -1441,8 +1484,12 @@ begin
                   executeMemWriteEnable         <= '0';
                   executeGTEReadEnable          <= '0';
                   executeCOP0WriteEnable        <= '0';
+                  execute_gte_writeEna          <= '0';
+                  execute_gte_cmdEna            <= '0';
                   
                   executeStalltype              <= EXESTALLTYPE_NONE;
+                  
+                  hiloWait                      <= 0;
                         
                else     
                      
@@ -1556,41 +1603,7 @@ begin
                end if;
                
             end if;
-            
-            -- mul/div calc/wait
-            if (hiloWait > 0) then
-               hiloWait <= hiloWait - 1;
-               if (hiloWait = 1) then
-                  stall3 <= '0';
-                  case (executeStalltype) is
-                     when EXESTALLTYPE_READHI => resultData <= hi;
-                     when EXESTALLTYPE_READLO => resultData <= lo;
-                     when others => null;
-                  end case;
-               end if;
-            end if;
-            
-            mulResultS <= signed(mul1) * signed(mul2);
-            mulResultU <= mul1 * mul2;
-            
-            if (hiloWait = 2) then
-               case (hilocalc) is
-                  when HILOCALC_MULT  => hi <=   unsigned(mulResultS(63 downto 32));  lo <=    unsigned(mulResultS(31 downto 0));
-                  when HILOCALC_MULTU => hi <=            mulResultU(63 downto 32);   lo <=             mulResultU(31 downto 0);
-                  when HILOCALC_DIV   => hi <=  unsigned(DIVremainder(31 downto  0)); lo <=   unsigned(DIVquotient(31 downto 0));
-                  when HILOCALC_DIVU  => hi <=  unsigned(DIVremainder(31 downto  0)); lo <=   unsigned(DIVquotient(31 downto 0));
-                  when HILOCALC_DIV0  => hi <=           DIV0remainder;               lo <=            DIV0quotient;
-               end case;
-            end if;
-            
-            -- GTE
-            if (executeStalltype = EXESTALLTYPE_GTE and gte_busy = '0') then
-               resultData          <= gte_readData;
-               executeMemWriteData <= gte_readData;
-               stall3              <= '0';
-               executeStalltype    <= EXESTALLTYPE_NONE;
-            end if;
-   
+
          end if;
          
       end if;
@@ -1726,6 +1739,10 @@ begin
       variable oldData      : unsigned(31 downto 0);
    begin
       if (rising_edge(clk1x)) then
+      
+         gte_writeEna  <= '0';
+         gte_cmdEna    <= '0';
+      
          if (reset = '1') then
          
             stall4                           <= '0';
@@ -1768,8 +1785,6 @@ begin
             writebackInvalidateCacheEna  <= WBinvalidateCacheEna; 
             writebackInvalidateCacheLine <= WBinvalidateCacheLine;   
             
-            gte_writeEna  <= '0';
-            gte_cmdEna    <= '0';
             
             if (stall = 0) then
             
@@ -1969,6 +1984,8 @@ begin
       if (rising_edge(clk1x)) then
       
          cpu_done <= '0';
+         
+         debugTmr <= debugTmr + 1;
       
          if (reset = '1') then
          
@@ -1987,6 +2004,7 @@ begin
             
             debugCnt             <= (others => '0');
             debugSum             <= (others => '0');
+            debugTmr             <= (others => '0');
          
          elsif (ce = '1') then
             
@@ -2017,7 +2035,7 @@ begin
                end loop;
                
                -- todo: REMOVE!
-               if (debugCnt(31) = '1' and debugSum(31) = '1' and writebackTarget = 0) then
+               if (debugCnt(31) = '1' and debugSum(31) = '1' and debugTmr(31) = '1' and writebackTarget = 0) then
                   writeDoneWriteEnable <= '0';
                end if;
                
@@ -2025,10 +2043,10 @@ begin
    
          end if;
          
-         if (debug_firstGTE = '1') then
-            debugCnt <= (others => '0');
-            debugSum <= (others => '0');
-         end if;
+         --if (debug_firstGTE = '1') then
+         --   debugCnt <= (others => '0');
+         --   debugSum <= (others => '0');
+         --end if;
          
       end if;
    end process;

@@ -213,6 +213,7 @@ architecture arch of psx_top is
    signal cpuPaused              : std_logic;
    signal dmaOn                  : std_logic;
    
+   signal ram_refresh_dma        : std_logic;
    signal ram_dma_dataWrite      : std_logic_vector(31 downto 0);
    signal ram_dma_Adr            : std_logic_vector(22 downto 0);
    signal ram_dma_be             : std_logic_vector(3 downto 0);
@@ -230,7 +231,7 @@ architecture arch of psx_top is
    -- cpu
    signal ce_intern              : std_logic := '0';
    signal ce_cpu                 : std_logic := '0';
-   
+   signal stallNext              : std_logic;
    
    -- GTE
    signal gte_busy               : std_logic;
@@ -363,7 +364,7 @@ begin
                cpuPaused <= '0';
             else
          
-               if ((cpuPaused = '1' and dmaOn = '1') or (dmaOn = '1' and memMuxIdle = '1' and mem_request = '0')) then
+               if ((cpuPaused = '1' and dmaOn = '1') or (dmaOn = '1' and memMuxIdle = '1' and stallNext = '0')) then
                   cpuPaused <= '1';
                   ce_cpu    <= '0';
                elsif (dmaOn = '0') then
@@ -504,7 +505,7 @@ begin
       dmaOn                => dmaOn,
       irqOut               => irq_DMA,
       
-      ram_refresh          => ram_refresh,  
+      ram_refresh          => ram_refresh_dma,  
       ram_dataWrite        => ram_dma_dataWrite,
       ram_dataRead         => ram_dataRead, 
       ram_Adr              => ram_dma_Adr,      
@@ -534,6 +535,8 @@ begin
       SS_wren              => SS_wren(3),     
       SS_DataRead          => SS_DataRead_DMA
    );
+   
+   ram_refresh   <= ram_refresh_dma;
    
    ram_dataWrite <= ram_dma_dataWrite when (cpuPaused = '1') else ram_cpu_dataWrite;
    ram_Adr       <= ram_dma_Adr       when (cpuPaused = '1') else ram_cpu_Adr;      
@@ -800,6 +803,8 @@ begin
       mem_dataRead      => mem_dataRead, 
       mem_dataCache     => mem_dataCache, 
       mem_done          => mem_done,
+      
+      stallNext         => stallNext,
       
       gte_busy          => gte_busy, 
       gte_readEna       => gte_readEna,
