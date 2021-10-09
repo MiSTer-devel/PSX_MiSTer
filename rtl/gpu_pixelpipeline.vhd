@@ -81,6 +81,10 @@ architecture arch of gpu_pixelpipeline is
    
    signal CLUTDataB_S         : std_logic_vector(15 downto 0) := (others => '0');
   
+   signal textPalReq          : std_logic;
+   signal textPalReqX         : unsigned(9 downto 0);   
+   signal textPalReqY         : unsigned(8 downto 0);
+  
    signal textPalFetched      : std_logic := '0';
    signal textPalX            : unsigned(9 downto 0) := (others => '0');   
    signal textPalY            : unsigned(8 downto 0) := (others => '0'); 
@@ -95,6 +99,7 @@ architecture arch of gpu_pixelpipeline is
    );
    signal state : tState := IDLE;
    
+   signal pipeline_busy       : std_logic;
    signal pipeline_stall_1    : std_logic := '0';
    
    signal reqVRAMXPos         : unsigned(9 downto 0)  := (others => '0');
@@ -304,6 +309,8 @@ begin
                       CLUTDataB_S    when (pipeline_stall_1 = '1') else 
                       CLUTDataB;
    
+   pipeline_busy <= pipeline_stall or stage0_valid or stage1_valid or stage2_valid or stage3_valid or stage4_valid;
+   
    process (clk2x)
       variable colorTr   : unsigned(12 downto 0);
       variable colorTg   : unsigned(12 downto 0);
@@ -341,15 +348,22 @@ begin
             
             pipeline_stall_1 <= pipeline_stall;
             
+            if (textPalInNew = '1' and drawMode(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
+               textPalReq  <= '1';
+               textPalReqX <= textPalInX;
+               textPalReqY <= textPalInY;
+            end if;
+            
             case (state) is
                when IDLE =>
-                  if (textPalInNew = '1' and drawMode(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
+                  if (textPalReq = '1' and pipeline_busy = '0') then
+                     textPalReq     <= '0';
                      state          <= REQUESTPALETTE;
                      textPalFetched <= '1';
-                     textPalX       <= textPalInX;
-                     textPalY       <= textPalInY;
-                     reqVRAMXPos    <= textPalInX;
-                     reqVRAMYPos    <= textPalInY;
+                     textPalX       <= textPalReqX;
+                     textPalY       <= textPalReqY;
+                     reqVRAMXPos    <= textPalReqX;
+                     reqVRAMYPos    <= textPalReqY;
                      if (drawMode(7) = '1') then
                         reqVRAMSize <= to_unsigned(256, 11); 
                      else
