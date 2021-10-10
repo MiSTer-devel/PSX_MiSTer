@@ -598,7 +598,6 @@ begin
    );
    
    hblank <= hblank_intern;
-   vblank <= vblank_intern;
    
    igpu : entity work.gpu
    generic map
@@ -644,6 +643,7 @@ begin
       hblank               => hblank_intern,
       hblank_tmr           => hblank_tmr,
       vblank               => vblank_intern,
+      vblank_extern        => vblank,
       DisplayWidth         => DisplayWidth, 
       DisplayHeight        => DisplayHeight,
       DisplayOffsetX       => DisplayOffsetX,

@@ -50,6 +50,7 @@ entity gpu is
       hblank               : out std_logic := '0';
       hblank_tmr           : out std_logic := '0';
       vblank               : out std_logic := '0';
+      vblank_extern        : out std_logic := '0';
       DisplayWidth         : out unsigned( 9 downto 0);
       DisplayHeight        : out unsigned( 8 downto 0);
       DisplayOffsetX       : out unsigned( 9 downto 0);
@@ -387,13 +388,26 @@ begin
          if (nextHCount <   3) then hblank_tmr <= '1'; else hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
          
          vblank <= inVsync;
-         if (vDisplayStart >= 4) then
-            if (vpos = vDisplayStart - 4) then vsync <= '1'; end if; 
-            if (vpos = vDisplayStart - 2) then vsync <= '0'; end if; 
+         if ((vtotal - vDisplayEnd) > 2) then
+            if (vpos = vDisplayEnd)     then vsync <= '1'; end if; 
+            if (vpos = vDisplayEnd + 2) then vsync <= '0'; end if; 
+         elsif (vDisplayStart >= 4) then
+            if (vpos = 0) then vsync <= '1'; end if; 
+            if (vpos = 2) then vsync <= '0'; end if; 
          else
             if (vpos = vDisplayEnd - 4) then vsync <= '1'; end if; 
             if (vpos = vDisplayEnd - 2) then vsync <= '0'; end if; 
-         end if;      
+         end if;   
+
+         if (vDisplayStart > 0) then
+            vblank_extern <= '0';
+            if (vposNew >= vDisplayEnd - vDisplayStart) then
+               vblank_extern <= '1'; 
+            end if;         
+         else
+            vblank_extern <= inVsync;
+         end if;
+         
       
          if (reset = '1') then
                
