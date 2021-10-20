@@ -19,6 +19,7 @@ entity gpu is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      videoout_on          : in  std_logic;
       isPal                : in  std_logic;
       
       bus_addr             : in  unsigned(3 downto 0); 
@@ -51,10 +52,16 @@ entity gpu is
       hblank_tmr           : out std_logic := '0';
       vblank               : out std_logic := '0';
       vblank_extern        : out std_logic := '0';
-      DisplayWidth         : out unsigned( 9 downto 0);
-      DisplayHeight        : out unsigned( 8 downto 0);
-      DisplayOffsetX       : out unsigned( 9 downto 0);
-      DisplayOffsetY       : out unsigned( 8 downto 0);
+      DisplayWidth         : buffer unsigned( 9 downto 0);
+      DisplayHeight        : buffer unsigned( 8 downto 0);
+      DisplayOffsetX       : buffer unsigned( 9 downto 0) := (others => '0'); 
+      DisplayOffsetY       : buffer unsigned( 8 downto 0) := (others => '0'); 
+      
+      video_ce             : out std_logic;
+      video_interlace      : out std_logic;
+      video_r              : out std_logic_vector(7 downto 0);
+      video_g              : out std_logic_vector(7 downto 0);
+      video_b              : out std_logic_vector(7 downto 0);
       
       loading_savestate    : in  std_logic;
       SS_reset             : in  std_logic;
@@ -310,6 +317,7 @@ architecture arch of gpu is
    );
    signal vramState : tvramState := IDLE;
    
+   signal VRAMIdle                  : std_logic;
    signal reqVRAMIdle               : std_logic;
    signal reqVRAMDone               : std_logic;
    
@@ -325,6 +333,16 @@ architecture arch of gpu is
    signal vramLineAddr              : unsigned(9 downto 0);
    
    signal vramLineData              : std_logic_vector(15 downto 0);
+   
+   -- videoout
+   signal videoout_fetch            : std_logic := '0';
+   signal videoout_lineIn           : unsigned(8 downto 0) := (others => '0');
+   signal videoout_lineInNext       : unsigned(8 downto 0) := (others => '0');
+   signal videoout_reqVRAMEnable    : std_logic;
+   signal videoout_reqVRAMXPos      : unsigned(9 downto 0);
+   signal videoout_reqVRAMYPos      : unsigned(8 downto 0);
+   signal videoout_reqVRAMSize      : unsigned(10 downto 0);
+   
    
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
@@ -370,6 +388,8 @@ begin
                              GPUSTAT_ReadyRecDMA when (GPUSTAT_DMADirection = "10") else
                              GPUSTAT_ReadySendVRAM;                   
 
+   video_interlace        <= GPUSTAT_VerRes and interlacedDisplayField;
+
    process (clk1x)
       variable mode480i                  : std_logic;
       variable isVsync                   : std_logic;
@@ -384,7 +404,7 @@ begin
          fifoOut_reset <= '0';
          
          if (nextHCount < 200) then hsync      <= '1'; else hsync      <= '0'; end if;
-         if (nextHCount < 400) then hblank     <= '1'; else hblank     <= '0'; end if;
+         --if (nextHCount < 400) then hblank     <= '1'; else hblank     <= '0'; end if;
          if (nextHCount <   3) then hblank_tmr <= '1'; else hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
          
          vblank <= inVsync;
@@ -399,14 +419,14 @@ begin
             if (vpos = vDisplayEnd - 2) then vsync <= '0'; end if; 
          end if;   
 
-         if (vDisplayStart > 0) then
-            vblank_extern <= '0';
-            if (vposNew >= vDisplayEnd - vDisplayStart) then
-               vblank_extern <= '1'; 
-            end if;         
-         else
+         --if (vDisplayStart > 0 and videoout_on = '0') then
+         --   vblank_extern <= '0';
+         --   if (vposNew >= vDisplayEnd - vDisplayStart) then
+         --      vblank_extern <= '1'; 
+         --   end if;         
+         --else
             vblank_extern <= inVsync;
-         end if;
+         --end if;
          
       
          if (reset = '1') then
@@ -465,7 +485,7 @@ begin
             end if;
             
             if (GPUSTAT_VerRes = '1') then
-               DisplayHeight  <= to_unsigned(240, 9);
+               DisplayHeight  <= to_unsigned(480, 9);
             else
                DisplayHeight  <= to_unsigned(240, 9);
             end if;
@@ -566,6 +586,19 @@ begin
                vtotal <= 263;
             end if;
             
+            if (GPUSTAT_HorRes2 = '1') then
+               htotal  <= 2169; -- 368
+            else
+               case (GPUSTAT_HorRes1) is
+                  when "00" => htotal <= 2172; -- 256;
+                  when "01" => htotal <= 2170; -- 320;
+                  when "10" => htotal <= 2169;  -- 512;
+                  when "11" => htotal <= 2170;  -- 640;
+                  when others => null;
+               end case;
+            end if;
+            
+            
             if (vDisplayRange( 9 downto  0) < 314) then vDisplayStart <= to_integer(vDisplayRange( 9 downto  0)); else vDisplayStart <= 314; end if;
             if (vDisplayRange(19 downto 10) < 314) then vDisplayEnd   <= to_integer(vDisplayRange(19 downto 10)); else vDisplayEnd   <= 314; end if;
               
@@ -594,12 +627,25 @@ begin
                if (GPUSTAT_VerRes = '1' and GPUSTAT_VertInterlace = '1') then mode480i := '1'; end if;
                
                isVsync := '0';
-               if (vposNew < vDisplayStart or vposNew >= vDisplayEnd) then isVsync := '1'; end if;
+               if (vposNew < vDisplayStart or vposNew >= vDisplayEnd) then 
+                  isVsync := '1'; 
+               else
+                  if (GPUSTAT_VerRes = '1') then
+                     if (interlacedDisplayField = '1') then
+                        videoout_lineIn <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
+                     else
+                        videoout_lineIn <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
+                     end if;
+                  else
+                     videoout_lineIn <= to_unsigned(vposNew - vDisplayStart, 9);
+                  end if;
+               end if;
 
                interlacedDisplayFieldNew := interlacedDisplayField;
                if (isVsync /= inVsync) then
                   if (isVsync = '1') then
-                     irq_VBLANK <= '1';
+                     videoout_fetch <= '0';
+                     irq_VBLANK     <= '1';
                      if (mode480i = '1') then 
                         interlacedDisplayFieldNew := not GPUSTAT_InterlaceField;
                      else 
@@ -626,6 +672,42 @@ begin
                   if (vramRange(10) = '1' and (vposNew mod 2) = 0) then GPUSTAT_DrawingOddline <= '1'; end if;
                end if;
                
+               vposNew := vposNew + 1;
+               if (vDisplayStart > 0) then
+                  if (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
+                     if (GPUSTAT_VerRes = '1') then
+                        if (interlacedDisplayField = '1') then
+                           videoout_lineInNext <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
+                        else
+                           videoout_lineInNext <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
+                        end if;
+                     else
+                        videoout_lineInNext <= to_unsigned(vposNew - vDisplayStart, 9);
+                     end if;
+                     videoout_fetch      <= '1';
+                  end if;
+               else  
+                  if (vposNew = vtotal) then
+                     if (GPUSTAT_VerRes = '1' and interlacedDisplayField = '1') then
+                        videoout_lineInNext <= to_unsigned(1, 9);
+                     else
+                        videoout_lineInNext <= to_unsigned(0, 9);
+                     end if;
+                     videoout_fetch      <= '1';
+                  elsif (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
+                     if (GPUSTAT_VerRes = '1') then
+                        if (interlacedDisplayField = '1') then
+                           videoout_lineInNext <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
+                        else
+                           videoout_lineInNext <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
+                        end if;
+                     else
+                        videoout_lineInNext <= to_unsigned(vposNew - vDisplayStart, 9);
+                     end if;
+                     videoout_fetch      <= '1';
+                  end if;
+               end if;
+              
             end if;
             
             -- softreset
@@ -1306,12 +1388,13 @@ begin
    
    fifoOut_Rd <= '1' when (ce = '1' and vramState = IDLE and vram_BUSY = '0' and fifoOut_Empty = '0' and reqVRAMEnable = '0') else '0';
    
-   reqVRAMIdle <= '1' when (vramState = IDLE and (vram_WE = '0' or vram_BUSY = '0')) else '0';
+   VRAMIdle    <= '1' when (vramState = IDLE and (vram_WE = '0' or vram_BUSY = '0')) else '0';
+   reqVRAMIdle <= VRAMIdle and not videoout_reqVRAMEnable;
    
-   reqVRAMEnable <= vram2vram_reqVRAMEnable or vram2cpu_reqVRAMEnable or line_reqVRAMEnable or rect_reqVRAMEnable or poly_reqVRAMEnable or pipeline_reqVRAMEnable;
-   reqVRAMXPos   <= vram2vram_reqVRAMXPos   or vram2cpu_reqVRAMXPos   or line_reqVRAMXPos   or rect_reqVRAMXPos   or poly_reqVRAMXPos   or pipeline_reqVRAMXPos  ;  
-   reqVRAMYPos   <= vram2vram_reqVRAMYPos   or vram2cpu_reqVRAMYPos   or line_reqVRAMYPos   or rect_reqVRAMYPos   or poly_reqVRAMYPos   or pipeline_reqVRAMYPos  ;  
-   reqVRAMSize   <= vram2vram_reqVRAMSize   or vram2cpu_reqVRAMSize   or line_reqVRAMSize   or rect_reqVRAMSize   or poly_reqVRAMSize   or pipeline_reqVRAMSize  ;  
+   reqVRAMEnable <= vram2vram_reqVRAMEnable or vram2cpu_reqVRAMEnable or line_reqVRAMEnable or rect_reqVRAMEnable or poly_reqVRAMEnable or pipeline_reqVRAMEnable or videoout_reqVRAMEnable;
+   reqVRAMXPos   <= vram2vram_reqVRAMXPos   or vram2cpu_reqVRAMXPos   or line_reqVRAMXPos   or rect_reqVRAMXPos   or poly_reqVRAMXPos   or pipeline_reqVRAMXPos   or videoout_reqVRAMXPos  ;  
+   reqVRAMYPos   <= vram2vram_reqVRAMYPos   or vram2cpu_reqVRAMYPos   or line_reqVRAMYPos   or rect_reqVRAMYPos   or poly_reqVRAMYPos   or pipeline_reqVRAMYPos   or videoout_reqVRAMYPos  ;  
+   reqVRAMSize   <= vram2vram_reqVRAMSize   or vram2cpu_reqVRAMSize   or line_reqVRAMSize   or rect_reqVRAMSize   or poly_reqVRAMSize   or pipeline_reqVRAMSize   or videoout_reqVRAMSize  ;  
    
    vramLineAddr  <= vram2vram_vramLineAddr when vram2vram_vramLineEna else 
                     vram2cpu_vramLineAddr when vram2cpu_vramLineEna else 
@@ -1343,7 +1426,7 @@ begin
                when IDLE =>
                   if (vram_WE = '0' or vram_BUSY = '0') then
                      if (reqVRAMEnable = '1') then
-                        reqVRAMStore <= not pipeline_reqVRAMEnable;
+                        reqVRAMStore <= (not pipeline_reqVRAMEnable) and (not videoout_reqVRAMEnable);
                         reqVRAMSizeRounded := reqVRAMSize;
                         if (reqVRAMSize(1 downto 0) /= "00") then -- round up read size to full 4*16bit
                            reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
@@ -1388,6 +1471,7 @@ begin
                            vram_RD       <= '1';
                            vram_BURSTCNT <= '0' & std_logic_vector(reqVRAMnext);
                            reqVRAMnext   <= (others => '0');
+                           reqVRAMremain <= '0' & (reqVRAMnext - 1);
                         else
                            vramState   <= IDLE;
                            reqVRAMDone <= '1';
@@ -1424,6 +1508,46 @@ begin
       q_b         => vramLineData
    );
    
+--##############################################################
+--############################### video out
+--##############################################################
+   
+   igpu_videoout : entity work.gpu_videoout
+   port map
+   (
+      clk2x                => clk2x,
+      ce                   => ce,   
+      reset                => reset,
+          
+      videoout_on          => videoout_on,
+          
+      fetch                => videoout_fetch,
+      lineIn               => videoout_lineIn,
+      lineInNext           => videoout_lineInNext,
+      DisplayWidth         => DisplayWidth,
+      DisplayOffsetX       => DisplayOffsetX,
+      DisplayOffsetY       => DisplayOffsetY,
+      GPUSTAT_HorRes2      => GPUSTAT_HorRes2,
+      GPUSTAT_HorRes1      => GPUSTAT_HorRes1,
+      GPUSTAT_ColorDepth24 => GPUSTAT_ColorDepth24,
+      interlacedMode       => GPUSTAT_VerRes,
+                           
+      requestVRAMEnable    => videoout_reqVRAMEnable,
+      requestVRAMXPos      => videoout_reqVRAMXPos,  
+      requestVRAMYPos      => videoout_reqVRAMYPos,  
+      requestVRAMSize      => videoout_reqVRAMSize,  
+      requestVRAMIdle      => VRAMIdle,
+      requestVRAMDone      => reqVRAMDone,
+                           
+      vram_DOUT            => vram_DOUT,      
+      vram_DOUT_READY      => vram_DOUT_READY,
+      
+      video_ce             => video_ce,
+      video_r              => video_r, 
+      video_g              => video_g, 
+      video_b              => video_b, 
+      video_hblank         => hblank
+   );
    
 --##############################################################
 --############################### savestates

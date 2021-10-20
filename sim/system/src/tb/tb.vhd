@@ -92,6 +92,15 @@ architecture arch of etb is
    signal DDRAM_BE            : std_logic_vector(7 downto 0);
    signal DDRAM_WE            : std_logic;
    
+   -- video
+   signal hblank              : std_logic;
+   signal vblank              : std_logic;
+   signal video_ce            : std_logic;
+   signal video_interlace     : std_logic;
+   signal video_r             : std_logic_vector(7 downto 0);
+   signal video_g             : std_logic_vector(7 downto 0);
+   signal video_b             : std_logic_vector(7 downto 0);
+   
    -- keys
    signal KeyTriangle         : std_logic := '0'; 
    signal KeyCircle           : std_logic := '0'; 
@@ -184,6 +193,15 @@ begin
       DDRAM_DIN             => DDRAM_DIN,       
       DDRAM_BE              => DDRAM_BE,        
       DDRAM_WE              => DDRAM_WE,
+      -- video
+      videoout_on           => '1',
+      hblank                => hblank,  
+      vblank                => vblank,  
+      video_ce              => video_ce,
+      video_interlace       => video_interlace,
+      video_r               => video_r, 
+      video_g               => video_g,    
+      video_b               => video_b,   
       -- Keys - all active high
       KeyTriangle           => KeyTriangle,           
       KeyCircle             => KeyCircle,           
@@ -249,21 +267,18 @@ begin
       ram_idle     => ram_idle
    );
    
-   --iframebuffer : entity work.framebuffer
-   --generic map
-   --(
-   --   FRAMESIZE_X => 240,
-   --   FRAMESIZE_Y => 160
-   --)
-   --port map
-   --(
-   --   clk100             => clk100,
-   --                       
-   --   pixel_in_x         => pixel_out_x,
-   --   pixel_in_y         => pixel_out_y,
-   --   pixel_in_data      => pixel_out_data,
-   --   pixel_in_we        => pixel_out_we
-   --);
+   iframebuffer : entity work.framebuffer
+   port map
+   (
+      clk               => clk66,     
+      hblank            => hblank,  
+      vblank            => vblank,  
+      video_ce          => video_ce,
+      video_interlace   => video_interlace,
+      video_r           => video_r, 
+      video_g           => video_g,    
+      video_b           => video_b  
+   );
    
    iTestprocessor : entity procbus.eTestprocessor
    generic map

@@ -227,10 +227,10 @@ begin
 
    requestFifo <= '1' when (state = REQUESTCOLOR or state = REQUESTPOS or state = REQUESTTEXTURE) else '0';
    
-   requestVRAMEnable <= '1'                        when (state = REQUESTLINE and pipeline_stall = '0') else '0';
-   requestVRAMXPos   <= unsigned(xPos(9 downto 0)) when (state = REQUESTLINE and pipeline_stall = '0') else (others => '0');
-   requestVRAMYPos   <= unsigned(yPos(8 downto 0)) when (state = REQUESTLINE and pipeline_stall = '0') else (others => '0');
-   requestVRAMSize   <= xSize                      when (state = REQUESTLINE and pipeline_stall = '0') else (others => '0');
+   requestVRAMEnable <= '1'                        when (state = REQUESTLINE and requestVRAMIdle = '1' and pipeline_stall = '0') else '0';
+   requestVRAMXPos   <= unsigned(xPos(9 downto 0)) when (state = REQUESTLINE and requestVRAMIdle = '1' and pipeline_stall = '0') else (others => '0');
+   requestVRAMYPos   <= unsigned(yPos(8 downto 0)) when (state = REQUESTLINE and requestVRAMIdle = '1' and pipeline_stall = '0') else (others => '0');
+   requestVRAMSize   <= xSize                      when (state = REQUESTLINE and requestVRAMIdle = '1' and pipeline_stall = '0') else (others => '0');
    
    vramLineEna  <= '1' when (state = PROCPIXELS) else '0';
    vramLineAddr <= unsigned(xPos(9 downto 0)) when (state = PROCPIXELS) else (others => '0');

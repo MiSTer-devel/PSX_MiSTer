@@ -151,10 +151,10 @@ begin
 
    requestFifo <= '1' when (recstate = REQUESTPOS1 or recstate = REQUESTCOLOR2 or recstate = REQUESTPOS2) else '0';
    
-   requestVRAMEnable <= '1'                           when (procstate = PROCREADLINE and pipeline_stall = '0') else '0';
-   requestVRAMXPos   <= unsigned(workx(41 downto 32)) when (procstate = PROCREADLINE and pipeline_stall = '0') else (others => '0');
-   requestVRAMYPos   <= unsigned(worky(40 downto 32)) when (procstate = PROCREADLINE and pipeline_stall = '0') else (others => '0');
-   requestVRAMSize   <= yPerLine                      when (procstate = PROCREADLINE and pipeline_stall = '0') else (others => '0');
+   requestVRAMEnable <= '1'                           when (procstate = PROCREADLINE and requestVRAMIdle = '1' and pipeline_stall = '0') else '0';
+   requestVRAMXPos   <= unsigned(workx(41 downto 32)) when (procstate = PROCREADLINE and requestVRAMIdle = '1' and pipeline_stall = '0') else (others => '0');
+   requestVRAMYPos   <= unsigned(worky(40 downto 32)) when (procstate = PROCREADLINE and requestVRAMIdle = '1' and pipeline_stall = '0') else (others => '0');
+   requestVRAMSize   <= yPerLine                      when (procstate = PROCREADLINE and requestVRAMIdle = '1' and pipeline_stall = '0') else (others => '0');
    
    vramLineEna  <= '1' when (procstate = PROCPIXELS) else '0';
    vramLineAddr <= unsigned(workx(41 downto 32)) when (procstate = PROCPIXELS) else (others => '0');

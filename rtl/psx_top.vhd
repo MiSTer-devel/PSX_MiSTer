@@ -41,6 +41,8 @@ entity psx_top is
       ddr3_BE               : out std_logic_vector(7 downto 0) := (others => '0'); 
       ddr3_WE               : out std_logic := '0';
       ddr3_RD               : out std_logic := '0'; 
+      -- video
+      videoout_on           : in  std_logic;
       hsync                 : out std_logic;
       vsync                 : out std_logic;
       hblank                : out std_logic;
@@ -49,6 +51,11 @@ entity psx_top is
       DisplayHeight         : out unsigned( 8 downto 0);
       DisplayOffsetX        : out unsigned( 9 downto 0);
       DisplayOffsetY        : out unsigned( 8 downto 0);
+      video_ce              : out std_logic;
+      video_interlace       : out std_logic;
+      video_r               : out std_logic_vector(7 downto 0);
+      video_g               : out std_logic_vector(7 downto 0);
+      video_b               : out std_logic_vector(7 downto 0);
       -- Keys - all active high   
       KeyTriangle           : in  std_logic; 
       KeyCircle             : in  std_logic; 
@@ -612,6 +619,7 @@ begin
       ce                   => ce,   
       reset                => reset_intern,
       
+      videoout_on          => videoout_on,
       isPal                => '1',
       
       bus_addr             => bus_gpu_addr,     
@@ -648,6 +656,12 @@ begin
       DisplayHeight        => DisplayHeight,
       DisplayOffsetX       => DisplayOffsetX,
       DisplayOffsetY       => DisplayOffsetY,
+      
+      video_ce              => video_ce,
+      video_interlace       => video_interlace,
+      video_r               => video_r, 
+      video_g               => video_g, 
+      video_b               => video_b, 
       
       loading_savestate    => loading_savestate,
       SS_reset             => SS_reset,

@@ -70,10 +70,10 @@ begin
 
    requestFifo <= '1' when (state = REQUESTWORD2 or state = REQUESTWORD3) else '0';
    
-   requestVRAMEnable <= '1'  when (state = READVRAM and Fifo_NearFull = '0') else '0';
-   requestVRAMXPos   <= srcX when state = READVRAM else (others => '0');
-   requestVRAMYPos   <= srcY when state = READVRAM else (others => '0');
-   requestVRAMSize   <= widt when state = READVRAM else (others => '0');
+   requestVRAMEnable <= '1'  when (state = READVRAM and requestVRAMIdle = '1' and Fifo_NearFull = '0') else '0';
+   requestVRAMXPos   <= srcX when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
+   requestVRAMYPos   <= srcY when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
+   requestVRAMSize   <= widt when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
    
    vramLineEna       <= '1'  when (state = WRITING or state = WAITREAD) else '0';
    vramLineAddr      <= xSrc when (state = WRITING or state = WAITREAD) else (others => '0');

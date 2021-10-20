@@ -37,6 +37,8 @@ entity psx_mister is
       DDRAM_DIN             : out std_logic_vector(63 downto 0);
       DDRAM_BE              : out std_logic_vector(7 downto 0); 
       DDRAM_WE              : out std_logic;
+      -- video
+      videoout_on           : in  std_logic;
       hsync                 : out std_logic;
       vsync                 : out std_logic;
       hblank                : out std_logic;
@@ -45,6 +47,11 @@ entity psx_mister is
       DisplayHeight         : out unsigned( 8 downto 0);
       DisplayOffsetX        : out unsigned( 9 downto 0);
       DisplayOffsetY        : out unsigned( 8 downto 0);
+      video_ce              : out std_logic;
+      video_interlace       : out std_logic;
+      video_r               : out std_logic_vector(7 downto 0);
+      video_g               : out std_logic_vector(7 downto 0);
+      video_b               : out std_logic_vector(7 downto 0);
       -- Keys - all active high   
       KeyTriangle           : in  std_logic; 
       KeyCircle             : in  std_logic; 
@@ -124,7 +131,9 @@ begin
       ddr3_DIN              => DDRAM_DIN,       
       ddr3_BE               => DDRAM_BE,        
       ddr3_WE               => DDRAM_WE,        
-      ddr3_RD               => DDRAM_RD,   
+      ddr3_RD               => DDRAM_RD,
+      -- video
+      videoout_on           => videoout_on,
       hsync                 => hsync, 
       vsync                 => vsync, 
       hblank                => hblank,
@@ -133,6 +142,11 @@ begin
       DisplayHeight         => DisplayHeight,
       DisplayOffsetX        => DisplayOffsetX,
       DisplayOffsetY        => DisplayOffsetY,
+      video_ce              => video_ce,
+      video_interlace       => video_interlace,
+      video_r               => video_r, 
+      video_g               => video_g, 
+      video_b               => video_b, 
       -- Keys - all active high
       KeyTriangle           => KeyTriangle,           
       KeyCircle             => KeyCircle,           

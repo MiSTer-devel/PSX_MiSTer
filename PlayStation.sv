@@ -195,7 +195,7 @@ wire [ 9:0] DisplayOffsetX;
 wire [ 8:0] DisplayOffsetY;
 
 assign FB_BASE    = status[11] ? 32'h30000000 : (32'h30000000 + (DisplayOffsetX * 2) + (DisplayOffsetY * 2048));
-assign FB_EN      = 1;
+assign FB_EN      = status[14];
 assign FB_FORMAT  = status[10] ? 5'b00101 : 5'b01100;
 assign FB_WIDTH   = status[11] ? 12'd1024 : DisplayWidth;
 assign FB_HEIGHT  = status[11] ? 12'd512  : DisplayHeight;
@@ -266,7 +266,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX XXXX   XX    X   X     XXXXXXX
+// X XXXXXXX XXXXX  XX    X   X     XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -283,6 +283,7 @@ parameter CONF_STR = {
 	"RI,Restore state (F1);",
 	"- ;",
 	"OA,Color,16,24;",
+	"OE,DDR3 Framebuffer,Off,On;",
 	"OB,VRAMViewer,Off,On;",
 	"- ;",
 
@@ -516,6 +517,8 @@ psx
    .DDRAM_DIN       (DDRAM_DIN       ),
    .DDRAM_BE        (DDRAM_BE        ),
    .DDRAM_WE        (DDRAM_WE        ),
+   // video
+   .videoout_on     (~status[14]),
    .hsync           (hs),
    .vsync           (vs),
    .hblank          (hbl),
@@ -524,6 +527,11 @@ psx
    .DisplayHeight   (DisplayHeight),
    .DisplayOffsetX  (DisplayOffsetX),
    .DisplayOffsetY  (DisplayOffsetY),
+   .video_ce        (ce_pix),
+   .video_interlace (video_interlace),
+   .video_r         (r),
+   .video_g         (g),
+   .video_b         (b),
    //Keys
    .KeyTriangle(joy[4]),    
    .KeyCircle(joy[5]),       
@@ -557,7 +565,6 @@ psx
    .rewind_on             (0), //(status[27]),
    .rewind_active         (0)  //(status[27] & joy[15])
 );
-
 
 ////////////////////////////  MEMORY  ///////////////////////////////////
 
@@ -747,31 +754,40 @@ end
 
 ////////////////////////////  VIDEO  ////////////////////////////////////
 
-assign CLK_VIDEO = clk_1x;
+assign CLK_VIDEO = clk_2x;
 
-wire hs, vs, hbl, vbl;
+wire hs, vs, hbl, vbl, video_interlace;
 
-assign VGA_F1 = 0;
+assign VGA_F1 = status[14] ? 0 : video_interlace;
 assign VGA_SL = sl[1:0];
 
 wire [2:0] scale = status[4:2];
 wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
 wire       scandoubler = (scale || forced_scandoubler);
 
-reg ce_pix = 1;
+wire ce_pix;
+wire [7:0] r,g,b;
 
-video_mixer #(.LINE_LENGTH(520), .GAMMA(1)) video_mixer
-(
-	.*,
-	.hq2x(scale==1),
-	.HSync (hs),
-	.VSync (vs),
-	.HBlank(hbl),
-	.VBlank(vbl),
-	.R(8'h00),
-	.G(8'hFF),
-	.B(8'h00)
-);
+//video_mixer #(.LINE_LENGTH(800), .GAMMA(1)) video_mixer
+//(
+//	.*,
+//	.hq2x(scale==1),
+//	.HSync (hs),
+//	.VSync (vs),
+//	.HBlank(hbl),
+//	.VBlank(vbl),
+//	.R(r),
+//	.G(g),
+//	.B(b)
+//);
+
+assign CE_PIXEL = ce_pix;
+assign VGA_R    = r;
+assign VGA_G    = g;
+assign VGA_B    = b;
+assign VGA_VS   = vs;
+assign VGA_HS   = hs;
+assign VGA_DE   = ~(vbl | hbl);
 
 wire [1:0] ar = status[33:32];
 video_freak video_freak

@@ -188,10 +188,10 @@ begin
 
    pipeline_stall <= '1' when (pixelStall = '1' or state /= IDLE) else '0';
 
-   requestVRAMEnable <= '1'         when (state = REQUESTTEXTURE or state = REQUESTPALETTE) else '0';
-   requestVRAMXPos   <= reqVRAMXPos when (state = REQUESTTEXTURE or state = REQUESTPALETTE) else (others => '0');
-   requestVRAMYPos   <= reqVRAMYPos when (state = REQUESTTEXTURE or state = REQUESTPALETTE) else (others => '0');
-   requestVRAMSize   <= reqVRAMSize when (state = REQUESTTEXTURE or state = REQUESTPALETTE) else (others => '0');
+   requestVRAMEnable <= '1'         when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or state = REQUESTPALETTE)) else '0';
+   requestVRAMXPos   <= reqVRAMXPos when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or state = REQUESTPALETTE)) else (others => '0');
+   requestVRAMYPos   <= reqVRAMYPos when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or state = REQUESTPALETTE)) else (others => '0');
+   requestVRAMSize   <= reqVRAMSize when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or state = REQUESTPALETTE)) else (others => '0');
    
    itagram : altdpram
 	GENERIC MAP 
