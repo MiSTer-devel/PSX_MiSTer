@@ -195,6 +195,7 @@ begin
       DDRAM_WE              => DDRAM_WE,
       -- video
       videoout_on           => '1',
+      isPal                 => '0',
       hblank                => hblank,  
       vblank                => vblank,  
       video_ce              => video_ce,

@@ -266,7 +266,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX XXXXX  XX    X   X     XXXXXXX
+// X XXXXXXX XXXXXX XX    X   X     XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -285,6 +285,7 @@ parameter CONF_STR = {
 	"OA,Color,16,24;",
 	"OE,DDR3 Framebuffer,Off,On;",
 	"OB,VRAMViewer,Off,On;",
+	"OF,System Type,NTSC,PAL;",
 	"- ;",
 
 	"P1,Video & Audio;",
@@ -519,6 +520,7 @@ psx
    .DDRAM_WE        (DDRAM_WE        ),
    // video
    .videoout_on     (~status[14]),
+   .isPal           (status[15]),
    .hsync           (hs),
    .vsync           (vs),
    .hblank          (hbl),
@@ -758,7 +760,7 @@ assign CLK_VIDEO = clk_2x;
 
 wire hs, vs, hbl, vbl, video_interlace;
 
-assign VGA_F1 = status[14] ? 0 : video_interlace;
+assign VGA_F1 = status[14] ? 1'b0 : video_interlace;
 assign VGA_SL = sl[1:0];
 
 wire [2:0] scale = status[4:2];

@@ -455,7 +455,7 @@ begin
             GPUSTAT_HorRes2         <= ss_gpu_in(1)(16);
             GPUSTAT_HorRes1         <= ss_gpu_in(1)(18 downto 17);
             GPUSTAT_VerRes          <= ss_gpu_in(1)(19);
-            GPUSTAT_PalVideoMode    <= ss_gpu_in(1)(20); --isPal;
+            GPUSTAT_PalVideoMode    <= isPal; --ss_gpu_in(1)(20); --;
             GPUSTAT_ColorDepth24    <= ss_gpu_in(1)(21);
             GPUSTAT_VertInterlace   <= ss_gpu_in(1)(22);
             GPUSTAT_DisplayDisable  <= ss_gpu_in(1)(23);

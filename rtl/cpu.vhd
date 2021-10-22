@@ -58,9 +58,20 @@ end entity;
 
 architecture arch of cpu is
      
-   -- regs
-   type tRegs is array(0 to 31) of unsigned(31 downto 0);
-   signal regs                         : tRegs := (others => (others => '0'));
+   -- register file
+   signal regs_address_a               : std_logic_vector(4 downto 0);
+   signal regs_data_a                  : std_logic_vector(31 downto 0);
+   signal regs_wren_a                  : std_logic;
+   signal regs1_address_b              : std_logic_vector(4 downto 0);
+   signal regs1_q_b                    : std_logic_vector(31 downto 0);
+   signal regs2_address_b              : std_logic_vector(4 downto 0);
+   signal regs2_q_b                    : std_logic_vector(31 downto 0);
+   
+   signal ss_regs_load                 : std_logic := '0';
+   signal ss_regs_addr                 : unsigned(7 downto 0);
+   signal ss_regs_data                 : std_logic_vector(31 downto 0);
+   
+   -- other register
    signal PC                           : unsigned(31 downto 0) := (others => '0');
    signal hi                           : unsigned(31 downto 0) := (others => '0');
    signal lo                           : unsigned(31 downto 0) := (others => '0');
@@ -340,13 +351,17 @@ architecture arch of cpu is
    signal writeDoneWriteEnable         : std_logic := '0';
    
    -- savestates
-   type t_ssarray is array(0 to 88) of std_logic_vector(31 downto 0);
+   type t_ssarray is array(0 to 56) of std_logic_vector(31 downto 0);
    signal ss_in  : t_ssarray := (others => (others => '0'));  
    
    -- debug
    signal debugCnt                     : unsigned(31 downto 0);
    signal debugSum                     : unsigned(31 downto 0);
    signal debugTmr                     : unsigned(31 downto 0);
+   
+   -- export
+   type tRegs is array(0 to 31) of unsigned(31 downto 0);
+   signal regs                         : tRegs := (others => (others => '0'));
    
 begin 
 
@@ -389,6 +404,80 @@ begin
          end if;
       end if;
    end process;
+   
+--##############################################################
+--############################### register file
+--##############################################################
+   iregisterfile1 : altdpram
+	GENERIC MAP 
+   (
+   	indata_aclr                         => "OFF",
+      indata_reg                          => "INCLOCK",
+      intended_device_family              => "Cyclone V",
+      lpm_type                            => "altdpram",
+      outdata_aclr                        => "OFF",
+      outdata_reg                         => "UNREGISTERED",
+      ram_block_type                      => "MLAB",
+      rdaddress_aclr                      => "OFF",
+      rdaddress_reg                       => "UNREGISTERED",
+      rdcontrol_aclr                      => "OFF",
+      rdcontrol_reg                       => "UNREGISTERED",
+      read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
+      width                               => 32,
+      widthad                             => 5,
+      width_byteena                       => 1,
+      wraddress_aclr                      => "OFF",
+      wraddress_reg                       => "INCLOCK",
+      wrcontrol_aclr                      => "OFF",
+      wrcontrol_reg                       => "INCLOCK"
+	)
+	PORT MAP (
+      inclock    => clk1x,
+      wren       => regs_wren_a,
+      data       => regs_data_a,
+      wraddress  => regs_address_a,
+      rdaddress  => regs1_address_b,
+      q          => regs1_q_b
+	);
+   
+   regs_wren_a    <= '1' when (ss_regs_load = '1' or (ce = '1' and stall = 0 and writebackWriteEnable = '1' and writebackException = '0' and writebackTarget > 0)) else '0';
+   regs_data_a    <= ss_regs_data                               when (ss_regs_load = '1') else std_logic_vector(writebackData);
+   regs_address_a <= std_logic_vector(ss_regs_addr(4 downto 0)) when (ss_regs_load = '1') else std_logic_vector(writebackTarget);
+   
+   regs1_address_b <= std_logic_vector(opcodeCacheMuxed(25 downto 21));
+   regs2_address_b <= std_logic_vector(opcodeCacheMuxed(20 downto 16));
+   
+   iregisterfile2 : altdpram
+	GENERIC MAP 
+   (
+   	indata_aclr                         => "OFF",
+      indata_reg                          => "INCLOCK",
+      intended_device_family              => "Cyclone V",
+      lpm_type                            => "altdpram",
+      outdata_aclr                        => "OFF",
+      outdata_reg                         => "UNREGISTERED",
+      ram_block_type                      => "MLAB",
+      rdaddress_aclr                      => "OFF",
+      rdaddress_reg                       => "UNREGISTERED",
+      rdcontrol_aclr                      => "OFF",
+      rdcontrol_reg                       => "UNREGISTERED",
+      read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
+      width                               => 32,
+      widthad                             => 5,
+      width_byteena                       => 1,
+      wraddress_aclr                      => "OFF",
+      wraddress_reg                       => "INCLOCK",
+      wrcontrol_aclr                      => "OFF",
+      wrcontrol_reg                       => "INCLOCK"
+	)
+	PORT MAP (
+      inclock    => clk1x,
+      wren       => regs_wren_a,
+      data       => regs_data_a,
+      wraddress  => regs_address_a,
+      rdaddress  => regs2_address_b,
+      q          => regs2_q_b
+	);
 
 --##############################################################
 --############################### stage 1
@@ -749,8 +838,8 @@ begin
                   decodeJumpTarget <= opcodeCacheMuxed(25 downto 0);
                   decodeSource1    <= opcodeCacheMuxed(25 downto 21);
                   decodeSource2    <= opcodeCacheMuxed(20 downto 16);
-                  decodeValue1     <= regs(to_integer(opcodeCacheMuxed(25 downto 21)));
-                  decodeValue2     <= regs(to_integer(opcodeCacheMuxed(20 downto 16)));
+                  decodeValue1     <= unsigned(regs1_q_b);
+                  decodeValue2     <= unsigned(regs2_q_b);
                   decodeOP         <= opcodeCacheMuxed(31 downto 26);
                   decodeFunct      <= opcodeCacheMuxed(5 downto 0);
                   decodeShamt      <= opcodeCacheMuxed(10 downto 6);
@@ -1994,10 +2083,6 @@ begin
             pcOld4               <= unsigned(ss_in(23));
             opcode4              <= unsigned(ss_in(18));
             
-            for i in 0 to 31 loop
-               regs(i) <= unsigned(ss_in(57 + i));
-            end loop;
-            
             writeDoneTarget      <= unsigned(ss_in(50)(12 downto 8));
             writeDoneData        <= unsigned(ss_in(49));
             writeDoneWriteEnable <= ss_in(50)(16);
@@ -2017,6 +2102,7 @@ begin
                writeDoneData        <= writebackData;       
                writeDoneWriteEnable <= writebackWriteEnable;
                
+               -- export
                if (writebackWriteEnable = '1' and writebackException = '0') then 
                   if (writebackTarget > 0) then
                      regs(to_integer(writebackTarget)) <= writebackData;
@@ -2024,7 +2110,6 @@ begin
                   end if;
                end if;
                
-               -- export
                debugCnt          <= debugCnt+ 1;
                cpu_done          <= '1';
                cpu_export.pc     <= pcOld4;
@@ -2047,6 +2132,11 @@ begin
          --   debugCnt <= (others => '0');
          --   debugSum <= (others => '0');
          --end if;
+         
+         -- export
+         if (ss_regs_load = '1') then
+            regs(to_integer(ss_regs_addr(4 downto 0))) <= unsigned(ss_regs_data);
+         end if; 
          
       end if;
    end process;
@@ -2153,17 +2243,24 @@ begin
    begin
       if (rising_edge(clk1x)) then
       
+         ss_regs_load <= '0';
+      
          if (SS_reset = '1') then
          
-            for i in 0 to 88 loop
+            for i in 0 to 56 loop
                ss_in(i) <= (others => '0');
             end loop;
             
             ss_in(0)  <= x"BFC00000"; -- PC
             ss_in(13) <= x"00000002"; -- cop0_PRID
             
-         elsif (SS_wren_CPU = '1' and SS_Adr < 89) then
+         elsif (SS_wren_CPU = '1' and SS_Adr < 57) then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+            
+         elsif (SS_wren_CPU = '1' and SS_Adr >= 57 and SS_Adr < 89) then
+            ss_regs_load <= '1';
+            ss_regs_addr <= SS_Adr - 57;
+            ss_regs_data <= SS_DataWrite;
          end if;
       
       end if;

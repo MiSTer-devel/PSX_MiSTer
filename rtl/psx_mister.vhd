@@ -39,6 +39,7 @@ entity psx_mister is
       DDRAM_WE              : out std_logic;
       -- video
       videoout_on           : in  std_logic;
+      isPal                 : in  std_logic;
       hsync                 : out std_logic;
       vsync                 : out std_logic;
       hblank                : out std_logic;
@@ -134,6 +135,7 @@ begin
       ddr3_RD               => DDRAM_RD,
       -- video
       videoout_on           => videoout_on,
+      isPal                 => isPal,
       hsync                 => hsync, 
       vsync                 => vsync, 
       hblank                => hblank,

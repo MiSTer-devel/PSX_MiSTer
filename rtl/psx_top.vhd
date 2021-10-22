@@ -43,6 +43,7 @@ entity psx_top is
       ddr3_RD               : out std_logic := '0'; 
       -- video
       videoout_on           : in  std_logic;
+      isPal                 : in  std_logic;
       hsync                 : out std_logic;
       vsync                 : out std_logic;
       hblank                : out std_logic;
@@ -620,7 +621,7 @@ begin
       reset                => reset_intern,
       
       videoout_on          => videoout_on,
-      isPal                => '1',
+      isPal                => isPal,
       
       bus_addr             => bus_gpu_addr,     
       bus_dataWrite        => bus_gpu_dataWrite,
