@@ -16,6 +16,7 @@ entity gpu_videoout is
       fetch                : in  std_logic;
       lineIn               : in  unsigned(8 downto 0);
       lineInNext           : in  unsigned(8 downto 0);
+      nextHCount           : in  integer range 0 to 4095;
       DisplayWidth         : in  unsigned(9 downto 0);
       DisplayOffsetX       : in  unsigned(9 downto 0);
       DisplayOffsetY       : in  unsigned(8 downto 0);
@@ -38,7 +39,8 @@ entity gpu_videoout is
       video_r              : out std_logic_vector(7 downto 0);
       video_g              : out std_logic_vector(7 downto 0);
       video_b              : out std_logic_vector(7 downto 0);
-      video_hblank         : out std_logic := '1'
+      video_hblank         : out std_logic := '1';
+      video_hsync          : out std_logic := '0'
    );
 end entity;
 
@@ -71,6 +73,9 @@ architecture arch of gpu_videoout is
    signal clkCnt        : integer range 0 to 12 := 0;
    signal xpos          : integer range 0 to 1023 := 0;
    signal xmax          : integer range 0 to 1023;
+   
+   signal hsync_start   : integer range 0 to 4095;
+   signal hsync_end     : integer range 0 to 4095;
    
    type tReadState is
    (
@@ -223,8 +228,15 @@ begin
                   video_b      <= pixelData_B;
                else
                   video_hblank <= '1';
+                  if (video_hblank = '0') then
+                     hsync_start <= (nextHCount / 2) + (26 * clkDiv);
+                     hsync_end   <= (nextHCount / 2) + (2 * clkDiv);
+                  end if;
                end if;
             end if;
+            
+            if (nextHCount = hsync_start) then video_hsync <= '1'; end if;
+            if (nextHCount = hsync_end  ) then video_hsync <= '0'; end if;
          
             case (readstate) is
             

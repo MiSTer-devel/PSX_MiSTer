@@ -130,6 +130,7 @@ architecture arch of gpu is
       
    signal nextHCount                : integer range 0 to 4095;
    signal vpos                      : integer range 0 to 511;
+   signal vsyncCount                : integer range 0 to 511;
    signal inVsync                   : std_logic := '0';
    signal interlacedDisplayField    : std_logic := '0';
    signal activeLineLSB             : std_logic := '0';
@@ -403,32 +404,21 @@ begin
          fifoIn_reset  <= '0';
          fifoOut_reset <= '0';
          
-         if (nextHCount < 200) then hsync      <= '1'; else hsync      <= '0'; end if;
+         --if (nextHCount < 200) then hsync      <= '1'; else hsync      <= '0'; end if;
          --if (nextHCount < 400) then hblank     <= '1'; else hblank     <= '0'; end if;
          if (nextHCount <   3) then hblank_tmr <= '1'; else hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
          
          vblank <= inVsync;
-         if ((vtotal - vDisplayEnd) > 2) then
-            if (vpos = vDisplayEnd)     then vsync <= '1'; end if; 
-            if (vpos = vDisplayEnd + 2) then vsync <= '0'; end if; 
-         elsif (vDisplayStart >= 4) then
-            if (vpos = 0) then vsync <= '1'; end if; 
-            if (vpos = 2) then vsync <= '0'; end if; 
-         else
-            if (vpos = vDisplayEnd - 4) then vsync <= '1'; end if; 
-            if (vpos = vDisplayEnd - 2) then vsync <= '0'; end if; 
-         end if;   
-
-         --if (vDisplayStart > 0 and videoout_on = '0') then
-         --   vblank_extern <= '0';
-         --   if (vposNew >= vDisplayEnd - vDisplayStart) then
-         --      vblank_extern <= '1'; 
-         --   end if;         
-         --else
-            vblank_extern <= inVsync;
-         --end if;
          
-      
+         vsync <= '0';
+         if (GPUSTAT_VerRes = '1') then
+            if (vsyncCount >= 5 and vsyncCount < 8) then vsync <= '1'; end if;
+         else
+            if (vsyncCount >= 10 and vsyncCount < 13) then vsync <= '1'; end if;
+         end if;
+
+         vblank_extern <= inVsync;
+
          if (reset = '1') then
                
             interlacedDisplayField  <= ss_timing_in(4)(19);
@@ -627,8 +617,10 @@ begin
                if (GPUSTAT_VerRes = '1' and GPUSTAT_VertInterlace = '1') then mode480i := '1'; end if;
                
                isVsync := '0';
+               vsyncCount <= 0;
                if (vposNew < vDisplayStart or vposNew >= vDisplayEnd) then 
                   isVsync := '1'; 
+                  vsyncCount <= vsyncCount + 1;
                else
                   if (GPUSTAT_VerRes = '1') then
                      if (interlacedDisplayField = '1') then
@@ -1524,6 +1516,7 @@ begin
       fetch                => videoout_fetch,
       lineIn               => videoout_lineIn,
       lineInNext           => videoout_lineInNext,
+      nextHCount           => nextHCount,
       DisplayWidth         => DisplayWidth,
       DisplayOffsetX       => DisplayOffsetX,
       DisplayOffsetY       => DisplayOffsetY,
@@ -1546,7 +1539,8 @@ begin
       video_r              => video_r, 
       video_g              => video_g, 
       video_b              => video_b, 
-      video_hblank         => hblank
+      video_hblank         => hblank,
+      video_hsync          => hsync
    );
    
 --##############################################################
