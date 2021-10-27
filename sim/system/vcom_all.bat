@@ -48,6 +48,7 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/gte_mac123.vhd ^
 ../../rtl/gte_UNRDivide.vhd ^
 ../../rtl/gte.vhd ^
+../../rtl/mdec.vhd ^
 ../../rtl/memctrl.vhd ^
 ../../rtl/sio.vhd ^
 ../../rtl/cpu.vhd ^

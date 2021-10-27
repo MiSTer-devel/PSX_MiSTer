@@ -17,12 +17,12 @@ entity SyncFifoFallThrough is
                
       Din      : in  std_logic_vector(DATAWIDTH - 1 downto 0);
       Wr       : in  std_logic; 
-      Full     : out std_logic;
-      NearFull : out std_logic;
+      Full     : out std_logic := '0';
+      NearFull : out std_logic := '0';
       
-      Dout     : out std_logic_vector(DATAWIDTH - 1 downto 0);
+      Dout     : out std_logic_vector(DATAWIDTH - 1 downto 0) := (others => '0');
       Rd       : in  std_logic;
-      Empty    : out std_logic
+      Empty    : out std_logic := '1'
    );
 end;
 

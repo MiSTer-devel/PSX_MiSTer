@@ -146,10 +146,10 @@ architecture arch of cpu is
    -- stage 1          
    -- cache
    signal tag_address_a                : std_logic_vector(7 downto 0);
-   signal tag_data_a                   : std_logic_vector(16 downto 0);
+   signal tag_data_a                   : std_logic_vector(19 downto 0);
    signal tag_wren_a                   : std_logic;
    signal tag_address_b                : std_logic_vector(7 downto 0);
-   signal tag_q_b                      : std_logic_vector(16 downto 0);
+   signal tag_q_b                      : std_logic_vector(19 downto 0);
    
    signal tagValid                     : std_logic_vector(0 to 255) := (others => '0');
    
@@ -498,7 +498,7 @@ begin
       rdcontrol_aclr                      => "OFF",
       rdcontrol_reg                       => "UNREGISTERED",
       read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
-      width                               => 17,
+      width                               => 20,
       widthad                             => 8,
       width_byteena                       => 1,
       wraddress_aclr                      => "OFF",
@@ -516,7 +516,7 @@ begin
 	);
 
    tag_address_a <= std_logic_vector(FetchLastAddr(11 downto 4));
-   tag_data_a    <= std_logic_vector(FetchLastAddr(28 downto 12));
+   tag_data_a    <= std_logic_vector(FetchLastAddr(31 downto 12));
    
    tag_address_b <= std_logic_vector(FetchAddr(11 downto 4));
 
@@ -662,7 +662,7 @@ begin
          case (to_integer(unsigned(FetchAddr(31 downto 29)))) is
             
             when 0 | 4 => -- cached
-               if (unsigned(tag_q_b) = FetchAddr(28 downto 12) and tagValid(to_integer(FetchAddr(11 downto 4))) = '1') then
+               if (unsigned(tag_q_b) = FetchAddr(31 downto 12) and tagValid(to_integer(FetchAddr(11 downto 4))) = '1') then
                   cacheHitNext      <= '1';
                   stallNew1         <= '0';
                   PCnext            <= FetchAddr + 4;

@@ -154,6 +154,12 @@ architecture arch of psx_top is
    signal bus_gpu_write          : std_logic;
    signal bus_gpu_dataRead       : std_logic_vector(31 downto 0);
    
+   signal bus_mdec_addr          : unsigned(3 downto 0); 
+   signal bus_mdec_dataWrite     : std_logic_vector(31 downto 0);
+   signal bus_mdec_read          : std_logic;
+   signal bus_mdec_write         : std_logic;
+   signal bus_mdec_dataRead      : std_logic_vector(31 downto 0);
+   
    signal bus_exp2_addr          : unsigned(12 downto 0); 
    signal bus_exp2_dataWrite     : std_logic_vector(31 downto 0);
    signal bus_exp2_read          : std_logic;
@@ -678,6 +684,27 @@ begin
       export_gobj          => export_gobj
    );
    
+   imdec : entity work.mdec
+   port map
+   (
+      clk1x                => clk1x,     
+      clk2x                => clk2x,    
+      clk2xIndex           => clk2xIndex,
+      ce                   => ce,        
+      reset                => reset,     
+      
+      bus_addr             => bus_mdec_addr,     
+      bus_dataWrite        => bus_mdec_dataWrite,
+      bus_read             => bus_mdec_read,     
+      bus_write            => bus_mdec_write,    
+      bus_dataRead         => bus_mdec_dataRead, 
+      
+      dma_write            => '0',
+      dma_writedata        => x"00000000",
+      dma_read             => '0',
+      dma_readdata         => open
+   );
+   
    iexp2 : entity work.exp2
    port map
    (
@@ -780,6 +807,12 @@ begin
       bus_gpu_read         => bus_gpu_read,     
       bus_gpu_write        => bus_gpu_write,    
       bus_gpu_dataRead     => bus_gpu_dataRead,
+      
+      bus_mdec_addr        => bus_mdec_addr,     
+      bus_mdec_dataWrite   => bus_mdec_dataWrite,
+      bus_mdec_read        => bus_mdec_read,     
+      bus_mdec_write       => bus_mdec_write,    
+      bus_mdec_dataRead    => bus_mdec_dataRead, 
       
       bus_exp2_addr        => bus_exp2_addr,     
       bus_exp2_dataWrite   => bus_exp2_dataWrite,

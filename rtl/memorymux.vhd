@@ -90,6 +90,12 @@ entity memorymux is
       bus_gpu_write        : out std_logic;
       bus_gpu_dataRead     : in  std_logic_vector(31 downto 0);
       
+      bus_mdec_addr        : out unsigned(3 downto 0); 
+      bus_mdec_dataWrite   : out std_logic_vector(31 downto 0);
+      bus_mdec_read        : out std_logic;
+      bus_mdec_write       : out std_logic;
+      bus_mdec_dataRead    : in  std_logic_vector(31 downto 0);
+      
       bus_exp2_addr        : out unsigned(12 downto 0); 
       bus_exp2_dataWrite   : out std_logic_vector(31 downto 0);
       bus_exp2_read        : out std_logic;
@@ -253,6 +259,18 @@ begin
          end if;
       end if;
       
+      -- mdec
+      bus_mdec_read      <= '0';
+      bus_mdec_write     <= '0';
+      bus_mdec_addr      <= address(3 downto 0);
+      bus_mdec_dataWrite <= mem_dataWrite;
+      if (address >= 16#1F801820# and address < 16#1F801830#) then
+         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+            bus_mdec_read  <= mem_rnw;
+            bus_mdec_write <= not mem_rnw;
+         end if;
+      end if;
+      
       -- exp2
       bus_exp2_read      <= '0';
       bus_exp2_write     <= '0';
@@ -268,7 +286,8 @@ begin
 
    end process;
    
-   dataFromBusses <= bus_exp1_dataRead or bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_irq_dataRead or bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_exp2_dataRead;
+   dataFromBusses <= bus_exp1_dataRead or bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_irq_dataRead or bus_dma_dataRead or 
+                     bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or bus_exp2_dataRead;
   
    process (clk1x)
    begin
