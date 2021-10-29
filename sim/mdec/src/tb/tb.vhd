@@ -127,13 +127,13 @@ begin
             bus_write     <= '1';
          end if;
          
-         if (para_type = x"09") then
-            dma_read    <= '1';
-         end if;
-         
          if (para_type = x"0A") then
             dma_write     <= '1';
             dma_writedata <= para_data;
+         end if;
+         
+         if (para_type = x"0C") then
+            dma_read    <= '1';
          end if;
          
          clkCount <= clkCount + 1;

@@ -9,12 +9,9 @@ Only scph1001.bin tested.
 Rename to boot.rom
 
 # Video output
-Core uses direct framebuffer mode to display VRAM content in DDR3 with scaler over HDMI.
-This is done for bandwidth purposes and will not allow you to display via analog out/VGA, unless you use direct video!
+Core uses either normal output or direct framebuffer mode.
 
-Also vsync_adjust=2 (low latency mode) in the mister.ini is required or it will lead to screen drawing being in the visible area!
-
-You can choose to view
+In Framebuffer mode you can choose to view:
 - normal drawing area without any overscan cutoff
 - full VRAM as 1024x512 pixel image (debug mode)
 
@@ -23,19 +20,13 @@ You can choose to view
 Work in progress, don't report any bugs!
 
 - Amidogs CPU test fully passed
-- All CPU testroms in .exe format working: https://github.com/RobertPeip/PSX/tree/master/CPUTest/CPU
-- HelloWorld in 16+24 bit working
-- ImageLoad/LZ77/Huffman in 16+24 bit working
-- polygon(triangle/quad), rectangle and line drawing working
-- Gouraud Shading and transparency working
-- direct, masked and palette color texturing and texture cache working
-- basic reading/writing DMA working
-- first GTE test working
+- Amidogs GTE math test fully passed
+- most rendering functions working
+- MDEC logic finished
 
--- 
-
-- No games working
-- BIOS startup not working
+- some games working with savestate loading
+- BIOS startup working
+- no booting from CD
 
 --
 
@@ -83,6 +74,8 @@ Timer  : 50%
 GTE    : 80%
 - timing not correct
 
-MDEC   : 0% 
+MDEC   : 70%
+- DMA connection missing
+ 
 CD     : 0%
 SPU    : 0%
