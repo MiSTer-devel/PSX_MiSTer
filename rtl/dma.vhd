@@ -438,7 +438,7 @@ begin
                         when 1 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(6).D_MADR(20 downto 2));
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(1).D_MADR(20 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_MDEC_read;
                            else
                               report "write to MDEC out not possible" severity failure;
@@ -447,7 +447,7 @@ begin
                         when 2 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(6).D_MADR(20 downto 2));
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(2).D_MADR(20 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_GPU_read;
                            end if;
                            

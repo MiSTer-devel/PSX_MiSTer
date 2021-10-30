@@ -186,6 +186,7 @@ architecture arch of mdec is
    -- output   
    signal FifoOut_Din         : std_logic_vector(31 downto 0) := (others => '0');
    signal FifoOut_Wr          : std_logic; 
+   signal FifoOut_NearFull    : std_logic; 
    signal FifoOut_Dout        : std_logic_vector(31 downto 0);
    signal FifoOut_Rd          : std_logic;
    signal FifoOut_Empty       : std_logic;
@@ -952,7 +953,7 @@ begin
    (
       SIZE             => 256,
       DATAWIDTH        => 32,
-      NEARFULLDISTANCE => 1
+      NEARFULLDISTANCE => 3
    )
    port map
    ( 
@@ -962,7 +963,7 @@ begin
       Din      => FifoOut_Din,     
       Wr       => FifoOut_Wr,      
       Full     => open,    
-      NearFull => open,
+      NearFull => FifoOut_NearFull,
 
       Dout     => FifoOut_Dout,    
       Rd       => FifoOut_Rd,      
@@ -980,8 +981,8 @@ begin
    MDECSTAT(23)           <= rec_bit15;
    MDECSTAT(24)           <= rec_signed;
    MDECSTAT(26 downto 25) <= rec_depth;
-   MDECSTAT(27)           <= not FifoOut_Empty;                                                          -- Data-Out Request (set when DMA1 enabled and ready to send data)
-   MDECSTAT(28)           <= '1' when (FifoIn_NearFull = '0' and receiveState /= RECEIVE_IDLE) else '0'; -- Data-In Request  (set when DMA0 enabled and ready to receive data)
+   MDECSTAT(27)           <= '1' when (FifoOut_NearFull = '1' or (FifoOut_Empty = '0' and dma_read = '0')) else '0'; -- Data-Out Request (set when DMA1 enabled and ready to send data)
+   MDECSTAT(28)           <= '1' when (FifoIn_NearFull = '0' and receiveState /= RECEIVE_IDLE) else '0';             -- Data-In Request  (set when DMA0 enabled and ready to receive data)
    MDECSTAT(29)           <= '0' when (receiveState = RECEIVE_IDLE) else '1';
    MDECSTAT(30)           <= FifoIn_NearFull;
    MDECSTAT(31)           <= FifoOut_Empty;
