@@ -20,6 +20,8 @@ entity mdec is
       bus_write            : in  std_logic;
       bus_dataRead         : out std_logic_vector(31 downto 0);
       
+      dmaWriteRequest      : out std_logic;
+      dmaReadRequest       : out std_logic;
       dma_write            : in  std_logic;
       dma_writedata        : in  std_logic_vector(31 downto 0);
       dma_read             : in  std_logic;
@@ -45,13 +47,13 @@ architecture arch of mdec is
    );
    signal receiveState        : treceiveState := RECEIVE_IDLE;
       
-   signal isColor             : std_logic; 
+   signal isColor             : std_logic := '0'; 
    signal recCount            : unsigned(4 downto 0);
-   signal wordsRemain         : unsigned(15 downto 0);
+   signal wordsRemain         : unsigned(15 downto 0) := (others => '0');
    
-   signal rec_depth           : std_logic_vector(1 downto 0);
-   signal rec_signed          : std_logic;
-   signal rec_bit15           : std_logic;
+   signal rec_depth           : std_logic_vector(1 downto 0) := "00";
+   signal rec_signed          : std_logic := '0';
+   signal rec_bit15           : std_logic := '0';
       
    signal RamYUVaddrA         : unsigned(4 downto 0) := (others => '0');
    signal RamYUVdataA         : std_logic_vector(31 downto 0) := (others => '0');
@@ -950,7 +952,7 @@ begin
    (
       SIZE             => 256,
       DATAWIDTH        => 32,
-      NEARFULLDISTANCE => 128
+      NEARFULLDISTANCE => 1
    )
    port map
    ( 
@@ -978,11 +980,14 @@ begin
    MDECSTAT(23)           <= rec_bit15;
    MDECSTAT(24)           <= rec_signed;
    MDECSTAT(26 downto 25) <= rec_depth;
-   MDECSTAT(27)           <= '0'; -- todo -> Data-Out Request (set when DMA1 enabled and ready to send data)
-   MDECSTAT(28)           <= '0'; -- todo -> Data-In Request  (set when DMA0 enabled and ready to receive data)
-   MDECSTAT(29)           <= '1' when (receiveState = RECEIVE_IDLE) else '0';
+   MDECSTAT(27)           <= not FifoOut_Empty;                                                          -- Data-Out Request (set when DMA1 enabled and ready to send data)
+   MDECSTAT(28)           <= '1' when (FifoIn_NearFull = '0' and receiveState /= RECEIVE_IDLE) else '0'; -- Data-In Request  (set when DMA0 enabled and ready to receive data)
+   MDECSTAT(29)           <= '0' when (receiveState = RECEIVE_IDLE) else '1';
    MDECSTAT(30)           <= FifoIn_NearFull;
    MDECSTAT(31)           <= FifoOut_Empty;
+   
+   dmaWriteRequest <= MDECSTAT(28);
+   dmaReadRequest  <= MDECSTAT(27);
    
    dma_readdata <= FifoOut_Dout when (FifoOut_Empty = '0') else (others => '1');
    
@@ -990,6 +995,8 @@ begin
    process (clk1x)
    begin
       if rising_edge(clk1x) then
+      
+         bus_dataRead <= (others => '0');
       
          if (bus_read = '1') then
             if (bus_addr(3 downto 2) = "00") then

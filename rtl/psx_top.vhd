@@ -242,6 +242,13 @@ architecture arch of psx_top is
    signal DMA_GPU_write          : std_logic_vector(31 downto 0);
    signal DMA_GPU_read           : std_logic_vector(31 downto 0);
    
+   signal mdec_dmaWriteRequest   : std_logic;
+   signal mdec_dmaReadRequest    : std_logic;
+   signal DMA_MDEC_writeEna      : std_logic := '0';
+   signal DMA_MDEC_readEna       : std_logic := '0';
+   signal DMA_MDEC_write         : std_logic_vector(31 downto 0);
+   signal DMA_MDEC_read          : std_logic_vector(31 downto 0);
+   
    -- cpu
    signal ce_intern              : std_logic := '0';
    signal ce_cpu                 : std_logic := '0';
@@ -537,6 +544,13 @@ begin
       DMA_GPU_write        => DMA_GPU_write,   
       DMA_GPU_read         => DMA_GPU_read,   
       
+      mdec_dmaWriteRequest => mdec_dmaWriteRequest,
+      mdec_dmaReadRequest  => mdec_dmaReadRequest, 
+      DMA_MDEC_writeEna    => DMA_MDEC_writeEna,   
+      DMA_MDEC_readEna     => DMA_MDEC_readEna,    
+      DMA_MDEC_write       => DMA_MDEC_write,      
+      DMA_MDEC_read        => DMA_MDEC_read,       
+      
       bus_addr             => bus_dma_addr,     
       bus_dataWrite        => bus_dma_dataWrite,
       bus_read             => bus_dma_read,     
@@ -699,10 +713,12 @@ begin
       bus_write            => bus_mdec_write,    
       bus_dataRead         => bus_mdec_dataRead, 
       
-      dma_write            => '0',
-      dma_writedata        => x"00000000",
-      dma_read             => '0',
-      dma_readdata         => open
+      dmaWriteRequest      => mdec_dmaWriteRequest,
+      dmaReadRequest       => mdec_dmaReadRequest, 
+      dma_write            => DMA_MDEC_writeEna,   
+      dma_writedata        => DMA_MDEC_write,    
+      dma_read             => DMA_MDEC_readEna,      
+      dma_readdata         => DMA_MDEC_read       
    );
    
    iexp2 : entity work.exp2

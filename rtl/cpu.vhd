@@ -2254,6 +2254,10 @@ begin
             ss_in(0)  <= x"BFC00000"; -- PC
             ss_in(13) <= x"00000002"; -- cop0_PRID
             
+            ss_regs_load <= '1';
+            ss_regs_addr <= (others => '0');
+            ss_regs_data <= (others => '0');
+            
          elsif (SS_wren_CPU = '1' and SS_Adr < 57) then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
             

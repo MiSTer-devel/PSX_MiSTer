@@ -33,6 +33,13 @@ entity dma is
       DMA_GPU_write        : out std_logic_vector(31 downto 0);
       DMA_GPU_read         : in  std_logic_vector(31 downto 0);
       
+      mdec_dmaWriteRequest : in  std_logic;
+      mdec_dmaReadRequest  : in  std_logic;
+      DMA_MDEC_writeEna    : out std_logic := '0';
+      DMA_MDEC_readEna     : out std_logic := '0';
+      DMA_MDEC_write       : out std_logic_vector(31 downto 0);
+      DMA_MDEC_read        : in  std_logic_vector(31 downto 0);
+      
       bus_addr             : in  unsigned(6 downto 0); 
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
       bus_read             : in  std_logic;
@@ -144,10 +151,15 @@ begin
    DICR_readback(23 downto 15) <= DICR(23 downto 15);
    DICR_readback(30 downto 24) <= DICR_IRQs;
    DICR_readback(31)           <= irqOut;
+
+   DMA_MDEC_writeEna <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 0 and toDevice = '1') else '0'; 
+   DMA_MDEC_write    <= fifoIn_Dout;  
    
+   DMA_MDEC_readEna  <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 1 and toDevice = '0') else '0';
    
-   DMA_GPU_writeEna <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 2 and toDevice = '1') else '0'; 
-   DMA_GPU_write    <= fifoIn_Dout;
+   DMA_GPU_readEna   <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 2 and toDevice = '0') else '0';
+   DMA_GPU_writeEna  <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 2 and toDevice = '1') else '0'; 
+   DMA_GPU_write     <= fifoIn_Dout;
 
    process (clk1x)
       variable channel         : integer range 0 to 7;
@@ -213,10 +225,8 @@ begin
 
             channel := to_integer(unsigned(bus_addr(6 downto 4)));
             
-            DMA_GPU_readEna  <= '0';
-            
-            dmaArray(0).request <= '0';
-            dmaArray(1).request <= '0';
+            dmaArray(0).request <= mdec_dmaWriteRequest;
+            dmaArray(1).request <= mdec_dmaReadRequest;
             dmaArray(2).request <= gpu_dmaRequest;
             dmaArray(3).request <= '0';
             dmaArray(4).request <= '0';
@@ -277,6 +287,10 @@ begin
                
             end if;
             
+            -- triggers from modules
+            if (mdec_dmaWriteRequest = '1') then triggerDMA(0) <= '1'; end if;
+            if (mdec_dmaReadRequest = '1')  then triggerDMA(1) <= '1'; end if;
+                
             -- trigger
             triggerNew     := '0';
             triggerchannel := 0;
@@ -296,7 +310,7 @@ begin
                               paused    <= '0';
                            end if;
                            
-                           if (dmaState /= OFF and dmaState /= TIMEUP and dmaState = TIMEUP) then
+                           if (dmaState /= OFF and dmaState /= TIMEUP and dmaState /= GPUBUSY) then
                               dmaArray(i).requestsPending <= '1';
                            else
                               -- todo : priority
@@ -416,9 +430,25 @@ begin
                      dmacount    <= dmacount + 1;
                      case (activeChannel) is
                      
+                        when 0 =>
+                           if (toDevice = '0') then
+                              report "read from MDEC in not possible" severity failure;
+                           end if;
+                        
+                        when 1 =>
+                           if (toDevice = '0') then
+                              fifoOut_Wr                <= '1';
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(6).D_MADR(20 downto 2));
+                              fifoOut_Din(31 downto 0)  <= DMA_MDEC_read;
+                           else
+                              report "write to MDEC out not possible" severity failure;
+                           end if;
+                     
                         when 2 =>
                            if (toDevice = '0') then
-                              report "GPU DMA read not implemented" severity failure; 
+                              fifoOut_Wr                <= '1';
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(6).D_MADR(20 downto 2));
+                              fifoOut_Din(31 downto 0)  <= DMA_GPU_read;
                            end if;
                            
                         when 6 =>
@@ -509,12 +539,14 @@ begin
                         activeChannel <= 2;
                         gpupaused     <= '0';
                      end if;
-                     
-                     -- todo: add check for gpubusy
 
                   end if;
                
                when PAUSING =>
+                  if (fifoOut_Done = '1' and fifoOut_Wr = '0' and requestOnFly = 0) then
+                     dmaState <= OFF;
+                     isOn     <= '0';
+                  end if;
                
                when TIMEUP =>
                
