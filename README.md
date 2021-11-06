@@ -74,8 +74,9 @@ Timer  : 50%
 GTE    : 80%
 - timing not correct
 
-MDEC   : 70%
-- DMA connection missing
+MDEC   : 90%
+- timing slightly too fast
  
-CD     : 0%
+CD     : 10%
+
 SPU    : 0%

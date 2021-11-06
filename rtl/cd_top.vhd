@@ -30,47 +30,67 @@ end entity;
 
 architecture arch of cd_top is
 
-   -- cpu interface
-   signal CDROM_STATUS        : std_logic_vector(7 downto 0);
-   signal CDROM_IRQENA        : std_logic_vector(4 downto 0);
-   signal CDROM_IRQFLAG       : std_logic_vector(4 downto 0);
+   constant FRAMES_PER_SECOND       : integer := 75;
+   constant FRAMES_PER_MINUTE       : integer := 75 * 60;
+   constant LEAD_OUT_TRACK_NUMBER   : unsigned(7 downto 0) := x"AA";
+   
+   -- cpu interface  
+   signal CDROM_STATUS              : std_logic_vector(7 downto 0);
+   signal CDROM_IRQENA              : std_logic_vector(4 downto 0);
+   signal CDROM_IRQFLAG             : std_logic_vector(4 downto 0);
+            
+   signal beginCommand              : std_logic := '0';
+   signal nextCmd                   : std_logic_vector(7 downto 0);
+   
+   signal pendingDriveIRQ           : std_logic := '0';
+   signal pendingDriveResponse      : std_logic_vector(7 downto 0);
+   signal ackRead_valid             : std_logic := '0';
+            
+   signal FifoParam_reset           : std_logic := '0';
+   signal FifoParam_Din             : std_logic_vector(7 downto 0) := (others => '0');
+   signal FifoParam_Wr              : std_logic := '0'; 
+   signal FifoParam_Dout            : std_logic_vector(7 downto 0);
+   signal FifoParam_Rd              : std_logic := '0';
+   signal FifoParam_Empty           : std_logic;
+            
+   -- command processing         
+   signal cmd_busy                  : std_logic := '0';
+   signal cmd_delay                 : integer range 0 to 120000;
+   signal cmdPending                : std_logic := '0';
+   signal handleCommand             : std_logic := '0';    
+   signal paramCount                : integer range 0 to 6;
+   signal fifoParamCount            : integer range 0 to 16;
+   signal working                   : std_logic := '0';
+   signal workCommand               : std_logic_vector(7 downto 0);
+   signal workDelay                 : integer range 0 to 399999;
+   signal cmdAck                    : std_logic := '0';
+   signal driveAck                  : std_logic := '0';
+   signal softReset                 : std_logic := '0';
+         
+   signal setLocActive              : std_logic := '0';
+   signal setLocReadStep            : integer range 0 to 5;
+   signal setLocMinute              : unsigned(7 downto 0);
+   signal setLocSecond              : unsigned(7 downto 0);
+   signal setLocFrame               : unsigned(7 downto 0);
       
-   signal beginCommand        : std_logic := '0';
-   signal nextCmd             : std_logic_vector(7 downto 0);
-      
-   signal FifoParam_reset     : std_logic := '0';
-   signal FifoParam_Din       : std_logic_vector(7 downto 0) := (others => '0');
-   signal FifoParam_Wr        : std_logic := '0'; 
-   signal FifoParam_Dout      : std_logic_vector(7 downto 0);
-   signal FifoParam_Rd        : std_logic := '0';
-   signal FifoParam_Empty     : std_logic;
-      
-   -- command processing   
-   signal cmd_busy            : std_logic := '0';
-   signal cmd_delay           : integer range 0 to 120000;
-   signal cmdPending          : std_logic := '0';
-   signal handleCommand       : std_logic := '0';    
-   signal paramCount          : integer range 0 to 6;
-   signal fifoParamCount      : integer range 0 to 16;
-   signal working             : std_logic := '0';
-   signal workCommand         : std_logic_vector(7 downto 0);
-   signal workDelay           : integer range 0 to 399999;
-   signal cmdAck              : std_logic := '0';
-   signal driveAck            : std_logic := '0';
-   signal softReset           : std_logic := '0';
+   signal seekOnDiskCmd             : std_logic := '0';
+   signal setMode                   : std_logic := '0';
+   signal newMode                   : std_logic_vector(7 downto 0);
+   signal readSN                    : std_logic := '0';
+   
+   signal errorResponseCmd_new      : std_logic := '0'; 
+   signal errorResponseCmd_error    : std_logic_vector(7 downto 0);
+   signal errorResponseCmd_reason   : std_logic_vector(7 downto 0);
+   
+   signal errorResponseNext_new     : std_logic := '0'; 
+   signal errorResponseNext_reason  : std_logic_vector(7 downto 0);
     
-   signal setLocActive        : std_logic := '0';
-   signal setLocReadStep      : integer range 0 to 5;
-   signal setLocMinute        : unsigned(7 downto 0);
-   signal setLocSecond        : unsigned(7 downto 0);
-   signal setLocFrame         : unsigned(7 downto 0);
-    
-   signal FifoResponse_reset  : std_logic := '0';
-   signal FifoResponse_Din    : std_logic_vector(7 downto 0) := (others => '0');
-   signal FifoResponse_Wr     : std_logic := '0'; 
-   signal FifoResponse_Dout   : std_logic_vector(7 downto 0);
-   signal FifoResponse_Rd     : std_logic := '0';
-   signal FifoResponse_Empty  : std_logic;
+   signal FifoResponse_reset        : std_logic := '0';
+   signal FifoResponse_Din          : std_logic_vector(7 downto 0) := (others => '0');
+   signal FifoResponse_Wr           : std_logic := '0'; 
+   signal FifoResponse_Dout         : std_logic_vector(7 downto 0);
+   signal FifoResponse_Rd           : std_logic := '0';
+   signal FifoResponse_Empty        : std_logic;
     
    -- drive
    type tdrivestate is
@@ -85,20 +105,41 @@ architecture arch of cd_top is
 		DRIVE_SPINNINGUP,
 		DRIVE_CHANGESESSION
 	);
-   signal driveState          : tdrivestate := DRIVE_IDLE;
+   signal driveState                : tdrivestate := DRIVE_IDLE;
+         
+   signal internalStatus            : std_logic_vector(7 downto 0);
+   signal modeReg                   : std_logic_vector(7 downto 0);
+         
+   signal driveBusy                 : std_logic;
+   signal driveDelay                : integer range 0 to 134217727;
+   signal driveDelayNext            : integer range 0 to 134217727;
+         
+   signal handleDrive               : std_logic := '0';
+   signal startMotor                : std_logic := '0';
+   signal ackDrive                  : std_logic := '0';
+   signal seekOnDiskDrive           : std_logic := '0';
+   signal ackRead                   : std_logic := '0';
+         
+   signal currentLBA                : integer range 0 to 262143;        
+   signal seekLBA                   : integer range 0 to 262143;       
    
-   signal internalStatus      : std_logic_vector(7 downto 0);
-   signal modeReg             : std_logic_vector(7 downto 0);
+   signal readAfterSeek             : std_logic := '0';
+   signal playAfterSeek             : std_logic := '0';
+   signal lastSectorHeaderValid     : std_logic := '0'; 
    
-   signal driveBusy           : std_logic;
-   signal driveDelay          : integer range 0 to 134217727;
-   signal driveDelayNext      : integer range 0 to 134217727;
-   
-   signal handleDrive         : std_logic := '0';
-   signal startMotor          : std_logic := '0';
-   
-   signal currentLBA          : integer range 0 to 16383;        
-    
+   signal errorResponseDrive_new    : std_logic := '0'; 
+   signal errorResponseDrive_error  : std_logic_vector(7 downto 0);
+   signal errorResponseDrive_reason : std_logic_vector(7 downto 0);
+
+   -- exchange with data part
+   signal readOnDisk                : std_logic := '0';   
+   signal seekOK                    : std_logic := '1';  
+   signal startReading              : std_logic := '0';  
+   signal writeSectorPointer        : unsigned(2 downto 0);
+   signal readSectorPointer         : unsigned(2 downto 0);
+   signal trackNumberBCD            : unsigned(7 downto 0) := x"01";
+      
+      
 begin 
    
    -- cpu interface
@@ -110,12 +151,14 @@ begin
          irqOut            <= '0';
          FifoResponse_Rd   <= '0';
          FifoParam_Wr      <= '0';
+         ackRead_valid     <= '0';
       
          if (reset = '1') then
             
-            CDROM_STATUS   <= x"18";
-            CDROM_IRQENA   <= (others => '0');
-            CDROM_IRQFLAG  <= (others => '0');
+            CDROM_STATUS    <= x"18";
+            CDROM_IRQENA    <= (others => '0');
+            CDROM_IRQFLAG   <= (others => '0');
+            pendingDriveIRQ <= '0';
             
          elsif (ce = '1') then
          
@@ -217,13 +260,35 @@ begin
                end if;
             end if;            
             
-            if (driveAck = '1') then
+            if (driveAck = '1' or ackDrive = '1') then
                CDROM_IRQFLAG <= "00010";
                if (CDROM_IRQENA(1) = '1') then
                   irqOut <= '1';
                end if;
             end if;
-         
+            
+            if (ackRead = '1') then
+               if (CDROM_IRQFLAG = "00001") then -- irq still pending, sector missed
+                  -- todo: nothing can be done?
+               elsif (CDROM_IRQFLAG /= "00000") then
+                  pendingDriveIRQ      <= '1';
+                  pendingDriveResponse <= internalStatus;
+               else
+                  CDROM_IRQFLAG <= "00001";
+                  if (CDROM_IRQENA(0) = '1') then
+                     irqOut <= '1';
+                  end if;
+                  ackRead_valid <= '1';
+               end if;
+            end if;
+               
+            if (errorResponseNext_new = '1') then
+               CDROM_IRQFLAG <= "00101";
+               if (CDROM_IRQENA(2) = '1' or CDROM_IRQENA(0) = '1') then
+                  irqOut <= '1';
+               end if;
+            end if; 
+
          end if; -- ce
       end if;
    end process;
@@ -255,26 +320,32 @@ begin
    begin
       if (rising_edge(clk1x)) then
       
-         handleCommand      <= '0';
-         FifoResponse_reset <= '0';
-         FifoResponse_Wr    <= '0';
-         cmdAck             <= '0';
-         driveAck           <= '0';
-         softReset          <= '0';
-         FifoParam_Rd       <= '0';
-         FifoParam_reset    <= '0';
+         handleCommand           <= '0';
+         cmdAck                  <= '0';
+         driveAck                <= '0';
+         softReset               <= '0';
+         seekOnDiskCmd           <= '0';
+         setMode                 <= '0';
+         readSN                  <= '0';
+         errorResponseCmd_new    <= '0';
+         errorResponseNext_new   <= '0';
+         
+         FifoResponse_reset      <= '0';
+         FifoResponse_Wr         <= '0';
+         FifoParam_Rd            <= '0';
+         FifoParam_reset         <= '0';
       
          if (reset = '1') then
             
-            FifoParam_reset      <= '1';
-            FifoResponse_reset   <= '1';
-            cmdPending           <= '0';
-            cmd_busy             <= '0';
-            cmd_delay            <= 0;
-            fifoParamCount       <= 0;
-            working              <= '0';
-            
-            setLocActive         <= '0';
+            FifoParam_reset         <= '1';
+            FifoResponse_reset      <= '1';
+            cmdPending              <= '0';
+            cmd_busy                <= '0';
+            cmd_delay               <= 0;
+            fifoParamCount          <= 0;
+            working                 <= '0';
+               
+            setLocActive            <= '0';
             
          elsif (ce = '1') then
          
@@ -309,8 +380,11 @@ begin
             -- command processing time is up -> handle it
             if (handleCommand = '1') then
                if (fifoParamCount < paramCount) then
-                  -- todo: errorResponse(1, 0x20);
-                  cmdPending <= '0';
+                  errorResponseCmd_new    <= '1';
+                  errorResponseCmd_error  <= x"01";
+                  errorResponseCmd_reason <= x"20";
+                  cmdPending              <= '0';
+                  FifoParam_reset         <= '1';
                else
                   if (FifoResponse_empty = '0') then 
                      FifoResponse_reset <= '1';
@@ -377,7 +451,11 @@ begin
                         --todo
                         
                      when x"0E" => -- setmode
-                        --todo
+                        FifoParam_Rd <= '1';
+                        setMode      <= '1';
+                        newMode      <= FifoParam_Dout;
+                        cmdAck       <= '1';
+                        cmdPending   <= '0';
                      
                      when x"0F" => -- getparam
                         --todo
@@ -398,7 +476,11 @@ begin
                         --todo
                         
                      when x"15" | x"16" => -- SeekL/SeekP
-                        --todo
+                        --todo: if seeking, update position?
+                        cmdAck                <= '1';
+                        cmdPending            <= '0';
+                        seekOnDiskCmd         <= '1';
+                        setLocActive          <= '0';
                         
                      when x"17" | x"18" => -- SetClock/GetClock
                         --todo
@@ -410,7 +492,16 @@ begin
                         --todo
                         
                      when x"06" | x"1B" => -- ReadN/ReadS
-                        --todo
+                        cmdPending <= '0';
+                        if (hasCD = '0') then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"80";
+                        else
+                           -- todo: missing checks
+                           cmdAck <= '1';
+                           readSN <= '1';
+                        end if;
                         
                      when x"1C" => -- Init
                         --todo
@@ -469,10 +560,27 @@ begin
             end if;
             
             -- responses
-            if (cmdAck = '1' or driveAck = '1') then
+            if (cmdAck = '1' or driveAck = '1' or ackDrive = '1' or ackRead_valid = '1') then
                FifoResponse_Din <= internalStatus;
                FifoResponse_Wr  <= '1';
             end if;
+                      
+            if (errorResponseCmd_new = '1') then
+               FifoResponse_Din           <= internalStatus or errorResponseCmd_error;
+               FifoResponse_Wr            <= '1';
+               errorResponseNext_new      <= '1';
+               errorResponseNext_reason   <= errorResponseCmd_reason;
+            end if;      
+            if (errorResponseDrive_new = '1') then
+               FifoResponse_Din        <= internalStatus or errorResponseDrive_error;
+               FifoResponse_Wr         <= '1';
+               errorResponseNext_new   <= '1';
+               errorResponseNext_reason   <= errorResponseDrive_reason;
+            end if;   
+            if (errorResponseNext_new = '1') then
+               FifoResponse_Din        <= errorResponseNext_reason;
+               FifoResponse_Wr         <= '1';
+            end if;            
             
             if (softReset = '1') then
                FifoParam_reset <= '1';
@@ -518,20 +626,30 @@ begin
    begin
       if (rising_edge(clk1x)) then
 
-         handleDrive <= '0';
-         startMotor  <= '0';
+         handleDrive             <= '0';
+         startMotor              <= '0';
+         readOnDisk              <= '0';
+         ackDrive                <= '0';
+         seekOnDiskDrive         <= '0';
+         errorResponseDrive_new  <= '0';
+         startReading            <= '0';
+         ackRead                 <= '0';
 
          if (reset = '1') then
             
-            driveBusy      <= '0';
-            driveState     <= DRIVE_IDLE;
-                  
-            startMotor     <= '1';
+            driveBusy               <= '0';
+            driveState              <= DRIVE_IDLE;
+                           
+            startMotor              <= '1';
+                     
+            internalStatus          <= x"10"; -- shell open
+            modeReg                 <= x"20"; -- read_raw_sector set
+                     
+            currentLBA              <= 0;
             
-            internalStatus <= x"10"; -- shell open
-            modeReg        <= x"20"; -- read_raw_sector set
-            
-            currentLBA     <= 0;
+            readAfterSeek           <= '0';
+            playAfterSeek           <= '0';
+            lastSectorHeaderValid   <= '0';
             
          elsif (softReset = '1') then
          
@@ -587,18 +705,144 @@ begin
             if (handleDrive = '1') then
                case (driveState) is
                
+                  when DRIVE_SEEKIMPLICIT =>
+                     --todo
+                     
+                  when DRIVE_SEEKLOGICAL | DRIVE_SEEKPHYSICAL =>
+                     driveState     <= DRIVE_IDLE;
+                     internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+                     if (seekOk = '1') then
+                        if (readAfterSeek = '1') then
+                           startReading  <= '1';
+                           readAfterSeek <= '0';
+                        elsif (playAfterSeek = '1') then
+                           --todo start playing
+                        else
+                           ackDrive <= '1';
+                        end if;
+                     else
+                        lastSectorHeaderValid     <= '0';
+                        errorResponseDrive_new    <= '1';
+                        errorResponseDrive_error  <= x"04";
+                        errorResponseDrive_reason <= x"04";
+                     end if;
+                     ackDrive <= '1';
+                     
+                     
+                  when DRIVE_READING | DRIVE_PLAYING =>
+                     if (trackNumberBCD = LEAD_OUT_TRACK_NUMBER) then
+                        internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+                        internalStatus(1)          <= '0'; -- motor off
+                        driveState   <= DRIVE_IDLE;
+                        ackDrive     <= '1';
+                     else
+                        -- todo: if dataSector
+                        --todo: processDataSector
+                        internalStatus(5) <= '1'; -- reading
+                        driveDelay   <= driveDelayNext;
+                        ackRead      <= '1';
+                        -- todo: currentLBA   <= lastReadSector;
+                        -- todo: physical lba position?
+                        -- todo: subdata = nextSubdata
+                        readOnDisk   <= '1';
+                     end if;
+                     
+                  when DRIVE_SPEEDCHANGEORTOCREAD =>
+                     driveState     <= DRIVE_IDLE;
+               
                   when DRIVE_SPINNINGUP =>
                      driveState     <= DRIVE_IDLE;
                      internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                      internalStatus(1)          <= hasCD;
                   
+                  when DRIVE_CHANGESESSION =>
+                     --todo
+                  
                   when others => null;
                end case;
+            end if;
+            
+            if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1') then
+               seekLBA        <=  to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
+               readOnDisk     <= '1';
+               readAfterSeek         <= '0';
+               playAfterSeek         <= '0';
+               lastSectorHeaderValid <= '0';
+               internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+               internalStatus(1)          <= '1'; -- motor on
+               internalStatus(6)          <= '1'; -- seeking
+               driveDelay     <= 19999; -- todo: real seek time
+               driveDelayNext <= 19999; -- todo: real seek time
+               driveBusy      <= '1';
+               if (nextCmd = x"15") then
+                  driveState  <= DRIVE_SEEKLOGICAL;
+               else
+                  driveState  <= DRIVE_SEEKPHYSICAL;
+               end if;
+            end if;
+            
+            if (readSN = '1') then
+               -- todo !
+               --if ((!setLocActive || seekLBA == lastReadSector) && (driveState == DRIVESTATE::READING || ((driveState == DRIVESTATE::SEEKLOGICAL || driveState == DRIVESTATE::SEEKPHYSICAL || driveState == DRIVESTATE::SEEKIMPLICIT) && readAfterSeek)))
+               --{
+               --   setLocActive = false;
+               --}
+               --else
+                  if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                     -- todo: updatePositionWhileSeeking();
+                  end if;
+                  if (setLocActive = '1') then
+                     seekOnDiskDrive   <= '1';
+                     readAfterSeek     <= '1';
+                     playAfterSeek     <= '0';
+                  else
+                     startReading <= '1';
+                  end if;
+            end if;
+            
+            if (startReading = '1') then
+               --todo: check for setLocActive needed when coming from readSN?
+               --todo: check for seekstate required? should never end here when still in seek?
+               internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+               internalStatus(1)          <= '1'; -- motor on
+               driveDelay         <= 9999; -- todo: real read time
+               driveDelayNext     <= 9999; -- todo: real read time
+               driveBusy          <= '1';
+               driveState         <= DRIVE_READING;
+               writeSectorPointer <= (others => '0');
+               readSectorPointer  <= (others => '0');
+            end if;
+            
+            if (ackRead_valid = '1') then
+               readSectorPointer <= writeSectorPointer;
+            end if;
+            
+            if (setMode = '1') then
+               modeReg <= newMode;
+               if (modeReg(7) /= newMode(7)) then -- speedchange
+                  if (driveState = DRIVE_SPEEDCHANGEORTOCREAD) then
+                     -- todo: need to early finish here?
+                  elsif (driveState /= DRIVE_SEEKIMPLICIT) then
+                     -- todo: add time? for now just set new time, it's very long anyway
+                     if (newMode(7) = '1') then
+                        driveDelay     <= 27095040; -- 80%
+                        driveDelayNext <= 27095040; -- 80%%
+                     else
+                        driveDelay     <= 33868800; -- 44100 * 0x300; -- 100%
+                        driveDelayNext <= 33868800; -- 44100 * 0x300; -- 100%
+                     end if;
+                  end if;
+               end if;
             end if;
             
          end if; -- ce
       end if;
    end process;
+   
+   
+   -- todo: readOnDisk 
+   -- todo: readSubchannel 
+   -- todo : seekOK
 
 goutput : if 1 = 1 generate
    signal outputCnt : unsigned(31 downto 0) := (others => '0'); 
@@ -675,7 +919,7 @@ goutput : if 1 = 1 generate
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
             end if; 
-            driveAck_1 := driveAck;
+            driveAck_1 := driveAck or ackDrive or ackRead_valid;
             
             outputCnt <= newoutputCnt;
            
