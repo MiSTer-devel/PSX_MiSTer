@@ -24,7 +24,7 @@ architecture arch of etb is
    signal bus_dataRead        : std_logic_vector(7 downto 0); 
    
    signal dma_read            : std_logic := '0';
-   signal dma_readdata        : std_logic_vector(31 downto 0);
+   signal dma_readdata        : std_logic_vector(7 downto 0);
    
    -- testbench
    signal cmdCount            : integer := 0;

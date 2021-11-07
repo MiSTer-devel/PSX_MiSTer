@@ -24,15 +24,31 @@ entity cd_top is
       
       dmaReadRequest       : out std_logic;
       dma_read             : in  std_logic;
-      dma_readdata         : out std_logic_vector(31 downto 0) 
+      dma_readdata         : out std_logic_vector(7 downto 0) 
    );
 end entity;
 
 architecture arch of cd_top is
-
+  
+   constant RAW_SECTOR_SIZE         : integer := 2352;
+   constant SECTOR_SYNC_SIZE        : integer := 12;
+   constant RAW_SECTOR_OUTPUT_SIZE  : integer := RAW_SECTOR_SIZE - SECTOR_SYNC_SIZE;
+   constant DATA_SECTOR_SIZE        : integer := 2048;
+   
    constant FRAMES_PER_SECOND       : integer := 75;
    constant FRAMES_PER_MINUTE       : integer := 75 * 60;
    constant LEAD_OUT_TRACK_NUMBER   : unsigned(7 downto 0) := x"AA";
+   constant startLBA                : integer := 150; -- todo: is this really constant?
+   
+   constant lbaCount                : integer := 27; -- todo: CD size / RAW_SECTOR_SIZE;
+   
+   -- data fifo
+   signal FifoData_reset            : std_logic := '0';
+   signal FifoData_Din              : std_logic_vector(7 downto 0) := (others => '0');
+   signal FifoData_Wr               : std_logic := '0'; 
+   signal FifoData_Dout             : std_logic_vector(7 downto 0);
+   signal FifoData_Rd               : std_logic := '0';
+   signal FifoData_Empty            : std_logic;
    
    -- cpu interface  
    signal CDROM_STATUS              : std_logic_vector(7 downto 0);
@@ -133,14 +149,108 @@ architecture arch of cd_top is
 
    -- exchange with data part
    signal readOnDisk                : std_logic := '0';   
+   signal readLBA                   : integer range 0 to 262143; 
+   signal trackNumberBCD            : unsigned(7 downto 0) := x"00";
+   
+   signal copyData                  : std_logic := '0';  
    signal seekOK                    : std_logic := '1';  
    signal startReading              : std_logic := '0';  
-   signal writeSectorPointer        : unsigned(2 downto 0);
-   signal readSectorPointer         : unsigned(2 downto 0);
-   signal trackNumberBCD            : unsigned(7 downto 0) := x"01";
+   signal processDataSector         : std_logic := '0';  
+   signal writeSectorPointer        : unsigned(2 downto 0) := (others => '0');
+   signal readSectorPointer         : unsigned(2 downto 0) := (others => '0');
+   
+   -- sector fetch
+   type tsectorFetch is
+	(
+		SFETCH_IDLE,
+      SFETCH_START,
+		SFETCH_FIRST,
+		SFETCH_DATA
+	);
+   signal sectorFetchState          : tsectorFetch := SFETCH_IDLE;
+   
+   type tsectorBuffer is array(0 to 587) of std_logic_vector(31 downto 0);
+   signal sectorBuffer              : tsectorBuffer;
+      
+   signal positionInIndex           : integer range 0 to 262143; 
+   signal lastReadSector            : integer range 0 to 262143; 
+   signal fetchCount                : integer range 0 to 588;
+      
+   -- sector process
+   type tsectorProcess is
+	(
+		SPROC_IDLE,
+      SPROC_READHEADER,
+      SPROC_READSUBHEADER,
+      SPROC_START,
+		SPROC_FIRST,
+		SPROC_DATA
+	);
+   signal sectorProcessState        : tsectorProcess := SPROC_IDLE;
+   
+   type tsectorBuffers is array(0 to 7) of tsectorBuffer;
+   signal sectorBuffers             : tsectorBuffers;
+   
+   type tsectorBufferSizes is array(0 to 7) of integer range 0 to 588;
+   signal sectorBufferSizes         : tsectorBufferSizes;
+   
+   signal procCount                 : integer range 0 to 588;
+   signal procSize                  : integer range 0 to 588;
+   signal procReadAddr              : integer range 0 to 588;
+   signal procReadData              : std_logic_vector(31 downto 0);
+   signal header                    : std_logic_vector(31 downto 0);
+   signal subheader                 : std_logic_vector(31 downto 0);
+   
+   -- copy data
+   type tCopyState is
+	(
+		COPY_IDLE,
+		COPY_FIRST,
+		COPY_DATA,
+      COPY_CHECKPTR
+	);
+   signal copyState                 : tCopyState := COPY_IDLE;
+
+   signal copyCount                 : integer range 0 to 588;
+   signal copyByteCnt               : integer range 0 to 3;
+   signal copySize                  : integer range 0 to 588;    
+   signal copyReadAddr              : integer range 0 to 588;
+   signal copyReadData              : std_logic_vector(31 downto 0); 
+      
+   --test cd
+   signal cd_addr                   : std_logic_vector(14 downto 0) := (others => '0');
+   signal cd_data                   : std_logic_vector(31 downto 0);
       
       
 begin 
+
+   ififoData: entity mem.SyncFifoFallThrough
+   generic map
+   (
+      SIZE             => 4096,
+      DATAWIDTH        => 8,
+      NEARFULLDISTANCE => 16
+   )
+   port map
+   ( 
+      clk      => clk1x,     
+      reset    => FifoData_reset,   
+                
+      Din      => FifoData_Din,     
+      Wr       => FifoData_Wr,      
+      Full     => open,    
+      NearFull => open,
+
+      Dout     => FifoData_Dout,    
+      Rd       => FifoData_Rd,      
+      Empty    => FifoData_Empty   
+   );
+   
+   FifoData_Rd <= ce when (FifoData_Empty = '0' and bus_read = '1' and bus_addr(3 downto 0) = "0010") else
+                  ce when (FifoData_Empty = '0' and dma_read = '1') else 
+                  '0';
+   
+   dma_readdata <= FifoData_Dout when (FifoData_Empty = '0') else (others => '1');
    
    -- cpu interface
    process(clk1x)
@@ -152,6 +262,8 @@ begin
          FifoResponse_Rd   <= '0';
          FifoParam_Wr      <= '0';
          ackRead_valid     <= '0';
+         FifoData_reset    <= '0';
+         copyData          <= '0';
       
          if (reset = '1') then
             
@@ -181,9 +293,11 @@ begin
                            
                            when x"3" =>
                               if (bus_dataWrite(7) = '1') then
-                                 -- todo: load data sector to fifo
+                                 if (FifoData_Empty = '1') then -- don't do anything when data still inside?
+                                    copyData <= '1';
+                                 end if;
                               else
-                                 -- todo: clear data fifo
+                                 FifoData_reset <= '1';
                               end if;
                            when others => null;
                         end case;
@@ -240,7 +354,11 @@ begin
                      end if;
                   
                   when x"2" =>
-                     -- todo: return data fifo
+                     if (FifoData_Empty = '0') then
+                        bus_dataRead <= FifoData_Dout;
+                     else
+                        bus_dataRead <= (others => '0');
+                     end if;
                   
                   when x"3" =>
                      if (CDROM_STATUS(0) = '1') then
@@ -634,6 +752,7 @@ begin
          errorResponseDrive_new  <= '0';
          startReading            <= '0';
          ackRead                 <= '0';
+         processDataSector       <= '0';
 
          if (reset = '1') then
             
@@ -737,14 +856,18 @@ begin
                         ackDrive     <= '1';
                      else
                         -- todo: if dataSector
-                        --todo: processDataSector
-                        internalStatus(5) <= '1'; -- reading
+                           processDataSector     <= '1';
+                           lastSectorHeaderValid <= '1';
+                           writeSectorPointer    <= writeSectorPointer + 1;
+                           internalStatus(5)     <= '1'; -- reading
+                        --endif
                         driveDelay   <= driveDelayNext;
                         ackRead      <= '1';
                         -- todo: currentLBA   <= lastReadSector;
                         -- todo: physical lba position?
                         -- todo: subdata = nextSubdata
-                        readOnDisk   <= '1';
+                        --readOnDisk   <= '1'; -- todo: move after read
+                        readLBA      <= lastReadSector + 1;
                      end if;
                      
                   when DRIVE_SPEEDCHANGEORTOCREAD =>
@@ -763,8 +886,9 @@ begin
             end if;
             
             if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1') then
-               seekLBA        <=  to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
-               readOnDisk     <= '1';
+               seekLBA               <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
+               readLBA               <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
+               readOnDisk            <= '1';
                readAfterSeek         <= '0';
                playAfterSeek         <= '0';
                lastSectorHeaderValid <= '0';
@@ -843,6 +967,180 @@ begin
    -- todo: readOnDisk 
    -- todo: readSubchannel 
    -- todo : seekOK
+   
+   -- data processing
+   process(clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+
+         FifoData_Wr  <= '0';
+
+         if (reset = '1') then
+            
+            sectorFetchState     <= SFETCH_IDLE;
+            sectorProcessState   <= SPROC_IDLE;
+            copyState            <= COPY_IDLE;
+            trackNumberBCD       <= x"00";
+            
+         elsif (ce = '1') then
+   
+            case (sectorFetchState) is
+            
+               when SFETCH_IDLE =>
+                  if (readOnDisk = '1') then
+                     lastReadSector   <= readLBA;
+                     positionInIndex  <= readLBA - startLBA;
+                     sectorFetchState <= SFETCH_START;
+                     fetchCount       <= 0;
+                  end if;
+                  
+               when SFETCH_START =>
+                  sectorFetchState <= SFETCH_FIRST;
+                  if (positionInIndex = lbaCount) then
+                     trackNumberBCD <= x"AA";
+                  else
+                     trackNumberBCD <= x"01"; -- todo
+                  end if;
+                  cd_addr <= std_logic_vector(to_unsigned(positionInIndex * (2352 / 4), 15)); -- todo: needs more bits for real CD
+               
+               when SFETCH_FIRST =>
+                  sectorFetchState <= SFETCH_DATA;
+                  cd_addr          <= std_logic_vector(unsigned(cd_addr) + 1);
+               
+               when SFETCH_DATA =>
+                  cd_addr          <= std_logic_vector(unsigned(cd_addr) + 1);
+                  fetchCount       <= fetchCount + 1;
+                  sectorBuffer(fetchCount) <= cd_data;
+                  if (fetchCount = 587) then
+                     sectorFetchState  <= SFETCH_IDLE;
+                  end if;
+                  
+            end case;
+            
+            procReadData <= sectorBuffer(procReadAddr);
+            
+            case (sectorProcessState) is
+            
+               when SPROC_IDLE =>
+                  procReadAddr <= SECTOR_SYNC_SIZE / 4;
+                  if (processDataSector = '1') then
+                     sectorProcessState <= SPROC_READHEADER;
+                     procReadAddr       <= procReadAddr + 1;
+                     procCount          <= 0;
+                  end if;
+                  
+               when SPROC_READHEADER =>
+                  sectorProcessState <= SPROC_READSUBHEADER;
+                  header <= procReadData;
+                  
+               when SPROC_READSUBHEADER => 
+                  subheader <= procReadData;
+                  sectorProcessState <= SPROC_START;
+                  if (modeReg(6) = '1') then -- xa_enable
+                     if (header(31 downto 24) = x"02") then
+                        if (subheader(22) = '1') then -- realtime
+                           if (subheader(18) = '1') then -- audio
+                              -- todo : ProcessXAADPCMSector
+                              sectorProcessState   <= SPROC_IDLE;
+                           end if;
+                        end if;
+                     end if;
+                  end if;
+                  
+               when SPROC_START =>
+                  sectorProcessState <= SPROC_FIRST;
+                  if (modeReg(5) = '1') then -- raw sector read
+                     procReadAddr <= SECTOR_SYNC_SIZE / 4;
+                     procSize <= (RAW_SECTOR_OUTPUT_SIZE) / 4;
+                  else
+                     procReadAddr <= (SECTOR_SYNC_SIZE + 12) / 4;
+                     procSize <= (DATA_SECTOR_SIZE) / 4;
+                     if (header(31 downto 24) /= x"02") then
+                        sectorProcessState   <= SPROC_IDLE;
+                     end if;
+                  end if;
+               
+               when SPROC_FIRST =>
+                  sectorProcessState <= SPROC_DATA;
+                  procReadAddr <= procReadAddr + 1;
+                  sectorBufferSizes(to_integer(writeSectorPointer)) <= procSize;
+               
+               when SPROC_DATA =>
+                  procCount    <= procCount + 1;
+                  procReadAddr <= procReadAddr + 1;
+                  sectorBuffers(to_integer(writeSectorPointer))(procCount) <= procReadData;
+                  if (procCount = (procSize - 1)) then
+                     sectorProcessState  <= SPROC_IDLE;
+                  end if;
+                  
+            end case;
+            
+
+            copyReadData <= sectorBuffers(to_integer(readSectorPointer))(copyReadAddr);
+            case (copyState) is
+            
+               when COPY_IDLE =>
+                  if (copyData = '1') then
+                     copyState      <= COPY_FIRST;
+                     copyCount      <= 0;
+                     copyReadAddr   <= 0;
+                     if (sectorBufferSizes(to_integer(readSectorPointer)) = 0) then
+                        copySize <= RAW_SECTOR_OUTPUT_SIZE / 4;
+                     else
+                        copySize <= sectorBufferSizes(to_integer(readSectorPointer));
+                     end if;
+                  end if;
+               
+               when COPY_FIRST =>
+                  copyState     <= COPY_DATA;
+                  sectorBufferSizes(to_integer(writeSectorPointer)) <= procSize;
+               
+               when COPY_DATA =>
+                  FifoData_Wr  <= '1';
+                  case (copyByteCnt) is
+                     when 0 => 
+                        copyByteCnt <= 1; 
+                        FifoData_Din <= copyReadData(7 downto 0);
+                        
+                     when 1 => 
+                        copyByteCnt <= 2; 
+                        FifoData_Din <= copyReadData(15 downto 8);
+                        
+                     when 2 => 
+                        copyByteCnt  <= 3; 
+                        FifoData_Din <= copyReadData(23 downto 16); 
+                        copyReadAddr <= copyReadAddr + 1;
+                        
+                     when 3 => 
+                        copyByteCnt  <= 0; 
+                        FifoData_Din <= copyReadData(31 downto 24); 
+                        copyCount    <= copyCount + 1;
+                        if (copyCount = (copySize - 1)) then
+                           copyState  <= COPY_CHECKPTR;
+                           sectorBufferSizes(to_integer(readSectorPointer)) <= 0;
+                        end if;
+                     when others => null;
+                  end case;
+                
+               when COPY_CHECKPTR =>
+                  copyState <= COPY_IDLE;
+                  if (sectorBufferSizes(to_integer(writeSectorPointer)) /= 0) then
+                     -- todo: additional irq for missed sector
+                  end if;
+                 
+            end case;
+   
+         end if; -- ce
+      end if;
+   end process;
+   
+   itestiso : entity work.testiso 
+   port map
+   (
+      clk     => clk1x,
+      address => cd_addr,
+      data    => cd_data
+   );
 
 goutput : if 1 = 1 generate
    signal outputCnt : unsigned(31 downto 0) := (others => '0'); 
@@ -858,6 +1156,7 @@ goutput : if 1 = 1 generate
          variable driveAck_1        : std_logic;
          variable fifoResponseSize  : unsigned(31 downto 0);
          variable newoutputCnt      : unsigned(31 downto 0); 
+         variable fifoDataWrCnt     : unsigned(7 downto 0);
       begin
    
          file_open(f_status, outfile, "R:\\debug_cd_sim.txt", write_mode);
@@ -920,6 +1219,39 @@ goutput : if 1 = 1 generate
                newoutputCnt := newoutputCnt + 1;
             end if; 
             driveAck_1 := driveAck or ackDrive or ackRead_valid;
+            
+            if (processDataSector = '1') then
+               write(line_out, string'("WPTR: "));
+               if (modeReg(5) = '1') then
+                  write(line_out, string'("24"));
+               else
+                  write(line_out, string'("00"));
+               end if;
+               write(line_out, string'(" 000000"));
+               write(line_out, to_hstring("00000" & writeSectorPointer));               
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if; 
+            
+            if (copyState = COPY_DATA and copyByteCnt = 0) then
+               write(line_out, string'("DATA: "));
+               write(line_out, to_hstring(fifoDataWrCnt));
+               write(line_out, string'(" "));
+               write(line_out, to_hstring(copyReadData));               
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+               fifoDataWrCnt := fifoDataWrCnt + 4;
+            elsif (copyState = COPY_IDLE) then
+               fifoDataWrCnt := (others => '0');
+            end if;
+            
+            --if (dma_read = '1') then
+            --   write(line_out, string'("DMAREAD: 00 000000"));
+            --   write(line_out, to_hstring(dma_readdata));               
+            --   writeline(outfile, line_out);
+            --   newoutputCnt := newoutputCnt + 1;
+            --end if; 
+            
             
             outputCnt <= newoutputCnt;
            

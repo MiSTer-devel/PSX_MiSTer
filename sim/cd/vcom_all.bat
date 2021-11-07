@@ -5,6 +5,7 @@ vcom -93 -quiet -work  sim/mem ^
 
 vcom -2008 -quiet -work sim/psx ^
 ../../rtl/dpram.vhd ^
+../../rtl/testiso.vhd ^
 ../../rtl/cd_top.vhd
 
 vcom -quiet -work sim/tb ^
