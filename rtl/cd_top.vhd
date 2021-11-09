@@ -22,9 +22,14 @@ entity cd_top is
       bus_write            : in  std_logic;
       bus_dataRead         : out std_logic_vector(7 downto 0);
       
-      dmaReadRequest       : out std_logic;
       dma_read             : in  std_logic;
-      dma_readdata         : out std_logic_vector(7 downto 0) 
+      dma_readdata         : out std_logic_vector(7 downto 0);
+      
+      SS_reset             : in  std_logic;
+      SS_DataWrite         : in  std_logic_vector(31 downto 0);
+      SS_Adr               : in  unsigned(14 downto 0);
+      SS_wren              : in  std_logic;
+      SS_DataRead          : out std_logic_vector(31 downto 0)
    );
 end entity;
 
@@ -56,6 +61,7 @@ architecture arch of cd_top is
    signal CDROM_IRQFLAG             : std_logic_vector(4 downto 0);
             
    signal beginCommand              : std_logic := '0';
+   signal cmd_unpause               : std_logic := '0';
    signal nextCmd                   : std_logic_vector(7 downto 0);
    
    signal pendingDriveIRQ           : std_logic := '0';
@@ -65,6 +71,7 @@ architecture arch of cd_top is
    signal FifoParam_reset           : std_logic := '0';
    signal FifoParam_Din             : std_logic_vector(7 downto 0) := (others => '0');
    signal FifoParam_Wr              : std_logic := '0'; 
+   signal FifoParam_NearFull         : std_logic := '0'; 
    signal FifoParam_Dout            : std_logic_vector(7 downto 0);
    signal FifoParam_Rd              : std_logic := '0';
    signal FifoParam_Empty           : std_logic;
@@ -93,6 +100,8 @@ architecture arch of cd_top is
    signal setMode                   : std_logic := '0';
    signal newMode                   : std_logic_vector(7 downto 0);
    signal readSN                    : std_logic := '0';
+   signal drive_stop                : std_logic := '0';
+   signal shell_close               : std_logic := '0';
    
    signal errorResponseCmd_new      : std_logic := '0'; 
    signal errorResponseCmd_error    : std_logic_vector(7 downto 0);
@@ -133,8 +142,10 @@ architecture arch of cd_top is
    signal handleDrive               : std_logic := '0';
    signal startMotor                : std_logic := '0';
    signal ackDrive                  : std_logic := '0';
+   signal ackDriveEnd               : std_logic := '0';
    signal seekOnDiskDrive           : std_logic := '0';
    signal ackRead                   : std_logic := '0';
+   signal pause_cmd                 : std_logic := '0';
          
    signal currentLBA                : integer range 0 to 262143;        
    signal seekLBA                   : integer range 0 to 262143;       
@@ -153,7 +164,7 @@ architecture arch of cd_top is
    signal trackNumberBCD            : unsigned(7 downto 0) := x"00";
    
    signal copyData                  : std_logic := '0';  
-   signal seekOK                    : std_logic := '1';  
+   signal seekOK                    : std_logic := '1';  -- todo
    signal startReading              : std_logic := '0';  
    signal processDataSector         : std_logic := '0';  
    signal writeSectorPointer        : unsigned(2 downto 0) := (others => '0');
@@ -163,6 +174,7 @@ architecture arch of cd_top is
    type tsectorFetch is
 	(
 		SFETCH_IDLE,
+      SFETCH_DELAY,
       SFETCH_START,
 		SFETCH_FIRST,
 		SFETCH_DATA
@@ -175,6 +187,7 @@ architecture arch of cd_top is
    signal positionInIndex           : integer range 0 to 262143; 
    signal lastReadSector            : integer range 0 to 262143; 
    signal fetchCount                : integer range 0 to 588;
+   signal fetchDelay                : integer range 0 to 15;
       
    -- sector process
    type tsectorProcess is
@@ -221,6 +234,9 @@ architecture arch of cd_top is
    signal cd_addr                   : std_logic_vector(14 downto 0) := (others => '0');
    signal cd_data                   : std_logic_vector(31 downto 0);
       
+   -- savestates
+   type t_ssarray is array(0 to 127) of std_logic_vector(31 downto 0);
+   signal ss_in  : t_ssarray := (others => (others => '0'));  
       
 begin 
 
@@ -254,6 +270,7 @@ begin
    
    -- cpu interface
    process(clk1x)
+      variable newFlags : std_logic_vector(4 downto 0);
    begin
       if (rising_edge(clk1x)) then
       
@@ -264,15 +281,23 @@ begin
          ackRead_valid     <= '0';
          FifoData_reset    <= '0';
          copyData          <= '0';
+         cmd_unpause       <= '0';
       
          if (reset = '1') then
             
-            CDROM_STATUS    <= x"18";
-            CDROM_IRQENA    <= (others => '0');
-            CDROM_IRQFLAG   <= (others => '0');
-            pendingDriveIRQ <= '0';
+            CDROM_STATUS    <= ss_in(21)(7 downto 0); -- x"18";
+            CDROM_IRQENA    <= ss_in(21)(12 downto 8); -- (others => '0');
+            CDROM_IRQFLAG   <= ss_in(21)(20 downto 16); -- (others => '0');
+            pendingDriveIRQ <= ss_in(13)(24); -- '0';
             
          elsif (ce = '1') then
+         
+            CDROM_STATUS(2) <= '0';                      -- ADPBUSY XA-ADPCM fifo empty  (0=Empty) ;set when playing XA-ADPCM sound
+            CDROM_STATUS(3) <= FifoParam_Empty;          -- PRMEMPT Parameter fifo empty (1=Empty) ;triggered before writing 1st byte
+            CDROM_STATUS(4) <= not FifoParam_NearFull;   -- PRMWRDY Parameter fifo full  (0=Full)  ;triggered after writing 16 bytes
+            CDROM_STATUS(5) <= not FifoResponse_Empty;   -- RSLRRDY Response fifo empty  (0=Empty) ;triggered after reading LAST byte
+            CDROM_STATUS(6) <= not FifoData_Empty;       -- DRQSTS  Data fifo empty      (0=Empty) ;triggered after reading LAST byte
+            CDROM_STATUS(7) <= cmdPending;               -- BUSYSTS Command/parameter transmission busy  (1=Busy)  
          
             if (bus_write = '1') then
             
@@ -309,8 +334,17 @@ begin
                               CDROM_IRQENA <= bus_dataWrite(4 downto 0);
                               
                            when x"3" =>
-                              CDROM_IRQFLAG <= CDROM_IRQFLAG and (not bus_dataWrite(4 downto 0));
-                              --todo: if CDROM_IRQFLAG = 0 and pendingDriveIRQ -> generate irq from drive or possibly reactive drive
+                              newFlags := CDROM_IRQFLAG and (not bus_dataWrite(4 downto 0));
+                              CDROM_IRQFLAG <= newFlags;
+                              if (newFlags = "00000") then
+                                 if (pendingDriveIRQ) then
+                                    -- todo: generate irq from drive 
+                                 else
+                                    if (cmd_delay > 0) then
+                                       cmd_unpause <= '1';
+                                    end if;
+                                 end if;
+                              end if;
                               if (bus_dataWrite(6) = '1') then
                                  --todo: clear param fifo
                               end if;
@@ -383,6 +417,13 @@ begin
                if (CDROM_IRQENA(1) = '1') then
                   irqOut <= '1';
                end if;
+            end if;           
+
+            if (ackDriveEnd = '1') then
+               CDROM_IRQFLAG <= "00100";
+               if (CDROM_IRQENA(2) = '1') then
+                  irqOut <= '1';
+               end if;
             end if;
             
             if (ackRead = '1') then
@@ -426,7 +467,7 @@ begin
       Din      => FifoParam_Din,     
       Wr       => FifoParam_Wr,      
       Full     => open,    
-      NearFull => open,
+      NearFull => FifoParam_NearFull,
 
       Dout     => FifoParam_Dout,    
       Rd       => FifoParam_Rd,      
@@ -445,6 +486,8 @@ begin
          seekOnDiskCmd           <= '0';
          setMode                 <= '0';
          readSN                  <= '0';
+         drive_stop              <= '0';
+         shell_close             <= '0';
          errorResponseCmd_new    <= '0';
          errorResponseNext_new   <= '0';
          
@@ -457,13 +500,14 @@ begin
             
             FifoParam_reset         <= '1';
             FifoResponse_reset      <= '1';
-            cmdPending              <= '0';
-            cmd_busy                <= '0';
-            cmd_delay               <= 0;
+            cmdPending              <= ss_in(18)(1); -- '0'
+            cmd_busy                <= ss_in(18)(0); -- '0'
+            cmd_delay               <= to_integer(unsigned(ss_in(12)(16 downto 0))); -- 0
             fifoParamCount          <= 0;
-            working                 <= '0';
+            working                 <= ss_in(18)(2); -- '0'
+            workDelay               <= to_integer(unsigned(ss_in(0)(18 downto 0))); -- 0
                
-            setLocActive            <= '0';
+            setLocActive            <= ss_in(18)(3); -- '0'
             
          elsif (ce = '1') then
          
@@ -471,9 +515,9 @@ begin
             if (beginCommand = '1') then
                cmdPending <= '1';
                cmd_busy   <= '1';
-               cmd_delay  <= 25000;
+               cmd_delay  <= 25000 - 2;
                if (nextCmd = x"1C") then -- init
-                  cmd_delay <= 120000;
+                  cmd_delay <= 120000 - 2;
                end if;
                case (nextCmd) is
                   when x"02" => paramCount <= 3; --Setloc
@@ -486,6 +530,10 @@ begin
                   when x"1F" => paramCount <= 6; --VideoCD
                   when others => paramCount <= 0;
                end case;
+            elsif (pause_cmd = '1') then
+               cmd_busy <= '0';
+            elsif (cmd_unpause = '1') then
+               cmd_busy <= '1';
             elsif (cmd_busy = '1') then
                if (cmd_delay > 0) then
                   cmd_delay <= cmd_delay - 1;
@@ -513,7 +561,11 @@ begin
                         --todo
                         
                      when x"01" => -- Getstat
-                        --todo
+                        cmdAck         <= '1';
+                        cmdPending     <= '0';
+                        if (hasCD = '1') then
+                           shell_close <= '1';
+                        end if;
                         
                      when x"02" => -- Setloc
                         setLocReadStep <= 5;
@@ -538,7 +590,22 @@ begin
                         --todo
                         
                      when x"09" => -- pause
-                        --todo
+                        cmdAck     <= '1';
+                        cmdPending <= '0';
+                        working    <= '1';
+                        workDelay  <= 7000;
+                        if (driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
+                           if (modeReg(7) = '1') then
+                              workDelay  <= 200000;
+                           else
+                              workDelay  <= 100000;
+                           end if;
+                        end if;
+                        if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                           -- todo: complete seek?
+                        else
+                           drive_stop <= '1';
+                        end if;
                      
                      when x"0A" => -- reset
                         cmdAck <= '1';
@@ -555,7 +622,7 @@ begin
                            workDelay   <= 399999;
                            workCommand <= nextCmd;
                            -- call here second time, so response has new values after reset?
-                           cmd_delay   <= 24999;
+                           cmd_delay   <= 24999 - 2;
                            cmd_busy    <= '1';
                         end if;
                      
@@ -678,7 +745,7 @@ begin
             end if;
             
             -- responses
-            if (cmdAck = '1' or driveAck = '1' or ackDrive = '1' or ackRead_valid = '1') then
+            if (cmdAck = '1' or driveAck = '1' or ackDrive = '1' or ackRead_valid = '1' or ackDriveEnd = '1') then
                FifoResponse_Din <= internalStatus;
                FifoResponse_Wr  <= '1';
             end if;
@@ -739,36 +806,41 @@ begin
       Empty    => FifoResponse_Empty   
    );
    
+   seekOK <= '1'; -- todo
+   
    -- drive
    process(clk1x)
    begin
       if (rising_edge(clk1x)) then
 
          handleDrive             <= '0';
-         startMotor              <= '0';
          readOnDisk              <= '0';
          ackDrive                <= '0';
+         ackDriveEnd             <= '0';
          seekOnDiskDrive         <= '0';
          errorResponseDrive_new  <= '0';
          startReading            <= '0';
          ackRead                 <= '0';
+         pause_cmd               <= '0';
          processDataSector       <= '0';
+         
+         if (SS_reset = '1') then
+            startMotor           <= '1'; 
+         end if;
 
          if (reset = '1') then
             
-            driveBusy               <= '0';
-            driveState              <= DRIVE_IDLE;
-                           
-            startMotor              <= '1';
+            driveBusy               <= ss_in(18)(4); -- 0
+            driveState              <= tdrivestate'VAL(to_integer(unsigned(ss_in(15)(27 downto 24)))); -- DRIVE_IDLE;  
                      
-            internalStatus          <= x"10"; -- shell open
-            modeReg                 <= x"20"; -- read_raw_sector set
+            internalStatus          <= ss_in(13)(7 downto 0); -- x"10"; -- shell open
+            modeReg                 <= ss_in(13)(15 downto 8); -- x"20"; -- read_raw_sector set
                      
-            currentLBA              <= 0;
+            currentLBA              <= to_integer(unsigned(ss_in(3)(19 downto 0))); -- 0
             
-            readAfterSeek           <= '0';
-            playAfterSeek           <= '0';
-            lastSectorHeaderValid   <= '0';
+            readAfterSeek           <= ss_in(18)(5); -- '0'
+            playAfterSeek           <= ss_in(18)(6); -- '0';
+            lastSectorHeaderValid   <= ss_in(18)(8); -- '0';
             
          elsif (softReset = '1') then
          
@@ -803,6 +875,8 @@ begin
             end if;
             
          elsif (ce = '1') then
+         
+            startMotor   <= '0'; 
          
             if (driveBusy = '1') then
                if (driveDelay > 0) then
@@ -849,11 +923,12 @@ begin
                      
                      
                   when DRIVE_READING | DRIVE_PLAYING =>
+                     pause_cmd <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
                      if (trackNumberBCD = LEAD_OUT_TRACK_NUMBER) then
                         internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                         internalStatus(1)          <= '0'; -- motor off
                         driveState   <= DRIVE_IDLE;
-                        ackDrive     <= '1';
+                        ackDriveEnd  <= '1';
                      else
                         -- todo: if dataSector
                            processDataSector     <= '1';
@@ -862,11 +937,12 @@ begin
                            internalStatus(5)     <= '1'; -- reading
                         --endif
                         driveDelay   <= driveDelayNext;
+                        driveBusy    <= '1';
                         ackRead      <= '1';
                         -- todo: currentLBA   <= lastReadSector;
                         -- todo: physical lba position?
                         -- todo: subdata = nextSubdata
-                        --readOnDisk   <= '1'; -- todo: move after read
+                        readOnDisk   <= '1';
                         readLBA      <= lastReadSector + 1;
                      end if;
                      
@@ -937,6 +1013,16 @@ begin
                readSectorPointer  <= (others => '0');
             end if;
             
+            if (drive_stop = '1') then
+               driveState <= DRIVE_IDLE;
+               driveBusy  <= '0';
+               internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+            end if;
+            
+            if (shell_close = '1') then
+               internalStatus(4) <= '0';
+            end if;
+            
             if (ackRead_valid = '1') then
                readSectorPointer <= writeSectorPointer;
             end if;
@@ -980,7 +1066,7 @@ begin
             sectorFetchState     <= SFETCH_IDLE;
             sectorProcessState   <= SPROC_IDLE;
             copyState            <= COPY_IDLE;
-            trackNumberBCD       <= x"00";
+            trackNumberBCD       <= unsigned(ss_in(15)(15 downto 8)); --  x"00";
             
          elsif (ce = '1') then
    
@@ -990,9 +1076,17 @@ begin
                   if (readOnDisk = '1') then
                      lastReadSector   <= readLBA;
                      positionInIndex  <= readLBA - startLBA;
-                     sectorFetchState <= SFETCH_START;
+                     sectorFetchState <= SFETCH_DELAY;
                      fetchCount       <= 0;
+                     fetchDelay       <= 15;
                   end if;
+                  
+               when SFETCH_DELAY => -- delay to give processing a head start with copy
+                  if (fetchDelay > 0) then
+                     fetchDelay <= fetchDelay - 1;
+                  else
+                     sectorFetchState <= SFETCH_START;
+                  end if;   
                   
                when SFETCH_START =>
                   sectorFetchState <= SFETCH_FIRST;
@@ -1141,8 +1235,35 @@ begin
       address => cd_addr,
       data    => cd_data
    );
+   
+--##############################################################
+--############################### savestates
+--##############################################################
 
-goutput : if 1 = 1 generate
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         if (SS_reset = '1') then
+         
+            for i in 0 to 127 loop
+               ss_in(i) <= (others => '0');
+            end loop;
+            
+            ss_in(13) <= x"00002010"; -- pendingDriveIRQ & nextCmd & modeReg & internalStatus
+            
+            ss_in(21) <= x"00000018"; -- CDROM_IRQFLAG & CDROM_IRQENA & CDROM_STATUS;
+            
+         elsif (SS_wren = '1' and SS_Adr < 128) then
+            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+      
+      end if;
+   end process;
+
+   -- synthesis translate_off
+
+   goutput : if 1 = 1 generate
    signal outputCnt : unsigned(31 downto 0) := (others => '0'); 
    
    begin
@@ -1218,7 +1339,7 @@ goutput : if 1 = 1 generate
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
             end if; 
-            driveAck_1 := driveAck or ackDrive or ackRead_valid;
+            driveAck_1 := driveAck or ackDrive or ackRead_valid or ackDriveEnd;
             
             if (processDataSector = '1') then
                write(line_out, string'("WPTR: "));

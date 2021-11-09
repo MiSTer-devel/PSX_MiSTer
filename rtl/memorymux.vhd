@@ -16,6 +16,8 @@ entity memorymux is
       loadExe              : in  std_logic;
       reset_exe            : out std_logic := '0';
       
+      fastboot             : in  std_logic;
+      
       isIdle               : out std_logic;
       
       ram_dataWrite        : out std_logic_vector(31 downto 0) := (others => '0');
@@ -84,6 +86,12 @@ entity memorymux is
       bus_tmr_write        : out std_logic;
       bus_tmr_dataRead     : in  std_logic_vector(31 downto 0);
       
+      bus_cd_addr          : out unsigned(3 downto 0); 
+      bus_cd_dataWrite     : out std_logic_vector(7 downto 0);
+      bus_cd_read          : out std_logic;
+      bus_cd_write         : out std_logic;
+      bus_cd_dataRead      : in  std_logic_vector(7 downto 0);
+      
       bus_gpu_addr         : out unsigned(3 downto 0); 
       bus_gpu_dataWrite    : out std_logic_vector(31 downto 0);
       bus_gpu_read         : out std_logic;
@@ -124,6 +132,9 @@ architecture arch of memorymux is
       --ERRORRAM,
       READBIOS,
       BUSACTION,
+      CD_WRITE,
+      CD_READ_WAIT,
+      CD_READ,
       WAITING,
       
       EXEREADHEADER,
@@ -136,9 +147,19 @@ architecture arch of memorymux is
    );
    signal state            : tState := IDLE;
    
+   signal byteStep         : unsigned(1 downto 0);
    signal waitcnt          : integer range 0 to 127;
    
+   signal addressData_buf  : unsigned(31 downto 0);
+   signal dataWrite_buf    : std_logic_vector(31 downto 0);
+   signal reqsize_buf      : unsigned(1 downto 0);   
+   signal writeMask_buf    : std_logic_vector(3 downto 0);
+   
+   signal addressBIOS_buf  : unsigned(18 downto 0);
+   
    signal dataFromBusses   : std_logic_vector(31 downto 0);
+   
+   signal data_cd          : std_logic_vector(31 downto 0);
    
    -- EXE handling
    signal loadExe_latched  : std_logic := '0';
@@ -287,15 +308,20 @@ begin
    end process;
    
    dataFromBusses <= bus_exp1_dataRead or bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_irq_dataRead or bus_dma_dataRead or 
-                     bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or bus_exp2_dataRead;
+                     bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or bus_exp2_dataRead or
+                     data_cd;
   
    process (clk1x)
+      variable biosPatch  : std_logic_vector(31 downto 0);
    begin
       if rising_edge(clk1x) then
       
-         ram_ena   <= '0';
-         mem_done  <= '0';
-         reset_exe <= '0';
+         ram_ena     <= '0';
+         mem_done    <= '0';
+         reset_exe   <= '0';
+         
+         bus_cd_read  <= '0';
+         bus_cd_write <= '0';
          
          if (loadExe = '1') then
             loadExe_latched <= '1';
@@ -309,6 +335,15 @@ begin
          
             case (state) is
                when IDLE =>
+               
+                  byteStep        <= (others => '0');
+                  addressData_buf <= mem_addressData;
+                  dataWrite_buf   <= mem_dataWrite;
+                  reqsize_buf     <= mem_reqsize;
+                  writeMask_buf   <= mem_writeMask;
+                  
+                  data_cd         <= (others => '0');
+                  
                   if (loadExe_latched = '1') then
                      
                      state           <= EXEREADHEADER;
@@ -335,6 +370,7 @@ begin
                            ram_rnw <= '1';
                            ram_Adr <= "01" & "00" & std_logic_vector(mem_addressInstr(18 downto 0));
                            state   <= READBIOS;
+                           addressBIOS_buf <= mem_addressInstr(18 downto 0);
                            waitcnt <= 16;
                            if (mem_isCache = '1') then
                               ram_Adr(3 downto 0) <= (others => '0');
@@ -366,6 +402,7 @@ begin
                            ram_rnw <= '1';
                            ram_Adr <= "01" & "00" & std_logic_vector(mem_addressData(18 downto 0));
                            state   <= READBIOS;
+                           addressBIOS_buf <= mem_addressData(18 downto 0);
                            case (mem_reqsize) is
                               when "00" => waitcnt <= 1;
                               when "01" => waitcnt <= 4;
@@ -373,7 +410,18 @@ begin
                               when others => null;
                            end case;
                         else
-                           state <= BUSACTION;
+                           if (mem_addressData(28 downto 0) >= 16#1F801800# and mem_addressData(28 downto 0) < 16#1F801810#) then
+                              if (mem_rnw = '1') then
+                                 state       <= CD_READ_WAIT;
+                                 bus_cd_addr <= mem_addressData(3 downto 0);
+                                 bus_cd_read <= '1';
+                              else
+                                 state   <= CD_WRITE;
+                              end if;
+                              
+                           else  
+                              state <= BUSACTION;
+                           end if;
                         end if;
             
                      end if;
@@ -427,11 +475,30 @@ begin
                   
                when READBIOS =>
                   if (ram_done = '1') then
-                     if (ram_Adr(0) = '1') then
-                        mem_dataRead <= x"00" & ram_dataRead(31 downto 8);
+                     if (fastboot = '1' and to_integer(addressBIOS_buf) >= 16#18000# and to_integer(addressBIOS_buf) <= 16#18010#) then
+                        case (to_integer(addressBIOS_buf(4 downto 2))) is
+                           when 0 => biosPatch := x"3C011F80";
+                           when 1 => biosPatch := x"3C0A0300";
+                           when 2 => biosPatch := x"AC2A1814";
+                           when 3 => biosPatch := x"03E00008";
+                           when 4 => biosPatch := x"00000000";
+                           when others => null;
+                        end case;
+                        case (addressBIOS_buf(1 downto 0)) is
+                           when "00" => mem_dataRead <= biosPatch;
+                           when "01" => mem_dataRead <= x"00" & biosPatch(31 downto 8);
+                           when "10" => mem_dataRead <= x"0000" & biosPatch(31 downto 16);
+                           when "11" => mem_dataRead <= x"000000" & biosPatch(31 downto 24);
+                           when others => null;
+                        end case;
                      else
-                        mem_dataRead <= ram_dataRead(31 downto 0);
+                        if (ram_Adr(0) = '1') then
+                           mem_dataRead <= x"00" & ram_dataRead(31 downto 8);
+                        else
+                           mem_dataRead <= ram_dataRead(31 downto 0);
+                        end if;
                      end if;
+                        
                      if (NOMEMWAIT = '1') then
                         mem_done <= '1';
                         state    <= IDLE;
@@ -444,6 +511,52 @@ begin
                   mem_dataRead <= dataFromBusses;
                   mem_done     <= '1';
                   state        <= IDLE;
+                  
+               when CD_WRITE =>
+                  byteStep    <= byteStep + 1;
+                  bus_cd_addr <= addressData_buf(3 downto 2) & byteStep;
+                  case (byteStep) is
+                     when "00" => if (writeMask_buf(0) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf( 7 downto  0); end if;
+                     when "01" => if (writeMask_buf(1) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf(15 downto  8); end if;
+                     when "10" => if (writeMask_buf(2) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf(23 downto 16); end if;
+                     when "11" => if (writeMask_buf(3) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf(31 downto 24); end if;  state <= BUSACTION; 
+                     when others => null;
+                  end case;
+                  
+               when CD_READ_WAIT =>
+                  state <= CD_READ;
+                  
+               when CD_READ =>
+                  state       <= CD_READ_WAIT;
+                  byteStep    <= byteStep + 1;
+                  bus_cd_addr <= bus_cd_addr + 1;
+                  case (byteStep) is
+                     when "00" => 
+                        data_cd( 7 downto  0) <= bus_cd_dataRead; 
+                        if (reqsize_buf = "00") then 
+                           state <= BUSACTION; 
+                        else
+                           bus_cd_read <= '1';
+                        end if;
+                        
+                     when "01" => 
+                        data_cd(15 downto  8) <= bus_cd_dataRead;
+                        if (reqsize_buf = "01") then 
+                           state <= BUSACTION; 
+                        else
+                           bus_cd_read <= '1';
+                        end if;
+                        
+                     when "10" => 
+                        data_cd(23 downto 16) <= bus_cd_dataRead;
+                        bus_cd_read <= '1';
+                        
+                     when "11" => 
+                        data_cd(31 downto 24) <= bus_cd_dataRead;
+                        state <= BUSACTION; 
+                        
+                     when others => null;
+                  end case;  
                   
                when WAITING =>
                   if (waitcnt > 0) then

@@ -76,7 +76,8 @@ GTE    : 80%
 
 MDEC   : 90%
 - timing slightly too fast
+- savestate loading missing
  
-CD     : 10%
+CD     : 20%
 
 SPU    : 0%

@@ -19,6 +19,7 @@ entity psx_top is
       reset                 : in  std_logic; 
       -- commands 
       loadExe               : in  std_logic;
+      fastboot              : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -148,6 +149,12 @@ architecture arch of psx_top is
    signal bus_tmr_write          : std_logic;
    signal bus_tmr_dataRead       : std_logic_vector(31 downto 0);
    
+   signal bus_cd_addr            : unsigned(3 downto 0); 
+   signal bus_cd_dataWrite       : std_logic_vector(7 downto 0);
+   signal bus_cd_read            : std_logic;
+   signal bus_cd_write           : std_logic;
+   signal bus_cd_dataRead        : std_logic_vector(7 downto 0);
+   
    signal bus_gpu_addr           : unsigned(3 downto 0); 
    signal bus_gpu_dataWrite      : std_logic_vector(31 downto 0);
    signal bus_gpu_read           : std_logic;
@@ -249,6 +256,9 @@ architecture arch of psx_top is
    signal DMA_MDEC_write         : std_logic_vector(31 downto 0);
    signal DMA_MDEC_read          : std_logic_vector(31 downto 0);
    
+   signal DMA_CD_readEna         : std_logic;
+   signal DMA_CD_read            : std_logic_vector(7 downto 0);
+   
    -- cpu
    signal ce_intern              : std_logic := '0';
    signal ce_cpu                 : std_logic := '0';
@@ -287,6 +297,7 @@ architecture arch of psx_top is
    signal SS_DataRead_PAD        : std_logic_vector(31 downto 0);
    signal SS_DataRead_TMR        : std_logic_vector(31 downto 0);
    signal SS_DataRead_IRQ        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_CD         : std_logic_vector(31 downto 0);
    signal SS_DataRead_SDRam      : std_logic_vector(31 downto 0);
    
    signal ss_ram_BUSY            : std_logic;                    
@@ -474,7 +485,6 @@ begin
    );
    
    irq_GPU       <= '0'; -- todo
-   irq_CDROM     <= '0'; -- todo
    irq_SIO       <= '0'; -- todo
    irq_SPU       <= '0'; -- todo
    irq_LIGHTPEN  <= '0'; -- todo
@@ -549,7 +559,10 @@ begin
       DMA_MDEC_writeEna    => DMA_MDEC_writeEna,   
       DMA_MDEC_readEna     => DMA_MDEC_readEna,    
       DMA_MDEC_write       => DMA_MDEC_write,      
-      DMA_MDEC_read        => DMA_MDEC_read,       
+      DMA_MDEC_read        => DMA_MDEC_read,   
+
+      DMA_CD_readEna       => DMA_CD_readEna,
+      DMA_CD_read          => DMA_CD_read,   
       
       bus_addr             => bus_dma_addr,     
       bus_dataWrite        => bus_dma_dataWrite,
@@ -624,6 +637,34 @@ begin
       export_t_current1    => export_t_current1,
       export_t_current2    => export_t_current2
    );
+   
+   icd_top : entity work.cd_top
+   port map
+   (
+      clk1x                => clk1x,
+      ce                   => ce,   
+      reset                => reset_intern,
+     
+      hasCD                => '1',
+          
+      irqOut               => irq_CDROM,
+                            
+      bus_addr             => bus_cd_addr,     
+      bus_dataWrite        => bus_cd_dataWrite,
+      bus_read             => bus_cd_read,     
+      bus_write            => bus_cd_write,     
+      bus_dataRead         => bus_cd_dataRead,
+                            
+      dma_read             => DMA_CD_readEna,
+      dma_readdata         => DMA_CD_read,
+      
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(14 downto 0),      
+      SS_wren              => SS_wren(13),     
+      SS_DataRead          => SS_DataRead_CD
+   );
+   
    
    hblank <= hblank_intern;
    
@@ -751,6 +792,8 @@ begin
          
       loadExe              => loadExe,
       reset_exe            => reset_exe,
+      
+      fastboot             => fastboot,
             
       ram_dataWrite        => ram_cpu_dataWrite,
       ram_dataRead         => ram_dataRead, 
@@ -816,7 +859,13 @@ begin
       bus_tmr_dataWrite    => bus_tmr_dataWrite,
       bus_tmr_read         => bus_tmr_read,     
       bus_tmr_write        => bus_tmr_write,    
-      bus_tmr_dataRead     => bus_tmr_dataRead,       
+      bus_tmr_dataRead     => bus_tmr_dataRead,  
+
+      bus_cd_addr          => bus_cd_addr,     
+      bus_cd_dataWrite     => bus_cd_dataWrite,
+      bus_cd_read          => bus_cd_read,     
+      bus_cd_write         => bus_cd_write,    
+      bus_cd_dataRead      => bus_cd_dataRead,      
       
       bus_gpu_addr         => bus_gpu_addr,     
       bus_gpu_dataWrite    => bus_gpu_dataWrite,

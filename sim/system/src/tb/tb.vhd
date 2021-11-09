@@ -172,6 +172,7 @@ begin
       reset                 => reset,
       -- commands 
       loadExe               => psx_LoadExe(0),
+      fastboot              => '1',
       -- RAM/BIOS interface        
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 
@@ -195,7 +196,7 @@ begin
       DDRAM_WE              => DDRAM_WE,
       -- video
       videoout_on           => '1',
-      isPal                 => '0',
+      isPal                 => '1',
       hblank                => hblank,  
       vblank                => vblank,  
       video_ce              => video_ce,

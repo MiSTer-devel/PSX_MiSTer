@@ -15,6 +15,7 @@ entity psx_mister is
       reset                 : in  std_logic;
       -- commands 
       loadExe               : in  std_logic;
+      fastboot              : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -111,6 +112,7 @@ begin
       reset                 => reset, 
       -- commands 
       loadExe               => loadExe,
+      fastboot              => fastboot,
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,

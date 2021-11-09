@@ -40,6 +40,9 @@ entity dma is
       DMA_MDEC_write       : out std_logic_vector(31 downto 0);
       DMA_MDEC_read        : in  std_logic_vector(31 downto 0);
       
+      DMA_CD_readEna       : out std_logic := '0';
+      DMA_CD_read          : in  std_logic_vector(7 downto 0);
+      
       bus_addr             : in  unsigned(6 downto 0); 
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
       bus_read             : in  std_logic;
@@ -88,6 +91,9 @@ architecture arch of dma is
    signal DICR_IRQs        : unsigned(6 downto 0);
       
    signal triggerDMA       : std_logic_vector(6 downto 0);
+   
+   signal wordAccu         : integer range 0 to 3 := 0;
+   signal DMA_CD_read_accu : std_logic_vector(23 downto 0);
       
    signal isOn             : std_logic;
    signal activeChannel    : integer range 0 to 6;
@@ -161,6 +167,8 @@ begin
    DMA_GPU_writeEna  <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 2 and toDevice = '1') else '0'; 
    DMA_GPU_write     <= fifoIn_Dout;
 
+   DMA_CD_readEna    <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 3 and toDevice = '0') else '0';
+
    process (clk1x)
       variable channel         : integer range 0 to 7;
       variable triggerNew      : std_logic;
@@ -228,7 +236,7 @@ begin
             dmaArray(0).request <= mdec_dmaWriteRequest;
             dmaArray(1).request <= mdec_dmaReadRequest;
             dmaArray(2).request <= gpu_dmaRequest;
-            dmaArray(3).request <= '0';
+            dmaArray(3).request <= '1';
             dmaArray(4).request <= '0';
             dmaArray(5).request <= '0';
             dmaArray(6).request <= '1';
@@ -335,6 +343,16 @@ begin
                dmaTime       <= 0;
             end if;
             
+            -- accu
+            if (DMA_CD_readEna = '1') then
+               case (wordAccu) is
+                  when 0 => wordAccu <= 3; 
+                  when 1 => wordAccu <= 0; DMA_CD_read_accu(23 downto 16) <= DMA_CD_read;
+                  when 2 => wordAccu <= 1; DMA_CD_read_accu(15 downto  8) <= DMA_CD_read;
+                  when 3 => wordAccu <= 2; DMA_CD_read_accu( 7 downto  0) <= DMA_CD_read;
+                  when others => null;
+               end case;
+            end if;
             
             case (dmaState) is
             
@@ -347,6 +365,10 @@ begin
                   if (waitcnt = 8) then
                      dmacount     <= (others => '0');
                      toDevice     <= dmaArray(activeChannel).D_CHCR(0);
+                     wordAccu     <= 0;
+                     if (activeChannel = 3) then
+                        wordAccu <= 3;
+                     end if;
                      if (dmaArray(activeChannel).D_CHCR(0) = '1') then
                         if (requestOnFly = 0) then
                            ram_rnw         <= '1';
@@ -426,7 +448,7 @@ begin
                   end if;
                
                when WORKING =>
-                  if (fifoIn_Valid = '1' or (toDevice = '0' and fifoOut_NearFull = '0')) then
+                  if (fifoIn_Valid = '1' or (toDevice = '0' and fifoOut_NearFull = '0' and wordAccu = 0)) then
                      dmacount    <= dmacount + 1;
                      case (activeChannel) is
                      
@@ -449,6 +471,13 @@ begin
                               fifoOut_Wr                <= '1';
                               fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(2).D_MADR(20 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_GPU_read;
+                           end if;
+                           
+                        when 3 =>
+                           if (toDevice = '0') then
+                              fifoOut_Wr                <= '1';
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(3).D_MADR(20 downto 2));
+                              fifoOut_Din(31 downto 0)  <= DMA_CD_read & DMA_CD_read_accu;
                            end if;
                            
                         when 6 =>
@@ -715,7 +744,7 @@ begin
       
          if (SS_reset = '1') then
          
-            for i in 0 to 1 loop
+            for i in 0 to 63 loop
                ss_in(i) <= (others => '0');
             end loop;
             

@@ -266,7 +266,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX XXXXXX XX    X   X     XXXXXXX
+// X XXXXXXX XXXXXXXXX    X   X     XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -286,6 +286,7 @@ parameter CONF_STR = {
 	"OE,DDR3 Framebuffer,Off,On;",
 	"OB,VRAMViewer,Off,On;",
 	"OF,System Type,NTSC,PAL;",
+	"OG,Fastboot,Off,On;",
 	"- ;",
 
 	"P1,Video & Audio;",
@@ -496,6 +497,7 @@ psx
    .reset(reset),
    // commands 
    .loadExe(loadExe),
+   .fastboot(status[16]),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),

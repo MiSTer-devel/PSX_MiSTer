@@ -82,7 +82,7 @@ architecture arch of savestates is
       ( 11264,     2),    -- IRQ          10
       ( 12288,     8),    -- SIO          11
       ( 31744,   256),    -- Scratchpad   12   
-      ( 32768,     2),    -- CDROM        13  -- size should be  32768
+      ( 32768, 32768),    -- CDROM        13
       (131072,     2),    -- SPURAM       14  -- size should be 131072
       (262144,262144),    -- VRAM         15
       (524288,524288)     -- RAM          16
