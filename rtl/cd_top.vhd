@@ -14,6 +14,8 @@ entity cd_top is
       
       hasCD                : in  std_logic;
       
+      fullyIdle            : out std_logic;
+      
       irqOut               : out std_logic := '0';
       
       bus_addr             : in  unsigned(3 downto 0); 
@@ -87,7 +89,10 @@ architecture arch of cd_top is
    signal workCommand               : std_logic_vector(7 downto 0);
    signal workDelay                 : integer range 0 to 399999;
    signal cmdAck                    : std_logic := '0';
+   signal cmdIRQ                    : std_logic := '0';
    signal driveAck                  : std_logic := '0';
+   signal getIDAck                  : std_logic := '0';
+   signal startMotorCMD             : std_logic := '0';
    signal softReset                 : std_logic := '0';
          
    signal setLocActive              : std_logic := '0';
@@ -239,6 +244,8 @@ architecture arch of cd_top is
    signal ss_in  : t_ssarray := (others => (others => '0'));  
       
 begin 
+
+   fullyIdle <= '1' when (cmd_busy = '0' and working = '0' and driveBusy = '0' and  sectorFetchState = SFETCH_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) else '0';
 
    ififoData: entity mem.SyncFifoFallThrough
    generic map
@@ -405,14 +412,14 @@ begin
                end case;
             end if;
             
-            if (cmdAck = '1') then
+            if (cmdAck = '1' or cmdIRQ = '1') then
                CDROM_IRQFLAG <= "00011";
                if (CDROM_IRQENA(1 downto 0) /= "00") then
                   irqOut <= '1';
                end if;
             end if;            
             
-            if (driveAck = '1' or ackDrive = '1') then
+            if (driveAck = '1' or ackDrive = '1' or (getIDAck = '1' and hasCD = '1')) then
                CDROM_IRQFLAG <= "00010";
                if (CDROM_IRQENA(1) = '1') then
                   irqOut <= '1';
@@ -438,6 +445,13 @@ begin
                      irqOut <= '1';
                   end if;
                   ackRead_valid <= '1';
+               end if;
+            end if;
+            
+            if (getIDAck = '1' and hasCD = '0') then
+               CDROM_IRQFLAG <= "00101";
+               if (CDROM_IRQENA(0) = '1' or CDROM_IRQENA(2) = '1') then
+                  irqOut <= '1';
                end if;
             end if;
                
@@ -481,12 +495,15 @@ begin
       
          handleCommand           <= '0';
          cmdAck                  <= '0';
+         cmdIRQ                  <= '0';
          driveAck                <= '0';
+         getIDAck                <= '0';
          softReset               <= '0';
          seekOnDiskCmd           <= '0';
          setMode                 <= '0';
          readSN                  <= '0';
          drive_stop              <= '0';
+         startMotorCMD           <= '0';
          shell_close             <= '0';
          errorResponseCmd_new    <= '0';
          errorResponseNext_new   <= '0';
@@ -552,7 +569,8 @@ begin
                   cmdPending              <= '0';
                   FifoParam_reset         <= '1';
                else
-                  if (FifoResponse_empty = '0') then 
+               
+                  if (FifoResponse_empty = '0' and nextCmd /= x"19") then
                      FifoResponse_reset <= '1';
                   end if;
                   
@@ -590,10 +608,11 @@ begin
                         --todo
                         
                      when x"09" => -- pause
-                        cmdAck     <= '1';
-                        cmdPending <= '0';
-                        working    <= '1';
-                        workDelay  <= 7000;
+                        cmdAck      <= '1';
+                        cmdPending  <= '0';
+                        working     <= '1';
+                        workDelay   <= 7000;
+                        workCommand <= nextCmd;
                         if (driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
                            if (modeReg(7) = '1') then
                               workDelay  <= 200000;
@@ -671,10 +690,29 @@ begin
                         --todo
                         
                      when x"19" => -- test
-                        --todo
+                        FifoParam_Rd   <= '1';
+                        cmdPending     <= '0';
+                        if (FifoParam_Dout = x"04" or FifoParam_Dout = x"05" or FifoParam_Dout = x"20" or FifoParam_Dout = x"22") then
+                           cmdIRQ <= '1';
+                        else
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"40";
+                        end if;
                         
                      when x"1A" => -- getID
-                        --todo
+                        cmdPending     <= '0';
+                        if (hasCD = '0') then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"80";
+                        else
+                           cmdAck      <= '1';
+                           working     <= '1';
+                           workDelay   <= 33867 - 2;
+                           workCommand <= nextCmd;
+                           -- if (driveState == DRIVESTATE::SPINNINGUP && driveBusy) workDelay += driveDelay; -- todo: required?
+                        end if;
                         
                      when x"06" | x"1B" => -- ReadN/ReadS
                         cmdPending <= '0';
@@ -701,7 +739,9 @@ begin
                         --todo
                      
                      when others =>
-                        --todo errorResponse(1, 0x40);
+                        errorResponseCmd_new    <= '1';
+                        errorResponseCmd_error  <= x"01";
+                        errorResponseCmd_reason <= x"40";
                         cmdPending <= '0';
                         
                   end case;
@@ -733,10 +773,34 @@ begin
             if (working = '1') then
                if (workDelay > 0) then
                   workDelay <= workDelay - 1;
+                  if (workCommand = x"1A") then -- GetID
+                     -- todo: do region check here...but why?
+                     if (workDelay = 9) then FifoResponse_reset <= '1'; end if; 
+                     if (workDelay = 8) then 
+                        FifoResponse_Wr <= '1'; 
+                        FifoResponse_Din <= internalStatus; 
+                        if (hasCD = '0') then FifoResponse_Din(3) <= '1'; end if; 
+                        if (hasCD = '1') then FifoResponse_Din(1) <= '1'; end if; 
+                     end if;
+                     if (workDelay = 7) then
+                        FifoResponse_Wr <= '1'; 
+                        FifoResponse_Din <= x"00";
+                        if (hasCD = '0') then FifoResponse_Din(6) <= '1'; end if; 
+                     end if;
+                     if (workDelay = 6) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"20"; end if; -- ? 
+                     if (workDelay = 5) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"00"; end if; -- ? 
+                     if (workDelay = 4) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('S')), 8)); end if; -- todo different regions
+                     if (workDelay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('C')), 8)); end if; 
+                     if (workDelay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if; 
+                     if (workDelay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if; 
+                  end if;
                else
                   working <= '0';
                   if (workCommand = x"1A") then -- GetID
-                     -- todo
+                     if (hasCD = '1') then
+                        startMotorCMD <= '1';
+                     end if;
+                     getIDAck <= '1';
                   else
                      cmd_busy <= '0';
                      driveAck <= '1';
@@ -765,7 +829,44 @@ begin
             if (errorResponseNext_new = '1') then
                FifoResponse_Din        <= errorResponseNext_reason;
                FifoResponse_Wr         <= '1';
-            end if;            
+            end if;  
+
+            -- long test response
+            if (nextCmd = x"19") then
+               if (cmd_delay = 11 and FifoResponse_empty = '0') then 
+                  FifoResponse_reset <= '1'; 
+               end if;
+                    
+               case (FifoParam_Dout) is
+                  when x"04" => -- Reset SCEx counters
+                     if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; startMotorCMD <= '1'; end if;
+               
+                  when x"05" => -- Read SCEx counters
+                     if (cmd_delay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
+                     if (cmd_delay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"00"; end if; -- ?
+                     if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"00"; end if; -- ?
+                  
+                  when x"20" => -- Get CDROM BIOS Date/Version
+                     if (cmd_delay = 4) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"95"; end if;
+                     if (cmd_delay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"05"; end if;
+                     if (cmd_delay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"16"; end if;
+                     if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"C1"; end if;
+                  
+                  when x"22" => -- region (todo: different regions)
+                     if (cmd_delay = 10) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('f')), 8)); end if;
+                     if (cmd_delay = 9)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('o')), 8)); end if;
+                     if (cmd_delay = 8)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('r')), 8)); end if;
+                     if (cmd_delay = 7)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos(' ')), 8)); end if;
+                     if (cmd_delay = 6)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if;
+                     if (cmd_delay = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('u')), 8)); end if;
+                     if (cmd_delay = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('r')), 8)); end if;
+                     if (cmd_delay = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('o')), 8)); end if;
+                     if (cmd_delay = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('p')), 8)); end if;
+                     if (cmd_delay = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('e')), 8)); end if;
+               
+                  when others => null;
+               end case;
+            end if;
             
             if (softReset = '1') then
                FifoParam_reset <= '1';
@@ -1025,6 +1126,10 @@ begin
             
             if (ackRead_valid = '1') then
                readSectorPointer <= writeSectorPointer;
+            end if;
+            
+            if (startMotorCMD = '1') then
+               internalStatus(1) <= '1'; -- motor on
             end if;
             
             if (setMode = '1') then
@@ -1340,6 +1445,15 @@ begin
                newoutputCnt := newoutputCnt + 1;
             end if; 
             driveAck_1 := driveAck or ackDrive or ackRead_valid or ackDriveEnd;
+            
+            if (getIDAck = '1') then
+               write(line_out, string'("RSPFIFO2: "));
+               write(line_out, to_hstring(FifoResponse_Dout));
+               write(line_out, string'(" "));
+               write(line_out, to_hstring(fifoResponseSize));               
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if;
             
             if (processDataSector = '1') then
                write(line_out, string'("WPTR: "));

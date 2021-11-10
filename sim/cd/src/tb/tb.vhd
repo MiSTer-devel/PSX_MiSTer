@@ -15,6 +15,7 @@ architecture arch of etb is
    signal clk1x               : std_logic := '1';
             
    signal reset               : std_logic := '1';
+   signal SS_reset            : std_logic := '1';
    
    -- mdec
    signal bus_addr            : unsigned(3 downto 0) := (others => '0'); 
@@ -26,6 +27,8 @@ architecture arch of etb is
    signal dma_read            : std_logic := '0';
    signal dma_readdata        : std_logic_vector(7 downto 0);
    
+   signal fullyIdle           : std_logic;
+   
    -- testbench
    signal cmdCount            : integer := 0;
    signal clkCount            : integer := 0;
@@ -34,7 +37,8 @@ begin
 
    clk1x  <= not clk1x  after 15 ns;
    
-   reset  <= '0' after 3000 ns;
+   reset     <= '0' after 3000 ns;
+   SS_reset  <= '0' after 1500 ns;
    
    icd_top : entity psx.cd_top
    port map
@@ -45,6 +49,8 @@ begin
 
       hasCD                => '1',
       
+      fullyIdle            => fullyIdle,
+      
       bus_addr             => bus_addr,     
       bus_dataWrite        => bus_dataWrite,
       bus_read             => bus_read,     
@@ -52,7 +58,12 @@ begin
       bus_dataRead         => bus_dataRead,
       
       dma_read             => dma_read,     
-      dma_readdata         => dma_readdata 
+      dma_readdata         => dma_readdata,
+      
+      SS_reset             => SS_reset,
+      SS_DataWrite         => (31 downto 0 => '0'),
+      SS_Adr               => (14 downto 0 => '0'),
+      SS_wren              => '0'
    );
    
    process
@@ -64,6 +75,7 @@ begin
       variable para_time   : std_logic_vector(31 downto 0);
       variable para_data   : std_logic_vector(31 downto 0);
       variable space       : character;
+      variable idleTime    : integer;
    begin
       
       wait until reset = '0';
@@ -82,9 +94,19 @@ begin
          Read(inLine, space);
          HREAD(inLine, para_data);
          
+         idleTime := 0;
+         
          while (clkCount < unsigned(para_time)) loop
             clkCount <= clkCount + 1;
             wait until rising_edge(clk1x);
+            if (fullyIdle = '1') then
+               idleTime := idleTime + 1;
+               if (idleTime > 10000) then
+                  idleTime := 0;
+                  clkCount <= to_integer(unsigned(para_time)) - 1000;
+                  wait until rising_edge(clk1x);
+               end if;
+            end if;
          end loop;
          
          if (para_type = x"08") then
