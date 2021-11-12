@@ -53,6 +53,7 @@ set_global_assignment -name SEED 1
 set_global_assignment -name VERILOG_MACRO "USE_FB=1"
 
 source sys/sys.tcl
+source sys/sys_dual_sdram.tcl
 source sys/sys_analog.tcl
 source files.qip
 set_global_assignment -name VHDL_INPUT_VERSION VHDL_2008
