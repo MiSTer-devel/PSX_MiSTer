@@ -17,7 +17,7 @@ architecture arch of etb is
    signal reset               : std_logic := '1';
    signal SS_reset            : std_logic := '1';
    
-   -- mdec
+   -- cd
    signal bus_addr            : unsigned(3 downto 0) := (others => '0'); 
    signal bus_dataWrite       : std_logic_vector(7 downto 0) := (others => '0');
    signal bus_read            : std_logic := '0';
@@ -28,6 +28,13 @@ architecture arch of etb is
    signal dma_readdata        : std_logic_vector(7 downto 0);
    
    signal fullyIdle           : std_logic;
+   
+   signal cd_req              : std_logic;
+   signal cd_addr             : std_logic_vector(26 downto 0) := (others => '0');
+   signal cd_data             : std_logic_vector(31 downto 0);
+   signal cd_done             : std_logic := '0';
+   
+   signal ram_do              : std_logic_vector(127 downto 0);
    
    -- testbench
    signal cmdCount            : integer := 0;
@@ -60,11 +67,38 @@ begin
       dma_read             => dma_read,     
       dma_readdata         => dma_readdata,
       
+      cd_req               => cd_req,
+      cd_addr              => cd_addr,
+      cd_data              => cd_data,
+      cd_done              => cd_done,
+      
       SS_reset             => SS_reset,
       SS_DataWrite         => (31 downto 0 => '0'),
       SS_Adr               => (14 downto 0 => '0'),
       SS_wren              => '0'
    );
+   
+   isdram_model : entity work.sdram_model 
+   generic map
+   (
+      INITFILE => "test.iso"
+   )
+   port map
+   (
+      clk          => clk1x,
+      addr         => cd_addr,
+      req          => cd_req,
+      ram_128      => '0',
+      rnw          => '1',
+      be           => "0000",
+      di           => x"00000000",
+      do           => ram_do,
+      done         => cd_done,
+      reqprocessed => open,
+      ram_idle     => open
+   );
+   
+   cd_data <= ram_do(31 downto 0);
    
    process
       file infile          : text;

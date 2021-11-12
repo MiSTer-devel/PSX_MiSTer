@@ -38,6 +38,11 @@ entity psx_mister is
       DDRAM_DIN             : out std_logic_vector(63 downto 0);
       DDRAM_BE              : out std_logic_vector(7 downto 0); 
       DDRAM_WE              : out std_logic;
+      -- cd
+      cd_req                : out std_logic := '0';
+      cd_addr               : out std_logic_vector(26 downto 0) := (others => '0');
+      cd_data               : in  std_logic_vector(31 downto 0);
+      cd_done               : in  std_logic;
       -- video
       videoout_on           : in  std_logic;
       isPal                 : in  std_logic;
@@ -135,6 +140,11 @@ begin
       ddr3_BE               => DDRAM_BE,        
       ddr3_WE               => DDRAM_WE,        
       ddr3_RD               => DDRAM_RD,
+      -- cd
+      cd_req                => cd_req, 
+      cd_addr               => cd_addr,
+      cd_data               => cd_data,
+      cd_done               => cd_done,
       -- video
       videoout_on           => videoout_on,
       isPal                 => isPal,

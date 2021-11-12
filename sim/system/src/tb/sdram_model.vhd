@@ -8,12 +8,13 @@ use tb.globals.all;
 entity sdram_model is
    generic
    (
-      DOREFRESH         : std_logic := '0'
+      DOREFRESH         : std_logic := '0';
+      INITFILE          : string := "NONE"
    );
    port 
    (
       clk               : in  std_logic;
-      addr              : in  std_logic_vector(22 downto 0);
+      addr              : in  std_logic_vector(26 downto 0);
       req               : in  std_logic;
       ram_128           : in  std_logic;
       rnw               : in  std_logic;
@@ -35,9 +36,11 @@ architecture arch of sdram_model is
    signal waitcnt    : integer range 0 to 8 := 0;
    
    signal req_buffer  : std_logic := '0';
-   signal addr_buffer : std_logic_vector(22 downto 0);
+   signal addr_buffer : std_logic_vector(26 downto 0);
    
    signal refreshcnt  : integer range 0 to 260 := 0;
+   
+   signal initFromFile : std_logic := '1';
    
 begin
 
@@ -54,7 +57,7 @@ begin
       variable targetpos      : integer;
       variable loadcount      : integer;
       
-      variable addr_rotate    : std_logic_vector(22 downto 0);
+      variable addr_rotate    : std_logic_vector(26 downto 0);
       
       -- copy from std_logic_arith, not used here because numeric std is also included
       function CONV_STD_LOGIC_VECTOR(ARG: INTEGER; SIZE: INTEGER) return STD_LOGIC_VECTOR is
@@ -115,10 +118,10 @@ begin
          end if;
       elsif ((req = '1' or req_buffer = '1') and rnw = '0') then
          ram_idle <= '0';
-         if (be(3) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 3) := to_integer(unsigned(di(31 downto 24))); end if;
-         if (be(2) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 2) := to_integer(unsigned(di(23 downto 16))); end if;
-         if (be(1) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 1) := to_integer(unsigned(di(15 downto  8))); end if;
-         if (be(0) = '1') then data(to_integer(unsigned(addr(22 downto 1)) & '0') + 0) := to_integer(unsigned(di( 7 downto  0))); end if;
+         if (be(3) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 3) := to_integer(unsigned(di(31 downto 24))); end if;
+         if (be(2) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 2) := to_integer(unsigned(di(23 downto 16))); end if;
+         if (be(1) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 1) := to_integer(unsigned(di(15 downto  8))); end if;
+         if (be(0) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 0) := to_integer(unsigned(di( 7 downto  0))); end if;
          waitcnt    <= 1;
          req_buffer <= '0';
          if (refreshcnt >= 260) then
@@ -192,6 +195,22 @@ begin
       
          COMMAND_FILE_ACK_1 <= '1';
       
+      end if;
+      
+      if (initFromFile = '1') then
+         initFromFile <= '0';
+         if (INITFILE /= "NONE") then
+            file_open(f_status, infile, INITFILE, read_mode);
+            targetpos := 0;
+            while (not endfile(infile)) loop
+               read(infile, next_vector, actual_len);  
+               read_byte := CONV_STD_LOGIC_VECTOR(bit'pos(next_vector(0)), 8);
+               data(targetpos) := to_integer(unsigned(read_byte));
+               targetpos       := targetpos + 1;
+            end loop;
+            file_close(infile);
+         end if;
+         
       end if;
 
    

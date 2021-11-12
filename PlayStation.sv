@@ -272,6 +272,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading;
 parameter CONF_STR = {
 	"PlayStation;SS3E000000:400000;",
 	"FS,EXE,Load Exe;",
+	"FS2,ISOBIN,Load Iso;",
 	"-;",
 	"D0RC,Reload Backup RAM;",
 	"D0RD,Save Backup RAM;",
@@ -409,11 +410,12 @@ assign joy = joy_unmod[16] ? 16'b0 : joy_unmod;
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
-reg bios_download, cart_download;
+reg bios_download, cart_download, cd_download;
 always @(posedge clk_1x) begin
 	//code_download <= ioctl_download & &ioctl_index;
-	bios_download <= ioctl_download & !ioctl_index;
-	cart_download <= ioctl_download & ~&ioctl_index & |ioctl_index;
+	bios_download <= ioctl_download & (ioctl_index == 0);
+	cart_download <= ioctl_download & (ioctl_index == 1);
+	cd_download   <= ioctl_download & (ioctl_index == 2);
 end
 
 reg        cart_loaded = 0;
@@ -429,26 +431,26 @@ localparam BIOS_START = 2097152;
 reg [26:0] ramdownload_wraddr;
 reg [31:0] ramdownload_wrdata;
 reg        ramdownload_wr;
-wire       ramdownload_ack;
 
 reg cart_download_1 = 0;
 reg loadExe = 0;
 
 always @(posedge clk_1x) begin
 	ramdownload_wr <= 0;
-	if(cart_download | bios_download) begin
+	if(cart_download | bios_download | cd_download) begin
       if (ioctl_wr) begin
          if(~ioctl_addr[1]) begin
             ramdownload_wrdata[15:0] <= ioctl_dout;
-            if (bios_download) ramdownload_wraddr  <= ioctl_addr[26:0] + BIOS_START[26:0];
-            else               ramdownload_wraddr  <= ioctl_addr[26:0] + EXE_START[26:0];                          
+            if (bios_download)      ramdownload_wraddr  <= ioctl_addr[26:0] + BIOS_START[26:0];
+            else if (cart_download) ramdownload_wraddr  <= ioctl_addr[26:0] + EXE_START[26:0];                          
+            else if (cd_download)   ramdownload_wraddr  <= ioctl_addr[26:0];      
          end else begin
             ramdownload_wrdata[31:16] <= ioctl_dout;
             ramdownload_wr            <= 1;
             ioctl_wait                <= 1;
          end
       end
-      if(sdram_writeack) ioctl_wait <= 0;
+      if(sdram_writeack | sdram_writeack2) ioctl_wait <= 0;
    end else begin 
       ioctl_wait <= 0;
 	end
@@ -520,6 +522,11 @@ psx
    .DDRAM_DIN       (DDRAM_DIN       ),
    .DDRAM_BE        (DDRAM_BE        ),
    .DDRAM_WE        (DDRAM_WE        ),
+   // cd
+   .cd_req          (cd_req),
+   .cd_addr         (cd_addr),
+   .cd_data         (cd_data),
+   .cd_done         (cd_done),
    // video
    .videoout_on     (~status[14]),
    .isPal           (status[15]),
@@ -577,6 +584,7 @@ localparam ROM_START = (65536+131072)*4;
 wire         sdr_refresh;
 wire  [31:0] sdr_sdram_din;
 wire [127:0] sdr_sdram_dout;
+wire [127:0] sdr_sdram_dout2;
 wire  [15:0] sdr_bram_din;
 wire         sdr_sdram_ack;
 wire         sdr_bram_ack;
@@ -584,18 +592,23 @@ wire  [22:0] sdram_addr;
 wire   [3:0] sdram_be;
 wire         sdram_req;
 wire         sdram_ack;
+wire         sdram_ack2;
 wire         sdram_reqprocessed;
 wire         sdram_readack;
+wire         sdram_readack2;
 wire         sdram_writeack;
+wire         sdram_writeack2;
 wire         sdram_rnw;
 wire         sdram_128;
 wire         ram_idle;
 
 assign sdram_ack = sdram_readack | sdram_writeack;
+assign sdram_ack2 = sdram_readack2 | sdram_writeack2;
 
 sdram sdram
 (
 	.*,
+   .SDRAM_EN(1),
 	.init(~pll_locked),
 	.clk(clk_3x),
 	.clk_base(clk_1x),
@@ -626,6 +639,61 @@ sdram sdram
 	.ch3_req(bram_req),
 	.ch3_rnw(~bk_loading),
 	.ch3_ready(sdr_bram_ack)
+);
+
+wire        cd_req;
+wire [26:0] cd_addr;
+wire [31:0] cd_data;
+wire        cd_done;
+
+assign cd_data = sdr_sdram_dout2[31:0];
+assign cd_done = sdram_readack2;
+
+sdram sdram2
+(
+	.SDRAM_DQ   (SDRAM2_DQ),
+   .SDRAM_A    (SDRAM2_A),
+   .SDRAM_DQML (),
+   .SDRAM_DQMH (),
+   .SDRAM_BA   (SDRAM2_BA),
+   .SDRAM_nCS  (SDRAM2_nCS),
+   .SDRAM_nWE  (SDRAM2_nWE),
+   .SDRAM_nRAS (SDRAM2_nRAS),
+   .SDRAM_nCAS (SDRAM2_nCAS),
+   .SDRAM_CKE  (),
+   .SDRAM_CLK  (SDRAM2_CLK),
+   .SDRAM_EN   (SDRAM2_EN),
+
+	.init(~pll_locked),
+	.clk(clk_3x),
+	.clk_base(clk_1x),
+	
+	.refreshForce(1'b0),
+	.ram_idle(),
+
+	.ch1_addr(cd_addr),
+	.ch1_din(),
+	.ch1_dout(sdr_sdram_dout2),
+	.ch1_req(cd_req),
+	.ch1_rnw(1'b1),
+	.ch1_128(1'b0),
+	.ch1_ready(sdram_readack2),
+	.ch1_reqprocessed(),
+
+	.ch2_addr (ramdownload_wraddr),
+	.ch2_din  (ramdownload_wrdata),
+	.ch2_dout (),
+	.ch2_req  ((cd_download) ? ramdownload_wr     : 1'b0),
+	.ch2_rnw  (1'b0),
+   .ch2_be   (4'b1111),
+	.ch2_ready(sdram_writeack2),
+
+	.ch3_addr({sd_lba[7:0],bram_addr}),
+	.ch3_din(bram_dout),
+	.ch3_dout(),
+	.ch3_req(1'b0),
+	.ch3_rnw(1'b1),
+	.ch3_ready()
 );
 
 //wire [63:0] ss_dout, ss_din;

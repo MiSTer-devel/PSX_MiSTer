@@ -27,6 +27,11 @@ entity cd_top is
       dma_read             : in  std_logic;
       dma_readdata         : out std_logic_vector(7 downto 0);
       
+      cd_req               : out std_logic := '0';
+      cd_addr              : out std_logic_vector(26 downto 0) := (others => '0');
+      cd_data              : in  std_logic_vector(31 downto 0);
+      cd_done              : in  std_logic;
+      
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(14 downto 0);
@@ -181,7 +186,6 @@ architecture arch of cd_top is
 		SFETCH_IDLE,
       SFETCH_DELAY,
       SFETCH_START,
-		SFETCH_FIRST,
 		SFETCH_DATA
 	);
    signal sectorFetchState          : tsectorFetch := SFETCH_IDLE;
@@ -234,10 +238,6 @@ architecture arch of cd_top is
    signal copySize                  : integer range 0 to 588;    
    signal copyReadAddr              : integer range 0 to 588;
    signal copyReadData              : std_logic_vector(31 downto 0); 
-      
-   --test cd
-   signal cd_addr                   : std_logic_vector(14 downto 0) := (others => '0');
-   signal cd_data                   : std_logic_vector(31 downto 0);
       
    -- savestates
    type t_ssarray is array(0 to 127) of std_logic_vector(31 downto 0);
@@ -1165,6 +1165,7 @@ begin
       if (rising_edge(clk1x)) then
 
          FifoData_Wr  <= '0';
+         cd_req       <= '0';
 
          if (reset = '1') then
             
@@ -1194,24 +1195,25 @@ begin
                   end if;   
                   
                when SFETCH_START =>
-                  sectorFetchState <= SFETCH_FIRST;
+                  sectorFetchState <= SFETCH_DATA;
                   if (positionInIndex = lbaCount) then
                      trackNumberBCD <= x"AA";
                   else
                      trackNumberBCD <= x"01"; -- todo
                   end if;
-                  cd_addr <= std_logic_vector(to_unsigned(positionInIndex * (2352 / 4), 15)); -- todo: needs more bits for real CD
-               
-               when SFETCH_FIRST =>
-                  sectorFetchState <= SFETCH_DATA;
-                  cd_addr          <= std_logic_vector(unsigned(cd_addr) + 1);
+                  cd_addr <= std_logic_vector(to_unsigned(positionInIndex * 2352, 27)); -- todo: needs more bits for real CD
+                  cd_req  <= '1';
                
                when SFETCH_DATA =>
-                  cd_addr          <= std_logic_vector(unsigned(cd_addr) + 1);
-                  fetchCount       <= fetchCount + 1;
-                  sectorBuffer(fetchCount) <= cd_data;
-                  if (fetchCount = 587) then
-                     sectorFetchState  <= SFETCH_IDLE;
+                  if (cd_done = '1') then
+                     sectorBuffer(fetchCount) <= cd_data;
+                     if (fetchCount = 587) then
+                        sectorFetchState  <= SFETCH_IDLE;
+                     else
+                        fetchCount  <= fetchCount + 1;
+                        cd_addr     <= std_logic_vector(unsigned(cd_addr) + 4);
+                        cd_req      <= '1';
+                     end if;
                   end if;
                   
             end case;
@@ -1332,14 +1334,6 @@ begin
          end if; -- ce
       end if;
    end process;
-   
-   itestiso : entity work.testiso 
-   port map
-   (
-      clk     => clk1x,
-      address => cd_addr,
-      data    => cd_data
-   );
    
 --##############################################################
 --############################### savestates

@@ -194,6 +194,11 @@ begin
       DDRAM_DIN             => DDRAM_DIN,       
       DDRAM_BE              => DDRAM_BE,        
       DDRAM_WE              => DDRAM_WE,
+      -- cd
+      cd_req                => open, 
+      cd_addr               => open,
+      cd_data               => x"00000000",
+      cd_done               => '0',
       -- video
       videoout_on           => '1',
       isPal                 => '1',
@@ -257,7 +262,7 @@ begin
    port map
    (
       clk          => clk33,
-      addr         => ram_Adr,
+      addr         => "0000" & ram_Adr,
       req          => ram_ena,
       ram_128      => ram_128,
       rnw          => ram_rnw,
