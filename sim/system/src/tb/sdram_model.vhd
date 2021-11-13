@@ -23,7 +23,8 @@ entity sdram_model is
       do                : out std_logic_vector(127 downto 0);
       done              : out std_logic := '0';
       reqprocessed      : out std_logic := '0';
-      ram_idle          : out std_logic := '0'
+      ram_idle          : out std_logic := '0';
+      fileSize          : out unsigned(29 downto 0) := (others => '0')
    );
 end entity;
 
@@ -208,6 +209,7 @@ begin
                data(targetpos) := to_integer(unsigned(read_byte));
                targetpos       := targetpos + 1;
             end loop;
+            fileSize <= to_unsigned(targetpos, 30);
             file_close(infile);
          end if;
          

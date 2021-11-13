@@ -13,6 +13,7 @@ entity cd_top is
       reset                : in  std_logic;
       
       hasCD                : in  std_logic;
+      cdSize               : in  unsigned(29 downto 0);
       
       fullyIdle            : out std_logic;
       
@@ -52,8 +53,6 @@ architecture arch of cd_top is
    constant LEAD_OUT_TRACK_NUMBER   : unsigned(7 downto 0) := x"AA";
    constant startLBA                : integer := 150; -- todo: is this really constant?
    
-   constant lbaCount                : integer := 27; -- todo: CD size / RAW_SECTOR_SIZE;
-   
    -- data fifo
    signal FifoData_reset            : std_logic := '0';
    signal FifoData_Din              : std_logic_vector(7 downto 0) := (others => '0');
@@ -73,6 +72,7 @@ architecture arch of cd_top is
    
    signal pendingDriveIRQ           : std_logic := '0';
    signal pendingDriveResponse      : std_logic_vector(7 downto 0);
+   signal ackPendingIRQ             : std_logic := '0';
    signal ackRead_valid             : std_logic := '0';
             
    signal FifoParam_reset           : std_logic := '0';
@@ -92,13 +92,14 @@ architecture arch of cd_top is
    signal fifoParamCount            : integer range 0 to 16;
    signal working                   : std_logic := '0';
    signal workCommand               : std_logic_vector(7 downto 0);
-   signal workDelay                 : integer range 0 to 399999;
+   signal workDelay                 : integer range 0 to 3999999;
    signal cmdAck                    : std_logic := '0';
    signal cmdIRQ                    : std_logic := '0';
    signal driveAck                  : std_logic := '0';
    signal getIDAck                  : std_logic := '0';
    signal startMotorCMD             : std_logic := '0';
    signal softReset                 : std_logic := '0';
+   signal ackPendingIRQNext         : std_logic := '0';
          
    signal setLocActive              : std_logic := '0';
    signal setLocReadStep            : integer range 0 to 5;
@@ -238,6 +239,13 @@ architecture arch of cd_top is
    signal copySize                  : integer range 0 to 588;    
    signal copyReadAddr              : integer range 0 to 588;
    signal copyReadData              : std_logic_vector(31 downto 0); 
+   
+   signal copySectorPointer         : unsigned(2 downto 0) := (others => '0');
+   signal ackRead_data              : std_logic := '0';
+      
+   -- size calculation
+   signal lbaCount                  : integer range 0 to 262143; 
+   signal cdSize_work               : unsigned(29 downto 0);
       
    -- savestates
    type t_ssarray is array(0 to 127) of std_logic_vector(31 downto 0);
@@ -286,6 +294,7 @@ begin
          FifoResponse_Rd   <= '0';
          FifoParam_Wr      <= '0';
          ackRead_valid     <= '0';
+         ackPendingIRQ     <= '0';
          FifoData_reset    <= '0';
          copyData          <= '0';
          cmd_unpause       <= '0';
@@ -344,8 +353,9 @@ begin
                               newFlags := CDROM_IRQFLAG and (not bus_dataWrite(4 downto 0));
                               CDROM_IRQFLAG <= newFlags;
                               if (newFlags = "00000") then
-                                 if (pendingDriveIRQ) then
-                                    -- todo: generate irq from drive 
+                                 if (pendingDriveIRQ = '1') then
+                                    pendingDriveIRQ <= '0';
+                                    ackPendingIRQ   <= '1';
                                  else
                                     if (cmd_delay > 0) then
                                        cmd_unpause <= '1';
@@ -433,7 +443,7 @@ begin
                end if;
             end if;
             
-            if (ackRead = '1') then
+            if (ackRead = '1' or ackRead_data = '1') then
                if (CDROM_IRQFLAG = "00001") then -- irq still pending, sector missed
                   -- todo: nothing can be done?
                elsif (CDROM_IRQFLAG /= "00000") then
@@ -445,6 +455,13 @@ begin
                      irqOut <= '1';
                   end if;
                   ackRead_valid <= '1';
+               end if;
+            end if;
+            
+            if (ackPendingIRQNext = '1') then
+               CDROM_IRQFLAG <= "00001";
+               if (CDROM_IRQENA(0) = '1') then
+                  irqOut <= '1';
                end if;
             end if;
             
@@ -570,7 +587,7 @@ begin
                   FifoParam_reset         <= '1';
                else
                
-                  if (FifoResponse_empty = '0' and nextCmd /= x"19") then
+                  if (FifoResponse_empty = '0' and nextCmd /= x"13" and nextCmd /= x"19") then
                      FifoResponse_reset <= '1';
                   end if;
                   
@@ -587,6 +604,7 @@ begin
                         
                      when x"02" => -- Setloc
                         setLocReadStep <= 5;
+                        setLocActive   <= '1';
                         cmdAck         <= '1';
                         cmdPending     <= '0';
                         
@@ -611,13 +629,13 @@ begin
                         cmdAck      <= '1';
                         cmdPending  <= '0';
                         working     <= '1';
-                        workDelay   <= 7000;
+                        workDelay   <= 7000 - 2;
                         workCommand <= nextCmd;
                         if (driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
                            if (modeReg(7) = '1') then
-                              workDelay  <= 200000;
+                              workDelay  <= 2000000 - 2;
                            else
-                              workDelay  <= 100000;
+                              workDelay  <= 1000000 - 2;
                            end if;
                         end if;
                         if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
@@ -646,10 +664,14 @@ begin
                         end if;
                      
                      when x"0B" => -- mute
-                        --todo
+                        --todo muted = true;
+                        cmdAck      <= '1';
+                        cmdPending  <= '0';
                         
                      when x"0C" => -- demute
-                        --todo
+                        --todo muted = false;
+                        cmdAck      <= '1';
+                        cmdPending  <= '0';
                         
                      when x"0D" => -- setfilter
                         --todo
@@ -674,7 +696,8 @@ begin
                         --todo
                         
                      when x"13" => -- GetTN
-                        --todo
+                        cmdIRQ         <= '1';
+                        cmdPending     <= '0';
                         
                      when x"14" => -- GetTD
                         --todo
@@ -747,6 +770,10 @@ begin
                   end case;
                   
                end if;
+            end if;
+            
+            if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1') then
+               setLocActive <= '0';
             end if;
             
             -- processing of commands that take several parameters
@@ -829,7 +856,26 @@ begin
             if (errorResponseNext_new = '1') then
                FifoResponse_Din        <= errorResponseNext_reason;
                FifoResponse_Wr         <= '1';
-            end if;  
+            end if; 
+
+            ackPendingIRQNext <= ackPendingIRQ;
+            if (ackPendingIRQ = '1') then
+               FifoResponse_reset <= '1';
+            end if;
+            if (ackPendingIRQNext = '1') then
+               FifoResponse_Din  <= pendingDriveResponse;
+               FifoResponse_Wr   <= '1';
+            end if;
+            
+            -- long GetTN response
+            if (nextCmd = x"13") then
+               if (cmd_delay = 4 and FifoResponse_empty = '0') then 
+                  FifoResponse_reset <= '1'; 
+               end if;
+               if (cmd_delay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
+               if (cmd_delay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"01"; end if; -- todo:  first track number
+               if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"01"; end if; -- todo:  last track number
+            end if;
 
             -- long test response
             if (nextCmd = x"19") then
@@ -951,11 +997,11 @@ begin
                internalStatus(1) <= '1';
                
                if (currentLBA /= 0) then
-                  -- todo
-               	--driveState = DRIVESTATE::SEEKIMPLICIT;
-                  --seekStartLBA = currentLBA;
+               	driveState <= DRIVE_SEEKIMPLICIT;
+                  --seekStartLBA = currentLBA; -- todo
                   --seekEndLBA = 0;
-                  --readOnDisk(0);
+                  readOnDisk   <= '1';
+                  readLBA      <= 0;
                else
                   driveState <= DRIVE_SPEEDCHANGEORTOCREAD;
                end if;
@@ -1020,7 +1066,6 @@ begin
                         errorResponseDrive_error  <= x"04";
                         errorResponseDrive_reason <= x"04";
                      end if;
-                     ackDrive <= '1';
                      
                      
                   when DRIVE_READING | DRIVE_PLAYING =>
@@ -1040,7 +1085,7 @@ begin
                         driveDelay   <= driveDelayNext;
                         driveBusy    <= '1';
                         ackRead      <= '1';
-                        -- todo: currentLBA   <= lastReadSector;
+                        currentLBA   <= lastReadSector;
                         -- todo: physical lba position?
                         -- todo: subdata = nextSubdata
                         readOnDisk   <= '1';
@@ -1066,14 +1111,16 @@ begin
                seekLBA               <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
                readLBA               <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
                readOnDisk            <= '1';
-               readAfterSeek         <= '0';
-               playAfterSeek         <= '0';
-               lastSectorHeaderValid <= '0';
+               if (seekOnDiskCmd = '1') then
+                  readAfterSeek         <= '0';
+                  playAfterSeek         <= '0';
+                  lastSectorHeaderValid <= '0';
+               end if;
                internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                internalStatus(1)          <= '1'; -- motor on
                internalStatus(6)          <= '1'; -- seeking
-               driveDelay     <= 19999; -- todo: real seek time
-               driveDelayNext <= 19999; -- todo: real seek time
+               driveDelay     <= 19999 - 2; -- todo: real seek time
+               driveDelayNext <= 19999 - 2; -- todo: real seek time
                driveBusy      <= '1';
                if (nextCmd = x"15") then
                   driveState  <= DRIVE_SEEKLOGICAL;
@@ -1106,8 +1153,8 @@ begin
                --todo: check for seekstate required? should never end here when still in seek?
                internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                internalStatus(1)          <= '1'; -- motor on
-               driveDelay         <= 9999; -- todo: real read time
-               driveDelayNext     <= 9999; -- todo: real read time
+               driveDelay         <= 9999 - 1; -- todo: real read time
+               driveDelayNext     <= 9999 - 1; -- todo: real read time
                driveBusy          <= '1';
                driveState         <= DRIVE_READING;
                writeSectorPointer <= (others => '0');
@@ -1124,7 +1171,7 @@ begin
                internalStatus(4) <= '0';
             end if;
             
-            if (ackRead_valid = '1') then
+            if (ackRead_valid = '1' or ackPendingIRQ = '1') then
                readSectorPointer <= writeSectorPointer;
             end if;
             
@@ -1155,7 +1202,6 @@ begin
    end process;
    
    
-   -- todo: readOnDisk 
    -- todo: readSubchannel 
    -- todo : seekOK
    
@@ -1166,6 +1212,7 @@ begin
 
          FifoData_Wr  <= '0';
          cd_req       <= '0';
+         ackRead_data <= '0';
 
          if (reset = '1') then
             
@@ -1181,7 +1228,11 @@ begin
                when SFETCH_IDLE =>
                   if (readOnDisk = '1') then
                      lastReadSector   <= readLBA;
-                     positionInIndex  <= readLBA - startLBA;
+                     if (readLBA >= startLBA) then
+                        positionInIndex <= readLBA - startLBA;
+                     else
+                        positionInIndex <= 0;
+                     end if;
                      sectorFetchState <= SFETCH_DELAY;
                      fetchCount       <= 0;
                      fetchDelay       <= 15;
@@ -1206,7 +1257,11 @@ begin
                
                when SFETCH_DATA =>
                   if (cd_done = '1') then
-                     sectorBuffer(fetchCount) <= cd_data;
+                     if (readLBA >= startLBA) then
+                        sectorBuffer(fetchCount) <= cd_data;
+                     else
+                        sectorBuffer(fetchCount) <= (others => '0');
+                     end if;
                      if (fetchCount = 587) then
                         sectorFetchState  <= SFETCH_IDLE;
                      else
@@ -1277,14 +1332,15 @@ begin
             end case;
             
 
-            copyReadData <= sectorBuffers(to_integer(readSectorPointer))(copyReadAddr);
+            copyReadData <= sectorBuffers(to_integer(copySectorPointer))(copyReadAddr);
             case (copyState) is
             
                when COPY_IDLE =>
                   if (copyData = '1') then
-                     copyState      <= COPY_FIRST;
-                     copyCount      <= 0;
-                     copyReadAddr   <= 0;
+                     copyState         <= COPY_FIRST;
+                     copyCount         <= 0;
+                     copyReadAddr      <= 0;
+                     copySectorPointer <= readSectorPointer;
                      if (sectorBufferSizes(to_integer(readSectorPointer)) = 0) then
                         copySize <= RAW_SECTOR_OUTPUT_SIZE / 4;
                      else
@@ -1318,7 +1374,7 @@ begin
                         copyCount    <= copyCount + 1;
                         if (copyCount = (copySize - 1)) then
                            copyState  <= COPY_CHECKPTR;
-                           sectorBufferSizes(to_integer(readSectorPointer)) <= 0;
+                           sectorBufferSizes(to_integer(copySectorPointer)) <= 0;
                         end if;
                      when others => null;
                   end case;
@@ -1326,12 +1382,33 @@ begin
                when COPY_CHECKPTR =>
                   copyState <= COPY_IDLE;
                   if (sectorBufferSizes(to_integer(writeSectorPointer)) /= 0) then
-                     -- todo: additional irq for missed sector
+                     -- additional irq for missed sector
+                     ackRead_data <= '1';
                   end if;
                  
             end case;
    
          end if; -- ce
+      end if;
+   end process;
+   
+   -- size calculation
+   process(clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+         if (reset = '1') then
+            cdSize_work <= cdSize;
+            lbaCount    <= 0;
+         else
+            if (cdSize_work > 0) then
+               lbaCount <= lbaCount + 1;
+               if (cdSize_work >= RAW_SECTOR_SIZE) then
+                  cdSize_work <= cdSize_work - RAW_SECTOR_SIZE;
+               else
+                  cdSize_work <= (others => '0');
+               end if;
+            end if;
+         end if;   
       end if;
    end process;
    
@@ -1367,21 +1444,31 @@ begin
    
    begin
       process
-         file outfile               : text;
-         variable f_status          : FILE_OPEN_STATUS;
-         variable line_out          : line;
+         constant WRITETIME            : std_logic := '1';
          
-         variable bus_read_1        : std_logic;
-         variable cmdAck_1          : std_logic;
-         variable driveAck_1        : std_logic;
-         variable fifoResponseSize  : unsigned(31 downto 0);
-         variable newoutputCnt      : unsigned(31 downto 0); 
-         variable fifoDataWrCnt     : unsigned(7 downto 0);
+         file outfile                  : text;
+         variable f_status             : FILE_OPEN_STATUS;
+         variable line_out             : line;
+            
+         variable clkCounter           : unsigned(31 downto 0);
+            
+         variable bus_read_1           : std_logic;
+         variable cmdAck_1             : std_logic;
+         variable driveAck_1           : std_logic;
+         variable ackDrive_1           : std_logic;
+         variable ackRead_valid_1      : std_logic;
+         variable ackDriveEnd_1        : std_logic;
+         variable ackPendingIRQNext_1  : std_logic;
+         variable fifoResponseSize     : unsigned(31 downto 0);
+         variable newoutputCnt         : unsigned(31 downto 0); 
+         variable fifoDataWrCnt        : unsigned(7 downto 0);
       begin
    
          file_open(f_status, outfile, "R:\\debug_cd_sim.txt", write_mode);
          file_close(outfile);
          file_open(f_status, outfile, "R:\\debug_cd_sim.txt", append_mode);
+         
+         clkCounter := (others => '0');
          
          while (true) loop
             
@@ -1393,27 +1480,12 @@ begin
             
             newoutputCnt := outputCnt;
             
-            if (bus_write = '1') then
-               write(line_out, string'("CPUWRITE: 0")); 
-               write(line_out, to_hstring(bus_addr));
-               write(line_out, string'(" 000000")); 
-               write(line_out, to_hstring(bus_dataWrite));
-               writeline(outfile, line_out);
-               newoutputCnt := newoutputCnt + 1;
-            end if; 
-            
-            if (bus_read_1 = '1') then
-               write(line_out, string'("CPUREAD: 0")); 
-               write(line_out, to_hstring(bus_addr));
-               write(line_out, string'(" 000000")); 
-               write(line_out, to_hstring(bus_dataRead));
-               writeline(outfile, line_out);
-               newoutputCnt := newoutputCnt + 1;
-            end if; 
-            bus_read_1 := bus_read;
-            
             if (beginCommand = '1') then
                write(line_out, string'("CMD: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter - 1));
+                  write(line_out, string'(" ")); 
+               end if;
                write(line_out, to_hstring(nextCmd));
                write(line_out, string'(" 00000000")); 
                writeline(outfile, line_out);
@@ -1422,26 +1494,47 @@ begin
             
             if (cmdAck_1 = '1') then
                write(line_out, string'("RSPFIFO: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter - 3));
+                  write(line_out, string'(" ")); 
+               end if;
                write(line_out, to_hstring(FifoResponse_Din));
                write(line_out, string'(" "));
                write(line_out, to_hstring(fifoResponseSize));               
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
             end if; 
-            cmdAck_1 := cmdAck;            
+            cmdAck_1 := cmdAck or cmdIRQ;            
             
-            if (driveAck_1 = '1') then
+            if (driveAck_1 = '1' or ackDrive_1 = '1' or ackRead_valid_1 = '1' or ackDriveEnd_1 = '1' or ackPendingIRQNext_1 = '1') then
                write(line_out, string'("RSPFIFO2: "));
+               if (WRITETIME = '1') then
+                  if (driveAck_1 = '1') then write(line_out, to_hstring(clkCounter - 3));
+                  elsif (ackDrive_1 = '1') then write(line_out, to_hstring(clkCounter - 3));
+                  elsif (ackRead_valid_1 = '1') then write(line_out, to_hstring(clkCounter - 6));
+                  elsif (ackDriveEnd_1 = '1') then write(line_out, to_hstring(clkCounter - 5));
+                  elsif (ackPendingIRQNext_1 = '1') then write(line_out, to_hstring(clkCounter - 5));
+                  end if;
+                  write(line_out, string'(" ")); 
+               end if;
                write(line_out, to_hstring(FifoResponse_Din));
                write(line_out, string'(" "));
                write(line_out, to_hstring(fifoResponseSize));               
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
             end if; 
-            driveAck_1 := driveAck or ackDrive or ackRead_valid or ackDriveEnd;
+            driveAck_1 := driveAck;
+            ackDrive_1 := ackDrive;
+            ackRead_valid_1 := ackRead_valid;
+            ackDriveEnd_1 := ackDriveEnd;
+            ackPendingIRQNext_1 := ackPendingIRQNext;
             
             if (getIDAck = '1') then
                write(line_out, string'("RSPFIFO2: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter - 3));
+                  write(line_out, string'(" ")); 
+               end if;
                write(line_out, to_hstring(FifoResponse_Dout));
                write(line_out, string'(" "));
                write(line_out, to_hstring(fifoResponseSize));               
@@ -1451,6 +1544,10 @@ begin
             
             if (processDataSector = '1') then
                write(line_out, string'("WPTR: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter - 4));
+                  write(line_out, string'(" ")); 
+               end if;
                if (modeReg(5) = '1') then
                   write(line_out, string'("24"));
                else
@@ -1481,8 +1578,36 @@ begin
             --   newoutputCnt := newoutputCnt + 1;
             --end if; 
             
+            if (bus_write = '1') then
+               write(line_out, string'("CPUWRITE: ")); 
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter));
+               end if;
+               write(line_out, string'(" 0")); 
+               write(line_out, to_hstring(bus_addr));
+               write(line_out, string'(" 000000")); 
+               write(line_out, to_hstring(bus_dataWrite));
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if; 
+            
+            if (bus_read_1 = '1') then
+               write(line_out, string'("CPUREAD: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter - 1));
+               end if;
+               write(line_out, string'(" 0")); 
+               write(line_out, to_hstring(bus_addr));
+               write(line_out, string'(" 000000")); 
+               write(line_out, to_hstring(bus_dataRead));
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if; 
+            bus_read_1 := bus_read;
+            
             
             outputCnt <= newoutputCnt;
+            clkCounter := clkCounter + 1;
            
          end loop;
          

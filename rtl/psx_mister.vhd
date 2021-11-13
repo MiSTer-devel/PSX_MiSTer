@@ -39,6 +39,7 @@ entity psx_mister is
       DDRAM_BE              : out std_logic_vector(7 downto 0); 
       DDRAM_WE              : out std_logic;
       -- cd
+      cd_Size               : in  unsigned(29 downto 0);
       cd_req                : out std_logic := '0';
       cd_addr               : out std_logic_vector(26 downto 0) := (others => '0');
       cd_data               : in  std_logic_vector(31 downto 0);
@@ -141,6 +142,7 @@ begin
       ddr3_WE               => DDRAM_WE,        
       ddr3_RD               => DDRAM_RD,
       -- cd
+      cd_Size               => cd_Size,
       cd_req                => cd_req, 
       cd_addr               => cd_addr,
       cd_data               => cd_data,

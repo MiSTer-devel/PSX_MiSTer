@@ -36,6 +36,8 @@ architecture arch of etb is
    
    signal ram_do              : std_logic_vector(127 downto 0);
    
+   signal cdSize              : unsigned(29 downto 0);
+   
    -- testbench
    signal cmdCount            : integer := 0;
    signal clkCount            : integer := 0;
@@ -55,6 +57,7 @@ begin
       reset                => reset,  
 
       hasCD                => '1',
+      cdSize               => cdSize,
       
       fullyIdle            => fullyIdle,
       
@@ -81,7 +84,7 @@ begin
    isdram_model : entity work.sdram_model 
    generic map
    (
-      INITFILE => "test.iso"
+      --INITFILE => "test_triangle.iso"
    )
    port map
    (
@@ -95,7 +98,8 @@ begin
       do           => ram_do,
       done         => cd_done,
       reqprocessed => open,
-      ram_idle     => open
+      ram_idle     => open,
+      fileSize     => cdSize
    );
    
    cd_data <= ram_do(31 downto 0);
@@ -112,8 +116,6 @@ begin
       variable idleTime    : integer;
    begin
       
-      wait until reset = '0';
-         
       file_open(f_status, infile, "R:\cd_test_fpsxa.txt", read_mode);
       
       while (not endfile(infile)) loop
@@ -135,11 +137,11 @@ begin
             wait until rising_edge(clk1x);
             if (fullyIdle = '1') then
                idleTime := idleTime + 1;
-               if (idleTime > 10000) then
-                  idleTime := 0;
-                  clkCount <= to_integer(unsigned(para_time)) - 1000;
-                  wait until rising_edge(clk1x);
-               end if;
+               --if (idleTime > 10000) then
+               --   idleTime := 0;
+               --   clkCount <= to_integer(unsigned(para_time)) - 1000;
+               --   wait until rising_edge(clk1x);
+               --end if;
             end if;
          end loop;
          

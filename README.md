@@ -4,6 +4,8 @@
 # HW Requirements/Features
 SDRam of any size is required.
 
+Second SDRam is required to boot iso/bin files for now(requirement will be removed later)
+
 # Bios
 Only scph1001.bin tested.
 Rename to boot.rom
@@ -26,7 +28,7 @@ Work in progress, don't report any bugs!
 
 - some games working with savestate loading
 - BIOS startup working
-- no booting from CD
+- booting of simple test CDs working(no games!)
 
 --
 

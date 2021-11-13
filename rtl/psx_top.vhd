@@ -43,6 +43,7 @@ entity psx_top is
       ddr3_WE               : out std_logic := '0';
       ddr3_RD               : out std_logic := '0'; 
       -- cd
+      cd_Size               : in  unsigned(29 downto 0);
       cd_req                : out std_logic := '0';
       cd_addr               : out std_logic_vector(26 downto 0) := (others => '0');
       cd_data               : in  std_logic_vector(31 downto 0);
@@ -663,6 +664,7 @@ begin
       dma_read             => DMA_CD_readEna,
       dma_readdata         => DMA_CD_read,
       
+      cdSize               => cd_Size,
       cd_req               => cd_req, 
       cd_addr              => cd_addr,
       cd_data              => cd_data,

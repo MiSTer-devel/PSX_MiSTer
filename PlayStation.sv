@@ -258,7 +258,7 @@ pll pll
 //   end
 //end
 
-wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading;
+wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_download;
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
@@ -432,7 +432,10 @@ reg [26:0] ramdownload_wraddr;
 reg [31:0] ramdownload_wrdata;
 reg        ramdownload_wr;
 
+reg[29:0]  cd_Size;
+
 reg cart_download_1 = 0;
+reg cd_download_1 = 0;
 reg loadExe = 0;
 
 always @(posedge clk_1x) begin
@@ -443,7 +446,7 @@ always @(posedge clk_1x) begin
             ramdownload_wrdata[15:0] <= ioctl_dout;
             if (bios_download)      ramdownload_wraddr  <= ioctl_addr[26:0] + BIOS_START[26:0];
             else if (cart_download) ramdownload_wraddr  <= ioctl_addr[26:0] + EXE_START[26:0];                          
-            else if (cd_download)   ramdownload_wraddr  <= ioctl_addr[26:0];      
+            else if (cd_download)   ramdownload_wraddr  <= ioctl_addr[26:0] ;      
          end else begin
             ramdownload_wrdata[31:16] <= ioctl_dout;
             ramdownload_wr            <= 1;
@@ -455,7 +458,10 @@ always @(posedge clk_1x) begin
       ioctl_wait <= 0;
 	end
    cart_download_1 <= cart_download;
-   loadExe         <= cart_download_1 & ~cart_download;
+   loadExe         <= cart_download_1 & ~cart_download;   
+   
+   cd_download_1 <= cd_download;
+   if (cd_download_1 & ~cd_download) cd_Size <= ioctl_addr;
 end
 
 ///////////////////////////  SAVESTATE  /////////////////////////////////
@@ -523,6 +529,7 @@ psx
    .DDRAM_BE        (DDRAM_BE        ),
    .DDRAM_WE        (DDRAM_WE        ),
    // cd
+   .cd_Size         (cd_Size),
    .cd_req          (cd_req),
    .cd_addr         (cd_addr),
    .cd_data         (cd_data),

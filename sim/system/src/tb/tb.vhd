@@ -195,6 +195,7 @@ begin
       DDRAM_BE              => DDRAM_BE,        
       DDRAM_WE              => DDRAM_WE,
       -- cd
+      cd_Size               => (29 downto 0 => '0'),
       cd_req                => open, 
       cd_addr               => open,
       cd_data               => x"00000000",
@@ -262,7 +263,8 @@ begin
    port map
    (
       clk          => clk33,
-      addr         => "0000" & ram_Adr,
+      addr(26 downto 23) => "0000",
+      addr(22 downto  0) =>  ram_Adr,
       req          => ram_ena,
       ram_128      => ram_128,
       rnw          => ram_rnw,
