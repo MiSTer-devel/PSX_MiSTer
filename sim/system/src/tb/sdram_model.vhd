@@ -31,7 +31,7 @@ end entity;
 architecture arch of sdram_model is
 
    -- not full size, because of memory required
-   type t_data is array(0 to (2**25)-1) of integer;
+   type t_data is array(0 to (2**27)-1) of integer;
    type bit_vector_file is file of bit_vector;
    
    signal waitcnt    : integer range 0 to 8 := 0;
@@ -110,8 +110,8 @@ begin
             if (rnw = '1') then
                addr_rotate := addr_buffer;
                for i in 0 to 7 loop
-                  do(7  + (i * 16) downto     (i * 16))  <= std_logic_vector(to_unsigned(data(to_integer(unsigned(addr_rotate(22 downto 1)) & '0') + 0), 8));
-                  do(15 + (i * 16) downto 8 + (i * 16))  <= std_logic_vector(to_unsigned(data(to_integer(unsigned(addr_rotate(22 downto 1)) & '0') + 1), 8));
+                  do(7  + (i * 16) downto     (i * 16))  <= std_logic_vector(to_unsigned(data(to_integer(unsigned(addr_rotate(26 downto 1)) & '0') + 0), 8));
+                  do(15 + (i * 16) downto 8 + (i * 16))  <= std_logic_vector(to_unsigned(data(to_integer(unsigned(addr_rotate(26 downto 1)) & '0') + 1), 8));
                   addr_rotate(3 downto 1) := std_logic_vector(unsigned(addr_rotate(3 downto 1)) + 1); 
                end loop;
             end if;

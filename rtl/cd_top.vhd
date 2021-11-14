@@ -246,6 +246,11 @@ architecture arch of cd_top is
    -- size calculation
    signal lbaCount                  : integer range 0 to 262143; 
    signal cdSize_work               : unsigned(29 downto 0);
+   signal lbaCount_work             : integer range 0 to 262143; 
+   signal cd_SecondsHigh            : unsigned(3 downto 0); 
+   signal cd_SecondsLow             : unsigned(3 downto 0); 
+   signal cd_MinutesHigh            : unsigned(3 downto 0); 
+   signal cd_MinutesLow             : unsigned(3 downto 0); 
       
    -- savestates
    type t_ssarray is array(0 to 127) of std_logic_vector(31 downto 0);
@@ -565,7 +570,10 @@ begin
                   when others => paramCount <= 0;
                end case;
             elsif (pause_cmd = '1') then
-               cmd_busy <= '0';
+               cmd_busy  <= '0';
+               if (cmd_busy = '1') then
+                  cmd_delay <= cmd_delay + 2;
+               end if;
             elsif (cmd_unpause = '1') then
                cmd_busy <= '1';
             elsif (cmd_busy = '1') then
@@ -587,7 +595,7 @@ begin
                   FifoParam_reset         <= '1';
                else
                
-                  if (FifoResponse_empty = '0' and nextCmd /= x"13" and nextCmd /= x"19") then
+                  if (FifoResponse_empty = '0' and nextCmd /= x"13" and nextCmd /= x"14" and nextCmd /= x"19") then
                      FifoResponse_reset <= '1';
                   end if;
                   
@@ -700,7 +708,19 @@ begin
                         cmdPending     <= '0';
                         
                      when x"14" => -- GetTD
-                        --todo
+                        FifoParam_Rd <= '1';
+                        if (hasCD = '0') then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"80";
+                        elsif (unsigned(FifoParam_Dout) > 1) then -- todo: gettrackCount, currently fake there is only 1 track
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"10";
+                        else
+                           cmdIRQ         <= '1';
+                           cmdPending     <= '0';
+                        end if;
                         
                      when x"15" | x"16" => -- SeekL/SeekP
                         --todo: if seeking, update position?
@@ -875,6 +895,26 @@ begin
                if (cmd_delay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
                if (cmd_delay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"01"; end if; -- todo:  first track number
                if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"01"; end if; -- todo:  last track number
+            end if;
+            
+            -- long GetTD response
+            -- track 0 -> total size of CD
+            if (nextCmd = x"14" and hasCD = '1' and FifoParam_Dout = x"00") then
+               if (cmd_delay = 4 and FifoResponse_empty = '0') then 
+                  FifoResponse_reset <= '1'; 
+               end if;
+               if (cmd_delay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
+               if (cmd_delay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(cd_MinutesHigh & cd_MinutesLow); end if;
+               if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(cd_SecondsHigh & cd_SecondsLow); end if;
+            end if;
+            -- track 1
+            if (nextCmd = x"14" and hasCD = '1' and FifoParam_Dout = x"01") then
+               if (cmd_delay = 4 and FifoResponse_empty = '0') then 
+                  FifoResponse_reset <= '1'; 
+               end if;
+               if (cmd_delay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
+               if (cmd_delay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"00"; end if; -- todo:  get position on track
+               if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"02"; end if;
             end if;
 
             -- long test response
@@ -1397,17 +1437,48 @@ begin
    begin
       if (rising_edge(clk1x)) then
          if (reset = '1') then
-            cdSize_work <= cdSize;
-            lbaCount    <= 0;
+            cdSize_work    <= cdSize;
+            lbaCount       <= 0;
+            lbaCount_work  <= 0;
+            cd_SecondsHigh <= (others => '0');
+            cd_SecondsLow  <= (others => '0');
+            cd_MinutesHigh <= (others => '0');
+            cd_MinutesLow  <= (others => '0');
          else
+
+            if (lbaCount_work >= FRAMES_PER_SECOND) then
+               lbaCount_work <= lbaCount_work - FRAMES_PER_SECOND;
+            
+               if (cd_SecondsLow < 9) then
+                  cd_SecondsLow <= cd_SecondsLow + 1;
+               else
+                  cd_SecondsLow <= (others => '0');
+                  if (cd_SecondsHigh < 5) then
+                     cd_SecondsHigh <= cd_SecondsHigh + 1;
+                  else
+                     cd_SecondsHigh <= (others => '0');
+                     if (cd_MinutesLow < 9) then
+                        cd_MinutesLow <= cd_MinutesLow + 1;
+                     else
+                        cd_MinutesLow  <= (others => '0');
+                        cd_MinutesHigh <= cd_MinutesHigh + 1;
+                     end if;
+                  end if;
+               end if;
+            else
+               lbaCount_work <= 0;
+            end if;
+            
             if (cdSize_work > 0) then
                lbaCount <= lbaCount + 1;
-               if (cdSize_work >= RAW_SECTOR_SIZE) then
+               if (cdSize_work > RAW_SECTOR_SIZE) then
                   cdSize_work <= cdSize_work - RAW_SECTOR_SIZE;
                else
-                  cdSize_work <= (others => '0');
+                  cdSize_work   <= (others => '0');
+                  lbaCount_work <= lbaCount + 1;
                end if;
             end if;
+            
          end if;   
       end if;
    end process;
@@ -1509,7 +1580,7 @@ begin
             if (driveAck_1 = '1' or ackDrive_1 = '1' or ackRead_valid_1 = '1' or ackDriveEnd_1 = '1' or ackPendingIRQNext_1 = '1') then
                write(line_out, string'("RSPFIFO2: "));
                if (WRITETIME = '1') then
-                  if (driveAck_1 = '1') then write(line_out, to_hstring(clkCounter - 3));
+                  if (driveAck_1 = '1') then write(line_out, to_hstring(clkCounter - 2));
                   elsif (ackDrive_1 = '1') then write(line_out, to_hstring(clkCounter - 3));
                   elsif (ackRead_valid_1 = '1') then write(line_out, to_hstring(clkCounter - 6));
                   elsif (ackDriveEnd_1 = '1') then write(line_out, to_hstring(clkCounter - 5));
