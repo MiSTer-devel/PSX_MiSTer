@@ -5,6 +5,10 @@ use IEEE.numeric_std.all;
 library mem;
 
 entity dma is
+   generic
+   (
+      REPRODUCIBLEDMATIMING : std_logic
+   );
    port 
    (
       clk1x                : in  std_logic;
@@ -86,7 +90,7 @@ architecture arch of dma is
    signal dmaArray : tdmaArray;
   
    signal DPCR             : unsigned(31 downto 0);
-   signal DICR             : unsigned(31 downto 0);
+   signal DICR             : unsigned(23 downto 0);
    signal DICR_readback    : unsigned(31 downto 0);
    signal DICR_IRQs        : unsigned(6 downto 0);
       
@@ -140,6 +144,10 @@ architecture arch of dma is
    
    signal ramwrite_pending : std_logic;
    
+   -- REPRODUCIBLEDMATIMING
+   signal REP_counter      : integer;
+   signal REP_target       : integer;
+   
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
    signal ss_in  : t_ssarray := (others => (others => '0'));  
@@ -156,7 +164,9 @@ begin
    DICR_readback(14 downto  6) <= "000000000";
    DICR_readback(23 downto 15) <= DICR(23 downto 15);
    DICR_readback(30 downto 24) <= DICR_IRQs;
-   DICR_readback(31)           <= irqOut;
+   DICR_readback(31)           <= '1' when (DICR(15) = '1') else
+                                  '1' when (DICR(23) = '1' and (DICR(22 downto 16) and DICR_IRQs) /= "0000000") else 
+                                  '0';
 
    DMA_MDEC_writeEna <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 0 and toDevice = '1') else '0'; 
    DMA_MDEC_write    <= fifoIn_Dout;  
@@ -183,6 +193,12 @@ begin
          fifoOut_Wr    <= '0';
       
          irqOut   <= '0';
+         
+         if (cpuPaused = '1') then
+            REP_counter <= REP_counter + 1;
+         else
+            REP_counter <= 0;
+         end if;
       
          if (reset = '1') then
          
@@ -201,8 +217,8 @@ begin
             end loop;
             
             DPCR           <= unsigned(ss_in(26)); -- x"07654321";
-            DICR           <= unsigned(ss_in(27));
-            DICR_IRQs      <= (others => '0');
+            DICR           <= unsigned(ss_in(27)(23 downto 0));
+            DICR_IRQs      <= unsigned(ss_in(27)(30 downto 24));
                
             triggerDMA     <= (others => '0');
             isOn           <= ss_in(4)(8);
@@ -283,12 +299,20 @@ begin
                   case (bus_addr(3 downto 2)) is
                      when "00" => 
                         DPCR       <= unsigned(bus_dataWrite);
-                        triggerDMA <= (others => '1'); -- really?
+                        for i in 0 to 6 loop
+                           if (dmaArray(i).request = '1') then
+                              triggerDMA(i) <= '1';
+                           end if;
+                        end loop;
                      when "01" => 
-                        DICR <= unsigned(bus_dataWrite);
-                        if (bus_dataWrite(15) = '1') then
-                           irqOut <= '1';
-                        end if;
+                        DICR( 5 downto  0) <= unsigned(bus_dataWrite(5 downto 0));
+                        DICR(14 downto  6) <= (14 downto 6 => '0');
+                        DICR(          15) <= bus_dataWrite(15);
+                        DICR(23 downto 16) <= unsigned(bus_dataWrite(23 downto 16));
+                        DICR_IRQs          <= DICR_IRQs and (not unsigned(bus_dataWrite(30 downto 24)));
+                        --if (bus_dataWrite(15) = '1') then  -- force bit not used in duckstation, why?
+                        --   irqOut <= '1';
+                        --end if;
                      when others => null;
                   end case;
                end if;
@@ -341,6 +365,7 @@ begin
                isOn          <= '1';
                activeChannel <= triggerchannel;
                dmaTime       <= 0;
+               REP_target    <= 32;
             end if;
             
             -- accu
@@ -422,6 +447,7 @@ begin
                   end if;
                
                when READHEADER =>
+                  REP_target <= REP_target + 16;
                   dmacount  <= dmacount + 1;
                   nextAddr  <= fifoIn_Dout(23 downto 0);
                   if (unsigned(fifoIn_Dout(31 downto 24)) > 0) then
@@ -450,6 +476,7 @@ begin
                when WORKING =>
                   if (fifoIn_Valid = '1' or (toDevice = '0' and fifoOut_NearFull = '0' and wordAccu = 0)) then
                      dmacount    <= dmacount + 1;
+                     REP_target  <= REP_target + 1;
                      case (activeChannel) is
                      
                         when 0 =>
@@ -478,6 +505,7 @@ begin
                               fifoOut_Wr                <= '1';
                               fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(3).D_MADR(20 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_CD_read & DMA_CD_read_accu;
+                              REP_target                <= REP_target + 4;
                            end if;
                            
                         when 6 =>
@@ -551,30 +579,33 @@ begin
                
                when STOPPING =>
                   if (fifoOut_Done = '1' and fifoOut_Wr = '0' and requestOnFly = 0) then
-                     dmaState <= OFF;
-                     isOn     <= '0';
-                     dmaArray(activeChannel).D_CHCR(24) <= '0';
-                     if (DICR(16 + activeChannel) = '1') then
-                        DICR(24 + activeChannel) <= '1';
-                        if (DICR(23) = '1') then
-                           irqOut <= '1';
+                     if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
+                        dmaState <= OFF;
+                        isOn     <= '0';
+                        dmaArray(activeChannel).D_CHCR(24) <= '0';
+                        if (DICR(16 + activeChannel) = '1') then
+                           DICR_IRQs(activeChannel) <= '1';
+                           if (DICR(23) = '1') then
+                              irqOut <= '1';
+                           end if;
+                        end if;
+                        
+                        if (gpupaused = '1') then
+                           isOn          <= '1';
+                           paused        <= '1';
+                           dmaState      <= GPUBUSY;
+                           activeChannel <= 2;
+                           gpupaused     <= '0';
                         end if;
                      end if;
-                     
-                     if (gpupaused = '1') then
-                        isOn          <= '1';
-                        paused        <= '1';
-                        dmaState      <= GPUBUSY;
-                        activeChannel <= 2;
-                        gpupaused     <= '0';
-                     end if;
-
                   end if;
                
                when PAUSING =>
                   if (fifoOut_Done = '1' and fifoOut_Wr = '0' and requestOnFly = 0) then
-                     dmaState <= OFF;
-                     isOn     <= '0';
+                     if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
+                        dmaState <= OFF;
+                        isOn     <= '0';
+                     end if;
                   end if;
                
                when TIMEUP =>

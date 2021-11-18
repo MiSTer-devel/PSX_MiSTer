@@ -123,6 +123,16 @@ architecture arch of etb is
    signal Analog2X            : signed(7 downto 0) := (others => '0');
    signal Analog2Y            : signed(7 downto 0) := (others => '0'); 
    
+   --cd
+   signal cd_req              : std_logic;
+   signal cd_addr             : std_logic_vector(26 downto 0) := (others => '0');
+   signal cd_data             : std_logic_vector(31 downto 0);
+   signal cd_done             : std_logic := '0';
+   
+   signal ram2_do             : std_logic_vector(127 downto 0);
+   
+   signal cdSize              : unsigned(29 downto 0);
+   
    
 begin
 
@@ -163,7 +173,8 @@ begin
    generic map
    (
       is_simu               => '1',
-      REPRODUCIBLEGPUTIMING => '0'
+      REPRODUCIBLEGPUTIMING => '0',
+      REPRODUCIBLEDMATIMING => '1'
    )
    port map
    (
@@ -195,11 +206,12 @@ begin
       DDRAM_BE              => DDRAM_BE,        
       DDRAM_WE              => DDRAM_WE,
       -- cd
-      cd_Size               => (29 downto 0 => '0'),
-      cd_req                => open, 
-      cd_addr               => open,
-      cd_data               => x"00000000",
-      cd_done               => '0',
+      fastCD                => '1',
+      cd_Size               => cdSize,
+      cd_req                => cd_req, 
+      cd_addr               => cd_addr,
+      cd_data               => cd_data,
+      cd_done               => cd_done,
       -- video
       videoout_on           => '1',
       isPal                 => '1',
@@ -260,6 +272,10 @@ begin
    );
    
    isdram_model : entity tb.sdram_model 
+   generic map
+   (
+      SCRIPTLOADING => '1'
+   )
    port map
    (
       clk          => clk33,
@@ -275,6 +291,30 @@ begin
       reqprocessed => ram_reqprocessed,
       ram_idle     => ram_idle
    );
+   
+   isdram_model2 : entity tb.sdram_model 
+   generic map
+   (
+      FILELOADING => '1',
+      INITFILE    => ""
+   )
+   port map
+   (
+      clk          => clk33,
+      addr         => cd_addr,
+      req          => cd_req,
+      ram_128      => '0',
+      rnw          => '1',
+      be           => "0000",
+      di           => x"00000000",
+      do           => ram2_do,
+      done         => cd_done,
+      reqprocessed => open,
+      ram_idle     => open,
+      fileSize     => cdSize
+   );
+   
+   cd_data <= ram2_do(31 downto 0);
    
    iframebuffer : entity work.framebuffer
    port map

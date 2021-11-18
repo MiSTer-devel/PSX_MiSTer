@@ -742,9 +742,9 @@ begin
             end if;
    
             if (mem_done = '1' and memoryMuxStage = 1) then 
-               case (to_integer(unsigned(PC(31 downto 29)))) is
+               case (to_integer(unsigned(FetchLastAddr(31 downto 29)))) is
                   when 0 | 4 => -- cached
-                     tagValid(to_integer(PC(11 downto 4))) <= '1';
+                     tagValid(to_integer(FetchLastAddr(11 downto 4))) <= '1';
                   when others => null;
                end case;
             end if;

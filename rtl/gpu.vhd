@@ -35,6 +35,7 @@ entity gpu is
       DMA_GPU_read         : out std_logic_vector(31 downto 0);
       
       irq_VBLANK           : out std_logic := '0';
+      irq_GPU              : out std_logic := '0';
                      
       vram_BUSY            : in  std_logic;                    
       vram_DOUT            : in  std_logic_vector(63 downto 0);
@@ -567,6 +568,10 @@ begin
             
             end if;
             
+            if (irq_GPU = '1') then
+               GPUSTAT_IRQRequest <= '1';
+            end if;
+            
             --gpu timing calc
             if (GPUSTAT_PalVideoMode = '1') then
                htotal <= 2169;
@@ -825,6 +830,10 @@ begin
                drawMode(8 downto 0) <= poly_drawModeRec(8 downto 0);
                drawMode(11)         <= poly_drawModeRec(11);
             end if;
+            
+            if (clk2xIndex = '1') then
+               irq_GPU <= '0';
+            end if;
          
             if (fifoIn_Valid = '1' and proc_idle = '1') then
                
@@ -840,7 +849,9 @@ begin
                   -- todo
                   
                elsif (cmdNew = 16#1F#) then -- irq request
-                  --GPUSTAT_IRQRequest <= '1'; todo
+                  if (GPUSTAT_IRQRequest = '0') then
+                     irq_GPU <= '1';
+                  end if;
                   
                elsif (cmdNew = 16#E1#) then -- Draw Mode setting
                   GPUSTAT_TextPageX      <= fifoIn_Dout(3 downto 0);

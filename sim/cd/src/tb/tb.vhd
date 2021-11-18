@@ -58,6 +58,7 @@ begin
 
       hasCD                => '1',
       cdSize               => cdSize,
+      fastCD               => '0',
       
       fullyIdle            => fullyIdle,
       
@@ -77,14 +78,15 @@ begin
       
       SS_reset             => SS_reset,
       SS_DataWrite         => (31 downto 0 => '0'),
-      SS_Adr               => (14 downto 0 => '0'),
+      SS_Adr               => (13 downto 0 => '0'),
       SS_wren              => '0'
    );
    
    isdram_model : entity work.sdram_model 
    generic map
    (
-      --INITFILE => "test_triangle.iso"
+      FILELOADING => '1',
+      INITFILE => "test_triangle.iso"
    )
    port map
    (
@@ -117,6 +119,9 @@ begin
    begin
       
       file_open(f_status, infile, "R:\cd_test_fpsxa.txt", read_mode);
+      
+      clkCount <= 2;
+      wait until reset = '0';
       
       while (not endfile(infile)) loop
          

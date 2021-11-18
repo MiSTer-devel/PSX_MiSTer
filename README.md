@@ -77,8 +77,8 @@ GTE    : 80%
 - timing not correct
 
 MDEC   : 90%
-- timing slightly too fast
-- savestate loading missing
+- timing slightly too fast (4996/5376)
+- writing to MDECControl -> reset
  
 CD     : 20%
 

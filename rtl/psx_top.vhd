@@ -10,7 +10,8 @@ entity psx_top is
    generic
    (
       is_simu               : std_logic := '0';
-      REPRODUCIBLEGPUTIMING : std_logic := '0'
+      REPRODUCIBLEGPUTIMING : std_logic := '0';
+      REPRODUCIBLEDMATIMING : std_logic := '0'
    );
    port 
    (
@@ -43,6 +44,7 @@ entity psx_top is
       ddr3_WE               : out std_logic := '0';
       ddr3_RD               : out std_logic := '0'; 
       -- cd
+      fastCD                : in  std_logic;
       cd_Size               : in  unsigned(29 downto 0);
       cd_req                : out std_logic := '0';
       cd_addr               : out std_logic_vector(26 downto 0) := (others => '0');
@@ -301,6 +303,7 @@ architecture arch of psx_top is
    signal SS_DataRead_DMA        : std_logic_vector(31 downto 0);
    signal SS_DataRead_GTE        : std_logic_vector(31 downto 0);
    signal SS_DataRead_PAD        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_MDEC       : std_logic_vector(31 downto 0);
    signal SS_DataRead_TMR        : std_logic_vector(31 downto 0);
    signal SS_DataRead_IRQ        : std_logic_vector(31 downto 0);
    signal SS_DataRead_CD         : std_logic_vector(31 downto 0);
@@ -490,7 +493,6 @@ begin
       bus_dataRead         => bus_sio_dataRead 
    );
    
-   irq_GPU       <= '0'; -- todo
    irq_SIO       <= '0'; -- todo
    irq_SPU       <= '0'; -- todo
    irq_LIGHTPEN  <= '0'; -- todo
@@ -532,6 +534,10 @@ begin
    );
    
    idma : entity work.dma
+   generic map
+   (
+      REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING
+   )
    port map
    (
       clk1x                => clk1x,
@@ -652,6 +658,7 @@ begin
       reset                => reset_intern,
      
       hasCD                => '1',
+      fastCD               => fastCD,
           
       irqOut               => irq_CDROM,
                             
@@ -672,7 +679,7 @@ begin
       
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
-      SS_Adr               => SS_Adr(14 downto 0),      
+      SS_Adr               => SS_Adr(13 downto 0),      
       SS_wren              => SS_wren(13),     
       SS_DataRead          => SS_DataRead_CD
    );
@@ -709,6 +716,7 @@ begin
       DMA_GPU_read         => DMA_GPU_read,  
       
       irq_VBLANK           => irq_VBLANK,
+      irq_GPU              => irq_GPU,
       
       vram_BUSY            => ddr3_BUSY,       
       vram_DOUT            => ddr3_DOUT,       
@@ -758,7 +766,7 @@ begin
       clk2x                => clk2x,    
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => reset,     
+      reset                => reset_intern,     
       
       bus_addr             => bus_mdec_addr,     
       bus_dataWrite        => bus_mdec_dataWrite,
@@ -771,7 +779,13 @@ begin
       dma_write            => DMA_MDEC_writeEna,   
       dma_writedata        => DMA_MDEC_write,    
       dma_read             => DMA_MDEC_readEna,      
-      dma_readdata         => DMA_MDEC_read       
+      dma_readdata         => DMA_MDEC_read,
+
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(6 downto 0),      
+      SS_wren              => SS_wren(6),     
+      SS_DataRead          => SS_DataRead_MDEC      
    );
    
    iexp2 : entity work.exp2

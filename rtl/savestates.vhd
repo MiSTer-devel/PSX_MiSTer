@@ -75,14 +75,14 @@ architecture arch of savestates is
       (  4096,    64),    -- DMA          3 
       (  5120,    64),    -- GTE          4 
       (  6144,     8),    -- Joypad       5 
-      (  7168,   256),    -- MDEC         6 
+      (  7168,   128),    -- MDEC         6 
       (  8192,    16),    -- Memory       7 
       (  9216,    16),    -- Timer        8 
       ( 10240,   256),    -- Sound        9 
       ( 11264,     2),    -- IRQ          10
       ( 12288,     8),    -- SIO          11
       ( 31744,   256),    -- Scratchpad   12   
-      ( 32768, 32768),    -- CDROM        13
+      ( 32768, 16384),    -- CDROM        13
       (131072,     2),    -- SPURAM       14  -- size should be 131072
       (262144,262144),    -- VRAM         15
       (524288,524288)     -- RAM          16

@@ -9,7 +9,9 @@ entity sdram_model is
    generic
    (
       DOREFRESH         : std_logic := '0';
-      INITFILE          : string := "NONE"
+      INITFILE          : string := "NONE";
+      SCRIPTLOADING     : std_logic := '0';
+      FILELOADING       : std_logic := '0'
    );
    port 
    (
@@ -158,49 +160,51 @@ begin
          addr_buffer  <= addr;
       end if;
 
-      COMMAND_FILE_ACK_1 <= '0';
-      if COMMAND_FILE_START_1 = '1' then
-         
-         assert false report "received" severity note;
-         assert false report COMMAND_FILE_NAME(1 to COMMAND_FILE_NAMELEN) severity note;
-      
-         file_open(f_status, infile, COMMAND_FILE_NAME(1 to COMMAND_FILE_NAMELEN), read_mode);
-      
-         targetpos := COMMAND_FILE_TARGET;
-         
-         wait until rising_edge(clk);
-         
-         for i in 1 to COMMAND_FILE_OFFSET loop
-            read(infile, next_vector, actual_len); 
-         end loop;
-         
-         loadcount := 0;
-     
-         while (not endfile(infile) and (COMMAND_FILE_SIZE = 0 or loadcount < COMMAND_FILE_SIZE)) loop
+      if (SCRIPTLOADING = '1') then
+         COMMAND_FILE_ACK_1 <= '0';
+         if COMMAND_FILE_START_1 = '1' then
             
-            read(infile, next_vector, actual_len);  
-             
-            read_byte := CONV_STD_LOGIC_VECTOR(bit'pos(next_vector(0)), 8);
-            
-            --report "read_byte=" & integer'image(to_integer(unsigned(read_byte)));
-            
-            data(targetpos) := to_integer(unsigned(read_byte));
-            targetpos       := targetpos + 1;
-            loadcount       := loadcount + 1;
-            
-         end loop;
+            assert false report "received" severity note;
+            assert false report COMMAND_FILE_NAME(1 to COMMAND_FILE_NAMELEN) severity note;
          
-         wait until rising_edge(clk);
+            file_open(f_status, infile, COMMAND_FILE_NAME(1 to COMMAND_FILE_NAMELEN), read_mode);
+         
+            targetpos := COMMAND_FILE_TARGET;
+            
+            wait until rising_edge(clk);
+            
+            for i in 1 to COMMAND_FILE_OFFSET loop
+               read(infile, next_vector, actual_len); 
+            end loop;
+            
+            loadcount := 0;
       
-         file_close(infile);
-      
-         COMMAND_FILE_ACK_1 <= '1';
-      
+            while (not endfile(infile) and (COMMAND_FILE_SIZE = 0 or loadcount < COMMAND_FILE_SIZE)) loop
+               
+               read(infile, next_vector, actual_len);  
+               
+               read_byte := CONV_STD_LOGIC_VECTOR(bit'pos(next_vector(0)), 8);
+               
+               --report "read_byte=" & integer'image(to_integer(unsigned(read_byte)));
+               
+               data(targetpos) := to_integer(unsigned(read_byte));
+               targetpos       := targetpos + 1;
+               loadcount       := loadcount + 1;
+               
+            end loop;
+            
+            wait until rising_edge(clk);
+         
+            file_close(infile);
+         
+            COMMAND_FILE_ACK_1 <= '1';
+         
+         end if;
       end if;
       
-      if (initFromFile = '1') then
-         initFromFile <= '0';
-         if (INITFILE /= "NONE") then
+      if (FILELOADING = '1') then
+         if (initFromFile = '1') then
+            initFromFile <= '0';
             file_open(f_status, infile, INITFILE, read_mode);
             targetpos := 0;
             while (not endfile(infile)) loop
@@ -212,9 +216,7 @@ begin
             fileSize <= to_unsigned(targetpos, 30);
             file_close(infile);
          end if;
-         
       end if;
-
    
    
    end process;

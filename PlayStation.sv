@@ -415,12 +415,12 @@ always @(posedge clk_1x) begin
 	//code_download <= ioctl_download & &ioctl_index;
 	bios_download <= ioctl_download & (ioctl_index == 0);
 	cart_download <= ioctl_download & (ioctl_index == 1);
-	cd_download   <= ioctl_download & (ioctl_index == 2);
+	cd_download   <= ioctl_download & (ioctl_index[5:0] == 2);
 end
 
-reg        cart_loaded = 0;
+reg cart_loaded = 0;
 always @(posedge clk_1x) begin
-	if (ioctl_download && ioctl_index == 1) begin
+	if (cart_download || cd_download) begin
 		cart_loaded <= 1;
 	end
 end
@@ -529,6 +529,7 @@ psx
    .DDRAM_BE        (DDRAM_BE        ),
    .DDRAM_WE        (DDRAM_WE        ),
    // cd
+   .fastCD          (0),
    .cd_Size         (cd_Size),
    .cd_req          (cd_req),
    .cd_addr         (cd_addr),

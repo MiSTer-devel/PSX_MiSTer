@@ -200,12 +200,22 @@ begin
                      timerArray(0).T_CURRENT <= (others => '0'); 
                   end if;
                end if;
+               if (timerArray(0).T_MODE(2 downto 1) = "11") then
+                  if (hblank_1 = '0' and hblank = '1') then 
+                     timerArray(0).T_MODE(0) <= '0';
+                  end if;
+               end if;
             end if;
             
             if (timerArray(1).T_MODE(0) = '1') then
                if (timerArray(1).T_MODE(2 downto 1) = "01" or timerArray(1).T_MODE(2 downto 1) = "10") then
                   if (vblank_1 = '0' and vblank = '1') then 
                      timerArray(1).T_CURRENT <= (others => '0'); 
+                  end if;
+               end if;
+               if (timerArray(1).T_MODE(2 downto 1) = "11") then
+                  if (vblank_1 = '0' and vblank = '1') then 
+                     timerArray(1).T_MODE(0) <= '0';
                   end if;
                end if;
             end if;

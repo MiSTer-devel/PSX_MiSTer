@@ -6,7 +6,8 @@ entity psx_mister is
    generic
    (
       is_simu               : std_logic := '0';
-      REPRODUCIBLEGPUTIMING : std_logic := '0'
+      REPRODUCIBLEGPUTIMING : std_logic := '0';
+      REPRODUCIBLEDMATIMING : std_logic := '0'
    );
    port 
    (
@@ -39,6 +40,7 @@ entity psx_mister is
       DDRAM_BE              : out std_logic_vector(7 downto 0); 
       DDRAM_WE              : out std_logic;
       -- cd
+      fastCD                : in  std_logic;
       cd_Size               : in  unsigned(29 downto 0);
       cd_req                : out std_logic := '0';
       cd_addr               : out std_logic_vector(26 downto 0) := (others => '0');
@@ -109,7 +111,8 @@ begin
    generic map
    (
       is_simu               => is_simu,
-      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING
+      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING,
+      REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING
    )
    port map
    (
@@ -142,6 +145,7 @@ begin
       ddr3_WE               => DDRAM_WE,        
       ddr3_RD               => DDRAM_RD,
       -- cd
+      fastCD                => fastCD,
       cd_Size               => cd_Size,
       cd_req                => cd_req, 
       cd_addr               => cd_addr,

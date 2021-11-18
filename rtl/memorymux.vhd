@@ -158,6 +158,7 @@ architecture arch of memorymux is
    signal addressBIOS_buf  : unsigned(18 downto 0);
    
    signal dataFromBusses   : std_logic_vector(31 downto 0);
+   signal rotate32         : std_logic;
    
    signal data_cd          : std_logic_vector(31 downto 0);
    
@@ -342,6 +343,8 @@ begin
                   reqsize_buf     <= mem_reqsize;
                   writeMask_buf   <= mem_writeMask;
                   
+                  rotate32        <= '0';
+                  
                   data_cd         <= (others => '0');
                   
                   if (loadExe_latched = '1') then
@@ -421,6 +424,7 @@ begin
                               
                            else  
                               state <= BUSACTION;
+                              if (bus_dma_read = '1' and mem_reqsize /= 4) then rotate32 <= '1'; end if;
                            end if;
                         end if;
             
@@ -475,7 +479,7 @@ begin
                   
                when READBIOS =>
                   if (ram_done = '1') then
-                     if (fastboot = '1' and to_integer(addressBIOS_buf) >= 16#18000# and to_integer(addressBIOS_buf) <= 16#18010#) then
+                     if (fastboot = '1' and to_integer(addressBIOS_buf) >= 16#18000# and to_integer(addressBIOS_buf) <= 16#18013#) then
                         case (to_integer(addressBIOS_buf(4 downto 2))) is
                            when 0 => biosPatch := x"3C011F80";
                            when 1 => biosPatch := x"3C0A0300";
@@ -508,7 +512,17 @@ begin
                   end if;
                   
                when BUSACTION =>
-                  mem_dataRead <= dataFromBusses;
+                  if (rotate32 = '1') then
+                     case (addressData_buf(1 downto 0)) is
+                        when "00" => mem_dataRead <= dataFromBusses;
+                        when "01" => mem_dataRead <= x"00" & dataFromBusses(31 downto 8);
+                        when "10" => mem_dataRead <= x"0000" & dataFromBusses(31 downto 16);
+                        when "11" => mem_dataRead <= x"000000" & dataFromBusses(31 downto 24);
+                        when others => null;
+                     end case;
+                  else
+                     mem_dataRead <= dataFromBusses;
+                  end if;
                   mem_done     <= '1';
                   state        <= IDLE;
                   

@@ -25,7 +25,13 @@ entity mdec is
       dma_write            : in  std_logic;
       dma_writedata        : in  std_logic_vector(31 downto 0);
       dma_read             : in  std_logic;
-      dma_readdata         : out std_logic_vector(31 downto 0) 
+      dma_readdata         : out std_logic_vector(31 downto 0);
+      
+      SS_reset             : in  std_logic;
+      SS_DataWrite         : in  std_logic_vector(31 downto 0);
+      SS_Adr               : in  unsigned(6 downto 0);
+      SS_wren              : in  std_logic;
+      SS_DataRead          : out std_logic_vector(31 downto 0)
    );
 end entity;
 
@@ -230,8 +236,13 @@ architecture arch of mdec is
       
    signal fifoOut_done        : std_logic := '0';
       
-   -- readback 
+   -- readback + registers 
    signal MDECSTAT            : std_logic_vector(31 downto 0);
+   signal MDECCONTROL         : std_logic_vector( 2 downto 0);
+   
+   -- savestates
+   type t_ssarray is array(0 to 1) of std_logic_vector(31 downto 0);
+   signal ss_in  : t_ssarray := (others => (others => '0')); 
 
 begin 
 
@@ -243,7 +254,7 @@ begin
    (
       SIZE             => 512,
       DATAWIDTH        => 32,
-      NEARFULLDISTANCE => 256
+      NEARFULLDISTANCE => 223
    )
    port map
    ( 
@@ -284,8 +295,30 @@ begin
             fifoSecondAvail <= '0';
             currentBlock    <= (others => '0');
             currentCoeff    <= to_unsigned(64, 7);
+            
+            MDECCONTROL     <= ss_in(1)(31 downto 29);
+            rec_bit15       <= ss_in(0)(23);          
+            rec_signed      <= ss_in(0)(24);          
+            rec_depth       <= ss_in(0)(26 downto 25);
+            
+         elsif (SS_wren = '1') then
+         
+            if (SS_Adr >= 16 and SS_Adr < 48) then
+               RamYUVaddrA <= resize(SS_Adr - 16, 5);
+               RamYUVdataA <= SS_DataWrite;
+               RamYUVwrite <= '1';
+            end if;
+            
+            if (SS_Adr >= 64 and SS_Adr < 96) then
+                scaleTable(((to_integer(SS_Adr) - 64) * 2) + 0) <= signed(SS_DataWrite(15 downto  0));
+                scaleTable(((to_integer(SS_Adr) - 64) * 2) + 1) <= signed(SS_DataWrite(31 downto 16));
+            end if;
          
          elsif (ce = '1') then
+         
+            if (bus_write = '1' and bus_addr = x"4") then
+               MDECCONTROL <= bus_dataWrite(31 downto 29);
+            end if;
          
             case (receiveState) is
             
@@ -981,8 +1014,8 @@ begin
    MDECSTAT(23)           <= rec_bit15;
    MDECSTAT(24)           <= rec_signed;
    MDECSTAT(26 downto 25) <= rec_depth;
-   MDECSTAT(27)           <= '1' when (FifoOut_NearFull = '1' or (FifoOut_Empty = '0' and dma_read = '0')) else '0'; -- Data-Out Request (set when DMA1 enabled and ready to send data)
-   MDECSTAT(28)           <= '1' when (FifoIn_NearFull = '0' and receiveState /= RECEIVE_IDLE) else '0';             -- Data-In Request  (set when DMA0 enabled and ready to receive data)
+   MDECSTAT(27)           <= '1' when (MDECCONTROL(0) = '1' and (FifoOut_NearFull = '1' or (FifoOut_Empty = '0' and dma_read = '0'))) else '0'; -- Data-Out Request (set when DMA1 enabled and ready to send data)
+   MDECSTAT(28)           <= '1' when (FifoIn_NearFull = '0' and MDECCONTROL(1) = '1') else '0';              -- Data-In Request  (set when DMA0 enabled and ready to receive data)
    MDECSTAT(29)           <= '0' when (receiveState = RECEIVE_IDLE) else '1';
    MDECSTAT(30)           <= FifoIn_NearFull;
    MDECSTAT(31)           <= FifoOut_Empty;
@@ -1013,6 +1046,22 @@ begin
             end if;
          end if;
          
+      end if;
+   end process;
+
+--##############################################################
+--############################### savestates
+--##############################################################
+
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+         if (SS_reset = '1') then
+            ss_in <= (others => (others => '0'));
+         elsif (SS_wren = '1' and SS_Adr < 2) then
+            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+      
       end if;
    end process;
 
