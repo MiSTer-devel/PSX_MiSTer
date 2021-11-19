@@ -2,6 +2,8 @@ library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all; 
 
+use STD.textio.all;
+
 entity joypad is
    port 
    (
@@ -11,39 +13,39 @@ entity joypad is
       
       irqRequest           : out std_logic := '0';
       
-      KeyTriangle           : in  std_logic; 
-      KeyCircle             : in  std_logic; 
-      KeyCross              : in  std_logic; 
-      KeySquare             : in  std_logic;
-      KeySelect             : in  std_logic;
-      KeyStart              : in  std_logic;
-      KeyRight              : in  std_logic;
-      KeyLeft               : in  std_logic;
-      KeyUp                 : in  std_logic;
-      KeyDown               : in  std_logic;
-      KeyR1                 : in  std_logic;
-      KeyR2                 : in  std_logic;
-      KeyR3                 : in  std_logic;
-      KeyL1                 : in  std_logic;
-      KeyL2                 : in  std_logic;
-      KeyL3                 : in  std_logic;
-      Analog1X              : in  signed(7 downto 0);
-      Analog1Y              : in  signed(7 downto 0);
-      Analog2X              : in  signed(7 downto 0);
-      Analog2Y              : in  signed(7 downto 0);      
+      KeyTriangle          : in  std_logic; 
+      KeyCircle            : in  std_logic; 
+      KeyCross             : in  std_logic; 
+      KeySquare            : in  std_logic;
+      KeySelect            : in  std_logic;
+      KeyStart             : in  std_logic;
+      KeyRight             : in  std_logic;
+      KeyLeft              : in  std_logic;
+      KeyUp                : in  std_logic;
+      KeyDown              : in  std_logic;
+      KeyR1                : in  std_logic;
+      KeyR2                : in  std_logic;
+      KeyR3                : in  std_logic;
+      KeyL1                : in  std_logic;
+      KeyL2                : in  std_logic;
+      KeyL3                : in  std_logic;
+      Analog1X             : in  signed(7 downto 0);
+      Analog1Y             : in  signed(7 downto 0);
+      Analog2X             : in  signed(7 downto 0);
+      Analog2Y             : in  signed(7 downto 0);      
       
-      bus_addr              : in  unsigned(3 downto 0); 
-      bus_dataWrite         : in  std_logic_vector(31 downto 0);
-      bus_read              : in  std_logic;
-      bus_write             : in  std_logic;
-      bus_writeMask         : in  std_logic_vector(3 downto 0);
-      bus_dataRead          : out std_logic_vector(31 downto 0);
-                            
-      SS_reset              : in  std_logic;
-      SS_DataWrite          : in  std_logic_vector(31 downto 0);
-      SS_Adr                : in  unsigned(2 downto 0);
-      SS_wren               : in  std_logic;
-      SS_DataRead           : out std_logic_vector(31 downto 0)
+      bus_addr             : in  unsigned(3 downto 0); 
+      bus_dataWrite        : in  std_logic_vector(31 downto 0);
+      bus_read             : in  std_logic;
+      bus_write            : in  std_logic;
+      bus_writeMask        : in  std_logic_vector(3 downto 0);
+      bus_dataRead         : out std_logic_vector(31 downto 0);
+                           
+      SS_reset             : in  std_logic;
+      SS_DataWrite         : in  std_logic_vector(31 downto 0);
+      SS_Adr               : in  unsigned(2 downto 0);
+      SS_wren              : in  std_logic;
+      SS_DataRead          : out std_logic_vector(31 downto 0)
    );
 end entity;
 
@@ -335,7 +337,128 @@ begin
       
       end if;
    end process;
+   
+   -- synthesis translate_off
 
+   goutput : if 1 = 1 generate
+   signal outputCnt : unsigned(31 downto 0) := (others => '0'); 
+   
+   begin
+      process
+         constant WRITETIME            : std_logic := '1';
+         
+         file outfile                  : text;
+         variable f_status             : FILE_OPEN_STATUS;
+         variable line_out             : line;
+            
+         variable clkCounter           : unsigned(31 downto 0);
+         variable newoutputCnt         : unsigned(31 downto 0);
+            
+         variable bus_adr              : unsigned(7 downto 0);
+         variable bus_data             : unsigned(15 downto 0);
+         variable transmit_1           : std_logic;
+         variable irq_1                : std_logic;
+         variable bus_read_1           : std_logic;
+         variable bus_addr_1           : unsigned(3 downto 0); 
+      begin
+   
+         file_open(f_status, outfile, "R:\\debug_pad_sim.txt", write_mode);
+         file_close(outfile);
+         file_open(f_status, outfile, "R:\\debug_pad_sim.txt", append_mode);
+         
+         while (true) loop
+            
+            wait until rising_edge(clk1x);
+            
+            if (reset = '1') then
+               clkCounter := (others => '0');
+            end if;
+            
+            newoutputCnt := outputCnt;
+            
+            if (bus_write = '1') then
+               write(line_out, string'("WRITE: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter));
+                  write(line_out, string'(" ")); 
+               end if;
+               bus_adr  := x"0" & bus_addr;
+               bus_data := unsigned(bus_dataWrite(15 downto 0));
+               if (bus_addr = x"8" and bus_writeMask(3 downto 2) /= "00") then
+                  bus_adr := x"0A";
+                  bus_data := unsigned(bus_dataWrite(31 downto 16));
+               end if;
+               if (bus_addr = x"C" and bus_writeMask(3 downto 2) /= "00") then
+                  bus_adr := x"0E";
+                  bus_data := unsigned(bus_dataWrite(31 downto 16));
+               end if;
+               write(line_out, to_hstring(bus_adr));
+               write(line_out, string'(" ")); 
+               write(line_out, to_hstring(bus_data));
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if; 
+            
+            if (bus_read_1 = '1') then
+               write(line_out, string'("READ: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter));
+               end if;
+               write(line_out, string'(" 0")); 
+               write(line_out, to_hstring(bus_addr_1));
+               write(line_out, string'(" ")); 
+               write(line_out, to_hstring(bus_dataRead(15 downto 0)));
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if; 
+            bus_read_1 := bus_read;
+            bus_addr_1 := bus_addr;
+            
+            if (beginTransfer = '1') then
+               write(line_out, string'("BEGINTRANSFER: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter - 1));
+               end if;
+               write(line_out, string'(" 00 00")); 
+               write(line_out, to_hstring(transmitBuffer));
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if;             
+            
+            if (transmit_1 = '1') then
+               write(line_out, string'("TRANSMIT: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter + 1));
+               end if;
+               write(line_out, string'(" 00 00")); 
+               write(line_out, to_hstring(receiveBuffer));
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if; 
+            transmit_1 := (not beginTransfer) and actionNext and transmitting;
+            
+            if (irq_1 = '1') then
+               write(line_out, string'("IRQ: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter));
+               end if;
+               write(line_out, string'(" 00 ")); 
+               write(line_out, to_hstring(JOY_STAT(15 downto 0)));
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if; 
+            irq_1 := (not beginTransfer) and actionNext and (not transmitting) and JOY_CTRL(12);
+            
+            outputCnt <= newoutputCnt;
+            clkCounter := clkCounter + 1;
+           
+         end loop;
+         
+      end process;
+   
+   end generate goutput;
+   
+   -- synthesis translate_on
 end architecture;
 
 

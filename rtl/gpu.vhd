@@ -120,7 +120,9 @@ architecture arch of gpu is
       
    signal textureWindow             : unsigned(19 downto 0) := (others => '0');
    signal textureWindow_AND_X       : unsigned(7 downto 0) := (others => '0');
-   signal textureWindow_AND_Y       : unsigned(7 downto 0) := (others => '0');
+   signal textureWindow_AND_Y       : unsigned(7 downto 0) := (others => '0');   
+   signal textureWindow_OR_X        : unsigned(7 downto 0) := (others => '0');
+   signal textureWindow_OR_Y        : unsigned(7 downto 0) := (others => '0');
       
    signal drawingAreaLeft           : unsigned(9 downto 0) := (others => '0');
    signal drawingAreaRight          : unsigned(9 downto 0) := (others => '0');
@@ -791,15 +793,18 @@ begin
       if rising_edge(clk2x) then
       
          fifoIn_Valid <= fifoIn_Rd;
+         
+         textureWindow_AND_X     <= not (textureWindow(4 downto 0) & "000");
+         textureWindow_AND_Y     <= not (textureWindow(9 downto 5) & "000");            
+         textureWindow_OR_X      <= (textureWindow(4 downto 0) and textureWindow(14 downto 10)) & "000";
+         textureWindow_OR_Y      <= (textureWindow(9 downto 5) and textureWindow(19 downto 15)) & "000";
       
          if (reset = '1') then
          
             proc_idle <= '1';
             
-            textureWindow           <= unsigned(ss_gpu_in(2)(19 downto 0));  
-            textureWindow_AND_X     <= (others => '1');
-            textureWindow_AND_Y     <= (others => '1');
-               
+            textureWindow           <= unsigned(ss_gpu_in(2)(19 downto 0));   
+            
             drawingAreaLeft         <= unsigned(ss_gpu_in(4)(9 downto 0)); 
             drawingAreaRight        <= unsigned(ss_gpu_in(5)(9 downto 0)); 
             drawingAreaTop          <= unsigned(ss_gpu_in(4)(24 downto 16)); 
@@ -864,7 +869,7 @@ begin
                   drawMode               <= unsigned(fifoIn_Dout(13 downto 0));
                   
                elsif (cmdNew = 16#E2#) then -- Set Texture window
-                  -- todo
+                  textureWindow <= unsigned(fifoIn_Dout(19 downto 0));
                   
                elsif (cmdNew = 16#E3#) then -- Set Drawing Area top left (X1,Y1)
                   drawingAreaLeft <= unsigned(fifoIn_Dout(9 downto 0));
@@ -1224,8 +1229,9 @@ begin
    pipeline_cr          <= line_pipeline_cr          or rect_pipeline_cr          or poly_pipeline_cr         ;
    pipeline_cg          <= line_pipeline_cg          or rect_pipeline_cg          or poly_pipeline_cg         ;
    pipeline_cb          <= line_pipeline_cb          or rect_pipeline_cb          or poly_pipeline_cb         ;
-   pipeline_u           <= x"00"                     or rect_pipeline_u           or poly_pipeline_u          ;
-   pipeline_v           <= x"00"                     or rect_pipeline_v           or poly_pipeline_v          ;
+   
+   pipeline_u           <= ((rect_pipeline_u or poly_pipeline_u) and textureWindow_AND_X) or textureWindow_OR_X;
+   pipeline_v           <= ((rect_pipeline_v or poly_pipeline_v) and textureWindow_AND_Y) or textureWindow_OR_Y;
    
    pipeline_textPalNew  <= rect_textPalNew or poly_textPalNew;
    pipeline_textPalX    <= rect_textPalX   or poly_textPalX  ;

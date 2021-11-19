@@ -92,6 +92,8 @@ begin
          
             
             timer2_subcount <= unsigned(ss_in(9)(2 downto 0));
+            hblank_1        <= hblank;
+            vblank_1        <= vblank;
 
          elsif (ce = '1') then
          

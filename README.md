@@ -38,7 +38,6 @@ CPU    : 90%
 
 GPU    : 80%
 - dithering missing
-- texture AND/OR mask missing
 - mask bits not implemented for special modules(e.g. cpu2vram)
 - vram2vram and vram2cpu line wraparound not implemented
 - vram2vram read/modify/write race condition when copying to same line

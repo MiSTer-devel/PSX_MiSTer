@@ -85,6 +85,7 @@ begin
       reset                => reset,
       
       isPal                => '1',
+      videoout_on          => '1',
       
       bus_addr             => bus_gpu_addr,     
       bus_dataWrite        => bus_gpu_dataWrite,

@@ -222,7 +222,8 @@ architecture arch of cpu is
       EXESTALLTYPE_NONE,
       EXESTALLTYPE_READLO,
       EXESTALLTYPE_READHI,
-      EXESTALLTYPE_GTE
+      EXESTALLTYPE_GTE,
+      EXESTALLTYPE_GTECMD
    );
    
    --regs         
@@ -1285,6 +1286,10 @@ begin
                else
                   if (decodeSource1(4) = '1') then
                      EXEgte_cmdEna <= '1';
+                     if (gte_busy = '1' or execute_gte_cmdEna = '1') then
+                        stallNew3    <= '1';
+                        EXEstalltype <= EXESTALLTYPE_GTECMD;
+                     end if;
                   else
                      case (decodeSource1(3 downto 0)) is
                         when x"0" => --mfcn
@@ -1460,7 +1465,7 @@ begin
                      stallNew3    <= '1';
                      EXEstalltype <= EXESTALLTYPE_GTE;
                   else
-                     gte_readEna          <= ce;
+                     gte_readEna  <= ce;
                   end if;
                end if; 
                
@@ -1556,6 +1561,11 @@ begin
             if (executeStalltype = EXESTALLTYPE_GTE and gte_readEna = '1') then
                resultData          <= gte_readData;
                executeMemWriteData <= gte_readData;
+               stall3              <= '0';
+               executeStalltype    <= EXESTALLTYPE_NONE;
+            end if;
+            
+            if (executeStalltype = EXESTALLTYPE_GTECMD and gte_busy = '0') then
                stall3              <= '0';
                executeStalltype    <= EXESTALLTYPE_NONE;
             end if;

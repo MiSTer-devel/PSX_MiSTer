@@ -238,6 +238,7 @@ architecture arch of cd_top is
    signal subheader                 : std_logic_vector(31 downto 0);
    signal headerIsData              : std_logic;
    signal headerDataCheck           : std_logic;
+   signal headerDataSector          : std_logic;
    
    type tsubdata is array(0 to 11) of std_logic_vector(7 downto 0);
    signal subdata                   : tsubdata;
@@ -1134,7 +1135,7 @@ begin
             if (driveBusy = '1') then
                if (driveDelay > 0) then
                   driveDelay <= driveDelay - 1;
-               else
+               elsif (sectorFetchState = SFETCH_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
                   handleDrive <= '1';
                   driveBusy   <= '0';
                end if;
@@ -1175,7 +1176,7 @@ begin
                      
                      
                   when DRIVE_READING | DRIVE_PLAYING =>
-                     pause_cmd <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
+                     --pause_cmd <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
                      if (trackNumberBCD = LEAD_OUT_TRACK_NUMBER) then
                         internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                         internalStatus(1)          <= '0'; -- motor off
@@ -1185,7 +1186,7 @@ begin
                         -- todo: if dataSector
                            processDataSector     <= '1';
                            lastSectorHeaderValid <= '1';
-                           if (modeReg(6) = '0' or headerIsData = '1') then
+                           if ((modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
                               writeSectorPointer    <= writeSectorPointer + 1;
                               internalStatus(5)     <= '1'; -- reading
                               ackRead      <= '1';
@@ -1419,8 +1420,8 @@ begin
                sectorBuffers_wrenA <= '1';
             end if;
             
-            if (SS_Adr = 1024) then headerIsData <= '1'; headerDataCheck <= '1'; end if;
-            if (SS_Adr = 1027 and SS_DataWrite(31 downto 24) /= x"02") then headerDataCheck <= '0'; end if;
+            if (SS_Adr = 1024) then headerIsData <= '1'; headerDataSector <= '1'; headerDataCheck <= '1'; end if;
+            if (SS_Adr = 1027 and SS_DataWrite(31 downto 24) /= x"02") then headerDataCheck <= '0'; headerDataSector <= '0'; end if;
             if (SS_Adr = 1028 and SS_DataWrite(22) = '1' and SS_DataWrite(18) = '1' and headerDataCheck = '1') then headerIsData <= '0'; end if;
             
          elsif (ce = '1') then
@@ -1474,8 +1475,8 @@ begin
                         cd_req      <= '1';
                      end if;
                      
-                     if (fetchCount = 0) then headerIsData <= '1'; headerDataCheck <= '1'; end if;
-                     if (fetchcount = 3 and cd_data(31 downto 24) /= x"02") then headerDataCheck <= '0'; end if;
+                     if (fetchCount = 0) then headerIsData <= '1'; headerDataSector <= '1'; headerDataCheck <= '1'; end if;
+                     if (fetchcount = 3 and cd_data(31 downto 24) /= x"02") then headerDataCheck <= '0'; headerDataSector <= '0'; end if;
                      if (fetchcount = 4 and cd_data(22) = '1' and cd_data(18) = '1' and headerDataCheck = '1') then headerIsData <= '0'; end if;
                   end if;
                   
