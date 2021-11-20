@@ -13,5 +13,6 @@ vcom -2008 -quiet -work sim/psx ^
 
 vcom -quiet -work sim/tb ^
 ../system/src/tb/sdram_model.vhd ^
+../system/src/tb/tb_savestates.vhd ^
 src/tb/tb.vhd
 

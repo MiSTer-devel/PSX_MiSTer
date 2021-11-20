@@ -273,7 +273,14 @@ architecture arch of cd_top is
       
    -- savestates
    type t_ssarray is array(0 to 127) of std_logic_vector(31 downto 0);
-   signal ss_in  : t_ssarray := (others => (others => '0'));  
+   signal ss_in  : t_ssarray := (others => (others => '0'));
+
+   -- debug
+   -- synthesis translate_off
+   type tsectorBuffer is array(0 to 587) of std_logic_vector(31 downto 0);
+   type tsectorBuffers is array(0 to 7) of tsectorBuffer;
+   signal sectorBuffers             : tsectorBuffers;
+   -- synthesis translate_on   
       
 begin 
 
@@ -886,7 +893,7 @@ begin
             -- setFilter
             if (setFilterReadStep > 0) then
                setFilterReadStep <= setFilterReadStep - 1;
-               case (setLocReadStep) is
+               case (setFilterReadStep) is
                   when 3 => 
                      XaFilterFile <= FifoParam_Dout;
                      FifoParam_Rd <= '1';
@@ -1533,6 +1540,9 @@ begin
                   if (procReadAddr < 587) then
                      procReadAddr <= procReadAddr + 1;
                   end if;
+                  -- synthesis translate_off
+                  sectorBuffers(to_integer(writeSectorPointer))(procCount) <= sectorBuffer_DataB;
+                  -- synthesis translate_on
                   sectorBuffers_addrA <= std_logic_vector(writeSectorPointer & to_unsigned(procCount, 10));
                   sectorBuffers_DataA <= sectorBuffer_DataB;
                   sectorBuffers_wrenA <= '1';
@@ -1560,7 +1570,6 @@ begin
                
                when COPY_FIRST =>
                   copyState     <= COPY_DATA;
-                  sectorBufferSizes(to_integer(writeSectorPointer)) <= procSize;
                
                when COPY_DATA =>
                   FifoData_Wr  <= '1';
@@ -1703,6 +1712,7 @@ begin
          variable fifoResponseSize     : unsigned(31 downto 0);
          variable newoutputCnt         : unsigned(31 downto 0); 
          variable fifoDataWrCnt        : unsigned(7 downto 0);
+         variable datatemp             : unsigned(31 downto 0);
       begin
    
          file_open(f_status, outfile, "R:\\debug_cd_sim.txt", write_mode);
@@ -1802,17 +1812,30 @@ begin
                newoutputCnt := newoutputCnt + 1;
             end if; 
             
-            if (copyState = COPY_DATA and copyByteCnt = 0) then
-               write(line_out, string'("DATA: "));
-               write(line_out, to_hstring(fifoDataWrCnt));
-               write(line_out, string'(" "));
-               write(line_out, to_hstring(sectorBuffers_DataB));               
-               writeline(outfile, line_out);
-               newoutputCnt := newoutputCnt + 1;
-               fifoDataWrCnt := fifoDataWrCnt + 4;
-            elsif (copyState = COPY_IDLE) then
-               fifoDataWrCnt := (others => '0');
+            if (copyState = COPY_FIRST) then
+               for i in 0 to (copySize - 1) loop
+                  write(line_out, string'("DATA: "));
+                  datatemp := to_unsigned(i * 4, 32);
+                  write(line_out, to_hstring(datatemp(7 downto 0)));
+                  write(line_out, string'(" "));
+                  datatemp := unsigned(sectorBuffers(to_integer(copySectorPointer))(i));
+                  write(line_out, to_hstring(datatemp)); 
+                  writeline(outfile, line_out);
+                  newoutputCnt := newoutputCnt + 1;
+               end loop;
             end if;
+            
+            --if (copyState = COPY_DATA and copyByteCnt = 0) then
+            --   write(line_out, string'("DATA: "));
+            --   write(line_out, to_hstring(fifoDataWrCnt));
+            --   write(line_out, string'(" "));
+            --   write(line_out, to_hstring(sectorBuffers_DataB));               
+            --   writeline(outfile, line_out);
+            --   newoutputCnt := newoutputCnt + 1;
+            --   fifoDataWrCnt := fifoDataWrCnt + 4;
+            --elsif (copyState = COPY_IDLE) then
+            --   fifoDataWrCnt := (others => '0');
+            --end if;
             
             --if (dma_read = '1') then
             --   write(line_out, string'("DMAREAD: 00 000000"));

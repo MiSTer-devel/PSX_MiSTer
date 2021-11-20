@@ -15,7 +15,6 @@ architecture arch of etb is
    signal clk1x               : std_logic := '1';
             
    signal reset               : std_logic := '1';
-   signal SS_reset            : std_logic := '1';
    
    -- cd
    signal bus_addr            : unsigned(3 downto 0) := (others => '0'); 
@@ -38,6 +37,14 @@ architecture arch of etb is
    
    signal cdSize              : unsigned(29 downto 0);
    
+   -- savestates
+   signal reset_in            : std_logic;
+   signal reset_out           : std_logic := '1';
+   signal SS_reset            : std_logic := '0';
+   signal SS_DataWrite        : std_logic_vector(31 downto 0) := (others => '0');
+   signal SS_Adr              : unsigned(18 downto 0) := (others => '0');
+   signal SS_wren             : std_logic_vector(16 downto 0) := (others => '0');
+   
    -- testbench
    signal cmdCount            : integer := 0;
    signal clkCount            : integer := 0;
@@ -46,15 +53,14 @@ begin
 
    clk1x  <= not clk1x  after 15 ns;
    
-   reset     <= '0' after 3000 ns;
-   SS_reset  <= '0' after 1500 ns;
+   reset_in  <= '0' after 3000 ns;
    
    icd_top : entity psx.cd_top
    port map
    (
       clk1x                => clk1x,
       ce                   => '1',        
-      reset                => reset,  
+      reset                => reset_out,  
 
       hasCD                => '1',
       cdSize               => cdSize,
@@ -77,16 +83,16 @@ begin
       cd_done              => cd_done,
       
       SS_reset             => SS_reset,
-      SS_DataWrite         => (31 downto 0 => '0'),
-      SS_Adr               => (13 downto 0 => '0'),
-      SS_wren              => '0'
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(13 downto 0),
+      SS_wren              => SS_wren(13)
    );
    
    isdram_model : entity work.sdram_model 
    generic map
    (
       FILELOADING => '1',
-      INITFILE => "test_triangle.iso"
+      --INITFILE => "test_triangle.iso"
    )
    port map
    (
@@ -106,6 +112,25 @@ begin
    
    cd_data <= ram_do(31 downto 0);
    
+   
+   itb_savestates : entity work.tb_savestates
+   generic map
+   (
+      LOADSTATE         => '1',
+      FILENAME          => ""
+   )
+   port map
+   (
+      clk               => clk1x,         
+      reset_in          => reset_in,    
+      reset_out         => reset_out,   
+      SS_reset          => SS_reset,    
+      SS_DataWrite      => SS_DataWrite,
+      SS_Adr            => SS_Adr,      
+      SS_wren           => SS_wren     
+   );
+   
+   
    process
       file infile          : text;
       variable f_status    : FILE_OPEN_STATUS;
@@ -120,8 +145,9 @@ begin
       
       file_open(f_status, infile, "R:\cd_test_fpsxa.txt", read_mode);
       
-      clkCount <= 2;
-      wait until reset = '0';
+      clkCount <= 1;
+      wait until reset_out = '1';
+      wait until reset_out = '0';
       
       while (not endfile(infile)) loop
          
