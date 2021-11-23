@@ -104,6 +104,12 @@ entity memorymux is
       bus_mdec_write       : out std_logic;
       bus_mdec_dataRead    : in  std_logic_vector(31 downto 0);
       
+      bus_spu_addr         : out unsigned(9 downto 0); 
+      bus_spu_dataWrite    : out std_logic_vector(15 downto 0);
+      bus_spu_read         : out std_logic;
+      bus_spu_write        : out std_logic;
+      bus_spu_dataRead     : in  std_logic_vector(15 downto 0);
+      
       bus_exp2_addr        : out unsigned(12 downto 0); 
       bus_exp2_dataWrite   : out std_logic_vector(31 downto 0);
       bus_exp2_read        : out std_logic;
@@ -134,7 +140,10 @@ architecture arch of memorymux is
       BUSACTION,
       CD_WRITE,
       CD_READ_WAIT,
-      CD_READ,
+      CD_READ,      
+      SPU_WRITE,
+      SPU_READ_WAIT,
+      SPU_READ,
       WAITING,
       
       EXEREADHEADER,
@@ -161,6 +170,7 @@ architecture arch of memorymux is
    signal rotate32         : std_logic;
    
    signal data_cd          : std_logic_vector(31 downto 0);
+   signal data_spu         : std_logic_vector(31 downto 0);
    
    -- EXE handling
    signal loadExe_latched  : std_logic := '0';
@@ -310,19 +320,22 @@ begin
    
    dataFromBusses <= bus_exp1_dataRead or bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_irq_dataRead or bus_dma_dataRead or 
                      bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or bus_exp2_dataRead or
-                     data_cd;
+                     data_cd or data_spu;
   
    process (clk1x)
       variable biosPatch  : std_logic_vector(31 downto 0);
    begin
       if rising_edge(clk1x) then
       
-         ram_ena     <= '0';
-         mem_done    <= '0';
-         reset_exe   <= '0';
+         ram_ena        <= '0';
+         mem_done       <= '0';
+         reset_exe      <= '0';
          
-         bus_cd_read  <= '0';
-         bus_cd_write <= '0';
+         bus_cd_read    <= '0';
+         bus_cd_write   <= '0';         
+         
+         bus_SPU_read   <= '0';
+         bus_SPU_write  <= '0';
          
          if (loadExe = '1') then
             loadExe_latched <= '1';
@@ -346,6 +359,7 @@ begin
                   rotate32        <= '0';
                   
                   data_cd         <= (others => '0');
+                  data_spu        <= (others => '0');
                   
                   if (loadExe_latched = '1') then
                      
@@ -421,7 +435,14 @@ begin
                               else
                                  state   <= CD_WRITE;
                               end if;
-                              
+                           elsif (mem_addressData(28 downto 0) >= 16#1F801C00# and mem_addressData(28 downto 0) < 16#1F802000#) then
+                              if (mem_rnw = '1') then
+                                 state        <= SPU_READ_WAIT;
+                                 bus_spu_addr <= mem_addressData(9 downto 0);
+                                 bus_spu_read <= '1';
+                              else
+                                 state   <= SPU_WRITE;
+                              end if;
                            else  
                               state <= BUSACTION;
                               if (bus_dma_read = '1' and mem_reqsize /= 4) then rotate32 <= '1'; end if;
@@ -526,6 +547,7 @@ begin
                   mem_done     <= '1';
                   state        <= IDLE;
                   
+               -- CD
                when CD_WRITE =>
                   byteStep    <= byteStep + 1;
                   bus_cd_addr <= addressData_buf(3 downto 2) & byteStep;
@@ -567,6 +589,39 @@ begin
                         
                      when "11" => 
                         data_cd(31 downto 24) <= bus_cd_dataRead;
+                        state <= BUSACTION; 
+                        
+                     when others => null;
+                  end case;  
+                  
+               -- SPU
+               when SPU_WRITE =>  -- todo: single byte write is special
+                  byteStep    <= byteStep + 2;
+                  bus_spu_addr <= addressData_buf(9 downto 2) & byteStep;
+                  case (byteStep) is
+                     when "00" => if (writeMask_buf(1 downto 0) /= "00") then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(15 downto  0); end if;
+                     when "10" => if (writeMask_buf(3 downto 2) /= "00") then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(31 downto 16); end if; state <= BUSACTION; 
+                     when others => null;
+                  end case;
+                  
+               when SPU_READ_WAIT =>
+                  state <= SPU_READ;
+                  
+               when SPU_READ =>
+                  state        <= SPU_READ_WAIT;
+                  byteStep     <= byteStep + 2;
+                  bus_spu_addr <= bus_spu_addr + 2;
+                  case (byteStep) is
+                     when "00" => 
+                        data_spu(15 downto  0) <= bus_spu_dataRead; 
+                        if (reqsize_buf /= "10") then 
+                           state <= BUSACTION; 
+                        else
+                           bus_spu_read <= '1';
+                        end if;
+                        
+                     when "10" => 
+                        data_spu(31 downto 16) <= bus_spu_dataRead;
                         state <= BUSACTION; 
                         
                      when others => null;

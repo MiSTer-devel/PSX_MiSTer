@@ -172,9 +172,7 @@ begin
    ipsx_mister : entity psx.psx_mister
    generic map
    (
-      is_simu               => '1',
-      REPRODUCIBLEGPUTIMING => '0',
-      REPRODUCIBLEDMATIMING => '1'
+      is_simu               => '1'
    )
    port map
    (
@@ -184,6 +182,9 @@ begin
       -- commands 
       loadExe               => psx_LoadExe(0),
       fastboot              => '1',
+      REPRODUCIBLEGPUTIMING => '1',
+      REPRODUCIBLEDMATIMING => '1',
+      CDDISABLE             => '0',
       -- RAM/BIOS interface        
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 
@@ -206,7 +207,7 @@ begin
       DDRAM_BE              => DDRAM_BE,        
       DDRAM_WE              => DDRAM_WE,
       -- cd
-      fastCD                => '1',
+      fastCD                => '0',
       cd_Size               => cdSize,
       cd_req                => cd_req, 
       cd_addr               => cd_addr,

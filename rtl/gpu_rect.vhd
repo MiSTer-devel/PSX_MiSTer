@@ -5,15 +5,13 @@ use IEEE.numeric_std.all;
 library mem;
 
 entity gpu_rect is
-   generic
-   (
-      REPRODUCIBLEGPUTIMING : std_logic
-   );
    port 
    (
       clk2x                : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
+      
+      REPRODUCIBLEGPUTIMING: in  std_logic;
       
       DrawPixelsMask       : in  std_logic;
       interlacedDrawing    : in  std_logic;

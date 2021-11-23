@@ -52,6 +52,7 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/cd_top.vhd ^
 ../../rtl/memctrl.vhd ^
 ../../rtl/sio.vhd ^
+../../rtl/spu.vhd ^
 ../../rtl/cpu.vhd ^
 ../../rtl/memorymux.vhd ^
 ../../rtl/statemanager.vhd ^

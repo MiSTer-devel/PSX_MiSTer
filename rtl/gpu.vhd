@@ -7,10 +7,6 @@ library mem;
 use work.pGPU.all;
 
 entity gpu is
-   generic
-   (
-      REPRODUCIBLEGPUTIMING : std_logic
-   );
    port 
    (
       clk1x                : in  std_logic;
@@ -19,6 +15,7 @@ entity gpu is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      REPRODUCIBLEGPUTIMING: in  std_logic;
       videoout_on          : in  std_logic;
       isPal                : in  std_logic;
       
@@ -28,6 +25,7 @@ entity gpu is
       bus_write            : in  std_logic;
       bus_dataRead         : out std_logic_vector(31 downto 0);
       
+      dmaOn                : in  std_logic;
       gpu_dmaRequest       : out std_logic;
       DMA_GPU_writeEna     : in  std_logic;
       DMA_GPU_readEna      : in  std_logic;
@@ -760,7 +758,7 @@ begin
       Empty    => fifoIn_Empty   
    );
    
-   fifoIn_Rd <= ce and (proc_idle or proc_requestFifo) and not fifoIn_Empty and not fifoIn_Valid;
+   fifoIn_Rd <= '1' when (ce = '1' and (proc_idle = '1' or proc_requestFifo = '1') and fifoIn_Empty = '0' and fifoIn_Valid = '0' and (clk2xIndex = '0' or REPRODUCIBLEGPUTIMING = '0')) else '0';
    
    process (clk2x)
    begin
@@ -1045,16 +1043,14 @@ begin
    );
    
    igpu_line : entity work.gpu_line
-   generic map
-   (
-      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING
-   )
    port map
    (
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset,     
+      reset                => softreset,
+
+      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,      
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
@@ -1100,15 +1096,13 @@ begin
    );
    
    igpu_rect : entity work.gpu_rect
-   generic map
-   (
-      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING
-   )
    port map
    (
       clk2x                => clk2x,     
       ce                   => ce,        
       reset                => softreset,     
+      
+      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
@@ -1155,16 +1149,14 @@ begin
    );
    
    igpu_poly : entity work.gpu_poly
-   generic map
-   (
-      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING
-   )
    port map
    (
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset,     
+      reset                => softreset,   
+
+      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,      
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,

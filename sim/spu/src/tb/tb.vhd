@@ -16,26 +16,17 @@ architecture arch of etb is
             
    signal reset               : std_logic := '1';
    
-   -- cd
-   signal bus_addr            : unsigned(3 downto 0) := (others => '0'); 
-   signal bus_dataWrite       : std_logic_vector(7 downto 0) := (others => '0');
+   -- spu
+   signal bus_addr            : unsigned(9 downto 0) := (others => '0'); 
+   signal bus_dataWrite       : std_logic_vector(15 downto 0) := (others => '0');
    signal bus_read            : std_logic := '0';
    signal bus_write           : std_logic := '0';
-   signal bus_dataRead        : std_logic_vector(7 downto 0); 
+   signal bus_dataRead        : std_logic_vector(15 downto 0); 
    
    signal dma_read            : std_logic := '0';
-   signal dma_readdata        : std_logic_vector(7 downto 0);
-   
-   signal fullyIdle           : std_logic;
-   
-   signal cd_req              : std_logic;
-   signal cd_addr             : std_logic_vector(26 downto 0) := (others => '0');
-   signal cd_data             : std_logic_vector(31 downto 0);
-   signal cd_done             : std_logic := '0';
-   
-   signal ram_do              : std_logic_vector(127 downto 0);
-   
-   signal cdSize              : unsigned(29 downto 0);
+   signal dma_readdata        : std_logic_vector(15 downto 0);   
+   signal dma_write           : std_logic := '0';
+   signal dma_writedata       : std_logic_vector(15 downto 0);
    
    -- savestates
    signal reset_in            : std_logic;
@@ -55,19 +46,12 @@ begin
    
    reset_in  <= '0' after 3000 ns;
    
-   icd_top : entity psx.cd_top
+   ispu : entity psx.spu
    port map
    (
       clk1x                => clk1x,
       ce                   => '1',        
-      reset                => reset_out,  
-
-      CDDISABLE            => '0',
-      hasCD                => '1',
-      cdSize               => cdSize,
-      fastCD               => '0',
-      
-      fullyIdle            => fullyIdle,
+      reset                => reset_out,
       
       bus_addr             => bus_addr,     
       bus_dataWrite        => bus_dataWrite,
@@ -77,42 +61,14 @@ begin
       
       dma_read             => dma_read,     
       dma_readdata         => dma_readdata,
-      
-      cd_req               => cd_req,
-      cd_addr              => cd_addr,
-      cd_data              => cd_data,
-      cd_done              => cd_done,
+      dma_write            => dma_write,     
+      dma_writedata        => dma_writedata,
       
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
-      SS_Adr               => SS_Adr(13 downto 0),
-      SS_wren              => SS_wren(13)
+      SS_Adr               => SS_Adr(7 downto 0),
+      SS_wren              => SS_wren(9)
    );
-   
-   isdram_model : entity work.sdram_model 
-   generic map
-   (
-      FILELOADING => '1',
-      --INITFILE => "test_triangle.iso"
-   )
-   port map
-   (
-      clk          => clk1x,
-      addr         => cd_addr,
-      req          => cd_req,
-      ram_128      => '0',
-      rnw          => '1',
-      be           => "0000",
-      di           => x"00000000",
-      do           => ram_do,
-      done         => cd_done,
-      reqprocessed => open,
-      ram_idle     => open,
-      fileSize     => cdSize
-   );
-   
-   cd_data <= ram_do(31 downto 0);
-   
    
    itb_savestates : entity work.tb_savestates
    generic map
@@ -137,14 +93,14 @@ begin
       variable f_status    : FILE_OPEN_STATUS;
       variable inLine      : LINE;
       variable para_type   : std_logic_vector(7 downto 0);
-      variable para_addr   : std_logic_vector(7 downto 0);
+      variable para_addr   : std_logic_vector(15 downto 0);
       variable para_time   : std_logic_vector(31 downto 0);
-      variable para_data   : std_logic_vector(31 downto 0);
+      variable para_data   : std_logic_vector(15 downto 0);
       variable space       : character;
       variable idleTime    : integer;
    begin
       
-      file_open(f_status, infile, "R:\cd_test_fpsxa.txt", read_mode);
+      file_open(f_status, infile, "R:\sound_test_fpsxa.txt", read_mode);
       
       clkCount <= 1;
       wait until reset_out = '1';
@@ -167,28 +123,25 @@ begin
          while (clkCount < unsigned(para_time)) loop
             clkCount <= clkCount + 1;
             wait until rising_edge(clk1x);
-            if (fullyIdle = '1') then
-               idleTime := idleTime + 1;
-               --if (idleTime > 10000) then
-               --   idleTime := 0;
-               --   clkCount <= to_integer(unsigned(para_time)) - 1000;
-               --   wait until rising_edge(clk1x);
-               --end if;
-            end if;
          end loop;
          
-         if (para_type = x"08") then
-            bus_addr    <= unsigned(para_addr(3 downto 0));
-            bus_read    <= '1';
-         end if;
-         
-         if (para_type = x"09") then
-            bus_dataWrite <= para_data(7 downto 0);
-            bus_addr      <= unsigned(para_addr(3 downto 0));
+         if (para_type = x"01") then
+            bus_dataWrite <= para_data;
+            bus_addr      <= unsigned(para_addr(9 downto 0));
             bus_write     <= '1';
          end if;
          
-         if (para_type = x"0A") then
+         if (para_type = x"02") then
+            bus_addr    <= unsigned(para_addr(9 downto 0));
+            bus_read    <= '1';
+         end if;
+         
+         if (para_type = x"03") then
+            dma_write     <= '1';
+            dma_writedata <= para_data;
+         end if;
+         
+         if (para_type = x"04") then
             dma_read    <= '1';
          end if;
          
@@ -197,6 +150,7 @@ begin
          wait until rising_edge(clk1x);
          bus_read      <= '0';
          bus_write     <= '0';
+         dma_write     <= '0';
          dma_read      <= '0';
       end loop;
       

@@ -12,6 +12,7 @@ entity cd_top is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      CDDISABLE            : in  std_logic;
       hasCD                : in  std_logic;
       cdSize               : in  unsigned(29 downto 0);
       fastCD               : in  std_logic;
@@ -24,7 +25,7 @@ entity cd_top is
       bus_dataWrite        : in  std_logic_vector(7 downto 0);
       bus_read             : in  std_logic;
       bus_write            : in  std_logic;
-      bus_dataRead         : out std_logic_vector(7 downto 0);
+      bus_dataRead         : out std_logic_vector(7 downto 0) := (others => '0');
       
       dma_read             : in  std_logic;
       dma_readdata         : out std_logic_vector(7 downto 0);
@@ -210,6 +211,22 @@ architecture arch of cd_top is
    signal fetchCount                : integer range 0 to 588;
    signal fetchDelay                : integer range 0 to 15;
       
+   -- read subchannel
+   type treadSubchannelState is
+	(
+		SSUB_IDLE,
+      SSUB_CALCPOS,
+      SSUB_CALCSECTOR
+	);
+   signal readSubchannelState       : treadSubchannelState := SSUB_IDLE;
+   
+   signal readSubchannel            : std_logic := '0';
+   signal subchannelLBAwork         : integer range 0 to 262143;  
+   signal sub_SecondsHigh           : unsigned(3 downto 0); 
+   signal sub_SecondsLow            : unsigned(3 downto 0); 
+   signal sub_MinutesHigh           : unsigned(3 downto 0); 
+   signal sub_MinutesLow            : unsigned(3 downto 0);
+      
    -- sector process
    type tsectorProcess is
 	(
@@ -320,15 +337,9 @@ begin
    begin
       if (rising_edge(clk1x)) then
       
-         beginCommand      <= '0';
-         irqOut            <= '0';
+         FifoData_reset    <= '0';
          FifoResponse_Rd   <= '0';
          FifoParam_Wr      <= '0';
-         ackRead_valid     <= '0';
-         ackPendingIRQ     <= '0';
-         FifoData_reset    <= '0';
-         copyData          <= '0';
-         cmd_unpause       <= '0';
       
          if (reset = '1') then
             
@@ -336,8 +347,16 @@ begin
             CDROM_IRQENA    <= ss_in(21)(12 downto 8); -- (others => '0');
             CDROM_IRQFLAG   <= ss_in(21)(20 downto 16); -- (others => '0');
             pendingDriveIRQ <= ss_in(13)(24); -- '0';
+            nextCmd         <= ss_in(13)(23 downto 16); -- '0';
             
          elsif (ce = '1') then
+         
+            beginCommand      <= '0';
+            irqOut            <= '0';
+            ackRead_valid     <= '0';
+            ackPendingIRQ     <= '0';
+            copyData          <= '0';
+            cmd_unpause       <= '0';
          
             CDROM_STATUS(2) <= '0';                      -- ADPBUSY XA-ADPCM fifo empty  (0=Empty) ;set when playing XA-ADPCM sound
             CDROM_STATUS(3) <= FifoParam_Empty;          -- PRMEMPT Parameter fifo empty (1=Empty) ;triggered before writing 1st byte
@@ -346,7 +365,7 @@ begin
             CDROM_STATUS(6) <= not FifoData_Empty;       -- DRQSTS  Data fifo empty      (0=Empty) ;triggered after reading LAST byte
             CDROM_STATUS(7) <= cmdPending;               -- BUSYSTS Command/parameter transmission busy  (1=Busy)  
          
-            if (bus_write = '1') then
+            if (bus_write = '1' and CDDISABLE = '0') then
             
                if (bus_addr = x"0") then
                   CDROM_STATUS(1 downto 0) <= bus_dataWrite(1 downto 0);
@@ -421,7 +440,7 @@ begin
             
             end if; -- end bus write
          
-            if (bus_read = '1') then
+            if (bus_read = '1' and CDDISABLE = '0') then
                bus_dataRead <= (others => '0');
                case (bus_addr) is
                   when x"0" => 
@@ -509,6 +528,10 @@ begin
                   irqOut <= '1';
                end if;
             end if; 
+            
+            if (CDDISABLE = '1') then
+               irqOut <= '0';
+            end if;
 
          end if; -- ce
       end if;
@@ -540,21 +563,6 @@ begin
    process(clk1x)
    begin
       if (rising_edge(clk1x)) then
-      
-         handleCommand           <= '0';
-         cmdAck                  <= '0';
-         cmdIRQ                  <= '0';
-         driveAck                <= '0';
-         getIDAck                <= '0';
-         softReset               <= '0';
-         seekOnDiskCmd           <= '0';
-         setMode                 <= '0';
-         readSN                  <= '0';
-         drive_stop              <= '0';
-         startMotorCMD           <= '0';
-         shell_close             <= '0';
-         errorResponseCmd_new    <= '0';
-         errorResponseNext_new   <= '0';
          
          FifoResponse_reset      <= '0';
          FifoResponse_Wr         <= '0';
@@ -571,10 +579,29 @@ begin
             fifoParamCount          <= 0;
             working                 <= ss_in(18)(2); -- '0'
             workDelay               <= to_integer(unsigned(ss_in(0)(18 downto 0))); -- 0
+            workCommand             <= ss_in(14)(15 downto 8);
                
             setLocActive            <= ss_in(18)(3); -- '0'
+            setLocMinute            <= unsigned(ss_in(14)(23 downto 16));
+            setLocSecond            <= unsigned(ss_in(14)(31 downto 24));
+            setLocFrame             <= unsigned(ss_in(18)(7 downto 0));
             
          elsif (ce = '1') then
+         
+            handleCommand           <= '0';
+            cmdAck                  <= '0';
+            cmdIRQ                  <= '0';
+            driveAck                <= '0';
+            getIDAck                <= '0';
+            softReset               <= '0';
+            seekOnDiskCmd           <= '0';
+            setMode                 <= '0';
+            readSN                  <= '0';
+            drive_stop              <= '0';
+            startMotorCMD           <= '0';
+            shell_close             <= '0';
+            errorResponseCmd_new    <= '0';
+            errorResponseNext_new   <= '0';
          
             -- receive new command request or decrease wait timer on pending command
             if (beginCommand = '1') then
@@ -604,7 +631,9 @@ begin
                cmd_busy <= '1';
             elsif (cmd_busy = '1') then
                if (cmd_delay > 0) then
-                  cmd_delay <= cmd_delay - 1;
+                  if ((driveBusy = '0' or driveDelay > 100) and (working = '0' or workDelay > 100)) then
+                     cmd_delay <= cmd_delay - 1;
+                  end if;
                else
                   handleCommand <= '1';
                   cmd_busy      <= '0';
@@ -1063,17 +1092,6 @@ begin
    process(clk1x)
    begin
       if (rising_edge(clk1x)) then
-
-         handleDrive             <= '0';
-         readOnDisk              <= '0';
-         ackDrive                <= '0';
-         ackDriveEnd             <= '0';
-         seekOnDiskDrive         <= '0';
-         errorResponseDrive_new  <= '0';
-         startReading            <= '0';
-         ackRead                 <= '0';
-         pause_cmd               <= '0';
-         processDataSector       <= '0';
          
          if (SS_reset = '1') then
             startMotor           <= '1'; 
@@ -1137,6 +1155,17 @@ begin
             
          elsif (ce = '1') then
          
+            handleDrive             <= '0';
+            readOnDisk              <= '0';
+            ackDrive                <= '0';
+            ackDriveEnd             <= '0';
+            seekOnDiskDrive         <= '0';
+            errorResponseDrive_new  <= '0';
+            startReading            <= '0';
+            ackRead                 <= '0';
+            pause_cmd               <= '0';
+            processDataSector       <= '0';
+         
             startMotor   <= '0'; 
          
             if (driveBusy = '1') then
@@ -1183,7 +1212,7 @@ begin
                      
                      
                   when DRIVE_READING | DRIVE_PLAYING =>
-                     --pause_cmd <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
+                     pause_cmd <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
                      if (trackNumberBCD = LEAD_OUT_TRACK_NUMBER) then
                         internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                         internalStatus(1)          <= '0'; -- motor off
@@ -1330,7 +1359,6 @@ begin
    end process;
    
    
-   -- todo: readSubchannel 
    -- todo : seekOK
    
    iramSectorBuffer: entity work.dpram
@@ -1379,13 +1407,13 @@ begin
    
    -- data processing
    process(clk1x)
+      variable frameLeft : unsigned(6 downto 0);
    begin
       if (rising_edge(clk1x)) then
 
          FifoData_Wr  <= '0';
          cd_req       <= '0';
-         ackRead_data <= '0';
-
+         
          sectorBuffer_wrenA  <= '0';
          sectorBuffers_wrenA <= '0';
 
@@ -1432,11 +1460,15 @@ begin
             if (SS_Adr = 1028 and SS_DataWrite(22) = '1' and SS_DataWrite(18) = '1' and headerDataCheck = '1') then headerIsData <= '0'; end if;
             
          elsif (ce = '1') then
+         
+            ackRead_data   <= '0';
+            readSubchannel <= '0';
    
             case (sectorFetchState) is
             
                when SFETCH_IDLE =>
                   if (readOnDisk = '1') then
+                     readSubchannel <= '1';
                      lastReadSector   <= readLBA;
                      if (readLBA >= startLBA) then
                         positionInIndex <= readLBA - startLBA;
@@ -1487,6 +1519,66 @@ begin
                      if (fetchcount = 4 and cd_data(22) = '1' and cd_data(18) = '1' and headerDataCheck = '1') then headerIsData <= '0'; end if;
                   end if;
                   
+            end case;
+            
+            case (readSubchannelState) is
+            
+               when SSUB_IDLE => -- todo: maybe replace with sbi
+                  if (readSubchannel = '1') then
+                     nextSubdata(0)       <= x"40";          -- index control bits
+                     nextSubdata(1)       <= std_logic_vector(trackNumberBCD); 
+                     nextSubdata(2)       <= x"01";           -- index number
+                     subchannelLBAwork    <= positionInIndex; 
+                     readSubchannelState  <= SSUB_CALCPOS;
+                     sub_SecondsHigh      <= (others => '0');
+                     sub_SecondsLow       <= (others => '0');
+                     sub_MinutesHigh      <= (others => '0');
+                     sub_MinutesLow       <= (others => '0');
+                  end if;
+               
+               when SSUB_CALCPOS | SSUB_CALCSECTOR =>
+                  if (subchannelLBAwork >= FRAMES_PER_SECOND) then
+                     subchannelLBAwork <= subchannelLBAwork - FRAMES_PER_SECOND;
+                  
+                     if (sub_SecondsLow < 9) then
+                        sub_SecondsLow <= sub_SecondsLow + 1;
+                     else
+                        sub_SecondsLow <= (others => '0');
+                        if (sub_SecondsHigh < 5) then
+                           sub_SecondsHigh <= sub_SecondsHigh + 1;
+                        else
+                           sub_SecondsHigh <= (others => '0');
+                           if (sub_MinutesLow < 9) then
+                              sub_MinutesLow <= sub_MinutesLow + 1;
+                           else
+                              sub_MinutesLow  <= (others => '0');
+                              sub_MinutesHigh <= sub_MinutesHigh + 1;
+                           end if;
+                        end if;
+                     end if;
+                  else
+                     frameLeft := to_unsigned(subchannelLBAwork, 7);
+                     subchannelLBAwork <= 0;
+                     if (readSubchannelState = SSUB_CALCPOS) then
+                        readSubchannelState        <= SSUB_CALCSECTOR;
+                        subchannelLBAwork          <= readLBA; 
+                        nextSubdata(3)             <= std_logic_vector(sub_MinutesHigh & sub_MinutesLow);
+                        nextSubdata(4)             <= std_logic_vector(sub_SecondsHigh & sub_SecondsLow);
+                        nextSubdata(5)(7 downto 4) <= std_logic_vector(resize(frameLeft / 10, 4));
+                        nextSubdata(5)(3 downto 0) <= std_logic_vector(resize(frameLeft mod 10, 4));
+                        sub_SecondsHigh            <= (others => '0');
+                        sub_SecondsLow             <= (others => '0');
+                        sub_MinutesHigh            <= (others => '0');
+                        sub_MinutesLow             <= (others => '0');
+                     else
+                        readSubchannelState  <= SSUB_IDLE;
+                        nextSubdata(7)             <= std_logic_vector(sub_MinutesHigh & sub_MinutesLow);
+                        nextSubdata(8)             <= std_logic_vector(sub_SecondsHigh & sub_SecondsLow);
+                        nextSubdata(9)(7 downto 4) <= std_logic_vector(resize(frameLeft / 10, 4));
+                        nextSubdata(9)(3 downto 0) <= std_logic_vector(resize(frameLeft mod 10, 4));
+                     end if;
+                  end if;
+               
             end case;
             
             case (sectorProcessState) is
@@ -1795,7 +1887,7 @@ begin
                newoutputCnt := newoutputCnt + 1;
             end if;
             
-            if (processDataSector = '1' and (modeReg(6) = '0' or headerIsData = '1')) then
+            if (processDataSector = '1' and (modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
                write(line_out, string'("WPTR: "));
                if (WRITETIME = '1') then
                   write(line_out, to_hstring(clkCounter - 4));

@@ -182,7 +182,7 @@ begin
          if (exportnow = '1') then
          
             write(line_out, string'("# "));
-            write(line_out, to_lower(to_hstring(totalticks)) & " ");
+            write(line_out, to_lower(to_hstring(totalticks - 1)) & " ");
             
             write(line_out, string'("# "));
             write(line_out, to_lower(to_hstring(newticks)) & " ");

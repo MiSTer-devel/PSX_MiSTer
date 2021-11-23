@@ -6,16 +6,14 @@ library mem;
 use work.pGPU.all;
 
 entity gpu_line is
-   generic
-   (
-      REPRODUCIBLEGPUTIMING : std_logic
-   );
    port 
    (
       clk2x                : in  std_logic;
       clk2xIndex           : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
+      
+      REPRODUCIBLEGPUTIMING: in  std_logic;
       
       DrawPixelsMask       : in  std_logic;
       interlacedDrawing    : in  std_logic;

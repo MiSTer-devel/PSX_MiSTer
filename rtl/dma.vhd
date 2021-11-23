@@ -5,15 +5,13 @@ use IEEE.numeric_std.all;
 library mem;
 
 entity dma is
-   generic
-   (
-      REPRODUCIBLEDMATIMING : std_logic
-   );
    port 
    (
       clk1x                : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
+      
+      REPRODUCIBLEDMATIMING: in  std_logic;
       
       cpuPaused            : in  std_logic;
       dmaOn                : out std_logic;
@@ -42,10 +40,16 @@ entity dma is
       DMA_MDEC_writeEna    : out std_logic := '0';
       DMA_MDEC_readEna     : out std_logic := '0';
       DMA_MDEC_write       : out std_logic_vector(31 downto 0);
-      DMA_MDEC_read        : in  std_logic_vector(31 downto 0);
+      DMA_MDEC_read        : in  std_logic_vector(31 downto 0);      
       
       DMA_CD_readEna       : out std_logic := '0';
       DMA_CD_read          : in  std_logic_vector(7 downto 0);
+      
+      spu_dmaRequest       : in  std_logic;
+      DMA_SPU_writeEna     : out std_logic := '0';
+      DMA_SPU_readEna      : out std_logic := '0';
+      DMA_SPU_write        : out std_logic_vector(15 downto 0);
+      DMA_SPU_read         : in  std_logic_vector(15 downto 0);
       
       bus_addr             : in  unsigned(6 downto 0); 
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
@@ -72,8 +76,9 @@ architecture arch of dma is
       WORKING,
       STOPPING,
       PAUSING,
+      GPUBUSY,
       TIMEUP,
-      GPUBUSY
+      GPU_PAUSING
    );
    signal dmaState : tdmaState := OFF;
 
@@ -89,64 +94,66 @@ architecture arch of dma is
    type tdmaArray is array (0 to 6) of dmaRecord;
    signal dmaArray : tdmaArray;
   
-   signal DPCR             : unsigned(31 downto 0);
-   signal DICR             : unsigned(23 downto 0);
-   signal DICR_readback    : unsigned(31 downto 0);
-   signal DICR_IRQs        : unsigned(6 downto 0);
+   signal DPCR                : unsigned(31 downto 0);
+   signal DICR                : unsigned(23 downto 0);
+   signal DICR_readback       : unsigned(31 downto 0);
+   signal DICR_IRQs           : unsigned(6 downto 0);
+         
+   signal triggerDMA          : std_logic_vector(6 downto 0);
       
-   signal triggerDMA       : std_logic_vector(6 downto 0);
-   
-   signal wordAccu         : integer range 0 to 3 := 0;
-   signal DMA_CD_read_accu : std_logic_vector(23 downto 0);
+   signal wordAccu            : integer range 0 to 3 := 0;
+   signal DMA_CD_read_accu    : std_logic_vector(23 downto 0);
+   signal DMA_SPU_read_accu   : std_logic_vector(15 downto 0);
       
-   signal isOn             : std_logic;
-   signal activeChannel    : integer range 0 to 6;
-   signal paused           : std_logic;
-   signal gpupaused        : std_logic;
-   signal waitcnt          : integer range 0 to 15;
-   signal dmaTime          : integer range 0 to 65535;
-   signal wordcount        : unsigned(16 downto 0);
-   signal toDevice         : std_logic;
-   signal directionNeg     : std_logic;
-   signal nextAddr         : std_logic_vector(23 downto 0);
-   signal blocksleft       : unsigned(15 downto 0);
-   signal dmacount         : unsigned(9 downto 0);
+   signal isOn                : std_logic;
+   signal activeChannel       : integer range 0 to 6;
+   signal paused              : std_logic;
+   signal gpupaused           : std_logic;
+   signal waitcnt             : integer range 0 to 15;
+   signal dmaTime             : integer range 0 to 65535;
+   signal wordcount           : unsigned(16 downto 0);
+   signal toDevice            : std_logic;
+   signal directionNeg        : std_logic;
+   signal nextAddr            : std_logic_vector(23 downto 0);
+   signal blocksleft          : unsigned(15 downto 0);
+   signal dmacount            : unsigned(9 downto 0);
+         
+   signal autoread            : std_logic := '0';
+   signal readcount           : unsigned(9 downto 0);
+   signal readsize            : unsigned(9 downto 0);
+   signal firstword           : std_logic := '0';
       
-   signal autoread         : std_logic := '0';
-   signal readcount        : unsigned(9 downto 0);
-   signal readsize         : unsigned(9 downto 0);
-   signal firstword        : std_logic := '0';
-   
-   signal dataNext         : std_logic_vector(95 downto 0);
-   signal dataCount        : integer range 0 to 3 := 0;
-   signal firstsize        : integer range 0 to 3 := 0;
-   signal requestOnFly     : integer range 0 to 2;
-   
-   signal fifoIn_reset     : std_logic := '0';
-   signal fifoIn_Din       : std_logic_vector(31 downto 0);
-   signal fifoIn_Wr        : std_logic; 
-   signal fifoIn_Full      : std_logic;
-   signal fifoIn_NearFull  : std_logic;
-   signal fifoIn_Dout      : std_logic_vector(31 downto 0);
-   signal fifoIn_Rd        : std_logic;
-   signal fifoIn_Empty     : std_logic;
-   signal fifoIn_Valid     : std_logic;   
-   
-   signal fifoOut_reset    : std_logic := '0';
-   signal fifoOut_Din      : std_logic_vector(50 downto 0);
-   signal fifoOut_Wr       : std_logic; 
-   signal fifoOut_Full     : std_logic;
-   signal fifoOut_NearFull : std_logic;
-   signal fifoOut_Dout     : std_logic_vector(50 downto 0);
-   signal fifoOut_Rd       : std_logic;
-   signal fifoOut_Empty    : std_logic;
-   signal fifoOut_Done     : std_logic;
-   
-   signal ramwrite_pending : std_logic;
-   
-   -- REPRODUCIBLEDMATIMING
-   signal REP_counter      : integer;
-   signal REP_target       : integer;
+   signal dataNext            : std_logic_vector(95 downto 0);
+   signal dataCount           : integer range 0 to 3 := 0;
+   signal firstsize           : integer range 0 to 3 := 0;
+   signal requestOnFly        : integer range 0 to 2;
+      
+   signal fifoIn_reset        : std_logic := '0';
+   signal fifoIn_Din          : std_logic_vector(31 downto 0);
+   signal fifoIn_Wr           : std_logic; 
+   signal fifoIn_Full         : std_logic;
+   signal fifoIn_NearFull     : std_logic;
+   signal fifoIn_Dout         : std_logic_vector(31 downto 0);
+   signal fifoIn_Rd           : std_logic;
+   signal fifoIn_Empty        : std_logic;
+   signal fifoIn_Valid        : std_logic;   
+   signal fifoIn_Valid_1      : std_logic;   
+      
+   signal fifoOut_reset       : std_logic := '0';
+   signal fifoOut_Din         : std_logic_vector(50 downto 0);
+   signal fifoOut_Wr          : std_logic; 
+   signal fifoOut_Full        : std_logic;
+   signal fifoOut_NearFull    : std_logic;
+   signal fifoOut_Dout        : std_logic_vector(50 downto 0);
+   signal fifoOut_Rd          : std_logic;
+   signal fifoOut_Empty       : std_logic;
+   signal fifoOut_Done        : std_logic;
+      
+   signal ramwrite_pending    : std_logic;
+      
+   -- REPRODUCIBLEDMATIMING   
+   signal REP_counter         : integer;
+   signal REP_target          : integer;
    
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
@@ -154,7 +161,7 @@ architecture arch of dma is
   
 begin 
 
-   dmaOn <= '1' when (dmaState = WAITING or dmaState = READHEADER or dmaState = WAITREAD or dmaState = WORKING or dmaState = STOPPING or dmaState = PAUSING) else '0';
+   dmaOn <= '1' when (dmaState = WAITING or dmaState = READHEADER or dmaState = WAITREAD or dmaState = WORKING or dmaState = STOPPING or dmaState = PAUSING or dmaState = GPU_PAUSING) else '0';
 
    ram_refresh <= '1' when (dmaState = WAITING and cpuPaused = '1' and waitcnt = 9) else '0';
    ram_be      <= "1111";
@@ -178,6 +185,10 @@ begin
    DMA_GPU_write     <= fifoIn_Dout;
 
    DMA_CD_readEna    <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 3 and toDevice = '0') else '0';
+   
+   DMA_SPU_readEna   <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 4 and toDevice = '0') else '0';
+   DMA_SPU_writeEna  <= '1' when ((fifoIn_Valid = '1' or fifoIn_Valid_1 = '1') and activeChannel = 4 and toDevice = '1') else '0'; 
+   DMA_SPU_write     <= fifoIn_Dout(15 downto 0) when fifoIn_Valid = '1' else fifoIn_Dout(31 downto 16);
 
    process (clk1x)
       variable channel         : integer range 0 to 7;
@@ -253,7 +264,7 @@ begin
             dmaArray(1).request <= mdec_dmaReadRequest;
             dmaArray(2).request <= gpu_dmaRequest;
             dmaArray(3).request <= '1';
-            dmaArray(4).request <= '0';
+            dmaArray(4).request <= spu_dmaRequest;
             dmaArray(5).request <= '0';
             dmaArray(6).request <= '1';
             
@@ -320,9 +331,13 @@ begin
             end if;
             
             -- triggers from modules
-            if (mdec_dmaWriteRequest = '1') then triggerDMA(0) <= '1'; end if;
-            if (mdec_dmaReadRequest = '1')  then triggerDMA(1) <= '1'; end if;
-                
+            if (mdec_dmaWriteRequest = '1')  then triggerDMA(0) <= '1'; end if;
+            if (mdec_dmaReadRequest = '1')   then triggerDMA(1) <= '1'; end if;
+            if (gpu_dmaRequest = '1')        then triggerDMA(2) <= '1'; end if;
+            if (dmaArray(3).D_CHCR(28))      then triggerDMA(3) <= '1'; end if;
+            if (spu_dmaRequest = '1')        then triggerDMA(4) <= '1'; end if;
+            if (dmaArray(6).D_CHCR(28))      then triggerDMA(6) <= '1'; end if;
+             
             -- trigger
             triggerNew     := '0';
             triggerchannel := 0;
@@ -342,7 +357,7 @@ begin
                               paused    <= '0';
                            end if;
                            
-                           if (dmaState /= OFF and dmaState /= TIMEUP and dmaState /= GPUBUSY) then
+                           if (triggerNew = '1' or (dmaState /= OFF and dmaState /= TIMEUP and dmaState /= GPUBUSY)) then
                               dmaArray(i).requestsPending <= '1';
                            else
                               -- todo : priority
@@ -375,6 +390,14 @@ begin
                   when 1 => wordAccu <= 0; DMA_CD_read_accu(23 downto 16) <= DMA_CD_read;
                   when 2 => wordAccu <= 1; DMA_CD_read_accu(15 downto  8) <= DMA_CD_read;
                   when 3 => wordAccu <= 2; DMA_CD_read_accu( 7 downto  0) <= DMA_CD_read;
+                  when others => null;
+               end case;
+            end if;
+            
+            if (DMA_SPU_readEna = '1') then
+               case (wordAccu) is
+                  when 0 => wordAccu <= 1; 
+                  when 1 => wordAccu <= 0; DMA_SPU_read_accu <= DMA_SPU_read;
                   when others => null;
                end case;
             end if;
@@ -508,6 +531,14 @@ begin
                               REP_target                <= REP_target + 4;
                            end if;
                            
+                        when 4 =>
+                           if (toDevice = '0') then
+                              fifoOut_Wr                <= '1';
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(4).D_MADR(20 downto 2));
+                              fifoOut_Din(31 downto 0)  <= DMA_SPU_read & DMA_SPU_read_accu;
+                              REP_target                <= REP_target + 2;
+                           end if;
+                           
                         when 6 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
@@ -566,7 +597,7 @@ begin
                                     waitcnt  <= 10;
                                     autoread <= '0';
                                  else
-                                    dmaState <= GPUBUSY;
+                                    dmaState <= GPU_PAUSING;
                                     paused   <= '1';
                                     autoread <= '0';
                                  end if;
@@ -610,12 +641,22 @@ begin
                
                when TIMEUP =>
                
+               when GPU_PAUSING =>
+                  if (fifoOut_Done = '1' and fifoOut_Wr = '0' and requestOnFly = 0) then
+                     if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
+                        dmaState <= GPUBUSY;
+                        paused   <= '1';
+                        autoread <= '0';
+                     end if;
+                  end if;
+               
                when GPUBUSY =>
                   if (gpu_dmaRequest = '1') then
-                     dmaState <= WAITING;
-                     waitcnt  <= 9;
-                     autoread <= '0';
-                     paused <= '0';
+                     dmaState    <= WAITING;
+                     waitcnt     <= 9;
+                     autoread    <= '0';
+                     paused      <= '0';
+                     REP_target  <= 32;
                   end if;
             
             end case;
@@ -690,7 +731,8 @@ begin
          
          requestOnFly <= requestOnFlyNew;
          
-         fifoIn_Valid <= fifoIn_Rd;
+         fifoIn_Valid   <= fifoIn_Rd;
+         fifoIn_Valid_1 <= fifoIn_Valid;
          
          -- fifo Out
          if (ram_done = '1') then
@@ -720,7 +762,10 @@ begin
                dataNext(31 downto 0);
    
    
-   fifoIn_Rd <= '1' when (fifoIn_Empty = '0' and ((dmaState = WAITING and waitcnt = 1) or (dmaState = WAITREAD and waitcnt = 1) or dmaState = working)) else '0';
+   fifoIn_Rd <= '1' when (fifoIn_Empty = '0' and dmaState = WAITING and waitcnt = 1) else
+                '1' when (fifoIn_Empty = '0' and dmaState = WAITREAD and waitcnt = 1) else 
+                '1' when (fifoIn_Empty = '0' and dmaState = working and (activeChannel /= 4 or fifoIn_Valid = '0')) else 
+                '0';
 
    
    iDMAfifoIn: entity mem.Syncfifo

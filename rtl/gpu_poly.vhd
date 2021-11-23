@@ -6,16 +6,14 @@ library mem;
 use work.pGPU.all;
 
 entity gpu_poly is
-   generic
-   (
-      REPRODUCIBLEGPUTIMING : std_logic
-   );
    port 
    (
       clk2x                : in  std_logic;
       clk2xIndex           : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
+      
+      REPRODUCIBLEGPUTIMING: in  std_logic;
       
       DrawPixelsMask       : in  std_logic;
       interlacedDrawing    : in  std_logic;
@@ -992,7 +990,7 @@ begin
                   end if;
                       
                when WAITIMING =>
-                  if (drawTiming + 2 >= targetTiming) then
+                  if (clk2xIndex = '0' and drawTiming + 4 >= targetTiming) then
                      state <= IDLE;
                      done  <= '1';
                   end if;

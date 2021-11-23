@@ -9,9 +9,7 @@ use work.pexport.all;
 entity psx_top is
    generic
    (
-      is_simu               : std_logic := '0';
-      REPRODUCIBLEGPUTIMING : std_logic := '0';
-      REPRODUCIBLEDMATIMING : std_logic := '0'
+      is_simu               : std_logic := '0'
    );
    port 
    (
@@ -21,6 +19,9 @@ entity psx_top is
       -- commands 
       loadExe               : in  std_logic;
       fastboot              : in  std_logic;
+      REPRODUCIBLEGPUTIMING : in  std_logic;
+      REPRODUCIBLEDMATIMING : in  std_logic;
+      CDDISABLE             : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -175,6 +176,12 @@ architecture arch of psx_top is
    signal bus_mdec_write         : std_logic;
    signal bus_mdec_dataRead      : std_logic_vector(31 downto 0);
    
+   signal bus_spu_addr           : unsigned(9 downto 0); 
+   signal bus_spu_dataWrite      : std_logic_vector(15 downto 0);
+   signal bus_spu_read           : std_logic;
+   signal bus_spu_write          : std_logic;
+   signal bus_spu_dataRead       : std_logic_vector(15 downto 0);
+   
    signal bus_exp2_addr          : unsigned(12 downto 0); 
    signal bus_exp2_dataWrite     : std_logic_vector(31 downto 0);
    signal bus_exp2_read          : std_logic;
@@ -267,6 +274,12 @@ architecture arch of psx_top is
    signal DMA_CD_readEna         : std_logic;
    signal DMA_CD_read            : std_logic_vector(7 downto 0);
    
+   signal spu_dmaRequest         : std_logic;
+   signal DMA_SPU_writeEna       : std_logic := '0';
+   signal DMA_SPU_readEna        : std_logic := '0';
+   signal DMA_SPU_write          : std_logic_vector(15 downto 0);
+   signal DMA_SPU_read           : std_logic_vector(15 downto 0);
+   
    -- cpu
    signal ce_intern              : std_logic := '0';
    signal ce_cpu                 : std_logic := '0';
@@ -304,6 +317,7 @@ architecture arch of psx_top is
    signal SS_DataRead_GTE        : std_logic_vector(31 downto 0);
    signal SS_DataRead_PAD        : std_logic_vector(31 downto 0);
    signal SS_DataRead_MDEC       : std_logic_vector(31 downto 0);
+   signal SS_DataRead_SPU        : std_logic_vector(31 downto 0);
    signal SS_DataRead_TMR        : std_logic_vector(31 downto 0);
    signal SS_DataRead_IRQ        : std_logic_vector(31 downto 0);
    signal SS_DataRead_CD         : std_logic_vector(31 downto 0);
@@ -494,7 +508,6 @@ begin
    );
    
    irq_SIO       <= '0'; -- todo
-   irq_SPU       <= '0'; -- todo
    irq_LIGHTPEN  <= '0'; -- todo
 
    iirq : entity work.irq
@@ -534,15 +547,13 @@ begin
    );
    
    idma : entity work.dma
-   generic map
-   (
-      REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING
-   )
    port map
    (
       clk1x                => clk1x,
       ce                   => ce,   
       reset                => reset_intern,
+      
+      REPRODUCIBLEDMATIMING=> REPRODUCIBLEDMATIMING,
       
       cpuPaused            => cpuPaused,
       dmaOn                => dmaOn,
@@ -575,6 +586,12 @@ begin
 
       DMA_CD_readEna       => DMA_CD_readEna,
       DMA_CD_read          => DMA_CD_read,   
+      
+      spu_dmaRequest       => spu_dmaRequest, 
+      DMA_SPU_writeEna     => DMA_SPU_writeEna,   
+      DMA_SPU_readEna      => DMA_SPU_readEna,    
+      DMA_SPU_write        => DMA_SPU_write,    
+      DMA_SPU_read         => DMA_SPU_read,
       
       bus_addr             => bus_dma_addr,     
       bus_dataWrite        => bus_dma_dataWrite,
@@ -657,6 +674,7 @@ begin
       ce                   => ce,   
       reset                => reset_intern,
      
+      CDDISABLE            => CDDISABLE,
       hasCD                => '1',
       fastCD               => fastCD,
           
@@ -688,10 +706,6 @@ begin
    hblank <= hblank_intern;
    
    igpu : entity work.gpu
-   generic map
-   (
-      REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING
-   )
    port map
    (
       clk1x                => clk1x,
@@ -700,6 +714,7 @@ begin
       ce                   => ce,   
       reset                => reset_intern,
       
+      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
       videoout_on          => videoout_on,
       isPal                => isPal,
       
@@ -709,6 +724,7 @@ begin
       bus_write            => bus_gpu_write,    
       bus_dataRead         => bus_gpu_dataRead, 
       
+      dmaOn                => dmaOn,
       gpu_dmaRequest       => gpu_dmaRequest,  
       DMA_GPU_writeEna     => DMA_GPU_writeEna,
       DMA_GPU_readEna      => DMA_GPU_readEna, 
@@ -786,6 +802,34 @@ begin
       SS_Adr               => SS_Adr(6 downto 0),      
       SS_wren              => SS_wren(6),     
       SS_DataRead          => SS_DataRead_MDEC      
+   );
+   
+   ispu : entity work.spu
+   port map
+   (
+      clk1x                => clk1x,     
+      ce                   => ce,        
+      reset                => reset_intern,     
+      
+      irqOut               => irq_SPU,
+      
+      bus_addr             => bus_spu_addr,     
+      bus_dataWrite        => bus_spu_dataWrite,
+      bus_read             => bus_spu_read,     
+      bus_write            => bus_spu_write,    
+      bus_dataRead         => bus_spu_dataRead, 
+      
+      spu_dmaRequest       => spu_dmaRequest, 
+      dma_read             => DMA_SPU_readEna,      
+      dma_readdata         => DMA_SPU_read, 
+      dma_write            => DMA_SPU_writeEna, 
+      dma_writedata        => DMA_SPU_write,
+      
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(7 downto 0),  
+      SS_wren              => SS_wren(9),     
+      SS_DataRead          => SS_DataRead_SPU     
    );
    
    iexp2 : entity work.exp2
@@ -904,6 +948,12 @@ begin
       bus_mdec_read        => bus_mdec_read,     
       bus_mdec_write       => bus_mdec_write,    
       bus_mdec_dataRead    => bus_mdec_dataRead, 
+      
+      bus_spu_addr         => bus_spu_addr,     
+      bus_spu_dataWrite    => bus_spu_dataWrite,
+      bus_spu_read         => bus_spu_read,     
+      bus_spu_write        => bus_spu_write,    
+      bus_spu_dataRead     => bus_spu_dataRead, 
       
       bus_exp2_addr        => bus_exp2_addr,     
       bus_exp2_dataWrite   => bus_exp2_dataWrite,

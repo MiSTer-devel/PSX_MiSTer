@@ -21,14 +21,8 @@ In Framebuffer mode you can choose to view:
 
 Work in progress, don't report any bugs!
 
-- Amidogs CPU test fully passed
-- Amidogs GTE math test fully passed
-- most rendering functions working
-- MDEC logic finished
-
-- some games working with savestate loading
-- BIOS startup working
-- booting of simple test CDs working(no games!)
+- only very few games working
+- first part of BIOS startup working
 
 --
 
@@ -45,11 +39,9 @@ GPU    : 80%
 Memory : 50%
 - DMA write performance only 32bit/2 cycles, should be 32Bit/1 cycle
 - SPU RAM not implemented
-- rotate register read16/32 missing
+- rotate register read16 missing
 
 IRQ    : 40%
-- irq_GPU missing    
-- irq_CDROM missing 
 - irq_SIO missing     
 - irq_SPU missing    
 - irq_LIGHTPEN missing
@@ -60,7 +52,6 @@ PAD    : 30%
 - all other special controllers not supported
 
 DMA    : 30%
-- only Mem->GPU and OTC->Mem implemented
 - DMA read prefetch must be fixed for long DMAs
 - DMA pausing and chopping not implemented 
 
@@ -79,6 +70,6 @@ MDEC   : 90%
 - timing slightly too fast (4996/5376)
 - writing to MDECControl -> reset
  
-CD     : 20%
+CD     : 30%
 
-SPU    : 0%
+SPU    : 5%

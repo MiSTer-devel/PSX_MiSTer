@@ -629,7 +629,7 @@ begin
       
          if (mem_done = '1' and memoryMuxStage = 1) then
             
-            case (to_integer(unsigned(PC(31 downto 29)))) is
+            case (to_integer(unsigned(FetchLastAddr(31 downto 29)))) is
             
                when 0 | 4 => -- cached
                   cacheUpdateNext <= '1';
