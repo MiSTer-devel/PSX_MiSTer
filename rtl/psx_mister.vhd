@@ -47,6 +47,12 @@ entity psx_mister is
       cd_addr               : out std_logic_vector(26 downto 0) := (others => '0');
       cd_data               : in  std_logic_vector(31 downto 0);
       cd_done               : in  std_logic;
+      cd_hps_on             : in  std_logic;
+      cd_hps_req            : out std_logic := '0';
+      cd_hps_lba            : out std_logic_vector(31 downto 0);
+      cd_hps_ack            : in  std_logic;
+      cd_hps_write          : in  std_logic;
+      cd_hps_data           : in  std_logic_vector(15 downto 0);
       -- video
       videoout_on           : in  std_logic;
       isPal                 : in  std_logic;
@@ -153,6 +159,12 @@ begin
       cd_addr               => cd_addr,
       cd_data               => cd_data,
       cd_done               => cd_done,
+      cd_hps_on             => cd_hps_on,   
+      cd_hps_req            => cd_hps_req,  
+      cd_hps_lba            => cd_hps_lba,  
+      cd_hps_ack            => cd_hps_ack,
+      cd_hps_write          => cd_hps_write,
+      cd_hps_data           => cd_hps_data, 
       -- video
       videoout_on           => videoout_on,
       isPal                 => isPal,

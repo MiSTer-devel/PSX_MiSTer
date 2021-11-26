@@ -33,9 +33,23 @@ architecture arch of etb is
    signal cd_data             : std_logic_vector(31 downto 0);
    signal cd_done             : std_logic := '0';
    
-   signal ram_do              : std_logic_vector(127 downto 0);
+   signal cd_hps_req          : std_logic := '0';
+   signal cd_hps_lba          : std_logic_vector(31 downto 0);
+   signal cd_hps_ack          : std_logic;
+   signal cd_hps_write        : std_logic;
+   signal cd_hps_data         : std_logic_vector(15 downto 0);
    
    signal cdSize              : unsigned(29 downto 0);
+   
+   --sdram
+   signal ram_req             : std_logic;
+   signal ram_addr            : std_logic_vector(26 downto 0) := (others => '0');
+   signal ram_do              : std_logic_vector(127 downto 0);
+   signal ram_done            : std_logic := '0';
+   
+   -- hps emulation
+   signal hps_req             : std_logic := '0';
+   signal hps_addr            : std_logic_vector(26 downto 0) := (others => '0');
    
    -- savestates
    signal reset_in            : std_logic;
@@ -83,6 +97,13 @@ begin
       cd_data              => cd_data,
       cd_done              => cd_done,
       
+      cd_hps_on            => '1',
+      cd_hps_req           => cd_hps_req,  
+      cd_hps_lba           => cd_hps_lba,  
+      cd_hps_ack           => cd_hps_ack,  
+      cd_hps_write         => cd_hps_write,
+      cd_hps_data          => cd_hps_data, 
+      
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(13 downto 0),
@@ -98,26 +119,30 @@ begin
    port map
    (
       clk          => clk1x,
-      addr         => cd_addr,
-      req          => cd_req,
+      addr         => ram_addr,
+      req          => ram_req,
       ram_128      => '0',
       rnw          => '1',
       be           => "0000",
       di           => x"00000000",
       do           => ram_do,
-      done         => cd_done,
+      done         => ram_done,
       reqprocessed => open,
       ram_idle     => open,
       fileSize     => cdSize
    );
    
+   ram_addr <= cd_addr when cd_req = '1' else hps_addr;
+   ram_req  <= cd_req or hps_req;
+   
    cd_data <= ram_do(31 downto 0);
+   cd_done <= ram_done;
    
    
    itb_savestates : entity work.tb_savestates
    generic map
    (
-      LOADSTATE         => '1',
+      LOADSTATE         => '0',
       FILENAME          => ""
    )
    port map
@@ -130,6 +155,39 @@ begin
       SS_Adr            => SS_Adr,      
       SS_wren           => SS_wren     
    );
+   
+   
+   -- hps emulation
+   process
+   begin
+      wait until rising_edge(clk1x);
+      if (cd_hps_req = '1') then
+         for i in 0 to 100 loop
+            wait until rising_edge(clk1x);
+         end loop;
+         cd_hps_ack <= '1';
+         wait until rising_edge(clk1x);
+         cd_hps_ack <= '0';
+         wait until rising_edge(clk1x);
+         
+         for i in 0 to 587 loop
+            hps_req  <= '1';
+            hps_addr <= std_logic_vector(to_unsigned(to_integer(unsigned(cd_hps_lba)) * 2352 + i * 4, 27));
+            wait until rising_edge(clk1x);
+            hps_req <= '0';
+            wait until rising_edge(clk1x);
+            
+            wait until ram_done = '1';
+            cd_hps_data  <= ram_do(15 downto 0);
+            cd_hps_write <= '1';
+            wait until rising_edge(clk1x);
+            cd_hps_data  <= ram_do(31 downto 16);
+            wait until rising_edge(clk1x);
+            cd_hps_write <= '0';
+         end loop;
+         
+      end if;
+   end process;
    
    
    process

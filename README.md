@@ -4,8 +4,6 @@
 # HW Requirements/Features
 SDRam of any size is required.
 
-Second SDRam is required to boot iso/bin files for now(requirement will be removed later)
-
 # Bios
 Only scph1001.bin tested.
 Rename to boot.rom
@@ -68,8 +66,11 @@ GTE    : 80%
 
 MDEC   : 90%
 - timing slightly too fast (4996/5376)
-- writing to MDECControl -> reset
+- writing to MDECControl -> should reset
  
 CD     : 30%
+- single track only
+- region only EU
+- no audio yet
 
 SPU    : 5%

@@ -56,9 +56,10 @@ module emu
 
 	input  [11:0] HDMI_WIDTH,
 	input  [11:0] HDMI_HEIGHT,
+   output        HDMI_FREEZE,
 
-`ifdef USE_FB
-	// Use framebuffer in DDRAM (USE_FB=1 in qsf)
+`ifdef MISTER_FB
+	// Use framebuffer in DDRAM (MISTER_FB=1 in qsf)
 	// FB_FORMAT:
 	//    [2:0] : 011=8bpp(palette) 100=16bpp 101=24bpp 110=32bpp
 	//    [3]   : 0=16bits 565 1=16bits 1555
@@ -113,7 +114,6 @@ module emu
 	output        SD_CS,
 	input         SD_CD,
 
-`ifdef USE_DDRAM
 	//High latency DDR3 RAM interface
 	//Use for non-critical time purposes
 	output        DDRAM_CLK,
@@ -126,9 +126,7 @@ module emu
 	output [63:0] DDRAM_DIN,
 	output  [7:0] DDRAM_BE,
 	output        DDRAM_WE,
-`endif
 
-`ifdef USE_SDRAM
 	//SDRAM interface with lower latency
 	output        SDRAM_CLK,
 	output        SDRAM_CKE,
@@ -141,9 +139,8 @@ module emu
 	output        SDRAM_nCAS,
 	output        SDRAM_nRAS,
 	output        SDRAM_nWE,
-`endif
 
-`ifdef DUAL_SDRAM
+`ifdef MISTER_DUAL_SDRAM
 	//Secondary SDRAM
 	input         SDRAM2_EN,
 	output        SDRAM2_CLK,
@@ -173,6 +170,8 @@ module emu
 
 	input         OSD_STATUS
 );
+
+assign HDMI_FREEZE = 0;
 
 assign ADC_BUS  = 'Z;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
@@ -224,41 +223,7 @@ pll pll
 	.locked(pll_locked)
 );
 
-//reg clk1xToggle;
-//
-//reg clk1xToggle2x;
-//reg clk2xIndex;
-//
-//reg clk1xToggle_1;
-//reg clk3xcnt[1:0];
-//reg clk3xIndex;
-//
-//always @(posedge clk_1x) begin
-//	clk1xToggle <= ~clk1xToggle;
-//end
-//
-//always @(posedge clk2x) begin
-//	clk1xToggle2x <= ~clk1xToggle2x;
-//   clk2xIndex    <= 1'b0;
-//   if (clk1xToggle2x == clk1xToggle) begin
-//      clk2xIndex <= 1'b1;
-//   end
-//end
-//
-//always @(posedge clk3x) begin
-//	clk1xToggle_1 <= ~clk1xToggle;
-//   if (clk1xToggle ~= clk1xToggle_1) begin
-//      clk3xcnt <= 2'b00;
-//   end else begin
-//      clk3xcnt <= clk3xcnt + 1;
-//   end
-//   clk3xIndex <= 1'b0;
-//   if (clk3xcnt = 1) begin
-//      clk3xIndex <= 1'b1;
-//   end
-//end
-
-wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_download;
+wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_download | img_mounted[1];
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
@@ -272,7 +237,8 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 parameter CONF_STR = {
 	"PlayStation;SS3E000000:400000;",
 	"FS,EXE,Load Exe;",
-	"FS2,ISOBIN,Load Iso;",
+	"FS2,ISOBIN,Load Iso SDRAM;",
+	"S1,ISOBIN,Load Iso HPS;",
 	"-;",
 	"D0RC,Reload Backup RAM;",
 	"D0RD,Save Backup RAM;",
@@ -331,15 +297,16 @@ wire  [1:0] buttons;
 wire [63:0] status;
 wire [15:0] status_menumask = {~bk_ena};
 wire        forced_scandoubler;
-reg  [31:0] sd_lba;
-reg         sd_rd = 0;
-reg         sd_wr = 0;
-wire        sd_ack;
+reg  [31:0] sd_lba0;
+reg  [31:0] sd_lba1;
+reg   [1:0] sd_rd;
+reg   [1:0] sd_wr;
+wire  [1:0] sd_ack;
 wire  [7:0] sd_buff_addr;
 wire [15:0] sd_buff_dout;
 wire [15:0] sd_buff_din;
 wire        sd_buff_wr;
-wire        img_mounted;
+wire  [1:0] img_mounted;
 wire        img_readonly;
 wire [63:0] img_size;
 wire        ioctl_download;
@@ -362,11 +329,10 @@ wire [32:0] RTC_time;
 
 wire [63:0] status_in = cart_download ? {status[63:39],ss_slot,status[36:17],1'b0,status[15:0]} : {status[63:39],ss_slot,status[36:0]};
 
-hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
+hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
 (
 	.clk_sys(clk_1x),
 	.HPS_BUS(HPS_BUS),
-	.conf_str(CONF_STR),
 
 	.buttons(buttons),
 	.forced_scandoubler(forced_scandoubler),
@@ -388,13 +354,14 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 	.ioctl_index(ioctl_index),
 	.ioctl_wait(ioctl_wait),
 
-	.sd_lba(sd_lba),
+	.sd_lba('{sd_lba0, sd_lba1}),
+   .sd_blk_cnt('{0,0}),
 	.sd_rd(sd_rd),
 	.sd_wr(sd_wr),
 	.sd_ack(sd_ack),
 	.sd_buff_addr(sd_buff_addr),
 	.sd_buff_dout(sd_buff_dout),
-	.sd_buff_din(sd_buff_din),
+	.sd_buff_din('{sd_buff_din, 0}),
 	.sd_buff_wr(sd_buff_wr),
 
 	.TIMESTAMP(RTC_time),
@@ -406,10 +373,15 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 	.sdram_sz(sdram_sz),
 	.gamma_bus(gamma_bus),
 
-   .joystick_analog_0(joystick_analog_0)
+   .joystick_l_analog_0(joystick_analog_0)
 );
 
 assign joy = joy_unmod[16] ? 16'b0 : joy_unmod;
+
+assign sd_rd[0] = 0;
+assign sd_wr[0] = 0;
+
+assign sd_wr[1] = 0;
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
@@ -440,6 +412,7 @@ reg[29:0]  cd_Size;
 reg cart_download_1 = 0;
 reg cd_download_1 = 0;
 reg loadExe = 0;
+reg cd_hps_on = 0;
 
 always @(posedge clk_1x) begin
 	ramdownload_wr <= 0;
@@ -464,7 +437,16 @@ always @(posedge clk_1x) begin
    loadExe         <= cart_download_1 & ~cart_download;   
    
    cd_download_1 <= cd_download;
-   if (cd_download_1 & ~cd_download) cd_Size <= ioctl_addr;
+   if (cd_download_1 & ~cd_download) begin
+      cd_Size   <= ioctl_addr;
+      cd_hps_on <= 0;
+   end
+     
+   if (img_mounted[1]) begin
+      cd_Size   <= img_size[29:0];
+      cd_hps_on <= 1;
+   end
+   
 end
 
 ///////////////////////////  SAVESTATE  /////////////////////////////////
@@ -541,6 +523,12 @@ psx
    .cd_addr         (cd_addr),
    .cd_data         (cd_data),
    .cd_done         (cd_done),
+   .cd_hps_on       (cd_hps_on),   
+   .cd_hps_req      (sd_rd[1]),  
+   .cd_hps_lba      (sd_lba1),  
+   .cd_hps_ack      (sd_ack[1]),
+   .cd_hps_write    (sd_buff_wr),
+   .cd_hps_data     (sd_buff_dout), 
    // video
    .videoout_on     (~status[14]),
    .isPal           (status[15]),
@@ -621,7 +609,18 @@ assign sdram_ack2 = sdram_readack2 | sdram_writeack2;
 
 sdram sdram
 (
-	.*,
+   .SDRAM_DQ   (SDRAM_DQ),
+   .SDRAM_A    (SDRAM_A),
+   .SDRAM_DQML (SDRAM_DQML),
+   .SDRAM_DQMH (SDRAM_DQMH),
+   .SDRAM_BA   (SDRAM_BA),
+   .SDRAM_nCS  (SDRAM_nCS),
+   .SDRAM_nWE  (SDRAM_nWE),
+   .SDRAM_nRAS (SDRAM_nRAS),
+   .SDRAM_nCAS (SDRAM_nCAS),
+   .SDRAM_CKE  (SDRAM_CKE),
+   .SDRAM_CLK  (SDRAM_CLK),
+   
    .SDRAM_EN(1),
 	.init(~pll_locked),
 	.clk(clk_3x),
@@ -647,7 +646,7 @@ sdram sdram
    .ch2_be   ((cart_download | bios_download) ? 4'b1111            : sdram_be),
 	.ch2_ready(sdram_writeack),
 
-	.ch3_addr({sd_lba[7:0],bram_addr}),
+	.ch3_addr({sd_lba0[7:0],bram_addr}),
 	.ch3_din(bram_dout),
 	.ch3_dout(sdr_bram_din),
 	.ch3_req(bram_req),
@@ -702,7 +701,7 @@ sdram sdram2
    .ch2_be   (4'b1111),
 	.ch2_ready(sdram_writeack2),
 
-	.ch3_addr({sd_lba[7:0],bram_addr}),
+	.ch3_addr({sd_lba0[7:0],bram_addr}),
 	.ch3_din(bram_dout),
 	.ch3_dout(),
 	.ch3_req(1'b0),
@@ -734,7 +733,7 @@ assign DDRAM_CLK = clk_2x;
 //	.ch2_rnw(bus_rd),
 //	.ch2_ready(ddr_bus_ack),
 //
-//	.ch3_addr({sd_lba[7:0],bram_addr}),
+//	.ch3_addr({sd_lba0[7:0],bram_addr}),
 //	.ch3_din(bram_dout),
 //	.ch3_dout(ddr_bram_din),
 //	.ch3_req(bram_req & ~sdram_en),
@@ -899,11 +898,11 @@ video_freak video_freak
 reg  bk_ena      = 0;
 reg  bk_pending  = 0;
 reg  bk_loading  = 0;
-assign sd_lba = 0;
+assign sd_lba0 = 0;
 
 //reg bk_record_rtc = 0;
 //
-//wire extra_data_addr = sd_lba[8:0] > save_sz;
+//wire extra_data_addr = sd_lba0[8:0] > save_sz;
 //
 //always @(posedge clk_1x) begin
 //	if (bk_write)      bk_pending <= 1;
@@ -924,7 +923,7 @@ assign sd_lba = 0;
 //		if(save_flash)  save_sz <= save_sz | {flash_1m, 7'h7F};
 //	end
 //
-//	if(img_mounted && img_size && !img_readonly) begin
+//	if(img_mounted[0] && img_size && !img_readonly) begin
 //		use_img <= 1;
 //		if (!(img_size[17:9] & (img_size[17:9] - 9'd1))) // Power of two
 //			save_sz <= img_size[17:9] - 1'd1;
@@ -945,38 +944,38 @@ assign sd_lba = 0;
 //	old_load   <= bk_load;
 //	old_save   <= bk_save;
 //	old_save_a <= bk_save_a;
-//	old_ack    <= sd_ack;
+//	old_ack    <= sd_ack[0];
 //
-//	if(~old_ack & sd_ack) {sd_rd, sd_wr} <= 0;
+//	if(~old_ack & sd_ack[0]) {sd_rd[0], sd_wr[0]} <= 0;
 //
 //	if(!bk_state) begin
 //		bram_tx_start <= 0;
 //		state <= 0;
-//		sd_lba <= 0;
+//		sd_lba0 <= 0;
 //		time_dout <= {5'd0, RTC_time, 42'd0};
 //		bk_loading <= 0;
-//		if(bk_ena & ((~old_load & bk_load) | (~old_save & bk_save) | (~old_save_a & bk_save_a & bk_pending) | (cart_download & img_mounted))) begin
+//		if(bk_ena & ((~old_load & bk_load) | (~old_save & bk_save) | (~old_save_a & bk_save_a & bk_pending) | (cart_download & img_mounted[0]))) begin
 //			bk_state <= 1;
-//			bk_loading <= bk_load | img_mounted;
+//			bk_loading <= bk_load | img_mounted[0];
 //		end
 //	end
 //	else if(bk_loading) begin
 //		case(state)
 //			0: begin
-//					sd_rd <= 1;
+//					sd_rd[0] <= 1;
 //					state <= 1;
 //				end
-//			1: if(old_ack & ~sd_ack) begin
+//			1: if(old_ack & ~sd_ack[0]) begin
 //					bram_tx_start <= 1;
 //					state <= 2;
 //				end
 //			2: if(bram_tx_finish) begin
 //					bram_tx_start <= 0;
 //					state <= 0;
-//					sd_lba <= sd_lba + 1'd1;
+//					sd_lba0 <= sd_lba0 + 1'd1;
 //
 //					// always read max possible size
-//					if(sd_lba[8:0] == 9'h100) begin
+//					if(sd_lba0[8:0] == 9'h100) begin
 //						bk_record_rtc <= 0;
 //						bk_state <= 0;
 //						RTC_load <= 0;
@@ -1010,14 +1009,14 @@ assign sd_lba = 0;
 //				end
 //			1: if(bram_tx_finish) begin
 //					bram_tx_start <= 0;
-//					sd_wr <= 1;
+//					sd_wr[0] <= 1;
 //					state <= 2;
 //				end
-//			2: if(old_ack & ~sd_ack) begin
+//			2: if(old_ack & ~sd_ack[0]) begin
 //					state <= 0;
-//					sd_lba <= sd_lba + 1'd1;
+//					sd_lba0 <= sd_lba0 + 1'd1;
 //
-//					if (sd_lba[8:0] == {1'b0, save_sz} + (has_rtc ? 9'd1 : 9'd0))
+//					if (sd_lba0[8:0] == {1'b0, save_sz} + (has_rtc ? 9'd1 : 9'd0))
 //						bk_state <= 0;
 //				end
 //		endcase

@@ -213,6 +213,12 @@ begin
       cd_addr               => cd_addr,
       cd_data               => cd_data,
       cd_done               => cd_done,
+      cd_hps_on             => '0',
+      cd_hps_req            => open,
+      cd_hps_lba            => open,
+      cd_hps_ack            => '0',
+      cd_hps_write          => '0',
+      cd_hps_data           => x"0000",
       -- video
       videoout_on           => '1',
       isPal                 => '1',

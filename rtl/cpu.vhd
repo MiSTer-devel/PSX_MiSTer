@@ -360,6 +360,11 @@ architecture arch of cpu is
    signal debugSum                     : unsigned(31 downto 0);
    signal debugTmr                     : unsigned(31 downto 0);
    
+   signal debugStallcounter            : unsigned(7 downto 0);
+   signal debug300exception            : std_logic := '0';
+   
+   signal debugTrigger                 : std_logic := '0';
+   
    -- export
    type tRegs is array(0 to 31) of unsigned(31 downto 0);
    signal regs                         : tRegs := (others => (others => '0'));
@@ -2130,7 +2135,7 @@ begin
                end loop;
                
                -- todo: REMOVE!
-               if (debugCnt(31) = '1' and debugSum(31) = '1' and debugTmr(31) = '1' and writebackTarget = 0) then
+               if (debugCnt(31) = '1' and debugSum(31) = '1' and debugTmr(31) = '1' and debugTrigger = '1' and writebackTarget = 0) then
                   writeDoneWriteEnable <= '0';
                end if;
                
@@ -2279,6 +2284,36 @@ begin
       
       end if;
    end process;
+   
+--##############################################################
+--############################### debug
+--##############################################################
+
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+         if (ce = '1') then
+         
+            if (stall = 0) then
+               debugStallcounter <= (others => '0');
+            else  
+               debugStallcounter <= debugStallcounter + 1;
+            end if;
+            
+            debug300exception <= '0';
+            if (mem_request = '1' and mem_isData = '1' and mem_rnw = '1' and mem_addressData = x"00000300") then
+               debug300exception <= '1';
+            end if;
+            
+            debugTrigger <= '0';
+            if (debugStallcounter(7) = '1' or debug300exception = '1') then
+               debugTrigger <= '1';
+            end if;
+            
+         end if;
+      end if;
+   end process;
+   
    
 
 end architecture;
