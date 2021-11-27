@@ -1319,9 +1319,17 @@ begin
                         
                         when x"4" => --mtcn
                            EXEgte_writeEna      <= '1';
+                           if (gte_busy = '1' or execute_gte_cmdEna = '1') then
+                              stallNew3    <= '1';
+                              EXEstalltype <= EXESTALLTYPE_GTECMD;
+                           end if;
                         
                         when x"6" => --cfcn
                            EXEgte_writeEna      <= '1';
+                           if (gte_busy = '1' or execute_gte_cmdEna = '1') then
+                              stallNew3    <= '1';
+                              EXEstalltype <= EXESTALLTYPE_GTECMD;
+                           end if;
                         
                         when others => null;
                      end case;

@@ -206,7 +206,7 @@ begin
                --end if;
                
                if (bus_addr < 16#180#) then
-                  VOICEREGS(to_integer(bus_addr)) <= bus_dataWrite;
+                  VOICEREGS(to_integer(bus_addr) / 2) <= bus_dataWrite;
                else
                   case (to_integer(bus_addr)) is
                      when 16#180# => VOLUME_LEFT               <= bus_dataWrite; CURVOL_L <= VOLUME_LEFT(14 downto 0) & '0';
@@ -253,7 +253,7 @@ begin
             if (bus_read = '1') then
                bus_dataRead <= (others => '1');
                if (bus_addr < 16#180#) then
-                  bus_dataRead <= VOICEREGS(to_integer(bus_addr));
+                  bus_dataRead <= VOICEREGS(to_integer(bus_addr) / 2);
                else
                   case (to_integer(bus_addr)) is
                      when 16#180# => bus_dataRead <= VOLUME_LEFT;
