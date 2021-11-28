@@ -67,8 +67,9 @@ architecture arch of cpu is
    signal regs2_address_b              : std_logic_vector(4 downto 0);
    signal regs2_q_b                    : std_logic_vector(31 downto 0);
    
+   signal ss_regs_loading              : std_logic := '0';
    signal ss_regs_load                 : std_logic := '0';
-   signal ss_regs_addr                 : unsigned(7 downto 0);
+   signal ss_regs_addr                 : unsigned(4 downto 0);
    signal ss_regs_data                 : std_logic_vector(31 downto 0);
    
    -- other register
@@ -448,7 +449,7 @@ begin
    
    regs_wren_a    <= '1' when (ss_regs_load = '1' or (ce = '1' and stall = 0 and writebackWriteEnable = '1' and writebackException = '0' and writebackTarget > 0)) else '0';
    regs_data_a    <= ss_regs_data                               when (ss_regs_load = '1') else std_logic_vector(writebackData);
-   regs_address_a <= std_logic_vector(ss_regs_addr(4 downto 0)) when (ss_regs_load = '1') else std_logic_vector(writebackTarget);
+   regs_address_a <= std_logic_vector(ss_regs_addr) when (ss_regs_load = '1') else std_logic_vector(writebackTarget);
    
    regs1_address_b <= std_logic_vector(opcodeCacheMuxed(25 downto 21));
    regs2_address_b <= std_logic_vector(opcodeCacheMuxed(20 downto 16));
@@ -1548,10 +1549,9 @@ begin
             if (hiloWait > 0) then
                hiloWait <= hiloWait - 1;
                if (hiloWait = 1) then
-                  stall3 <= '0';
                   case (executeStalltype) is
-                     when EXESTALLTYPE_READHI => resultData <= hi;
-                     when EXESTALLTYPE_READLO => resultData <= lo;
+                     when EXESTALLTYPE_READHI => resultData <= hi; stall3 <= '0'; executeStalltype <= EXESTALLTYPE_NONE;
+                     when EXESTALLTYPE_READLO => resultData <= lo; stall3 <= '0'; executeStalltype <= EXESTALLTYPE_NONE;
                      when others => null;
                   end case;
                end if;
@@ -1600,8 +1600,6 @@ begin
                   execute_gte_cmdEna            <= '0';
                   
                   executeStalltype              <= EXESTALLTYPE_NONE;
-                  
-                  hiloWait                      <= 0;
                         
                else     
                      
@@ -2158,7 +2156,7 @@ begin
          
          -- export
          if (ss_regs_load = '1') then
-            regs(to_integer(ss_regs_addr(4 downto 0))) <= unsigned(ss_regs_data);
+            regs(to_integer(ss_regs_addr)) <= unsigned(ss_regs_data);
          end if; 
          
       end if;
@@ -2277,17 +2275,25 @@ begin
             ss_in(0)  <= x"BFC00000"; -- PC
             ss_in(13) <= x"00000002"; -- cop0_PRID
             
-            ss_regs_load <= '1';
-            ss_regs_addr <= (others => '0');
-            ss_regs_data <= (others => '0');
+            ss_regs_loading <= '1';
+            ss_regs_addr    <= (others => '0');
+            ss_regs_data    <= (others => '0');
             
          elsif (SS_wren_CPU = '1' and SS_Adr < 57) then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
             
          elsif (SS_wren_CPU = '1' and SS_Adr >= 57 and SS_Adr < 89) then
             ss_regs_load <= '1';
-            ss_regs_addr <= SS_Adr - 57;
+            ss_regs_addr <= resize(SS_Adr - 57, 5);
             ss_regs_data <= SS_DataWrite;
+         end if;
+         
+         if (ss_regs_loading = '1') then
+            ss_regs_load <= '1';
+            ss_regs_addr <= ss_regs_addr + 1;
+            if (ss_regs_addr = 31) then
+               ss_regs_loading <= '0';
+            end if;
          end if;
       
       end if;

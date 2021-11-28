@@ -73,11 +73,18 @@ begin
       gte_readAddr         => gte_readAddr, 
       gte_readData         => gte_readData, 
       gte_readEna          => gte_readEna, 
-      gte_writeAddr        => gte_writeAddr,
-      gte_writeData        => gte_writeData,
-      gte_writeEna         => gte_writeEna, 
+      gte_writeAddr_in     => gte_writeAddr,
+      gte_writeData_in     => gte_writeData,
+      gte_writeEna_in      => gte_writeEna, 
       gte_cmdData          => gte_cmdData,  
-      gte_cmdEna           => gte_cmdEna  
+      gte_cmdEna           => gte_cmdEna,
+
+      loading_savestate    => '0',
+      SS_reset             => '0',
+      SS_DataWrite         => x"00000000",
+      SS_Adr               => "000000",
+      SS_wren              => '0',
+      SS_DataRead          => open
    );
    
    process

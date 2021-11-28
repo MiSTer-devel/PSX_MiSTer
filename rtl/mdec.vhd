@@ -75,7 +75,7 @@ architecture arch of mdec is
    signal fifoSecondAvail     : std_logic := '0';
    signal RLdata              : std_logic_vector(15 downto 0);
    signal currentBlock        : unsigned(2 downto 0);
-   signal currentCoeff        : unsigned(6 downto 0);
+   signal currentCoeff        : unsigned(6 downto 0) := (others => '0');
    signal currentQScale       : unsigned(5 downto 0);
    signal currentData         : signed(9 downto 0);
    signal calcNextRL          : std_logic := '0';

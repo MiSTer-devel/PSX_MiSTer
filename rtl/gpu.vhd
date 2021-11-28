@@ -718,6 +718,8 @@ begin
                vpos                   <= 0;
                inVsync                <= '0';
                      
+               irq_VBLANK             <= '0';
+                     
                GPUSTAT_InterlaceField <= '1';
                GPUSTAT_ReverseFlag    <= '0';
                GPUSTAT_HorRes2        <= '0';

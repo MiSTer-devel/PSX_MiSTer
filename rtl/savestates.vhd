@@ -118,6 +118,8 @@ architecture arch of savestates is
    signal settle              : integer range 0 to SETTLECOUNT := 0;
    
    signal reset_2x            : std_logic := '0';
+   signal ss_reset_2x         : std_logic := '0';
+   signal load_done_2x        : std_logic := '0';
    signal loading_ss_2x       : std_logic := '0';
    
    signal SS_DataWrite_2x     : std_logic_vector(31 downto 0) := (others => '0');
@@ -132,6 +134,10 @@ architecture arch of savestates is
    signal slowcounter         : integer range 0 to 2 := 0;
    
    signal header_amount       : unsigned(31 downto 0) := to_unsigned(1, 32);
+   
+   signal resetMode           : std_logic := '0';
+   
+   signal reset_in_1          : std_logic := '0';
 
 begin 
 
@@ -148,10 +154,12 @@ begin
    begin
       if rising_edge(clk1x) then
 
-         reset_out         <= reset_2x;
+         reset_out         <= reset_2x and (not ss_reset_2x);
+         ss_reset          <= ss_reset_2x;
+         load_done         <= load_done_2x;
          
          if (loading_ss_2x = '1') then
-            loading_savestate <= '1';
+            loading_savestate <= not resetMode;
          elsif (reset_2x = '0') then
             loading_savestate <= '0';
          end if;
@@ -174,11 +182,16 @@ begin
             SS_wren_2x <= (others => '0');
          end if;
          
-         ss_reset      <= '0';
-         load_done     <= '0';
-         
          if (reset_out = '1') then
             reset_2x <= '0';
+         end if;
+         
+         if (ss_reset = '1') then
+            ss_reset_2x <= '0';
+         end if;
+         
+         if (load_done = '1') then
+            load_done_2x <= '0';
          end if;
          
          if (ddr3_BUSY = '0') then
@@ -189,17 +202,23 @@ begin
          case state is
          
             when IDLE =>
-               savetype_counter <= 0;
                savestate_slow   <= '0';
-               if (reset_in = '1') then
-                  reset_2x      <= '1';
-                  ss_reset       <= '1';
+               if (reset_in_1 = '1' and reset_in = '0') then
+                  state                <= LOAD_WAITSETTLE;
+                  resetMode            <= '1';
+                  savetype_counter     <= 12;
+                  settle               <= 0;
+                  sleep_savestate      <= '1';
                --elsif (save = '1') then
                --   savestate_slow       <= '1';
+               --   resetMode            <= '0';
+               --   savetype_counter     <= 0;
                --   state                <= SAVE_WAITIDLE;
                --   header_amount        <= header_amount + 1;
                elsif (load = '1') then
                   state                <= LOAD_WAITSETTLE;
+                  resetMode            <= '0';
+                  savetype_counter     <= 0;
                   settle               <= 0;
                   sleep_savestate      <= '1';
                end if;
@@ -332,17 +351,21 @@ begin
                else
                   state             <= LOAD_HEADERAMOUNTCHECK;
                   ddr3_ADDR         <= std_logic_vector(to_unsigned(savestate_address, 26));
-                  ddr3_RD           <= '1';
+                  ddr3_RD           <= not resetMode;
                end if;
                
             when LOAD_HEADERAMOUNTCHECK =>
-               if (ddr3_DOUT_READY = '1') then
-                  if (ddr3_DOUT(63 downto 32) = std_logic_vector(to_unsigned(STATESIZE, 32))) then
-                     header_amount        <= unsigned(ddr3_DOUT(31 downto 0));
+               if (ddr3_DOUT_READY = '1' or resetMode = '1') then
+                  if (ddr3_DOUT(63 downto 32) = std_logic_vector(to_unsigned(STATESIZE, 32)) or resetMode = '1') then
+                     if (resetMode = '1') then
+                        header_amount     <= (others => '0');
+                     else
+                        header_amount     <= unsigned(ddr3_DOUT(31 downto 0));
+                     end if;
                      state                <= LOADMEMORY_NEXT;
                      loading_ss_2x        <= '1';
                      reset_2x             <= '1';
-                     ss_reset             <= '1';
+                     ss_reset_2x          <= '1';
                   else
                      state                <= IDLE;
                      sleep_savestate      <= '0';
@@ -352,7 +375,7 @@ begin
             when LOADMEMORY_NEXT =>
                if ((FASTSIM = '0' and savetype_counter < SAVETYPESCOUNT) or (FASTSIM = '1' and savetype_counter < 15)) then
                   ddr3_ADDR      <= std_logic_vector(to_unsigned(savestate_address + savetypes(savetype_counter).offset, 26));
-                  ddr3_RD        <= '1';
+                  ddr3_RD        <= not resetMode;
                   state          <= LOADMEMORY_READ;
                   count          <= 2;
                   maxcount       <= savetypes(savetype_counter).size;
@@ -363,19 +386,27 @@ begin
                   reset_2x          <= '1';
                   loading_ss_2x     <= '0';
                   sleep_savestate   <= '0';
-                  load_done         <= '1';
+                  load_done_2x      <= not resetMode;
                end if;
             
             when LOADMEMORY_READ =>
                ddr3_ADDR_save <= ddr3_ADDR;
-               if (ddr3_DOUT_READY = '1') then
+               if (ddr3_DOUT_READY = '1' or resetMode = '1') then
                   state             <= LOADMEMORY_WRITE;
-                  ddr3_DOUT_saved   <= ddr3_DOUT;
+                  
+                  if (resetMode = '1') then
+                     ddr3_DOUT_saved   <= (others => '0');
+                     ddr3_DIN          <= (others => '0');
+                  else
+                     ddr3_DOUT_saved   <= ddr3_DOUT;
+                     ddr3_DIN          <= ddr3_DOUT;
+                  end if;
+                  
                   if (savetype_counter = 15) then -- vram
                      dwordcounter <= 1;
                      state        <= LOADMEMORY_WRITE_VRAM;
                      ddr3_WE      <= '1';
-                     ddr3_DIN     <= ddr3_DOUT;
+                     
                      ddr3_ADDR    <= "0000000" & std_logic_vector(RAMAddrNext);
                      RAMAddrNext  <= RAMAddrNext + 2;
                   end if;
@@ -413,9 +444,13 @@ begin
                      state          <= LOADMEMORY_READ;
                      count          <= count + 2;
                      dwordcounter   <= 0;
-                     ddr3_RD        <= '1';
+                     ddr3_RD        <= not resetMode;
                   else 
-                     savetype_counter <= savetype_counter + 1;
+                     if (savetype_counter = 12 and resetMode = '1') then
+                        savetype_counter <= 14;
+                     else
+                        savetype_counter <= savetype_counter + 1;
+                     end if;
                      state            <= LOADMEMORY_NEXT;
                   end if;
                end if;
@@ -423,8 +458,9 @@ begin
          
          end case;
          
-         if (reset_in = '1') then
-            state <= IDLE;
+         reset_in_1 <= reset_in;
+         if (reset_in = '1' and reset_in_1 = '0') then
+            state           <= IDLE;
          end if;
          
       end if;
