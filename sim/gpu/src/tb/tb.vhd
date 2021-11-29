@@ -72,10 +72,6 @@ begin
    end process;
    
    igpu : entity psx.gpu
-   generic map
-   (
-      REPRODUCIBLEGPUTIMING => '0'
-   )
    port map
    (
       clk1x                => clk1x,
@@ -84,8 +80,11 @@ begin
       ce                   => '1',   
       reset                => reset,
       
+      REPRODUCIBLEGPUTIMING=> '0',
       isPal                => '1',
       videoout_on          => '1',
+      
+      dmaOn                => '0',
       
       bus_addr             => bus_gpu_addr,     
       bus_dataWrite        => bus_gpu_dataWrite,

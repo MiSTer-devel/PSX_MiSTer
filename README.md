@@ -20,13 +20,11 @@ In Framebuffer mode you can choose to view:
 Work in progress, don't report any bugs!
 
 - only very few games working
-- first part of BIOS startup working
 
 --
 
 CPU    : 90%
 - exception for read in invalid instruction and data area missing
-- scratchpad clear on reset?
 
 GPU    : 80%
 - dithering missing

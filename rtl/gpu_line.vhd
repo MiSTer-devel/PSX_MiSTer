@@ -377,6 +377,7 @@ begin
                      end if;
                      points            <= unsigned(dy(9 downto 0));
                      singlePixelLines  <= '1';
+                     yPerLine          <= to_unsigned(1, 11);
                   end if;
                   if (dx >= 16#400# or dy >= 16#200#) then
                      procstate <= PROCIDLE;
@@ -445,9 +446,7 @@ begin
                      stepDr   <= div3.quotient(19 downto 0);
                      stepDg   <= div4.quotient(19 downto 0);
                      stepDb   <= div5.quotient(19 downto 0);
-                     if (singlePixelLines = '1') then
-                        yPerLine <= to_unsigned(1, 11);
-                     else
+                     if (singlePixelLines = '0') then
                         yPerLine <= resize(unsigned(div6.quotient(9 downto 0)),11) + 1;
                      end if;
                   end if;

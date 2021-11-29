@@ -66,6 +66,7 @@ architecture arch of gpu_rect is
       REQUESTPOS,
       REQUESTTEXTURE,
       REQUESTSIZE,
+      CHECKPOS,
       REQUESTLINE,
       READWAIT,
       PROCPIXELS,
@@ -109,7 +110,10 @@ begin
    vramLineAddr <= unsigned(xPos(9 downto 0)) when (state = PROCPIXELS) else (others => '0');
    
    process (clk2x)
-      variable xcalc : signed(11 downto 0);
+      variable xsize : signed(11 downto 0);
+      variable ysize : signed(11 downto 0);
+      variable xdiff : signed(11 downto 0);
+      variable ydiff : signed(11 downto 0);
    begin
       if rising_edge(clk2x) then
          
@@ -174,26 +178,15 @@ begin
                   end case;
                
                   if (fifo_Valid = '1') then
-                     xcalc      := resize(signed(fifo_data(10 downto  0)),12) + resize(drawingOffsetX, 12);
-                     if (xcalc < to_integer(drawingAreaLeft)) then
-                        xcalc := resize(signed(drawingAreaLeft), 12);
-                     end if;
-                     rec_posx   <= xcalc;
-                     xPos       <= xcalc;
-                     
+                     rec_posx   <= resize(signed(fifo_data(10 downto  0)),12) + resize(drawingOffsetX, 12);
                      yPos       <= resize(signed(fifo_data(26 downto 16)),12) + resize(drawingOffsetY, 12);
-                     if (to_integer(resize(signed(fifo_data(26 downto 16)),12) + resize(drawingOffsetY, 12)) < to_integer(drawingAreaTop)) then
-                        yPos <= resize(signed(drawingAreaTop), 12);
-                     end if;
                      
                      if (rec_texture = '1') then
                         state    <= REQUESTTEXTURE;  
                      elsif (rec_size = "00") then
                         state    <= REQUESTSIZE;  
-                     elsif (rec_transparency = '1' or DrawPixelsMask = '1') then
-                        state  <= REQUESTLINE;
                      else
-                        state  <= PROCPIXELS;
+                        state    <= CHECKPOS;
                      end if;
                   end if;
                   
@@ -207,10 +200,8 @@ begin
                      textPalNew    <= '1';
                      if (rec_size = "00") then
                         state    <= REQUESTSIZE;  
-                     elsif (rec_transparency = '1' or DrawPixelsMask = '1') then
-                        state  <= REQUESTLINE;
                      else
-                        state  <= PROCPIXELS;
+                        state    <= CHECKPOS;
                      end if;
                   end if;
             
@@ -218,11 +209,43 @@ begin
                   if (fifo_Valid = '1') then
                      rec_sizex   <= unsigned(fifo_data(9 downto  0));
                      rec_sizey   <= unsigned(fifo_data(24 downto 16));
-                     if (rec_transparency = '1' or DrawPixelsMask = '1') then
-                        state  <= REQUESTLINE;
+                     state       <= CHECKPOS;
+                  end if;
+                  
+               when CHECKPOS =>
+                  xsize := resize(signed(rec_sizex), 12);
+                  xdiff := (others => '0');
+                  if (rec_posx < to_integer(drawingAreaLeft)) then
+                     xdiff := (resize(signed(drawingAreaLeft), 12) - rec_posx);
+                     xsize := xsize - xdiff;
+                  end if;
+                  rec_posx  <= rec_posx + xdiff;
+                  xPos      <= rec_posx + xdiff;
+                  uWork     <= uWork + unsigned(xdiff(7 downto 0));
+                  rec_u     <= rec_u + unsigned(xdiff(7 downto 0));
+                  rec_sizex <= unsigned(xsize(9 downto 0)); 
+               
+                  ysize := resize(signed(rec_sizey), 12);
+                  ydiff := (others => '0');
+                  if (to_integer(yPos) < to_integer(drawingAreaTop)) then
+                     ydiff := (resize(signed(drawingAreaTop), 12) - yPos);
+                     ysize := ysize - ydiff;
+                  end if;
+                  yPos      <= yPos + ydiff;
+                  vWork     <= vWork + unsigned(ydiff(7 downto 0));
+                  rec_sizey <= unsigned(ysize(8 downto 0)); 
+                  
+                  if (xsize < 1 or ysize < 1 or rec_posx > to_integer(drawingAreaRight) or yPos > to_integer(drawingAreaBottom)) then
+                     if (REPRODUCIBLEGPUTIMING = '1') then
+                        state <= WAITIMING;
                      else
-                        state  <= PROCPIXELS;
+                        state <= IDLE;
+                        done  <= '1';
                      end if;
+                  elsif (rec_transparency = '1' or DrawPixelsMask = '1') then
+                     state  <= REQUESTLINE;
+                  else
+                     state  <= PROCPIXELS;
                   end if;
                        
                when REQUESTLINE =>
