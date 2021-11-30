@@ -185,6 +185,7 @@ begin
       REPRODUCIBLEGPUTIMING => '1',
       REPRODUCIBLEDMATIMING => '1',
       CDDISABLE             => '0',
+      ditherOff             => '0',
       -- RAM/BIOS interface        
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 

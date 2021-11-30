@@ -80,6 +80,7 @@ begin
       ce                   => '1',   
       reset                => reset,
       
+      ditherOff            => '0',
       REPRODUCIBLEGPUTIMING=> '0',
       isPal                => '1',
       videoout_on          => '1',

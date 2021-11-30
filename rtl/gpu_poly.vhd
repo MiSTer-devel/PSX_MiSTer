@@ -40,6 +40,7 @@ entity gpu_poly is
       pipeline_texture     : out std_logic := '0';
       pipeline_transparent : out std_logic := '0';
       pipeline_rawTexture  : out std_logic := '0';
+      pipeline_dithering   : out std_logic := '0';
       pipeline_x           : out unsigned(9 downto 0) := (others => '0');
       pipeline_y           : out unsigned(8 downto 0) := (others => '0');
       pipeline_cr          : out unsigned(7 downto 0) := (others => '0');
@@ -110,6 +111,7 @@ architecture arch of gpu_poly is
    signal rec_texture         : std_logic := '0';
    signal rec_transparency    : std_logic := '0';
    signal rec_rawTexture      : std_logic := '0';
+   signal rec_dithering       : std_logic := '0';
    
    type tVertex is record
       x         : integer range -2048 to 2047; 
@@ -361,6 +363,7 @@ begin
             pipeline_texture     <= '0';
             pipeline_transparent <= '0';
             pipeline_rawTexture  <= '0';
+            pipeline_dithering   <= '0';
             pipeline_x           <= (others => '0');
             pipeline_y           <= (others => '0');
             pipeline_cr          <= (others => '0');
@@ -410,6 +413,7 @@ begin
                      rec_texture       <= fifo_data(26);
                      rec_transparency  <= fifo_data(25);
                      rec_rawTexture    <= fifo_data(24);
+                     rec_dithering     <= fifo_data(28) or (fifo_data(26) and (not fifo_data(24)));
                      for i in 0 to 3 loop
                         rec_vertices(i).r <= unsigned(fifo_data( 7 downto  0));
                         rec_vertices(i).g <= unsigned(fifo_data(15 downto  8));
@@ -979,6 +983,7 @@ begin
                         pipeline_texture     <= rec_texture;
                         pipeline_transparent <= rec_transparency;
                         pipeline_rawTexture  <= rec_rawTexture;
+                        pipeline_dithering   <= rec_dithering;
                         pipeline_x           <= unsigned(xPos(9 downto 0));
                         pipeline_y           <= unsigned(yPos(8 downto 0));
                         pipeline_cr          <= work_R(19 downto 12);

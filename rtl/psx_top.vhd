@@ -22,6 +22,7 @@ entity psx_top is
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       CDDISABLE             : in  std_logic;
+      ditherOff             : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -727,6 +728,7 @@ begin
       ce                   => ce,   
       reset                => reset_intern,
       
+      ditherOff            => ditherOff,
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
       videoout_on          => videoout_on,
       isPal                => isPal,

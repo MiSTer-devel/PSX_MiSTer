@@ -18,6 +18,7 @@ entity psx_mister is
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       CDDISABLE             : in  std_logic;
+      ditherOff             : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -130,6 +131,7 @@ begin
       REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING,
       REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING,
       CDDISABLE             => CDDISABLE,
+      ditherOff             => ditherOff,
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,

@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX XXXXXXXXXXXX X   X     XXXXXXX
+// X XXXXXXX XXXXXXXXXXXXXX   X     XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -249,6 +249,7 @@ parameter CONF_STR = {
 	"RH,Save state (Alt-F1);",
 	"RI,Restore state (F1);",
 	"- ;",
+	"OM,Dithering,On,Off;",
 	"OA,Color,16,24;",
 	"OE,DDR3 Framebuffer,Off,On;",
 	"OB,VRAMViewer,Off,On;",
@@ -494,6 +495,7 @@ psx
    .REPRODUCIBLEGPUTIMING(status[19]),
    .REPRODUCIBLEDMATIMING(status[20]),
    .CDDISABLE(status[21]),
+   .ditherOff(status[22]),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),

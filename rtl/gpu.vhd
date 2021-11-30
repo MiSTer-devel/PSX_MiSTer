@@ -15,6 +15,7 @@ entity gpu is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      ditherOff            : in  std_logic;
       REPRODUCIBLEGPUTIMING: in  std_logic;
       videoout_on          : in  std_logic;
       isPal                : in  std_logic;
@@ -255,6 +256,7 @@ architecture arch of gpu is
    signal poly_pipeline_texture     : std_logic;
    signal poly_pipeline_transparent : std_logic;
    signal poly_pipeline_rawTexture  : std_logic;
+   signal poly_pipeline_dithering   : std_logic;
    signal poly_pipeline_x           : unsigned(9 downto 0);
    signal poly_pipeline_y           : unsigned(8 downto 0);
    signal poly_pipeline_cr          : unsigned(7 downto 0);
@@ -287,6 +289,7 @@ architecture arch of gpu is
    signal pipeline_texture          : std_logic;
    signal pipeline_transparent      : std_logic;
    signal pipeline_rawTexture       : std_logic;
+   signal pipeline_dithering        : std_logic;
    signal pipeline_x                : unsigned(9 downto 0);
    signal pipeline_y                : unsigned(8 downto 0);
    signal pipeline_cr               : unsigned(7 downto 0);
@@ -1185,6 +1188,7 @@ begin
       pipeline_texture     => poly_pipeline_texture,
       pipeline_transparent => poly_pipeline_transparent,
       pipeline_rawTexture  => poly_pipeline_rawTexture,
+      pipeline_dithering   => poly_pipeline_dithering,
       pipeline_x           => poly_pipeline_x,          
       pipeline_y           => poly_pipeline_y,          
       pipeline_cr          => poly_pipeline_cr,         
@@ -1217,7 +1221,8 @@ begin
    pipeline_new         <= line_pipeline_new         or rect_pipeline_new         or poly_pipeline_new        ;       
    pipeline_texture     <= '0'                       or rect_pipeline_texture     or poly_pipeline_texture    ;
    pipeline_transparent <= line_pipeline_transparent or rect_pipeline_transparent or poly_pipeline_transparent;          
-   pipeline_rawTexture  <= '0'                       or rect_pipeline_rawTexture  or poly_pipeline_rawTexture ;         
+   pipeline_rawTexture  <= '0'                       or rect_pipeline_rawTexture  or poly_pipeline_rawTexture ; 
+   pipeline_dithering   <= (line_pipeline_new        or '0'                       or poly_pipeline_dithering  ) and drawMode(9) and (not ditherOff);
    pipeline_x           <= line_pipeline_x           or rect_pipeline_x           or poly_pipeline_x          ;       
    pipeline_y           <= line_pipeline_y           or rect_pipeline_y           or poly_pipeline_y          ;     
    pipeline_cr          <= line_pipeline_cr          or rect_pipeline_cr          or poly_pipeline_cr         ;
@@ -1239,15 +1244,16 @@ begin
       ce                   => ce,        
       reset                => softreset,  
 
-      drawMode             => drawMode,
-      DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
-      SetMask              => GPUSTAT_SetMask,
+      drawMode_in          => drawMode,
+      DrawPixelsMask_in    => GPUSTAT_DrawPixelsMask,
+      SetMask_in           => GPUSTAT_SetMask,
       
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => pipeline_new,        
       pipeline_texture     => pipeline_texture,    
       pipeline_transparent => pipeline_transparent,
       pipeline_rawTexture  => pipeline_rawTexture, 
+      pipeline_dithering   => pipeline_dithering,
       pipeline_x           => pipeline_x,          
       pipeline_y           => pipeline_y,          
       pipeline_cr          => pipeline_cr,         

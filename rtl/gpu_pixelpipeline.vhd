@@ -14,15 +14,16 @@ entity gpu_pixelpipeline is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
-      drawMode             : in  unsigned(13 downto 0) := (others => '0');
-      DrawPixelsMask       : in  std_logic;
-      SetMask              : in  std_logic;
+      drawMode_in          : in  unsigned(13 downto 0) := (others => '0');
+      DrawPixelsMask_in    : in  std_logic;
+      SetMask_in           : in  std_logic;
       
       pipeline_stall       : out std_logic;
       pipeline_new         : in  std_logic;
       pipeline_texture     : in  std_logic;
       pipeline_transparent : in  std_logic;
       pipeline_rawTexture  : in  std_logic;
+      pipeline_dithering   : in  std_logic;
       pipeline_x           : in  unsigned(9 downto 0);
       pipeline_y           : in  unsigned(8 downto 0);
       pipeline_cr          : in  unsigned(7 downto 0);
@@ -54,6 +55,19 @@ entity gpu_pixelpipeline is
 end entity;
 
 architecture arch of gpu_pixelpipeline is
+  
+   type tDitherMatrix is array(0 to 3, 0 to 3) of integer range -4 to 4;
+   constant	DITHERMATRIX : tDitherMatrix := 
+   (
+		(-4, +0, -3, +1),
+		(+2, -2, +3, -1),
+		(-3, +1, -4, +0),
+		(+3, -1, +2, -2)
+	);
+   
+   signal drawMode            : unsigned(13 downto 0) := (others => '0');
+   signal DrawPixelsMask      : std_logic := '0';
+   signal SetMask             : std_logic := '0';
   
    signal tag_addr            : unsigned(7 downto 0) := (others => '0');
    signal tag_data            : unsigned(9 downto 0) := (others => '0');
@@ -110,6 +124,7 @@ architecture arch of gpu_pixelpipeline is
    signal stageS_texture      : std_logic := '0';
    signal stageS_transparent  : std_logic := '0';
    signal stageS_rawTexture   : std_logic := '0';
+   signal stageS_dithering    : std_logic := '0';
    signal stageS_x            : unsigned(9 downto 0) := (others => '0');
    signal stageS_y            : unsigned(8 downto 0) := (others => '0');
    signal stageS_cr           : unsigned(7 downto 0) := (others => '0');
@@ -123,6 +138,7 @@ architecture arch of gpu_pixelpipeline is
    signal stage0_texture      : std_logic := '0';
    signal stage0_transparent  : std_logic := '0';
    signal stage0_rawTexture   : std_logic := '0';
+   signal stage0_dithering    : std_logic := '0';
    signal stage0_x            : unsigned(9 downto 0) := (others => '0');
    signal stage0_y            : unsigned(8 downto 0) := (others => '0');
    signal stage0_cr           : unsigned(7 downto 0) := (others => '0');
@@ -138,6 +154,7 @@ architecture arch of gpu_pixelpipeline is
    signal stage1_texture      : std_logic := '0';
    signal stage1_transparent  : std_logic := '0';
    signal stage1_rawTexture   : std_logic := '0';
+   signal stage1_dithering    : std_logic := '0';
    signal stage1_x            : unsigned(9 downto 0) := (others => '0');
    signal stage1_y            : unsigned(8 downto 0) := (others => '0');
    signal stage1_cr           : unsigned(7 downto 0) := (others => '0');
@@ -155,6 +172,7 @@ architecture arch of gpu_pixelpipeline is
    signal stage2_texture      : std_logic := '0';
    signal stage2_transparent  : std_logic := '0';
    signal stage2_rawTexture   : std_logic := '0';
+   signal stage2_dithering    : std_logic := '0';
    signal stage2_x            : unsigned(9 downto 0) := (others => '0');
    signal stage2_y            : unsigned(8 downto 0) := (others => '0');
    signal stage2_cr           : unsigned(7 downto 0) := (others => '0');
@@ -162,6 +180,7 @@ architecture arch of gpu_pixelpipeline is
    signal stage2_cb           : unsigned(7 downto 0) := (others => '0');
    signal stage2_oldPixel     : std_logic_vector(15 downto 0) := (others => '0');
    signal stage2_texdata      : std_logic_vector(15 downto 0) := (others => '0');
+   signal stage2_ditherAdd    : integer range -4 to 4;
    
    signal texdata_palette     : std_logic_vector(15 downto 0) := (others => '0');
    
@@ -314,7 +333,10 @@ begin
    process (clk2x)
       variable colorTr   : unsigned(12 downto 0);
       variable colorTg   : unsigned(12 downto 0);
-      variable colorTb   : unsigned(12 downto 0);
+      variable colorTb   : unsigned(12 downto 0);      
+      variable colorDr   : integer range -4 to 511;
+      variable colorDg   : integer range -4 to 511;
+      variable colorDb   : integer range -4 to 511;
       variable colorBGr  : unsigned(4 downto 0);
       variable colorBGg  : unsigned(4 downto 0);
       variable colorBGb  : unsigned(4 downto 0);
@@ -347,6 +369,12 @@ begin
             cache_wren_a  <= '0';
             
             pipeline_stall_1 <= pipeline_stall;
+            
+            if (pipeline_busy = '0') then
+               drawMode       <= drawMode_in;      
+               DrawPixelsMask <= DrawPixelsMask_in;
+               SetMask        <= SetMask_in;       
+            end if;
             
             if (textPalInNew = '1' and drawMode(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
                textPalReq  <= '1';
@@ -424,6 +452,7 @@ begin
                stageS_texture       <= pipeline_texture;
                stageS_transparent   <= pipeline_transparent;
                stageS_rawTexture    <= pipeline_rawTexture; 
+               stageS_dithering     <= pipeline_dithering; 
                stageS_x             <= pipeline_x; 
                stageS_y             <= pipeline_y; 
                stageS_cr            <= pipeline_cr;
@@ -444,6 +473,7 @@ begin
                   stage0_texture       <= stageS_texture;    
                   stage0_transparent   <= stageS_transparent;
                   stage0_rawTexture    <= stageS_rawTexture; 
+                  stage0_dithering     <= stageS_dithering; 
                   stage0_x             <= stageS_x;          
                   stage0_y             <= stageS_y;          
                   stage0_cr            <= stageS_cr;         
@@ -457,6 +487,7 @@ begin
                   stage0_texture       <= pipeline_texture;
                   stage0_transparent   <= pipeline_transparent;
                   stage0_rawTexture    <= pipeline_rawTexture; 
+                  stage0_dithering     <= pipeline_dithering; 
                   stage0_x             <= pipeline_x; 
                   stage0_y             <= pipeline_y; 
                   stage0_cr            <= pipeline_cr;
@@ -472,6 +503,7 @@ begin
                stage1_texture     <= stage0_texture;    
                stage1_transparent <= stage0_transparent;
                stage1_rawTexture  <= stage0_rawTexture; 
+               stage1_dithering   <= stage0_dithering; 
                stage1_x           <= stage0_x;          
                stage1_y           <= stage0_y;          
                stage1_cr          <= stage0_cr;         
@@ -486,6 +518,7 @@ begin
                stage2_texture     <= stage1_texture;    
                stage2_transparent <= stage1_transparent;
                stage2_rawTexture  <= stage1_rawTexture; 
+               stage2_dithering   <= stage1_dithering; 
                stage2_x           <= stage1_x;          
                stage2_y           <= stage1_y;          
                stage2_cr          <= stage1_cr;         
@@ -493,6 +526,7 @@ begin
                stage2_cb          <= stage1_cb; 
                stage2_texdata     <= texdata_raw;
                stage2_oldPixel    <= stage1_oldPixel;
+               stage2_ditherAdd   <= DITHERMATRIX(to_integer(stage1_y(1 downto 0)), to_integer(stage1_x(1 downto 0)));
                
                -- stage 3 - apply blending or raw color
                stage3_valid       <= stage2_valid; 
@@ -514,14 +548,32 @@ begin
                      colorTr := unsigned(texdata_palette( 4 downto  0)) * stage2_cr;
                      colorTg := unsigned(texdata_palette( 9 downto  5)) * stage2_cg;
                      colorTb := unsigned(texdata_palette(14 downto 10)) * stage2_cb;
-                     if (colorTr(12 downto 7) > 31) then stage3_cr <= (others => '1'); else stage3_cr <= colorTr(11 downto 7); end if;
-                     if (colorTg(12 downto 7) > 31) then stage3_cg <= (others => '1'); else stage3_cg <= colorTg(11 downto 7); end if;
-                     if (colorTb(12 downto 7) > 31) then stage3_cb <= (others => '1'); else stage3_cb <= colorTb(11 downto 7); end if;
+                     if (stage2_dithering = '1') then
+                        colorDr := (to_integer(colorTr) / 16) + stage2_ditherAdd;
+                        colorDg := (to_integer(colorTg) / 16) + stage2_ditherAdd;
+                        colorDb := (to_integer(colorTb) / 16) + stage2_ditherAdd;
+                        if (colorDr < 0) then stage3_cr <= (others => '0'); elsif (colorDr > 255) then stage3_cr <= (others => '1'); else stage3_cr <= to_unsigned(colorDr / 8, 5); end if;
+                        if (colorDg < 0) then stage3_cg <= (others => '0'); elsif (colorDg > 255) then stage3_cg <= (others => '1'); else stage3_cg <= to_unsigned(colorDg / 8, 5); end if;
+                        if (colorDb < 0) then stage3_cb <= (others => '0'); elsif (colorDb > 255) then stage3_cb <= (others => '1'); else stage3_cb <= to_unsigned(colorDb / 8, 5); end if;
+                     else
+                        if (colorTr(12 downto 7) > 31) then stage3_cr <= (others => '1'); else stage3_cr <= colorTr(11 downto 7); end if;
+                        if (colorTg(12 downto 7) > 31) then stage3_cg <= (others => '1'); else stage3_cg <= colorTg(11 downto 7); end if;
+                        if (colorTb(12 downto 7) > 31) then stage3_cb <= (others => '1'); else stage3_cb <= colorTb(11 downto 7); end if;
+                     end if;
                   end if;
                else
-                  stage3_cr         <= stage2_cr(7 downto 3);
-                  stage3_cg         <= stage2_cg(7 downto 3);
-                  stage3_cb         <= stage2_cb(7 downto 3);
+                  if (stage2_dithering = '1') then
+                     colorDr := to_integer(stage2_cr) + stage2_ditherAdd;
+                     colorDg := to_integer(stage2_cg) + stage2_ditherAdd;
+                     colorDb := to_integer(stage2_cb) + stage2_ditherAdd;
+                     if (colorDr < 0) then stage3_cr <= (others => '0'); elsif (colorDr > 255) then stage3_cr <= (others => '1'); else stage3_cr <= to_unsigned(colorDr / 8, 5); end if;
+                     if (colorDg < 0) then stage3_cg <= (others => '0'); elsif (colorDg > 255) then stage3_cg <= (others => '1'); else stage3_cg <= to_unsigned(colorDg / 8, 5); end if;
+                     if (colorDb < 0) then stage3_cb <= (others => '0'); elsif (colorDb > 255) then stage3_cb <= (others => '1'); else stage3_cb <= to_unsigned(colorDb / 8, 5); end if;
+                  else
+                     stage3_cr         <= stage2_cr(7 downto 3);
+                     stage3_cg         <= stage2_cg(7 downto 3);
+                     stage3_cb         <= stage2_cb(7 downto 3);
+                  end if;
                   stage3_alphacheck <= '1';
                   stage3_alphabit   <= '0';
                end if;
