@@ -8,6 +8,7 @@ entity gpu_rect is
    port 
    (
       clk2x                : in  std_logic;
+      clk2xIndex           : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
@@ -213,6 +214,12 @@ begin
                   end if;
                   
                when CHECKPOS =>
+                  if (rec_transparency = '1' or rec_texture = '1') then 
+                     targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * 4), 32);
+                  else
+                     targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * 2), 32);
+                  end if;
+               
                   xsize := resize(signed(rec_sizex), 12);
                   xdiff := (others => '0');
                   if (rec_posx < to_integer(drawingAreaLeft)) then
@@ -259,12 +266,6 @@ begin
                   end if;
                
                when PROCPIXELS =>
-                  if (rec_transparency = '1' or rec_texture = '1') then 
-                     targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * 4), 32);
-                  else
-                     targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * 2), 32);
-                  end if;
-                  
                   if (pipeline_stall = '0') then
                      xCnt  <= xCnt + 1;
                      xPos  <= xPos + 1;
@@ -318,7 +319,7 @@ begin
                   end if;
                   
                 when WAITIMING =>
-                  if (drawTiming + 2 >= targetTiming) then
+                  if (clk2xIndex = '0' and drawTiming + 4 >= targetTiming) then
                      state <= IDLE;
                      done  <= '1';
                   end if;

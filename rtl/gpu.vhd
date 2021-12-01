@@ -1103,7 +1103,8 @@ begin
    igpu_rect : entity work.gpu_rect
    port map
    (
-      clk2x                => clk2x,     
+      clk2x                => clk2x,  
+      clk2xIndex           => clk2xIndex,      
       ce                   => ce,        
       reset                => softreset,     
       

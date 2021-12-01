@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX XXXXXXXXXXXXXX   X     XXXXXXX
+// X XXXXXXX XXXXXXXXXXXXXXX  X     XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -248,7 +248,9 @@ parameter CONF_STR = {
 	"o56,Savestate Slot,1,2,3,4;",
 	"RH,Save state (Alt-F1);",
 	"RI,Restore state (F1);",
-	"- ;",
+	"-;",
+   "OO,Pad Mode,Digital,Analog;",
+	"-;",
 	"OM,Dithering,On,Off;",
 	"OA,Color,16,24;",
 	"OE,DDR3 Framebuffer,Off,On;",
@@ -324,7 +326,8 @@ wire [10:0] ps2_key;
 wire [21:0] gamma_bus;
 wire [15:0] sdram_sz;
 
-wire [15:0] joystick_analog_0;
+wire [15:0] joystick_analog_l0;
+wire [15:0] joystick_analog_r0;
 
 wire [32:0] RTC_time;
 
@@ -374,7 +377,8 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
 	.sdram_sz(sdram_sz),
 	.gamma_bus(gamma_bus),
 
-   .joystick_l_analog_0(joystick_analog_0)
+   .joystick_l_analog_0(joystick_analog_l0),
+   .joystick_r_analog_0(joystick_analog_r0)
 );
 
 assign joy = joy_unmod[16] ? 16'b0 : joy_unmod;
@@ -496,6 +500,7 @@ psx
    .REPRODUCIBLEDMATIMING(status[20]),
    .CDDISABLE(status[21]),
    .ditherOff(status[22]),
+   .analogPad(status[24]),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),
@@ -564,10 +569,10 @@ psx
    .KeyL1(joy[10]),          
    .KeyL2(joy[12]),          
    .KeyL3(joy[14]),          
-   .Analog1X(joystick_analog_0[7:0]),       
-   .Analog1Y(joystick_analog_0[15:8]),       
-   .Analog2X(8'b0),       
-   .Analog2Y(8'b0),       
+   .Analog1X(joystick_analog_l0[7:0]),       
+   .Analog1Y(joystick_analog_l0[15:8]),       
+   .Analog2X(joystick_analog_r0[7:0]),           
+   .Analog2Y(joystick_analog_r0[15:8]),           
    //sound       
 	.sound_out_left(AUDIO_L),
 	.sound_out_right(AUDIO_R),

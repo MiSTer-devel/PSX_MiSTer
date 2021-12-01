@@ -11,6 +11,10 @@ entity joypad is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      analogPad            : in  std_logic;
+      
+      rumbleOn             : out std_logic := '0';
+      
       irqRequest           : out std_logic := '0';
       
       KeyTriangle          : in  std_logic; 
@@ -80,9 +84,16 @@ architecture arch of joypad is
       READY,
       ID,
       BUTTONLSB,
-      BUTTONMSB
+      BUTTONMSB,
+      ANALOGRIGHTX,
+      ANALOGRIGHTY,
+      ANALOGLEFTX,
+      ANALOGLEFTY
    );
    signal controllerState : tcontrollerState := IDLE;
+   
+   signal analogPadSave   : std_logic := '0';
+   signal rumbleOnFirst   : std_logic := '0';
   
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
@@ -127,6 +138,8 @@ begin
             
             beginTransfer   <= '0';
             actionNext      <= '0';
+
+            rumbleOn        <= '0';
 
          elsif (ce = '1') then
          
@@ -247,7 +260,8 @@ begin
                         if (controllerState = IDLE and transmitValue = x"01") then
                            controllerState <= READY;
                            activeDevice    <= 1;
-                           ack := '1';
+                           ack             := '1'; 
+                           analogPadSave   <= analogPad;
                         end if;
                      elsif (activeDevice = 1) then
                         case (controllerState) is
@@ -255,12 +269,17 @@ begin
                               if (transmitValue = x"01") then
                                  controllerState <= READY;
                                  activeDevice    <= 1;
-                                 ack := '1';
+                                 ack             := '1';
+                                 analogPadSave   <= analogPad;
                               end if;
                               
                            when READY => 
                               if (transmitValue = x"42") then
-                                 receiveBuffer   <= x"41";
+                                 if (analogPadSave = '1') then
+                                    receiveBuffer   <= x"73";
+                                 else
+                                    receiveBuffer   <= x"41";
+                                 end if;
                                  controllerState <= ID;
                                  ack := '1';
                               end if;
@@ -281,6 +300,11 @@ begin
                               receiveBuffer(7) <= not KeyLeft;
                               controllerState <= BUTTONMSB;
                               ack := '1';
+                              rumbleOnFirst <= '0';
+                              if (analogPadSave = '1' and transmitValue(7 downto 6) = "01") then
+                                 rumbleOnFirst <= '1';
+                              end if;
+                              
                               
                            when BUTTONMSB => 
                               receiveBuffer(0) <= not KeyL2;
@@ -291,7 +315,36 @@ begin
                               receiveBuffer(5) <= not KeyCircle;
                               receiveBuffer(6) <= not KeyCross;
                               receiveBuffer(7) <= not KeySquare;
+                              if (analogPadSave = '1') then
+                                 controllerState <= ANALOGRIGHTX;
+                                 ack := '1';
+                              else
+                                 controllerState <= IDLE;
+                              end if;
+                              rumbleOn <= '0';
+                              if (analogPadSave = '1' and transmitValue(0) = '1' and rumbleOnFirst = '1') then
+                                 rumbleOn <= '1';
+                              end if;
+                              
+                           when ANALOGRIGHTX => 
+                              receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog2X) + 128, 8));
+                              controllerState <= ANALOGRIGHTY;
+                              ack := '1';
+                           
+                           when ANALOGRIGHTY => 
+                              receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog2Y) + 128, 8));
+                              controllerState <= ANALOGLEFTX;
+                              ack := '1';
+                           
+                           when ANALOGLEFTX =>
+                              receiveBuffer   <=std_logic_vector(to_unsigned(to_integer(Analog1X) + 128, 8));
+                              controllerState <= ANALOGLEFTY;
+                              ack := '1';
+                           
+                           when ANALOGLEFTY =>
+                              receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog1Y) + 128, 8));
                               controllerState <= IDLE;
+                              
                         end case;
                      end if;
                   end if;

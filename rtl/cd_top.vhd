@@ -589,7 +589,7 @@ begin
             cmd_delay               <= to_integer(unsigned(ss_in(12)(16 downto 0))); -- 0
             fifoParamCount          <= 0;
             working                 <= ss_in(18)(2); -- '0'
-            workDelay               <= to_integer(unsigned(ss_in(0)(18 downto 0))); -- 0
+            workDelay               <= to_integer(unsigned(ss_in(0)(31 downto 0))); -- 0
             workCommand             <= ss_in(14)(15 downto 8);
                
             setLocActive            <= ss_in(18)(3); -- '0'
@@ -1230,7 +1230,6 @@ begin
                      
                      
                   when DRIVE_READING | DRIVE_PLAYING =>
-                     pause_cmd <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
                      if (trackNumberBCD = LEAD_OUT_TRACK_NUMBER) then
                         internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                         internalStatus(1)          <= '0'; -- motor off
@@ -1243,7 +1242,8 @@ begin
                            if ((modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
                               writeSectorPointer    <= writeSectorPointer + 1;
                               internalStatus(5)     <= '1'; -- reading
-                              ackRead      <= '1';
+                              ackRead               <= '1';
+                              pause_cmd             <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
                            end if;
                         --endif
                         driveDelay   <= driveDelayNext;
