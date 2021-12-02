@@ -70,6 +70,7 @@ entity gpu is
       SS_wren_GPU          : in  std_logic;
       SS_wren_Timing       : in  std_logic;
       SS_DataRead          : out std_logic_vector(31 downto 0);
+      SS_Idle              : out std_logic;
       
       export_gtm           : out unsigned(11 downto 0);
       export_line          : out unsigned(11 downto 0);
@@ -284,6 +285,7 @@ architecture arch of gpu is
    signal pipeline_reqVRAMYPos      : unsigned(8 downto 0);
    signal pipeline_reqVRAMSize      : unsigned(10 downto 0);
    
+   signal pipeline_busy             : std_logic;
    signal pipeline_stall            : std_logic;
    signal pipeline_new              : std_logic;
    signal pipeline_texture          : std_logic;
@@ -1249,6 +1251,7 @@ begin
       DrawPixelsMask_in    => GPUSTAT_DrawPixelsMask,
       SetMask_in           => GPUSTAT_SetMask,
       
+      pipeline_busy        => pipeline_busy,
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => pipeline_new,        
       pipeline_texture     => pipeline_texture,    
@@ -1587,6 +1590,11 @@ begin
                ss_timing_in(to_integer(SS_Adr)) <= SS_DataWrite;
             end if;
          end if;
+         
+         SS_Idle <= '0';
+         if (proc_idle = '1' and fifoIn_Empty = '1' and fifoOut_Empty = '1' and vramState = IDLE and pipeline_busy = '0'  and fifoOut_Wr = '0' and pixelWrite = '0') then
+            SS_Idle <= '1';
+         end if;         
       
       end if;
    end process;

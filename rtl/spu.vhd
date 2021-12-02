@@ -30,7 +30,8 @@ entity spu is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(7 downto 0);
       SS_wren              : in  std_logic;
-      SS_DataRead          : out std_logic_vector(31 downto 0)
+      SS_DataRead          : out std_logic_vector(31 downto 0);
+      SS_idle              : out std_logic
    );
 end entity;
 
@@ -81,9 +82,9 @@ architecture arch of spu is
    
    -- processing
    signal busy                : std_logic := '0';
-   signal capturePosition     : unsigned(9 downto 0);
-   signal sampleticks         : unsigned(9 downto 0);
-   signal cmdTicks            : unsigned(9 downto 0);
+   signal capturePosition     : unsigned(9 downto 0) := (others => '0');
+   signal sampleticks         : unsigned(9 downto 0) := (others => '0');
+   signal cmdTicks            : unsigned(9 downto 0) := (others => '0');
    
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
@@ -338,6 +339,11 @@ begin
             
          elsif (SS_wren = '1' and SS_Adr < 64) then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+         
+         SS_idle <= '0';
+         if (FifoIn_Empty = '1' and FifoOut_Empty = '1') then
+            SS_idle <= '1';
          end if;
       
       end if;

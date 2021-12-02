@@ -49,7 +49,8 @@ entity joypad is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(2 downto 0);
       SS_wren              : in  std_logic;
-      SS_DataRead          : out std_logic_vector(31 downto 0)
+      SS_DataRead          : out std_logic_vector(31 downto 0);
+      SS_idle              : out std_logic
    );
 end entity;
 
@@ -67,7 +68,7 @@ architecture arch of joypad is
    signal transmitting     : std_logic;
    signal waitAck          : std_logic;
    
-   signal baudCnt          : unsigned(20 downto 0);
+   signal baudCnt          : unsigned(20 downto 0) := (others => '0');
    
    signal JOY_MODE         : std_logic_vector(15 downto 0);
    signal JOY_CTRL         : std_logic_vector(15 downto 0);
@@ -386,6 +387,11 @@ begin
             
          elsif (SS_wren = '1') then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+         
+         SS_idle <= '0';
+         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNext = '0') then
+            SS_idle <= '1';
          end if;
       
       end if;

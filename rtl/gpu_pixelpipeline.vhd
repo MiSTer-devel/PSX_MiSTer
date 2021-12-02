@@ -18,6 +18,7 @@ entity gpu_pixelpipeline is
       DrawPixelsMask_in    : in  std_logic;
       SetMask_in           : in  std_logic;
       
+      pipeline_busy        : out std_logic;
       pipeline_stall       : out std_logic;
       pipeline_new         : in  std_logic;
       pipeline_texture     : in  std_logic;
@@ -113,7 +114,6 @@ architecture arch of gpu_pixelpipeline is
    );
    signal state : tState := IDLE;
    
-   signal pipeline_busy       : std_logic;
    signal pipeline_stall_1    : std_logic := '0';
    
    signal reqVRAMXPos         : unsigned(9 downto 0)  := (others => '0');

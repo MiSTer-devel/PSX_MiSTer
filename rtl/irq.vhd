@@ -34,6 +34,7 @@ entity irq is
       SS_Adr               : in  unsigned(0 downto 0);
       SS_wren              : in  std_logic;
       SS_DataRead          : out std_logic_vector(31 downto 0);
+      SS_idle              : out std_logic;
       
       export_irq           : out unsigned(15 downto 0)
    );
@@ -112,6 +113,11 @@ begin
             I_STATUSNew := I_STATUSNew or (irqIn and (not irqIn_1));
             
             I_STATUS <= I_STATUSNew;
+            
+            SS_idle <= '0';
+            if ((I_STATUSNew and I_MASK) = 0) then
+               SS_idle <= '1';
+            end if;
             
          end if;
       end if;

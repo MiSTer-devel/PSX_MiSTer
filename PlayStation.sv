@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX XXXXXXXXXXXXXXX  X     XXXXXXX
+// X XXXXXXX XXXXXXXXXXXXXXXX X     XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -260,6 +260,7 @@ parameter CONF_STR = {
    "OJ,RepTimingGPU,Off,On;",
    "OK,RepTimingDMA,Off,On;",
    "OL,CD Disable,Off,On;",
+   "OP,Pause when OSD is open,Off,On;",
 	"- ;",
 
 	"P1,Video & Audio;",
@@ -400,7 +401,7 @@ end
 
 reg cart_loaded = 0;
 always @(posedge clk_1x) begin
-	if (cart_download || cd_download) begin
+	if (cart_download || cd_download || img_mounted[1]) begin
 		cart_loaded <= 1;
 	end
 end
@@ -494,6 +495,7 @@ psx
    .clk2x(clk_2x),
    .reset(reset),
    // commands 
+   .pause(status[25] & OSD_STATUS),
    .loadExe(loadExe),
    .fastboot(status[16]),
    .REPRODUCIBLEGPUTIMING(status[19]),

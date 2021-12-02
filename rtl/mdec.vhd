@@ -31,7 +31,8 @@ entity mdec is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(6 downto 0);
       SS_wren              : in  std_logic;
-      SS_DataRead          : out std_logic_vector(31 downto 0)
+      SS_DataRead          : out std_logic_vector(31 downto 0);
+      SS_Idle              : out std_logic
    );
 end entity;
 
@@ -1060,6 +1061,11 @@ begin
             ss_in <= (others => (others => '0'));
          elsif (SS_wren = '1' and SS_Adr < 2) then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+         
+         SS_Idle <= '0';
+         if (FifoIn_Empty = '1' and FifoOut_Empty = '1' and receiveState = RECEIVE_IDLE and idctState = IDCT_IDLE and colorState = COLOR_IDLE and outputState = OUTPUT_IDLE) then
+            SS_Idle <= '1';
          end if;
       
       end if;

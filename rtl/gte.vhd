@@ -8,6 +8,7 @@ use work.pGTE.all;
 entity gte is
    port 
    (
+      clk1x                : in  std_logic;
       clk2x                : in  std_logic;
       clk2xIndex           : in  std_logic;
       ce                   : in  std_logic;
@@ -29,6 +30,7 @@ entity gte is
       SS_Adr               : in  unsigned(5 downto 0);
       SS_wren              : in  std_logic;
       SS_DataRead          : out std_logic_vector(31 downto 0);
+      SS_idle              : out std_logic;
       
       debug_firstGTE       : out std_logic
    );
@@ -1323,6 +1325,21 @@ begin
       divError       => div_Error  
    );
 
+--##############################################################
+--############################### savestates
+--##############################################################
+
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         SS_idle <= '0';
+         if (gte_busy = '0' and gte_cmdEna = '0' and gte_readEna = '0' and gte_writeEna_in = '0') then
+            SS_idle <= '1';
+         end if;
+      
+      end if;
+   end process;
    
    -- synthesis translate_off
    

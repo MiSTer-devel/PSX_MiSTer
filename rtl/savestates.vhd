@@ -18,6 +18,8 @@ entity savestates is
       reset_out               : out std_logic := '0';
       ss_reset                : out std_logic := '0';
          
+      loadExe                 : in  std_logic;
+         
       load_done               : out std_logic := '0';
             
       increaseSSHeaderCount   : in  std_logic;  
@@ -138,6 +140,8 @@ architecture arch of savestates is
    signal resetMode           : std_logic := '0';
    
    signal reset_in_1          : std_logic := '0';
+   
+   signal exeMode             : std_logic := '0';
 
 begin 
 
@@ -197,6 +201,12 @@ begin
          if (ddr3_BUSY = '0') then
             ddr3_WE <= '0';
             ddr3_RD <= '0';
+         end if;
+         
+         if (loadExe = '1') then
+            exeMode <= '1';
+         elsif (save = '1' or load = '1') then
+            exeMode <= '0';
          end if;
          
          case state is
@@ -373,7 +383,7 @@ begin
                end if;
             
             when LOADMEMORY_NEXT =>
-               if ((FASTSIM = '0' and savetype_counter < SAVETYPESCOUNT) or (FASTSIM = '1' and savetype_counter < 15)) then
+               if ((FASTSIM = '0' and ((exeMode = '0' and savetype_counter < SAVETYPESCOUNT) or (exeMode = '1' and savetype_counter < 16))) or (FASTSIM = '1' and savetype_counter < 15)) then
                   ddr3_ADDR      <= std_logic_vector(to_unsigned(savestate_address + savetypes(savetype_counter).offset, 26));
                   ddr3_RD        <= not resetMode;
                   state          <= LOADMEMORY_READ;

@@ -46,7 +46,8 @@ entity cd_top is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(13 downto 0);
       SS_wren              : in  std_logic;
-      SS_DataRead          : out std_logic_vector(31 downto 0)
+      SS_DataRead          : out std_logic_vector(31 downto 0);
+      SS_idle              : out std_logic
    );
 end entity;
 
@@ -1478,15 +1479,18 @@ begin
             if (SS_Adr = 1027 and SS_DataWrite(31 downto 24) /= x"02") then headerDataCheck <= '0'; headerDataSector <= '0'; end if;
             if (SS_Adr = 1028 and SS_DataWrite(22) = '1' and SS_DataWrite(18) = '1' and headerDataCheck = '1') then headerIsData <= '0'; end if;
             
-         elsif (ce = '1') then
+         else
          
-            ackRead_data   <= '0';
+            if (ce = '1') then
+               ackRead_data   <= '0';
+            end if;
+            
             readSubchannel <= '0';
    
             case (sectorFetchState) is
             
                when SFETCH_IDLE =>
-                  if (readOnDisk = '1') then
+                  if (readOnDisk = '1' and ce = '1') then
                      readSubchannel <= '1';
                      lastReadSector   <= readLBA;
                      if (readLBA >= startLBA) then
@@ -1653,7 +1657,7 @@ begin
             
                when SPROC_IDLE =>
                   procReadAddr <= SECTOR_SYNC_SIZE / 4;
-                  if (processDataSector = '1') then
+                  if (processDataSector = '1' and ce = '1') then
                      sectorProcessState <= SPROC_READHEADER;
                      procReadAddr       <= procReadAddr + 1;
                      procCount          <= 0;
@@ -1716,7 +1720,7 @@ begin
             case (copyState) is
             
                when COPY_IDLE =>
-                  if (copyData = '1') then
+                  if (copyData = '1' and ce = '1') then
                      copyState         <= COPY_FIRST;
                      copyCount         <= 0;
                      copyReadAddr      <= 0;
@@ -1767,7 +1771,7 @@ begin
                  
             end case;
    
-         end if; -- ce
+         end if;
       end if;
    end process;
    
@@ -1842,6 +1846,12 @@ begin
             
          elsif (SS_wren = '1' and SS_Adr < 128) then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+         
+         SS_idle <= '0';
+         if (FifoParam_Empty = '1' and FifoResponse_Empty = '1' and cmd_busy = '0' and working = '0' and (driveBusy = '0' or driveDelay > 1023) and
+           sectorFetchState = SFETCH_IDLE and readSubchannelState = SSUB_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
+            SS_idle <= '1';
          end if;
       
       end if;

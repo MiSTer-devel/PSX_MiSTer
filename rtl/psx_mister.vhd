@@ -13,6 +13,7 @@ entity psx_mister is
       clk2x                 : in  std_logic;  
       reset                 : in  std_logic;
       -- commands 
+      pause                 : in  std_logic;
       loadExe               : in  std_logic;
       fastboot              : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
@@ -127,6 +128,7 @@ begin
       clk2x                 => clk2x,          
       reset                 => reset, 
       -- commands 
+      pause                 => pause,
       loadExe               => loadExe,
       fastboot              => fastboot,
       REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING,

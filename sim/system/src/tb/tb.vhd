@@ -180,12 +180,14 @@ begin
       clk2x                 => clk66, 
       reset                 => reset,
       -- commands 
+      pause                 => '0',
       loadExe               => psx_LoadExe(0),
       fastboot              => '1',
       REPRODUCIBLEGPUTIMING => '1',
       REPRODUCIBLEDMATIMING => '1',
       CDDISABLE             => '0',
       ditherOff             => '0',
+      analogPad             => '1',
       -- RAM/BIOS interface        
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 

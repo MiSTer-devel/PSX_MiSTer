@@ -17,6 +17,7 @@ entity psx_top is
       clk2x                 : in  std_logic;   
       reset                 : in  std_logic; 
       -- commands 
+      pause                 : in  std_logic;
       loadExe               : in  std_logic;
       fastboot              : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
@@ -120,6 +121,8 @@ architecture arch of psx_top is
    signal clk1xToggle            : std_logic := '0';
    signal clk1xToggle2X          : std_logic := '0';
    signal clk2xIndex             : std_logic := '0';
+   
+   signal pausing                : std_logic := '0';
    
    -- Busses
    signal bus_exp1_addr          : unsigned(22 downto 0); 
@@ -340,6 +343,15 @@ architecture arch of psx_top is
    signal ss_ram_BE              : std_logic_vector(7 downto 0) := (others => '0'); 
    signal ss_ram_WE              : std_logic := '0';
    signal ss_ram_RD              : std_logic := '0'; 
+   
+   signal SS_Idle_gpu            : std_logic; 
+   signal SS_Idle_mdec           : std_logic; 
+   signal SS_Idle_cd             : std_logic; 
+   signal SS_Idle_spu            : std_logic; 
+   signal SS_idle_pad            : std_logic; 
+   signal SS_idle_irq            : std_logic; 
+   signal SS_idle_cpu            : std_logic; 
+   signal SS_idle_gte            : std_logic; 
 
    -- export
    signal cpu_done               : std_logic; 
@@ -410,12 +422,16 @@ begin
    begin
       if rising_edge(clk1x) then
       
-         if (sleep_savestate = '1' or sleep_rewind = '1') then
+         if (reset = '1' or pausing = '1' or sleep_savestate = '1' or sleep_rewind = '1') then
          
             ce        <= '0';
             ce_cpu    <= '0';
             if (reset_intern = '1') then
                cpuPaused <= '0';
+            end if;
+            
+            if (pause = '0') then
+               pausing <= '0';
             end if;
          
          else
@@ -427,10 +443,16 @@ begin
                cpuPaused <= '0';
             else
          
-               if ((cpuPaused = '1' and dmaOn = '1') or (dmaOn = '1' and memMuxIdle = '1' and stallNext = '0')) then
+               if (pause = '1' and  -- switch to pause/savestate pausing
+                  cpuPaused = '0' and dmaOn = '0' and stallNext = '0' and memMuxIdle = '1' and 
+                  SS_Idle_gpu = '1' and SS_Idle_mdec = '1' and SS_Idle_cd = '1' and SS_idle_spu = '1' and SS_idle_pad = '1' and SS_idle_irq = '1' and SS_idle_cpu = '1' and SS_idle_gte = '1') then 
+                  pausing <= '1';
+                  ce      <= '0';
+                  ce_cpu  <= '0';
+               elsif ((cpuPaused = '1' and dmaOn = '1') or (dmaOn = '1' and memMuxIdle = '1' and stallNext = '0')) then -- switch to dma
                   cpuPaused <= '1';
                   ce_cpu    <= '0';
-               elsif (dmaOn = '0') then
+               elsif (dmaOn = '0') then -- switch to CPU
                   cpuPaused <= '0';
                   ce_cpu    <= '1';
                end if;
@@ -438,6 +460,10 @@ begin
             end if;
             
          end if;   
+         
+         if (reset_in = '1') then
+            pausing <= '0';
+         end if;
          
       end if;
    end process;
@@ -499,7 +525,8 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(2 downto 0),      
       SS_wren              => SS_wren(5),     
-      SS_DataRead          => SS_DataRead_PAD
+      SS_DataRead          => SS_DataRead_PAD,
+      SS_idle              => SS_idle_pad
    );
    
    isio : entity work.sio
@@ -552,6 +579,7 @@ begin
       SS_Adr               => SS_Adr(0 downto 0),      
       SS_wren              => SS_wren(10),     
       SS_DataRead          => SS_DataRead_IRQ,
+      SS_idle              => SS_idle_irq,
       
       export_irq           => export_irq
    );
@@ -716,7 +744,8 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(13 downto 0),      
       SS_wren              => SS_wren(13),     
-      SS_DataRead          => SS_DataRead_CD
+      SS_DataRead          => SS_DataRead_CD,
+      SS_Idle              => SS_Idle_cd
    );
    
    
@@ -786,6 +815,7 @@ begin
       SS_wren_GPU          => SS_wren(1),     
       SS_wren_Timing       => SS_wren(2),
       SS_DataRead          => SS_DataRead_GPU,
+      SS_Idle              => SS_Idle_gpu,
       
       export_gtm           => export_gtm,
       export_line          => export_line,
@@ -819,7 +849,8 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(6 downto 0),      
       SS_wren              => SS_wren(6),     
-      SS_DataRead          => SS_DataRead_MDEC      
+      SS_DataRead          => SS_DataRead_MDEC,
+      SS_Idle              => SS_Idle_mdec
    );
    
    ispu : entity work.spu
@@ -847,7 +878,8 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(7 downto 0),  
       SS_wren              => SS_wren(9),     
-      SS_DataRead          => SS_DataRead_SPU     
+      SS_DataRead          => SS_DataRead_SPU,
+      SS_idle              => SS_idle_spu
    );
    
    iexp2 : entity work.exp2
@@ -1029,6 +1061,7 @@ begin
       SS_wren_CPU       => SS_wren(0),     
       SS_wren_SCP       => SS_wren(12),     
       SS_DataRead       => SS_DataRead_CPU,
+      SS_idle           => SS_idle_cpu,
       
       debug_firstGTE    => debug_firstGTE,
       
@@ -1039,6 +1072,7 @@ begin
    igte : entity work.gte
    port map
    (
+      clk1x                => clk1x,     
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
@@ -1060,6 +1094,7 @@ begin
       SS_Adr               => SS_Adr(5 downto 0),
       SS_wren              => SS_wren(4),     
       SS_DataRead          => SS_DataRead_GTE,
+      SS_idle              => SS_idle_gte,
       
       debug_firstGTE       => debug_firstGTE
    );
@@ -1085,6 +1120,8 @@ begin
       reset_in                => reset_in,
       reset_out               => reset_intern,
       ss_reset                => SS_reset,
+      
+      loadExe                 => loadExe,
            
       load_done               => state_loaded,
             

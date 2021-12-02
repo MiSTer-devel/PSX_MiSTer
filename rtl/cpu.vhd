@@ -48,6 +48,7 @@ entity cpu is
       SS_wren_CPU           : in  std_logic;
       SS_wren_SCP           : in  std_logic;
       SS_DataRead           : out std_logic_vector(31 downto 0);
+      SS_idle               : out std_logic;
       
       debug_firstGTE        : in  std_logic;
    
@@ -2294,6 +2295,11 @@ begin
             if (ss_regs_addr = 31) then
                ss_regs_loading <= '0';
             end if;
+         end if;
+      
+         SS_idle <= '0';
+         if (hiloWait = 0) then
+            SS_idle <= '1';
          end if;
       
       end if;

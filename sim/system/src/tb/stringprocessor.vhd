@@ -313,7 +313,7 @@ begin
                   --wait until COMMAND_FILE_ACK_1 = '1';
                   wait for 30 ns;
                   COMMAND_FILE_START_1  <= '0';
-                  wait for 20 ns;
+                  wait for 1000 ns;
                else
                    COMMAND_FILE_START_2  <= '1';
                   wait until COMMAND_FILE_ACK_2 = '1';
