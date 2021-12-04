@@ -5,6 +5,9 @@ use STD.textio.all;
 
 library mem;
 
+LIBRARY altera_mf;
+USE altera_mf.altera_mf_components.all; 
+
 entity spu is
    port 
    (
@@ -30,6 +33,7 @@ entity spu is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(7 downto 0);
       SS_wren              : in  std_logic;
+      SS_rden              : in  std_logic;
       SS_DataRead          : out std_logic_vector(31 downto 0);
       SS_idle              : out std_logic
    );
@@ -37,10 +41,20 @@ end entity;
 
 architecture arch of spu is
    
-   -- Regs
-   type tVOICEREGS is array(0 to 191) of std_logic_vector(15 downto 0);
-   signal VOICEREGS           : tVOICEREGS; -- 0x1F801C00..0x1F801D7F
-                              
+   -- voiceregs
+   signal RamVoice1_addrA     : unsigned(7 downto 0) := (others => '0');
+   signal RamVoice1_dataA     : std_logic_vector(15 downto 0) := (others => '0');
+   signal RamVoice1_write     : std_logic := '0';     
+   signal RamVoice1_addrB     : unsigned(7 downto 0) := (others => '0');
+   signal RamVoice1_dataB     : std_logic_vector(15 downto 0); 
+   
+   signal RamVoice2_addrA     : unsigned(7 downto 0) := (others => '0');
+   signal RamVoice2_dataA     : std_logic_vector(15 downto 0) := (others => '0');
+   signal RamVoice2_write     : std_logic := '0';     
+   signal RamVoice2_addrB     : unsigned(7 downto 0) := (others => '0');
+   signal RamVoice2_dataB     : std_logic_vector(15 downto 0); 
+   
+   -- Regs                          
 	signal VOLUME_LEFT         : std_logic_vector(15 downto 0);  -- 0x1F801D80
 	signal VOLUME_RIGHT        : std_logic_vector(15 downto 0);  -- 0x1F801D82
                               
@@ -89,6 +103,9 @@ architecture arch of spu is
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
    signal ss_in  : t_ssarray := (others => (others => '0'));
+   signal ss_out : t_ssarray := (others => (others => '0'));
+      
+   signal ss_voice_loading : std_logic := '0';
       
 begin 
 
@@ -149,21 +166,136 @@ begin
    STAT(5 downto 0) <= CNT(5 downto 0);
 
    spu_dmaRequest <= STAT(7);
+   
+   itagramVOICEREGS1 : altdpram
+	GENERIC MAP 
+   (
+   	indata_aclr                         => "OFF",
+      indata_reg                          => "INCLOCK",
+      intended_device_family              => "Cyclone V",
+      lpm_type                            => "altdpram",
+      outdata_aclr                        => "OFF",
+      outdata_reg                         => "UNREGISTERED",
+      ram_block_type                      => "MLAB",
+      rdaddress_aclr                      => "OFF",
+      rdaddress_reg                       => "UNREGISTERED",
+      rdcontrol_aclr                      => "OFF",
+      rdcontrol_reg                       => "UNREGISTERED",
+      read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
+      width                               => 16,
+      widthad                             => 8,
+      width_byteena                       => 1,
+      wraddress_aclr                      => "OFF",
+      wraddress_reg                       => "INCLOCK",
+      wrcontrol_aclr                      => "OFF",
+      wrcontrol_reg                       => "INCLOCK"
+	)
+	PORT MAP (
+      inclock    => clk1x,
+      wren       => RamVoice1_write,
+      data       => RamVoice1_dataA,
+      wraddress  => std_logic_vector(RamVoice1_addrA),
+      rdaddress  => std_logic_vector(RamVoice1_addrB),
+      q          => RamVoice1_dataB
+	);
+   
+   RamVoice1_addrB <= bus_addr(8 downto 1);
+   
+   itagramVOICEREGS2 : altdpram
+	GENERIC MAP 
+   (
+   	indata_aclr                         => "OFF",
+      indata_reg                          => "INCLOCK",
+      intended_device_family              => "Cyclone V",
+      lpm_type                            => "altdpram",
+      outdata_aclr                        => "OFF",
+      outdata_reg                         => "UNREGISTERED",
+      ram_block_type                      => "MLAB",
+      rdaddress_aclr                      => "OFF",
+      rdaddress_reg                       => "UNREGISTERED",
+      rdcontrol_aclr                      => "OFF",
+      rdcontrol_reg                       => "UNREGISTERED",
+      read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
+      width                               => 16,
+      widthad                             => 8,
+      width_byteena                       => 1,
+      wraddress_aclr                      => "OFF",
+      wraddress_reg                       => "INCLOCK",
+      wrcontrol_aclr                      => "OFF",
+      wrcontrol_reg                       => "INCLOCK"
+	)
+	PORT MAP (
+      inclock    => clk1x,
+      wren       => RamVoice2_write,
+      data       => RamVoice2_dataA,
+      wraddress  => std_logic_vector(RamVoice2_addrA),
+      rdaddress  => std_logic_vector(RamVoice2_addrB),
+      q          => RamVoice2_dataB
+	);
+   
+   RamVoice2_addrB <= (SS_Adr - 64) when SS_Adr > 64 else (others => '0');
+
+   ss_out(0)(9 downto 0)    <= std_logic_vector(cmdTicks);       
+   ss_out(1)(9 downto 0)    <= std_logic_vector(sampleticks);    
+   ss_out(2)(9 downto 0)    <= std_logic_vector(capturePosition);
+      
+   ss_out(32)               <= KEYON;          
+   ss_out(33)               <= KEYOFF;         
+   ss_out(34)               <= PITCHMODENA;    
+   ss_out(35)               <= NOISEMODE;      
+   ss_out(36)               <= REVERBON;       
+   ss_out(37)               <= ENDX;           
+      
+   ss_out(38)(15 downto 0)  <= VOLUME_LEFT;    
+   ss_out(38)(31 downto 16) <= VOLUME_RIGHT;   
+   ss_out(39)(15 downto 0)  <= TRANSFERADDR;   
+   ss_out(39)(31 downto 16) <= CNT;		      
+   ss_out(40)(15 downto 0)  <= TRANSFER_CNT;   
+   ss_out(40)(31 downto 16) <= STAT;   
+   ss_out(41)(15 downto 0)  <= CDAUDIO_VOL_L;  
+   ss_out(41)(31 downto 16) <= CDAUDIO_VOL_R;  
+   ss_out(42)(15 downto 0)  <= EXT_VOL_L;	   
+   ss_out(42)(31 downto 16) <= EXT_VOL_R;	   
+   ss_out(43)(15 downto 0)  <= CURVOL_L;	      
+   ss_out(43)(31 downto 16) <= CURVOL_R;	      
 
    -- cpu interface
    process(clk1x)
    begin
       if (rising_edge(clk1x)) then
             
-         FifoIn_Wr      <= '0';
-         FifoIn_Rd      <= '0';
-         FifoIn_reset   <= '0';
-
-         FifoOut_Wr     <= '0';
-         FifoOut_Rd     <= '0';
-         FifoOut_reset  <= '0';
+         FifoIn_Wr         <= '0';
+         FifoIn_Rd         <= '0';
+         FifoIn_reset      <= '0';
+   
+         FifoOut_Wr        <= '0';
+         FifoOut_Rd        <= '0';
+         FifoOut_reset     <= '0';
+            
+         irqOut            <= '0';
          
-         irqOut         <= '0';
+         RamVoice1_write   <= '0';
+         RamVoice2_write   <= '0';
+         
+         if (SS_reset = '1') then
+            ss_voice_loading <= '1';
+            RamVoice1_write <= '1';
+            RamVoice1_dataA <= x"0000";
+            RamVoice1_addrA <= (others => '0');
+            RamVoice2_write <= '1';
+            RamVoice2_dataA <= x"0000";
+            RamVoice2_addrA <= (others => '0');
+         end if;
+         
+         if (ss_voice_loading = '1') then
+            RamVoice1_write <= '1';
+            RamVoice1_addrA <= RamVoice1_addrA + 1;
+            RamVoice2_write <= '1';
+            RamVoice2_addrA <= RamVoice2_addrA + 1;
+            if (RamVoice1_addrA = 191) then
+               ss_voice_loading <= '0';
+            end if;
+         end if;
       
          if (reset = '1') then
             
@@ -191,11 +323,16 @@ begin
             EXT_VOL_R	      <= ss_in(42)(31 downto 16);
             CURVOL_L	         <= ss_in(43)(15 downto 0);
             CURVOL_R	         <= ss_in(43)(31 downto 16);
-            
+
          elsif (SS_wren = '1') then
             
             if (SS_Adr >= 64) then
-               VOICEREGS(to_integer(SS_Adr) - 64) <= SS_DataWrite(15 downto 0);
+               RamVoice1_write <= '1';
+               RamVoice1_dataA <= SS_DataWrite(15 downto 0);
+               RamVoice1_addrA <= SS_Adr - 64;
+               RamVoice2_write <= '1';
+               RamVoice2_dataA <= SS_DataWrite(15 downto 0);
+               RamVoice2_addrA <= SS_Adr - 64;
             end if;
             
          elsif (ce = '1') then
@@ -207,7 +344,12 @@ begin
                --end if;
                
                if (bus_addr < 16#180#) then
-                  VOICEREGS(to_integer(bus_addr) / 2) <= bus_dataWrite;
+                  RamVoice1_write <= '1';
+                  RamVoice1_dataA <= bus_dataWrite;
+                  RamVoice1_addrA <= bus_addr(8 downto 1);                 
+                  RamVoice2_write <= '1';
+                  RamVoice2_dataA <= bus_dataWrite;
+                  RamVoice2_addrA <= bus_addr(8 downto 1);
                else
                   case (to_integer(bus_addr)) is
                      when 16#180# => VOLUME_LEFT               <= bus_dataWrite; CURVOL_L <= VOLUME_LEFT(14 downto 0) & '0';
@@ -254,7 +396,7 @@ begin
             if (bus_read = '1') then
                bus_dataRead <= (others => '1');
                if (bus_addr < 16#180#) then
-                  bus_dataRead <= VOICEREGS(to_integer(bus_addr) / 2);
+                  bus_dataRead <= RamVoice1_dataB;
                else
                   case (to_integer(bus_addr)) is
                      when 16#180# => bus_dataRead <= VOLUME_LEFT;
@@ -344,6 +486,14 @@ begin
          SS_idle <= '0';
          if (FifoIn_Empty = '1' and FifoOut_Empty = '1') then
             SS_idle <= '1';
+         end if;
+         
+         if (SS_rden = '1') then
+            if (SS_Adr < 64) then
+               SS_DataRead <= ss_out(to_integer(SS_Adr));
+            else
+               SS_DataRead <= x"0000" & RamVoice2_dataB;
+            end if;
          end if;
       
       end if;

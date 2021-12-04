@@ -29,14 +29,17 @@ entity irq is
       
       irqRequest           : out std_logic := '0';
       
+-- synthesis translate_off
+      export_irq           : out unsigned(15 downto 0);
+-- synthesis translate_on
+      
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(0 downto 0);
       SS_wren              : in  std_logic;
+      SS_rden              : in  std_logic;
       SS_DataRead          : out std_logic_vector(31 downto 0);
-      SS_idle              : out std_logic;
-      
-      export_irq           : out unsigned(15 downto 0)
+      SS_idle              : out std_logic
    );
 end entity;
 
@@ -51,10 +54,13 @@ architecture arch of irq is
    -- savestates
    type t_ssarray is array(0 to 1) of std_logic_vector(31 downto 0);
    signal ss_in  : t_ssarray := (others => (others => '0'));  
+   signal ss_out : t_ssarray := (others => (others => '0'));  
    
 begin 
 
+-- synthesis translate_off
    export_irq  <= "00000" & I_STATUS;
+-- synthesis translate_on
 
    irqRequest <= '1' when ((I_STATUS and I_MASK) > 0) else '0';
    
@@ -69,6 +75,9 @@ begin
    irqIn(8)  <= irq_SIO;     
    irqIn(9)  <= irq_SPU;     
    irqIn(10) <= irq_LIGHTPEN;
+
+   ss_out(0)(10 downto 0) <= std_logic_vector(I_STATUS);
+   ss_out(1)(10 downto 0) <= std_logic_vector(I_MASK);
 
    process (clk1x)
       variable I_STATUSNew : unsigned(10 downto 0);
@@ -139,6 +148,10 @@ begin
             
          elsif (SS_wren = '1') then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+         
+         if (SS_rden = '1') then
+            SS_DataRead <= ss_out(to_integer(SS_Adr));
          end if;
       
       end if;

@@ -46,6 +46,7 @@ entity cd_top is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(13 downto 0);
       SS_wren              : in  std_logic;
+      SS_rden              : in  std_logic;
       SS_DataRead          : out std_logic_vector(31 downto 0);
       SS_idle              : out std_logic
    );
@@ -302,7 +303,11 @@ architecture arch of cd_top is
       
    -- savestates
    type t_ssarray is array(0 to 127) of std_logic_vector(31 downto 0);
-   signal ss_in  : t_ssarray := (others => (others => '0'));
+   signal ss_in   : t_ssarray := (others => (others => '0'));
+   signal ss_out  : t_ssarray := (others => (others => '0'));
+
+   signal SS_rden_sectorbuffer  : std_logic;
+   signal SS_rden_sectorbuffers : std_logic;
 
    -- debug
    -- synthesis translate_off
@@ -342,6 +347,13 @@ begin
                   '0';
    
    dma_readdata <= FifoData_Dout when (FifoData_Empty = '0') else (others => '1');
+   
+   
+   ss_out(21)( 7 downto  0) <= CDROM_STATUS;
+   ss_out(21)(12 downto  8) <= CDROM_IRQENA;
+   ss_out(21)(20 downto 16) <= CDROM_IRQFLAG;
+   ss_out(13)(24)           <= pendingDriveIRQ;
+   ss_out(13)(23 downto 16) <= nextCmd;
    
    -- cpu interface
    process(clk1x)
@@ -571,6 +583,18 @@ begin
       Empty    => FifoParam_Empty   
    );
    
+   
+   ss_out(18)(1)             <= cmdPending;   
+   ss_out(18)(0)             <= cmd_busy;     
+   ss_out(12)(16 downto  0)  <= std_logic_vector(to_unsigned(cmd_delay, 17)); 
+   ss_out(18)(2)             <= working;      
+   ss_out( 0)(31 downto  0)  <= std_logic_vector(to_unsigned(workDelay, 32));    
+   ss_out(14)(15 downto  8)  <= workCommand;  
+   ss_out(18)(3)             <= setLocActive; 
+   ss_out(14)(23 downto 16)  <= std_logic_vector(setLocMinute); 
+   ss_out(14)(31 downto 24)  <= std_logic_vector(setLocSecond); 
+   ss_out(15)( 7 downto  0)  <= std_logic_vector(setLocFrame);  
+   
    -- command processing
    process(clk1x)
    begin
@@ -596,7 +620,7 @@ begin
             setLocActive            <= ss_in(18)(3); -- '0'
             setLocMinute            <= unsigned(ss_in(14)(23 downto 16));
             setLocSecond            <= unsigned(ss_in(14)(31 downto 24));
-            setLocFrame             <= unsigned(ss_in(18)(7 downto 0));
+            setLocFrame             <= unsigned(ss_in(15)(7 downto 0));
             
          elsif (ce = '1') then
          
@@ -1100,6 +1124,24 @@ begin
    
    seekOK <= '1'; -- todo
    
+   ss_out(18)(4)            <= driveBusy;           
+   ss_out(15)(27 downto 24) <= std_logic_vector(to_unsigned(tdrivestate'POS(driveState), 4));  
+   ss_out( 4)(26 downto  0) <= std_logic_vector(to_unsigned(driveDelay, 27));           
+   ss_out( 5)(26 downto  0) <= std_logic_vector(to_unsigned(driveDelayNext, 27));           
+   ss_out(13)( 7 downto  0) <= internalStatus;       
+   ss_out(13)(15 downto  8) <= modeReg;                   
+   ss_out( 3)(19 downto  0) <= std_logic_vector(to_unsigned(currentLBA, 20));           
+   ss_out(18)(5)            <= readAfterSeek;        
+   ss_out(18)(6)            <= playAfterSeek;        
+   ss_out(18)(8)            <= lastSectorHeaderValid;
+   ss_out(16)( 2 downto  0) <= std_logic_vector(writeSectorPointer);   
+   ss_out(16)(10 downto  8) <= std_logic_vector(readSectorPointer);    
+   
+   gSSsubdata: for i in 0 to 11 generate
+   begin
+      ss_out(i + 76)(7 downto 0) <= subdata(i);
+   end generate;
+   
    -- drive
    process(clk1x)
    begin
@@ -1109,6 +1151,7 @@ begin
             startMotorReset        <= '1'; 
          elsif (SS_wren = '1') then
             startMotorReset        <= '0'; 
+            startMotor             <= '0';
          end if;
 
          if (reset = '1') then
@@ -1400,9 +1443,10 @@ begin
       q_b         => sectorBuffer_DataB
    );
    
-   sectorBuffer_addrB <= std_logic_vector(to_unsigned(procReadAddr, 10));
+   sectorBuffer_addrB <= std_logic_vector(SS_Adr(9 downto 0)) when (SS_rden = '1') else std_logic_vector(to_unsigned(procReadAddr, 10));
    
-   sectorBuffers_addrB <= std_logic_vector(copySectorPointer & to_unsigned(copyReadAddr, 10));
+   sectorBuffers_addrB <= std_logic_vector(to_unsigned(to_integer(SS_Adr - 2048), 13)) when (SS_rden = '1' and SS_Adr >= 2048 and SS_Adr < 2048 + (1024 * 8)) else 
+                          std_logic_vector(copySectorPointer & to_unsigned(copyReadAddr, 10));
    
    iramSectorBuffers: entity work.dpram
    generic map 
@@ -1423,6 +1467,23 @@ begin
       wren_b      => '0',
       q_b         => sectorBuffers_DataB
    );
+   
+   ss_out(10)              <= std_logic_vector(to_unsigned(startLBA, 32));
+   ss_out(15)(15 downto 8) <= std_logic_vector(trackNumberBCD);
+   ss_out(19)              <= header;
+   ss_out(20)              <= subheader;
+   ss_out(6)(19 downto 0)  <= std_logic_vector(to_unsigned(lastReadSector, 20));
+   ss_out(11)(19 downto 0) <= std_logic_vector(to_unsigned(positionInIndex, 20));
+   
+   gSSnextsubdata: for i in 0 to 11 generate
+   begin
+      ss_out(i + 64)(7 downto 0) <= nextSubdata(i);
+   end generate;
+   
+   gSSsectorBufferSizes: for i in 0 to 7 generate
+   begin
+      ss_out(i + 96)(11 downto 0) <= std_logic_vector(to_unsigned(sectorBufferSizes(i), 10)) & "00";
+   end generate;
    
    -- data processing
    process(clk1x)
@@ -1457,11 +1518,11 @@ begin
                nextSubdata(i) <= ss_in(i + 64)(7 downto 0);
             end loop;
             
-         elsif (SS_wren = '1') then
+            for i in 0 to 7 loop
+               sectorBufferSizes(i) <= to_integer(unsigned(ss_in(i + 96)(11 downto 2)));
+            end loop;
             
-            if (SS_Adr >= 96 and SS_Adr < 96 + 8) then
-               sectorBufferSizes(to_integer(SS_Adr) - 96) <= to_integer(unsigned(SS_DataWrite(9 downto 0)));
-            end if;
+         elsif (SS_wren = '1') then
             
             if (SS_Adr >= 1024 and SS_Adr < 1024 + (RAW_SECTOR_SIZE / 4)) then
                sectorBuffer_addrA <= std_logic_vector(SS_Adr(9 downto 0));
@@ -1852,6 +1913,24 @@ begin
          if (FifoParam_Empty = '1' and FifoResponse_Empty = '1' and cmd_busy = '0' and working = '0' and (driveBusy = '0' or driveDelay > 1023) and
            sectorFetchState = SFETCH_IDLE and readSubchannelState = SSUB_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
             SS_idle <= '1';
+         end if;
+         
+         SS_rden_sectorbuffer <= '0';
+         if (SS_rden = '1' and SS_Adr >= 1024 and SS_Adr < 1024 + (RAW_SECTOR_SIZE / 4)) then
+            SS_rden_sectorbuffer <= '1';
+         end if;
+         
+         SS_rden_sectorbuffers <= '0';
+         if (SS_rden = '1' and SS_Adr >= 2048 and SS_Adr < 2048 + (1024 * 8)) then
+            SS_rden_sectorbuffers <= '1';
+         end if;
+         
+         if (SS_rden_sectorbuffer = '1') then
+            SS_DataRead <= sectorBuffer_DataB;
+         elsif (SS_rden_sectorbuffers = '1') then
+            SS_DataRead <= sectorBuffers_DataB;
+         elsif (SS_rden = '1' and SS_Adr < 128) then
+            SS_DataRead <= ss_out(to_integer(SS_Adr));
          end if;
       
       end if;

@@ -47,13 +47,18 @@ entity cpu is
       SS_Adr                : in  unsigned(7 downto 0);
       SS_wren_CPU           : in  std_logic;
       SS_wren_SCP           : in  std_logic;
-      SS_DataRead           : out std_logic_vector(31 downto 0);
+      SS_rden_CPU           : in  std_logic;
+      SS_rden_SCP           : in  std_logic;
+      SS_DataRead_CPU       : out std_logic_vector(31 downto 0);
+      SS_DataRead_SCP       : out std_logic_vector(31 downto 0);
       SS_idle               : out std_logic;
-      
-      debug_firstGTE        : in  std_logic;
    
+-- synthesis translate_off
       cpu_done              : out std_logic := '0'; 
-      cpu_export            : out cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'), (others => '0'))
+      cpu_export            : out cpu_export_type := ((others => (others => '0')), (others => '0'), (others => '0'), (others => '0'));
+-- synthesis translate_on
+      
+      debug_firstGTE        : in  std_logic
    );
 end entity;
 
@@ -66,7 +71,10 @@ architecture arch of cpu is
    signal regs1_address_b              : std_logic_vector(4 downto 0);
    signal regs1_q_b                    : std_logic_vector(31 downto 0);
    signal regs2_address_b              : std_logic_vector(4 downto 0);
-   signal regs2_q_b                    : std_logic_vector(31 downto 0);
+   signal regs2_q_b                    : std_logic_vector(31 downto 0);   
+   signal regsSS_address_b             : std_logic_vector(4 downto 0) := (others => '0');
+   signal regsSS_q_b                   : std_logic_vector(31 downto 0);
+   signal regsSS_rden                  : std_logic := '0';
    
    signal ss_regs_loading              : std_logic := '0';
    signal ss_regs_load                 : std_logic := '0';
@@ -319,6 +327,7 @@ architecture arch of cpu is
    signal scratchpad_address_a         : std_logic_vector(7 downto 0);
    signal scratchpad_data_a            : std_logic_vector(31 downto 0);
    signal scratchpad_wren_a            : std_logic_vector(3 downto 0);
+   signal scratchpad_q_a               : std_logic_vector(31 downto 0);
    signal scratchpad_address_b         : std_logic_vector(7 downto 0);
    signal scratchpad_q_b               : std_logic_vector(31 downto 0);
    signal scratchpad_dataread          : unsigned(31 downto 0);
@@ -354,8 +363,11 @@ architecture arch of cpu is
    signal writeDoneWriteEnable         : std_logic := '0';
    
    -- savestates
-   type t_ssarray is array(0 to 56) of std_logic_vector(31 downto 0);
+   type t_ssarray is array(0 to 95) of std_logic_vector(31 downto 0);
    signal ss_in  : t_ssarray := (others => (others => '0'));  
+   signal ss_out : t_ssarray := (others => (others => '0')); 
+
+   signal ss_scp_rden_1                : std_logic;              
    
    -- debug
    signal debugCnt                     : unsigned(31 downto 0);
@@ -368,8 +380,10 @@ architecture arch of cpu is
    signal debugTrigger                 : std_logic := '0';
    
    -- export
+-- synthesis translate_off
    type tRegs is array(0 to 31) of unsigned(31 downto 0);
    signal regs                         : tRegs := (others => (others => '0'));
+-- synthesis translate_on
    
 begin 
 
@@ -396,7 +410,7 @@ begin
       if (rising_edge(clk1x)) then
          if (reset = '1') then
          
-            memoryMuxStage <= 1; -- no ss when stalled -> not relevant
+            memoryMuxStage <= 1; -- no ss when stalled -> not relevant for savestate
          
          elsif (ce = '1') then
             
@@ -485,6 +499,38 @@ begin
       wraddress  => regs_address_a,
       rdaddress  => regs2_address_b,
       q          => regs2_q_b
+	);
+   
+   iregisterfileSS : altdpram
+	GENERIC MAP 
+   (
+   	indata_aclr                         => "OFF",
+      indata_reg                          => "INCLOCK",
+      intended_device_family              => "Cyclone V",
+      lpm_type                            => "altdpram",
+      outdata_aclr                        => "OFF",
+      outdata_reg                         => "UNREGISTERED",
+      ram_block_type                      => "MLAB",
+      rdaddress_aclr                      => "OFF",
+      rdaddress_reg                       => "UNREGISTERED",
+      rdcontrol_aclr                      => "OFF",
+      rdcontrol_reg                       => "UNREGISTERED",
+      read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
+      width                               => 32,
+      widthad                             => 5,
+      width_byteena                       => 1,
+      wraddress_aclr                      => "OFF",
+      wraddress_reg                       => "INCLOCK",
+      wrcontrol_aclr                      => "OFF",
+      wrcontrol_reg                       => "INCLOCK"
+	)
+	PORT MAP (
+      inclock    => clk1x,
+      wren       => regs_wren_a,
+      data       => regs_data_a,
+      wraddress  => regs_address_a,
+      rdaddress  => regsSS_address_b,
+      q          => regsSS_q_b
 	);
 
 --##############################################################
@@ -694,6 +740,11 @@ begin
       
    end process;
    
+   ss_out( 0) <= std_logic_vector(PC);
+   ss_out(14) <= std_logic_vector(opcode0);
+   ss_out(19) <= std_logic_vector(PCold0);
+   ss_out(25)(0) <= fetchReady;
+   
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
@@ -791,6 +842,23 @@ begin
                        unsigned(cache_q_b(127 downto 96)) when (cacheHit = '1' and PCold0(3 downto 2) = "11") else
                        opcode0;
 
+   ss_out(15) <= std_logic_vector(opcode1);
+   ss_out(20) <= std_logic_vector(pcOld1);
+
+   ss_out(32)(25) <= decodeException;
+   
+   ss_out(26)(15 downto 0)   <= std_logic_vector(decodeImmData);
+   ss_out(31)( 4 downto 0)   <= std_logic_vector(decodeSource1);
+   ss_out(31)(12 downto 8)   <= std_logic_vector(decodeSource2);
+   ss_out(27)                <= std_logic_vector(decodeValue1);
+   ss_out(28)                <= std_logic_vector(decodeValue2);
+   ss_out(31)(29 downto 24)  <= std_logic_vector(decodeOP);
+   ss_out(32)(13 downto  8)  <= std_logic_vector(decodeFunct);
+   ss_out(32)(20 downto 16)  <= std_logic_vector(decodeShamt);
+   ss_out(32)( 4 downto  0)  <= std_logic_vector(decodeRD);
+   ss_out(31)(20 downto 16)  <= std_logic_vector(decodeTarget);
+   ss_out(29)(25 downto  0)  <= std_logic_vector(decodeJumpTarget);
+
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
@@ -809,7 +877,7 @@ begin
             decodeValue2     <= unsigned(ss_in(28));
             decodeOP         <= unsigned(ss_in(31)(29 downto 24));
             decodeFunct      <= unsigned(ss_in(32)(13 downto 8));
-            decodeShamt      <= unsigned(ss_in(31)(20 downto 16));
+            decodeShamt      <= unsigned(ss_in(32)(20 downto 16));
             decodeRD         <= unsigned(ss_in(32)(4 downto 0));
             decodeTarget     <= unsigned(ss_in(31)(20 downto 16));
             decodeJumpTarget <= unsigned(ss_in(29)(25 downto 0));
@@ -1497,6 +1565,41 @@ begin
       
    end process;
    
+   ss_out(16) <= std_logic_vector(opcode2);
+   ss_out(21) <= std_logic_vector(pcOld2);
+   
+   ss_out(24)(13)           <= blockLoadforward;           
+    
+   ss_out(41)(24)           <= executeException;          
+   ss_out(41)(20)           <= resultWriteEnable;          
+   ss_out(33)               <= std_logic_vector(resultData);                 
+   ss_out(40)(4 downto 0)   <= std_logic_vector(resultTarget);               
+   ss_out(41)(27)           <= executeBranchdelaySlot;     
+   ss_out(41)(26)           <= executeBranchTaken;         
+   ss_out(35)               <= std_logic_vector(executeMemWriteData);        
+   ss_out(40)(19 downto 16) <= executeMemWriteMask;        
+   ss_out(36)               <= std_logic_vector(executeMemWriteAddr);        
+   ss_out(41)(23)           <= executeMemWriteEnable;      
+   ss_out(41)(18 downto 16) <= std_logic_vector(to_unsigned(CPU_LOADTYPE'POS(executeLoadType), 3));       
+   ss_out(34)               <= std_logic_vector(executeReadAddress);        
+   ss_out(41)(21)           <= executeReadEnable;          
+   ss_out(41)(25)           <= executeCOP0WriteEnable;     
+   ss_out(40)(28 downto 24) <= std_logic_vector(executeCOP0WriteDestination);
+   ss_out(37)               <= std_logic_vector(executeCOP0WriteValue);      
+                
+   ss_out(1)                <= std_logic_vector(hi);                         
+   ss_out(2)                <= std_logic_vector(lo);                         
+
+   ss_out(41)(22)           <= executeGTEReadEnable;       
+   ss_out(40)(12 downto 8)  <= std_logic_vector(executeGTETarget);           
+
+   ss_out(59)(5 downto 0)   <= std_logic_vector(execute_gte_writeAddr);      
+   ss_out(57)               <= std_logic_vector(execute_gte_writeData);      
+   ss_out(59)(8)            <= execute_gte_writeEna;       
+                     
+   ss_out(58)               <= std_logic_vector(execute_gte_cmdData);        
+   ss_out(59)(9)            <= execute_gte_cmdEna;         
+   
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
@@ -1535,12 +1638,12 @@ begin
             executeGTEReadEnable          <= ss_in(41)(22);
             executeGTETarget              <= unsigned(ss_in(40)(12 downto 8));
             
-            execute_gte_writeAddr         <= (others => '0'); -- todo -> savestate 
-            execute_gte_writeData         <= (others => '0'); -- todo -> savestate 
-            execute_gte_writeEna          <= '0';             -- todo -> savestate 
+            execute_gte_writeAddr         <= unsigned(ss_in(59)(5 downto 0));
+            execute_gte_writeData         <= unsigned(ss_in(57));
+            execute_gte_writeEna          <= ss_in(59)(8);
                                    
-            execute_gte_cmdData           <= (others => '0'); -- todo -> savestate 
-            execute_gte_cmdEna            <= '0';             -- todo -> savestate 
+            execute_gte_cmdData           <= unsigned(ss_in(58));
+            execute_gte_cmdEna            <= ss_in(59)(9);
             
          elsif (ce = '1') then
          
@@ -1713,6 +1816,7 @@ begin
                   
                end if;
                
+               
             end if;
 
          end if;
@@ -1725,7 +1829,7 @@ begin
 --############################### stage 4
 --##############################################################
    
-   scratchpad_address_a <= std_logic_vector(SS_Adr(7 downto 0)) when (SS_wren_SCP = '1') else std_logic_vector(executeMemWriteAddr(9 downto 2));
+   scratchpad_address_a <= std_logic_vector(SS_Adr(7 downto 0)) when (SS_wren_SCP = '1' or SS_rden_SCP = '1') else std_logic_vector(executeMemWriteAddr(9 downto 2));
    scratchpad_data_a    <= SS_DataWrite                         when (SS_wren_SCP = '1') else std_logic_vector(executeMemWriteData);
    
    scratchpad_address_b <= std_logic_vector(executeReadAddress(9 downto 2));
@@ -1737,10 +1841,11 @@ begin
       port map
       (
          clock_a     => clk1x,
-         clken_a     => ce or SS_wren_SCP,
+         clken_a     => ce or SS_wren_SCP or SS_rden_SCP,
          address_a   => scratchpad_address_a,
          data_a      => scratchpad_data_a((8*i) + 7 downto (8*i)),
          wren_a      => scratchpad_wren_a(i),
+         q_a         => scratchpad_q_a((8*i) + 7 downto (8*i)),
          
          clock_b     => clk2x,
          address_b   => scratchpad_address_b,
@@ -1842,6 +1947,31 @@ begin
       end if;
       
    end process;
+   
+   ss_out(22)               <= std_logic_vector(pcOld3);                     
+   ss_out(17)               <= std_logic_vector(opcode3);                    
+                                   
+   ss_out( 3)               <= std_logic_vector(cop0_BPC);                   
+   ss_out( 4)               <= std_logic_vector(cop0_BDA);                   
+   ss_out( 5)               <= std_logic_vector(cop0_JUMPDEST);              
+   ss_out( 6)               <= std_logic_vector(cop0_DCIC);                  
+   ss_out( 8)               <= std_logic_vector(cop0_BDAM);                  
+   ss_out( 9)               <= std_logic_vector(cop0_BPCM);                  
+   ss_out(10)               <= std_logic_vector(cop0_SR);                    
+   ss_out(11)               <= std_logic_vector(cop0_CAUSE);                 
+   ss_out(12)               <= std_logic_vector(cop0_EPC);                   
+   ss_out(13)               <= std_logic_vector(cop0_PRID);                  
+                                                 
+   ss_out(56)               <= std_logic_vector(CACHECONTROL);               
+                                             
+   ss_out(47)(4 downto 0)   <= std_logic_vector(writebackTarget);            
+   ss_out(42)               <= std_logic_vector(writebackData);              
+   ss_out(47)(24)           <= writebackWriteEnable;       
+
+   ss_out(47)(26)           <= writebackException;         
+                    
+   ss_out(47)(30)           <= writebackGTEReadEnable;     
+   ss_out(48)(5 downto 0)   <= std_logic_vector(WBgte_writeAddr);          
    
    process (clk1x)
       variable dataReadEna  : std_logic;
@@ -2085,7 +2215,12 @@ begin
       end if;
    end process;
    
+   ss_out(23)              <= std_logic_vector(pcOld4);
+   ss_out(18)              <= std_logic_vector(opcode4);
    
+   ss_out(50)(12 downto 8) <= std_logic_vector(writeDoneTarget);
+   ss_out(49)              <= std_logic_vector(writeDoneData);
+   ss_out(50)(16)          <= writeDoneWriteEnable;
    
 --##############################################################
 --############################### stage 5
@@ -2094,7 +2229,9 @@ begin
    begin
       if (rising_edge(clk1x)) then
       
+-- synthesis translate_off
          cpu_done <= '0';
+-- synthesis translate_on
          
          debugTmr <= debugTmr + 1;
       
@@ -2127,12 +2264,15 @@ begin
                -- export
                if (writebackWriteEnable = '1' and writebackException = '0') then 
                   if (writebackTarget > 0) then
+-- synthesis translate_off
                      regs(to_integer(writebackTarget)) <= writebackData;
+-- synthesis translate_on
                      debugSum <= debugSum + writebackData;
                   end if;
                end if;
                
                debugCnt          <= debugCnt+ 1;
+-- synthesis translate_off
                cpu_done          <= '1';
                cpu_export.pc     <= pcOld4;
                cpu_export.opcode <= opcode4;
@@ -2140,6 +2280,7 @@ begin
                for i in 0 to 31 loop
                   cpu_export.regs(i) <= regs(i);
                end loop;
+-- synthesis translate_on
                
                -- todo: REMOVE!
                if (debugCnt(31) = '1' and debugSum(31) = '1' and debugTmr(31) = '1' and debugTrigger = '1' and writebackTarget = 0) then
@@ -2156,9 +2297,11 @@ begin
          --end if;
          
          -- export
+-- synthesis translate_off
          if (ss_regs_load = '1') then
             regs(to_integer(ss_regs_addr)) <= unsigned(ss_regs_data);
          end if; 
+-- synthesis translate_on
          
       end if;
    end process;
@@ -2166,6 +2309,16 @@ begin
 --##############################################################
 --############################### exception handling
 --##############################################################
+
+   ss_out(24)(9 downto 5)  <= std_logic_vector(exception);      
+
+   ss_out(7)               <= std_logic_vector(cop0_BADVADDR);  
+
+   ss_out(51)              <= std_logic_vector(exception_SR);   
+   ss_out(52)              <= std_logic_vector(exception_CAUSE);
+   ss_out(53)              <= std_logic_vector(exception_EPC);  
+   ss_out(54)              <= std_logic_vector(exception_JMP);  
+
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
@@ -2280,12 +2433,12 @@ begin
             ss_regs_addr    <= (others => '0');
             ss_regs_data    <= (others => '0');
             
-         elsif (SS_wren_CPU = '1' and SS_Adr < 57) then
+         elsif (SS_wren_CPU = '1' and SS_Adr < 96) then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
             
-         elsif (SS_wren_CPU = '1' and SS_Adr >= 57 and SS_Adr < 89) then
+         elsif (SS_wren_CPU = '1' and SS_Adr >= 96 and SS_Adr < 128) then
             ss_regs_load <= '1';
-            ss_regs_addr <= resize(SS_Adr - 57, 5);
+            ss_regs_addr <= resize(SS_Adr - 96, 5);
             ss_regs_data <= SS_DataWrite;
          end if;
          
@@ -2300,6 +2453,23 @@ begin
          SS_idle <= '0';
          if (hiloWait = 0) then
             SS_idle <= '1';
+         end if;
+      
+         regsSS_rden <= '0';
+         if (SS_rden_CPU = '1' and SS_Adr >= 96 and SS_Adr < 128) then
+            regsSS_address_b <= std_logic_vector(resize(SS_Adr - 96, 5));
+            regsSS_rden      <= '1';
+         end if;
+         
+         if (regsSS_rden = '1') then
+            SS_DataRead_CPU <= regsSS_q_b;
+         elsif (SS_rden_CPU = '1' and SS_Adr < 96) then
+            SS_DataRead_CPU <= ss_out(to_integer(SS_Adr));
+         end if;
+      
+         ss_scp_rden_1 <= SS_rden_SCP;
+         if (ss_scp_rden_1 = '1') then
+            SS_DataRead_SCP <= scratchpad_q_a;
          end if;
       
       end if;

@@ -61,6 +61,7 @@ entity dma is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(5 downto 0);
       SS_wren              : in  std_logic;
+      SS_rden              : in  std_logic;
       SS_DataRead          : out std_logic_vector(31 downto 0)
    );
 end entity;
@@ -157,7 +158,8 @@ architecture arch of dma is
    
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
-   signal ss_in  : t_ssarray := (others => (others => '0'));  
+   signal ss_in   : t_ssarray := (others => (others => '0'));  
+   signal ss_out  : t_ssarray := (others => (others => '0'));  
   
 begin 
 
@@ -189,6 +191,28 @@ begin
    DMA_SPU_readEna   <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 4 and toDevice = '0') else '0';
    DMA_SPU_writeEna  <= '1' when ((fifoIn_Valid = '1' or fifoIn_Valid_1 = '1') and activeChannel = 4 and toDevice = '1') else '0'; 
    DMA_SPU_write     <= fifoIn_Dout(15 downto 0) when fifoIn_Valid = '1' else fifoIn_Dout(31 downto 16);
+
+
+
+   gSSout: for i in 0 to 6 generate
+   begin
+      ss_out(28 + i)(23 downto 0) <= std_logic_vector(dmaArray(i).D_MADR);        
+      ss_out(35 + i)              <= std_logic_vector(dmaArray(i).D_BCR);          
+      ss_out(42 + i)              <= std_logic_vector(dmaArray(i).D_CHCR);         
+      ss_out(19 + i)(8)           <= dmaArray(i).request;        
+      ss_out(19 + i)(10)          <= dmaArray(i).timeupPending;  
+      ss_out(19 + i)(9)           <= dmaArray(i).requestsPending;
+   end generate;
+
+   ss_out(26)               <= std_logic_vector(DPCR);     
+   ss_out(27)(23 downto 0)  <= std_logic_vector(DICR);    
+   ss_out(27)(30 downto 24) <= std_logic_vector(DICR_IRQs);
+
+   ss_out(4)(7 downto 0)    <= x"07" when (dmaState = GPUBUSY) else x"00";
+   ss_out(4)(8)             <= isOn;         
+   ss_out(2)(18 downto 16)  <= std_logic_vector(to_unsigned(activeChannel, 3));       
+   ss_out(4)(9)             <= paused;       
+   ss_out(4)(10)            <= gpupaused;    
 
    process (clk1x)
       variable channel         : integer range 0 to 7;
@@ -828,6 +852,10 @@ begin
             
          elsif (SS_wren = '1') then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+         
+         if (SS_rden = '1') then
+            SS_DataRead <= ss_out(to_integer(SS_Adr));
          end if;
       
       end if;

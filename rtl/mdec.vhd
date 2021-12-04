@@ -31,6 +31,7 @@ entity mdec is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(6 downto 0);
       SS_wren              : in  std_logic;
+      SS_rden              : in  std_logic;
       SS_DataRead          : out std_logic_vector(31 downto 0);
       SS_Idle              : out std_logic
    );
@@ -243,7 +244,16 @@ architecture arch of mdec is
    
    -- savestates
    type t_ssarray is array(0 to 1) of std_logic_vector(31 downto 0);
-   signal ss_in  : t_ssarray := (others => (others => '0')); 
+   signal ss_in  : t_ssarray  := (others => (others => '0')); 
+   signal ss_out : t_ssarray  := (others => (others => '0'));
+                              
+   signal RamSSaddrA          : unsigned(5 downto 0) := (others => '0');
+   signal RamSSdataA          : std_logic_vector(31 downto 0) := (others => '0');
+   signal RamSSwrite          : std_logic := '0';     
+   signal RamSSaddrB          : unsigned(5 downto 0) := (others => '0');
+   signal RamSSdataB          : std_logic_vector(31 downto 0); 
+                              
+   signal ram_SSrden          : std_logic;
 
 begin 
 
@@ -280,6 +290,10 @@ begin
    
    RLdata <= FifoIn_Dout(15 downto 0) when fifoSecondAvail = '0' else FifoIn_Dout(31 downto 16);
    
+   
+   ss_out(0)               <= MDECSTAT; 
+   ss_out(1)(31 downto 29) <= MDECCONTROL;
+   
    -- receive FIFO handling
    process (clk1x)
       variable nextCoeff : unsigned(6 downto 0);
@@ -287,6 +301,7 @@ begin
       if rising_edge(clk1x) then
       
          RamYUVwrite       <= '0';
+         RamSSwrite        <= '0';
          calcNextRL        <= '0';
          currentBlockDone  <= '0';
       
@@ -308,11 +323,17 @@ begin
                RamYUVaddrA <= resize(SS_Adr - 16, 5);
                RamYUVdataA <= SS_DataWrite;
                RamYUVwrite <= '1';
+               RamSSaddrA  <= '0' & resize(SS_Adr - 16, 5);
+               RamSSdataA  <= SS_DataWrite;
+               RamSSwrite  <= '1';
             end if;
             
             if (SS_Adr >= 64 and SS_Adr < 96) then
-                scaleTable(((to_integer(SS_Adr) - 64) * 2) + 0) <= signed(SS_DataWrite(15 downto  0));
-                scaleTable(((to_integer(SS_Adr) - 64) * 2) + 1) <= signed(SS_DataWrite(31 downto 16));
+               scaleTable(((to_integer(SS_Adr) - 64) * 2) + 0) <= signed(SS_DataWrite(15 downto  0));
+               scaleTable(((to_integer(SS_Adr) - 64) * 2) + 1) <= signed(SS_DataWrite(31 downto 16));
+               RamSSaddrA  <= '1' & resize(SS_Adr - 64, 5);
+               RamSSdataA  <= SS_DataWrite;
+               RamSSwrite  <= '1';
             end if;
          
          elsif (ce = '1') then
@@ -358,7 +379,10 @@ begin
                   if (FifoIn_Empty = '0') then
                      RamYUVaddrA <= recCount;
                      RamYUVdataA <= FifoIn_Dout;
-                     RamYUVwrite <= '1';
+                     RamYUVwrite <= '1';                     
+                     RamSSaddrA  <= '0' & recCount;
+                     RamSSdataA  <= FifoIn_Dout;
+                     RamSSwrite  <= '1';
                      recCount    <= recCount + 1;
                      if ((isColor = '1' and recCount = 31) or (isColor = '0' and recCount = 15)) then
                         receiveState <= RECEIVE_IDLE;
@@ -370,6 +394,9 @@ begin
                   if (FifoIn_Empty = '0') then
                      scaleTable(to_integer(recCount) * 2 + 0) <= signed(FifoIn_Dout(15 downto  0));
                      scaleTable(to_integer(recCount) * 2 + 1) <= signed(FifoIn_Dout(31 downto 16));
+                     RamSSaddrA  <= '1' & recCount;
+                     RamSSdataA  <= FifoIn_Dout;
+                     RamSSwrite  <= '1';
                      recCount    <= recCount + 1;
                      if (recCount = 31) then
                         receiveState <= RECEIVE_IDLE;
@@ -449,6 +476,30 @@ begin
    );
    
    RamYUVaddrB <= '0' & currentCoeff(5 downto 0) when (currentBlock >= 2) else '1' & currentCoeff(5 downto 0);
+   
+   iramSS: entity work.dpram_dif
+   generic map 
+   ( 
+      addr_width_a  => 6,
+      data_width_a  => 32,
+      addr_width_b  => 6,
+      data_width_b  => 32
+   )
+   port map
+   (
+      clock       => clk1x,
+      
+      address_a   => std_logic_vector(RamSSaddrA),
+      data_a      => RamSSdataA,
+      wren_a      => (RamSSwrite),
+      
+      address_b   => std_logic_vector(RamSSaddrB),
+      data_b      => x"00000000",
+      wren_b      => '0',
+      q_b         => RamSSdataB
+   );
+   
+   RamSSaddrB <= (SS_Adr(5 downto 0) - 16) when SS_Adr < 64 else '1' & SS_Adr(4 downto 0);
    
    -- RL decoding
    process (clk1x)
@@ -1066,6 +1117,19 @@ begin
          SS_Idle <= '0';
          if (FifoIn_Empty = '1' and FifoOut_Empty = '1' and receiveState = RECEIVE_IDLE and idctState = IDCT_IDLE and colorState = COLOR_IDLE and outputState = OUTPUT_IDLE) then
             SS_Idle <= '1';
+         end if;
+         
+         ram_SSrden <= '0';
+         if (SS_rden = '1' and ((SS_Adr >= 16 and SS_Adr < 48) or (SS_Adr >= 64 and SS_Adr < 96))) then
+            ram_SSrden <= '1';
+         end if;
+         
+         if (ram_SSrden = '1') then
+            SS_DataRead <= RamSSdataB;
+         elsif (SS_rden = '1' and SS_Adr < 2) then
+            SS_DataRead <= ss_out(to_integer(SS_Adr));
+         elsif (SS_rden = '1') then
+            SS_DataRead <= (others => '0');
          end if;
       
       end if;

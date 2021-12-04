@@ -27,7 +27,7 @@ entity statemanager is
       
       request_savestate   : out   std_logic := '0';
       request_loadstate   : out   std_logic := '0';
-      request_address     : out   integer;
+      request_address     : out   integer := 0;
       request_busy        : in    std_logic
    );
 end entity;

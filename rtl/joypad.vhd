@@ -49,6 +49,7 @@ entity joypad is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(2 downto 0);
       SS_wren              : in  std_logic;
+      SS_rden              : in  std_logic;
       SS_DataRead          : out std_logic_vector(31 downto 0);
       SS_idle              : out std_logic
    );
@@ -99,6 +100,7 @@ architecture arch of joypad is
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
    signal ss_in  : t_ssarray := (others => (others => '0'));  
+   signal ss_out : t_ssarray := (others => (others => '0'));  
   
 begin 
 
@@ -115,6 +117,20 @@ begin
    JOY_STAT(10) <= '0'; -- unknown
    JOY_STAT(31 downto 11) <= (others => '0'); --std_logic_vector(baudCnt); ??
 
+   ss_out(0)(20 downto 0)  <= std_logic_vector(baudCnt);  
+   ss_out(1)(15 downto 0)  <= JOY_STAT(15 downto 0);    
+   ss_out(1)(31 downto 16) <= JOY_MODE; 
+   ss_out(2)(15 downto  0) <= JOY_CTRL;      
+   ss_out(2)(31 downto 16) <= JOY_BAUD;   
+   ss_out(3)( 7 downto  0) <= transmitBuffer;
+   ss_out(3)(15 downto  8) <= transmitValue;
+   ss_out(3)(23 downto 16) <= receiveBuffer;   
+   ss_out(3)(31 downto 24) <= std_logic_vector(to_unsigned(activeDevice, 8));    
+   ss_out(4)(15 downto 8)  <= std_logic_vector(to_unsigned(tcontrollerState'POS(controllerState), 8));       
+   ss_out(4)(19)           <= receiveFilled; 
+   ss_out(4)(16)           <= transmitFilled;
+   ss_out(4)(17)           <= transmitting;  
+   ss_out(4)(18)           <= waitAck;        
 
    process (clk1x)
       variable ack : std_logic;
@@ -123,17 +139,20 @@ begin
       
          if (reset = '1') then
          
+            baudCnt         <= unsigned(ss_in(0)(20 downto 0));
             irqRequest      <= ss_in(1)(9);
             receiveFilled   <= ss_in(4)(19);
             JOY_STAT_ACK    <= ss_in(1)(7);
             transmitFilled  <= ss_in(4)(16);
             transmitting    <= ss_in(4)(17);
             waitAck         <= ss_in(4)(18);
-            baudCnt         <= unsigned(ss_in(0)(20 downto 0));
             JOY_MODE        <= ss_in(1)(31 downto 16);
             JOY_CTRL        <= ss_in(2)(15 downto  0);
             JOY_BAUD        <= ss_in(2)(31 downto 16);
             
+            transmitBuffer  <= ss_in(3)(7 downto 0);
+            transmitValue   <= ss_in(3)(15 downto 8);
+            receiveBuffer   <= ss_in(3)(23 downto 16);
             activeDevice    <= to_integer(unsigned(ss_in(3)(31 downto 24)));
             controllerState <= tcontrollerState'VAL(to_integer(unsigned(ss_in(4)(15 downto 8))));
             
@@ -392,6 +411,10 @@ begin
          SS_idle <= '0';
          if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNext = '0') then
             SS_idle <= '1';
+         end if;
+         
+         if (SS_rden = '1') then
+            SS_DataRead <= ss_out(to_integer(SS_Adr));
          end if;
       
       end if;

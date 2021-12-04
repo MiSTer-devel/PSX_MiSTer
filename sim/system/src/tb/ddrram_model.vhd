@@ -31,6 +31,7 @@ architecture arch of ddrram_model is
    -- not full size, because of memory required
    type t_data is array(0 to (2**28)-1) of integer;
    type bit_vector_file is file of bit_vector;
+   type t_ssfile is file of character;
    
    signal intern_addr : STD_LOGIC_VECTOR(DDRAM_ADDR'left downto 0);
    
@@ -67,6 +68,8 @@ begin
       variable readval        : signed(31 downto 0); 
       
       variable dumpVRAMimage  : std_logic;
+      
+      file ssfile             : t_ssfile;
       
       -- copy from std_logic_arith, not used here because numeric std is also included
       function CONV_STD_LOGIC_VECTOR(ARG: INTEGER; SIZE: INTEGER) return STD_LOGIC_VECTOR is
@@ -198,6 +201,18 @@ begin
                      end if;
                   end loop;
                   pixelTimeout := 1000;
+               end if;
+               
+               if (DDRAM_ADDR = '0' & x"7C00000") then
+                  file_open(f_status, ssfile, "ss_out.ss", write_mode);
+                  for i in 0 to 1048575 loop
+                     cmd_din_save(31 downto 0) := std_logic_vector(to_signed(data(to_integer(unsigned(cmd_address_save)) + i), 32));
+                     write(ssfile, character'val(to_integer(unsigned(cmd_din_save( 7 downto  0)))));
+                     write(ssfile, character'val(to_integer(unsigned(cmd_din_save(15 downto  8)))));
+                     write(ssfile, character'val(to_integer(unsigned(cmd_din_save(23 downto 16)))));
+                     write(ssfile, character'val(to_integer(unsigned(cmd_din_save(31 downto 24)))));
+                  end loop;
+                  file_close(ssfile);
                end if;
                
                wait until rising_edge(DDRAM_CLK);

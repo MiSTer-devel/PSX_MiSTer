@@ -23,15 +23,18 @@ entity timer is
       bus_write            : in  std_logic;
       bus_dataRead         : out std_logic_vector(31 downto 0);
       
+-- synthesis translate_off
+      export_t_current0    : out unsigned(15 downto 0);
+      export_t_current1    : out unsigned(15 downto 0);
+      export_t_current2    : out unsigned(15 downto 0);
+-- synthesis translate_on
+      
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(3 downto 0);
       SS_wren              : in  std_logic;
-      SS_DataRead          : out std_logic_vector(31 downto 0);
-      
-      export_t_current0    : out unsigned(15 downto 0);
-      export_t_current1    : out unsigned(15 downto 0);
-      export_t_current2    : out unsigned(15 downto 0)
+      SS_rden              : in  std_logic;
+      SS_DataRead          : out std_logic_vector(31 downto 0)
    );
 end entity;
 
@@ -54,6 +57,7 @@ architecture arch of timer is
    -- savestates
    type t_ssarray is array(0 to 15) of std_logic_vector(31 downto 0);
    signal ss_in  : t_ssarray := (others => (others => '0'));  
+   signal ss_out : t_ssarray := (others => (others => '0'));  
    
 begin 
 
@@ -61,9 +65,25 @@ begin
    irqRequest1 <= not timerArray(1).T_MODE(10);
    irqRequest2 <= not timerArray(2).T_MODE(10);
    
+-- synthesis translate_off
    export_t_current0 <= timerArray(0).T_CURRENT;
    export_t_current1 <= timerArray(1).T_CURRENT;
    export_t_current2 <= timerArray(2).T_CURRENT;
+-- synthesis translate_on
+   
+   ss_out(0)(15 downto 0) <= std_logic_vector(timerArray(0).T_CURRENT);
+   ss_out(3)(15 downto 0) <= std_logic_vector(timerArray(0).T_MODE);   
+   ss_out(6)(15 downto 0) <= std_logic_vector(timerArray(0).T_TARGET); 
+   ss_out(9)(11)          <= timerArray(0).irqDone; 
+   ss_out(1)(15 downto 0) <= std_logic_vector(timerArray(1).T_CURRENT);
+   ss_out(4)(15 downto 0) <= std_logic_vector(timerArray(1).T_MODE);   
+   ss_out(7)(15 downto 0) <= std_logic_vector(timerArray(1).T_TARGET); 
+   ss_out(9)(12)          <= timerArray(1).irqDone;  
+   ss_out(2)(15 downto 0) <= std_logic_vector(timerArray(2).T_CURRENT);
+   ss_out(5)(15 downto 0) <= std_logic_vector(timerArray(2).T_MODE);   
+   ss_out(8)(15 downto 0) <= std_logic_vector(timerArray(2).T_TARGET); 
+   ss_out(9)(13)          <= timerArray(2).irqDone;  
+   ss_out(9)(2 downto 0)  <= std_logic_vector(timer2_subcount);        
 
    process (clk1x)
       variable channel  : integer range 0 to 3;
@@ -90,7 +110,6 @@ begin
             timerArray(2).T_TARGET  <= unsigned(ss_in(8)(15 downto 0));
             timerArray(2).irqDone   <= ss_in(9)(13);
          
-            
             timer2_subcount <= unsigned(ss_in(9)(2 downto 0));
             hblank_1        <= hblank;
             vblank_1        <= vblank;
@@ -283,6 +302,10 @@ begin
             
          elsif (SS_wren = '1') then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+         
+         if (SS_rden = '1') then
+            SS_DataRead <= ss_out(to_integer(SS_Adr));
          end if;
       
       end if;

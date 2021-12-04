@@ -63,19 +63,24 @@ entity gpu is
       video_g              : out std_logic_vector(7 downto 0);
       video_b              : out std_logic_vector(7 downto 0);
       
+-- synthesis translate_off
+      export_gtm           : out unsigned(11 downto 0);
+      export_line          : out unsigned(11 downto 0);
+      export_gpus          : out unsigned(31 downto 0);
+      export_gobj          : out unsigned(15 downto 0) := (others => '0');
+-- synthesis translate_on
+      
       loading_savestate    : in  std_logic;
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(2 downto 0);
       SS_wren_GPU          : in  std_logic;
       SS_wren_Timing       : in  std_logic;
-      SS_DataRead          : out std_logic_vector(31 downto 0);
-      SS_Idle              : out std_logic;
-      
-      export_gtm           : out unsigned(11 downto 0);
-      export_line          : out unsigned(11 downto 0);
-      export_gpus          : out unsigned(31 downto 0);
-      export_gobj          : out unsigned(15 downto 0) := (others => '0')
+      SS_rden_GPU          : in  std_logic;
+      SS_rden_Timing       : in  std_logic;
+      SS_DataRead_GPU      : out std_logic_vector(31 downto 0);
+      SS_DataRead_Timing   : out std_logic_vector(31 downto 0);
+      SS_Idle              : out std_logic
    );
 end entity;
 
@@ -354,13 +359,17 @@ architecture arch of gpu is
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
    signal ss_gpu_in     : t_ssarray := (others => (others => '0'));
-   signal ss_timing_in  : t_ssarray := (others => (others => '0'));
+   signal ss_timing_in  : t_ssarray := (others => (others => '0'));   
+   signal ss_gpu_out    : t_ssarray := (others => (others => '0'));
+   signal ss_timing_out : t_ssarray := (others => (others => '0'));
    
 begin 
 
+-- synthesis translate_off
    export_gtm  <= to_unsigned(nextHCount, 12);
    export_line <= to_unsigned(vpos, 12);
    export_gpus <= unsigned(GPUSTAT);
+-- synthesis translate_on
    
    gpu_dmaRequest <= GPUSTAT_DMADataRequest;
 
@@ -396,6 +405,18 @@ begin
                              GPUSTAT_ReadySendVRAM;                   
 
    video_interlace        <= GPUSTAT_VerRes and interlacedDisplayField;
+
+   ss_gpu_out(0)  <= GPUREAD;                
+   ss_gpu_out(1)  <= GPUSTAT;                
+
+   ss_timing_out(4)(19)            <= interlacedDisplayField;
+   ss_timing_out(2)(18 downto 0)   <= std_logic_vector(vramRange);    
+   ss_timing_out(1)(23 downto 0)   <= std_logic_vector(hDisplayRange);
+   ss_timing_out(0)(19 downto 0)   <= std_logic_vector(vDisplayRange);
+   ss_timing_out(4)(11 downto 0)   <= std_logic_vector(to_unsigned(nextHCount, 12));
+   ss_timing_out(3)(24 downto 16)  <= std_logic_vector(to_unsigned(vpos, 9));
+   ss_timing_out(4)(17)            <= inVsync;      
+   ss_timing_out(4)(20)            <= activeLineLSB;
 
    process (clk1x)
       variable mode480i                  : std_logic;
@@ -458,7 +479,6 @@ begin
             GPUSTAT_IRQRequest      <= ss_gpu_in(1)(24);
             GPUSTAT_DMADirection    <= ss_gpu_in(1)(30 downto 29);
             GPUSTAT_DrawingOddline  <= ss_gpu_in(1)(31);
-            
             GPUREAD                 <= ss_gpu_in(0);       
 
          elsif (ce = '1') then
@@ -791,6 +811,17 @@ begin
 
       end if;
    end process;
+
+   ss_gpu_out(2)(19 downto 0)   <= std_logic_vector(textureWindow);
+   ss_gpu_out(4)(9 downto 0)    <= std_logic_vector(drawingAreaLeft);  
+   ss_gpu_out(5)(9 downto 0)    <= std_logic_vector(drawingAreaRight); 
+   ss_gpu_out(4)(24 downto 16)  <= std_logic_vector(drawingAreaTop);   
+   ss_gpu_out(5)(24 downto 16)  <= std_logic_vector(drawingAreaBottom);
+   ss_gpu_out(6)(10 downto 0)   <= std_logic_vector(drawingOffsetX);   
+   ss_gpu_out(6)(26 downto 16)  <= std_logic_vector(drawingOffsetY);   
+   ss_gpu_out(3)(13 downto 0)   <= std_logic_vector(drawMode);         
+   ss_gpu_out(3)(16)            <= GPUSTAT_DrawPixelsMask;         
+   ss_gpu_out(3)(17)            <= GPUSTAT_TextureDisable;         
    
    process (clk2x)
       variable cmdNew : unsigned(7 downto 0);
@@ -898,7 +929,9 @@ begin
             end if;
             
             if (proc_done = '1') then
+-- synthesis translate_off
                export_gobj          <= export_gobj + 1;
+-- synthesis translate_on
                proc_idle            <= '1';
                GPUSTAT_ReadyRecCmd  <= '1';
                if (fifoIn_Empty = '1') then
@@ -1594,7 +1627,15 @@ begin
          SS_Idle <= '0';
          if (proc_idle = '1' and fifoIn_Empty = '1' and fifoOut_Empty = '1' and vramState = IDLE and pipeline_busy = '0'  and fifoOut_Wr = '0' and pixelWrite = '0') then
             SS_Idle <= '1';
-         end if;         
+         end if;     
+
+         if (SS_rden_GPU = '1') then
+            SS_DataRead_GPU <= ss_gpu_out(to_integer(SS_Adr));
+         end if;
+         
+         if (SS_rden_Timing = '1') then
+            SS_DataRead_Timing <= ss_timing_out(to_integer(SS_Adr));
+         end if;
       
       end if;
    end process;

@@ -115,6 +115,7 @@ begin
    (
       FILELOADING => '1',
       --INITFILE => "test_triangle.iso"
+      INITFILE    => "C:\Projekte\psx\CastlevaniaSOTNTrack1dummy.bin"
    )
    port map
    (
@@ -142,8 +143,8 @@ begin
    itb_savestates : entity work.tb_savestates
    generic map
    (
-      LOADSTATE         => '0',
-      FILENAME          => ""
+      LOADSTATE         => '1',
+      FILENAME          => "C:\Projekte\psx\FPSXApp\CastlevaniaSOTNTrack1.sst"
    )
    port map
    (

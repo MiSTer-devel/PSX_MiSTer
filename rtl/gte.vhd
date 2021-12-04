@@ -29,6 +29,7 @@ entity gte is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(5 downto 0);
       SS_wren              : in  std_logic;
+      SS_rden              : in  std_logic;
       SS_DataRead          : out std_logic_vector(31 downto 0);
       SS_idle              : out std_logic;
       
@@ -241,6 +242,11 @@ architecture arch of gte is
   
    -- debug
    signal debugCnt         : unsigned(31 downto 0);
+   
+   -- savestates
+   signal SSreadAddr       : unsigned(5 downto 0);
+   signal SSrden           : std_logic;
+   signal SS_readData      : std_logic_vector(31 downto 0);
   
 begin 
 
@@ -1329,6 +1335,83 @@ begin
 --############################### savestates
 --##############################################################
 
+   process (clk2x)
+   begin
+      if (rising_edge(clk2x)) then
+      
+         SSreadAddr <= SS_Adr;
+      
+         case (to_integer(SSreadAddr)) is
+            when 00 => SS_readData <= std_logic_vector(REG_V0Y & REG_V0X);       
+            when 01 => SS_readData <= std_logic_vector(resize(REG_V0Z, 32));     
+            when 02 => SS_readData <= std_logic_vector(REG_V1Y & REG_V1X);       
+            when 03 => SS_readData <= std_logic_vector(resize(REG_V1Z, 32));     
+            when 04 => SS_readData <= std_logic_vector(REG_V2Y & REG_V2X);       
+            when 05 => SS_readData <= std_logic_vector(resize(REG_V2Z, 32));     
+            when 06 => SS_readData <= std_logic_vector(REG_RGBC);                
+            when 07 => SS_readData <= std_logic_vector(x"0000" & REG_OTZ);       
+            when 08 => SS_readData <= std_logic_vector(resize(REG_IR0, 32));     
+            when 09 => SS_readData <= std_logic_vector(resize(REG_IR1, 32));     
+            when 10 => SS_readData <= std_logic_vector(resize(REG_IR2, 32));     
+            when 11 => SS_readData <= std_logic_vector(resize(REG_IR3, 32));     
+            when 12 => SS_readData <= std_logic_vector(REG_SY0 & REG_SX0);       
+            when 13 => SS_readData <= std_logic_vector(REG_SY1 & REG_SX1);       
+            when 14 => SS_readData <= std_logic_vector(REG_SY2 & REG_SX2);       
+            when 15 => SS_readData <= x"00000000";       
+            when 16 => SS_readData <= std_logic_vector(x"0000" & REG_SZ0);       
+            when 17 => SS_readData <= std_logic_vector(x"0000" & REG_SZ1);       
+            when 18 => SS_readData <= std_logic_vector(x"0000" & REG_SZ2);       
+            when 19 => SS_readData <= std_logic_vector(x"0000" & REG_SZ3);       
+            when 20 => SS_readData <= std_logic_vector(REG_RGB0);                
+            when 21 => SS_readData <= std_logic_vector(REG_RGB1);                
+            when 22 => SS_readData <= std_logic_vector(REG_RGB2);                
+            when 23 => SS_readData <= std_logic_vector(REG_RES1);                
+            when 24 => SS_readData <= std_logic_vector(REG_MAC0);                
+            when 25 => SS_readData <= std_logic_vector(REG_MAC1);                
+            when 26 => SS_readData <= std_logic_vector(REG_MAC2);                
+            when 27 => SS_readData <= std_logic_vector(REG_MAC3);                
+            when 28 => SS_readData <= std_logic_vector(x"0000" & '0' & REG_IRGB);
+            when 29 => SS_readData <= std_logic_vector(x"0000" & '0' & REG_ORGB);
+            when 30 => SS_readData <= std_logic_vector(REG_LZCS);                
+            when 31 => SS_readData <= std_logic_vector(REG_LZCR);                
+            when 32 => SS_readData <= std_logic_vector(REG_RT12 & REG_RT11);     
+            when 33 => SS_readData <= std_logic_vector(REG_RT21 & REG_RT13);     
+            when 34 => SS_readData <= std_logic_vector(REG_RT23 & REG_RT22);     
+            when 35 => SS_readData <= std_logic_vector(REG_RT32 & REG_RT31);     
+            when 36 => SS_readData <= std_logic_vector(resize(REG_RT33, 32));    
+            when 37 => SS_readData <= std_logic_vector(REG_TR0);                 
+            when 38 => SS_readData <= std_logic_vector(REG_TR1);                 
+            when 39 => SS_readData <= std_logic_vector(REG_TR2);                 
+            when 40 => SS_readData <= std_logic_vector(REG_LL12 & REG_LL11);     
+            when 41 => SS_readData <= std_logic_vector(REG_LL21 & REG_LL13);     
+            when 42 => SS_readData <= std_logic_vector(REG_LL23 & REG_LL22);     
+            when 43 => SS_readData <= std_logic_vector(REG_LL32 & REG_LL31);     
+            when 44 => SS_readData <= std_logic_vector(resize(REG_LL33, 32));    
+            when 45 => SS_readData <= std_logic_vector(REG_BK0);                 
+            when 46 => SS_readData <= std_logic_vector(REG_BK1);                 
+            when 47 => SS_readData <= std_logic_vector(REG_BK2);                 
+            when 48 => SS_readData <= std_logic_vector(REG_LC12 & REG_LC11);     
+            when 49 => SS_readData <= std_logic_vector(REG_LC21 & REG_LC13);     
+            when 50 => SS_readData <= std_logic_vector(REG_LC23 & REG_LC22);     
+            when 51 => SS_readData <= std_logic_vector(REG_LC32 & REG_LC31);     
+            when 52 => SS_readData <= std_logic_vector(resize(REG_LC33, 32));    
+            when 53 => SS_readData <= std_logic_vector(REG_FC0);                 
+            when 54 => SS_readData <= std_logic_vector(REG_FC1);                 
+            when 55 => SS_readData <= std_logic_vector(REG_FC2);                 
+            when 56 => SS_readData <= std_logic_vector(REG_OFX);                 
+            when 57 => SS_readData <= std_logic_vector(REG_OFY);                 
+            when 58 => SS_readData <= std_logic_vector(resize(REG_H, 32));       
+            when 59 => SS_readData <= std_logic_vector(resize(REG_DQA, 32));     
+            when 60 => SS_readData <= std_logic_vector(REG_DQB);                 
+            when 61 => SS_readData <= std_logic_vector(resize(REG_ZSF3, 32));    
+            when 62 => SS_readData <= std_logic_vector(resize(REG_ZSF4, 32));    
+            when 63 => SS_readData <= std_logic_vector(REG_FLAG);                
+            when others => null;
+         end case;
+
+      end if;
+   end process;
+
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
@@ -1336,6 +1419,11 @@ begin
          SS_idle <= '0';
          if (gte_busy = '0' and gte_cmdEna = '0' and gte_readEna = '0' and gte_writeEna_in = '0') then
             SS_idle <= '1';
+         end if;
+         
+         SSrden <= SS_rden;
+         if (SSrden = '1') then
+            SS_DataRead <= SS_readData;
          end if;
       
       end if;

@@ -36,16 +36,16 @@ Memory : 50%
 - DMA write performance only 32bit/2 cycles, should be 32Bit/1 cycle
 - SPU RAM not implemented
 - rotate register read16 missing
+- some memory delay registers missing
 
 IRQ    : 40%
 - irq_SIO missing     
 - irq_SPU missing    
 - irq_LIGHTPEN missing
 
-PAD    : 30%
+PAD    : 40%
 - memory card not implemented
-- analog controller not implemented
-- all other special controllers not supported
+- special controllers not supported
 
 DMA    : 30%
 - DMA read prefetch must be fixed for long DMAs

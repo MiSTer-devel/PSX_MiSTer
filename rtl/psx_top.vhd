@@ -311,6 +311,8 @@ architecture arch of psx_top is
    signal loading_savestate      : std_logic;
    signal sleep_savestate        : std_logic;
    signal sleep_rewind           : std_logic;
+   signal savestate_pause        : std_logic;
+   signal ddr3_savestate         : std_logic;
    
    signal SS_reset               : std_logic;
    
@@ -322,17 +324,21 @@ architecture arch of psx_top is
    signal SS_DataWrite           : std_logic_vector(31 downto 0);
    signal SS_Adr                 : unsigned(18 downto 0);
    signal SS_wren                : std_logic_vector(16 downto 0);
+   signal SS_rden                : std_logic_vector(16 downto 0);
    signal SS_DataRead_CPU        : std_logic_vector(31 downto 0);
    signal SS_DataRead_GPU        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_GPUTiming  : std_logic_vector(31 downto 0);
    signal SS_DataRead_DMA        : std_logic_vector(31 downto 0);
    signal SS_DataRead_GTE        : std_logic_vector(31 downto 0);
-   signal SS_DataRead_PAD        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_JOYPAD     : std_logic_vector(31 downto 0);
    signal SS_DataRead_MDEC       : std_logic_vector(31 downto 0);
-   signal SS_DataRead_SPU        : std_logic_vector(31 downto 0);
-   signal SS_DataRead_TMR        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_MEMORY     : std_logic_vector(31 downto 0);
+   signal SS_DataRead_TIMER      : std_logic_vector(31 downto 0);
+   signal SS_DataRead_SOUND      : std_logic_vector(31 downto 0);
    signal SS_DataRead_IRQ        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_SIO        : std_logic_vector(31 downto 0);
+   signal SS_DataRead_SCP        : std_logic_vector(31 downto 0);
    signal SS_DataRead_CD         : std_logic_vector(31 downto 0);
-   signal SS_DataRead_SDRam      : std_logic_vector(31 downto 0);
    
    signal ss_ram_BUSY            : std_logic;                    
    signal ss_ram_DOUT            : std_logic_vector(63 downto 0);
@@ -353,6 +359,7 @@ architecture arch of psx_top is
    signal SS_idle_cpu            : std_logic; 
    signal SS_idle_gte            : std_logic; 
 
+-- synthesis translate_off
    -- export
    signal cpu_done               : std_logic; 
    signal new_export             : std_logic; 
@@ -368,6 +375,7 @@ architecture arch of psx_top is
    signal export_t_current0      : unsigned(15 downto 0);
    signal export_t_current1      : unsigned(15 downto 0);
    signal export_t_current2      : unsigned(15 downto 0);
+-- synthesis translate_on
    
    signal debug_firstGTE         : std_logic;
    
@@ -430,7 +438,11 @@ begin
                cpuPaused <= '0';
             end if;
             
-            if (pause = '0') then
+            if (pause = '1') then
+               pausing <= '1';
+            end if;
+            
+            if (pause = '0' and savestate_pause = '0') then
                pausing <= '0';
             end if;
          
@@ -443,7 +455,7 @@ begin
                cpuPaused <= '0';
             else
          
-               if (pause = '1' and  -- switch to pause/savestate pausing
+               if ((pause = '1' or savestate_pause = '1') and  -- switch to pause/savestate pausing
                   cpuPaused = '0' and dmaOn = '0' and stallNext = '0' and memMuxIdle = '1' and 
                   SS_Idle_gpu = '1' and SS_Idle_mdec = '1' and SS_Idle_cd = '1' and SS_idle_spu = '1' and SS_idle_pad = '1' and SS_idle_irq = '1' and SS_idle_cpu = '1' and SS_idle_gte = '1') then 
                   pausing <= '1';
@@ -525,7 +537,8 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(2 downto 0),      
       SS_wren              => SS_wren(5),     
-      SS_DataRead          => SS_DataRead_PAD,
+      SS_rden              => SS_rden(5),     
+      SS_DataRead          => SS_DataRead_JOYPAD,
       SS_idle              => SS_idle_pad
    );
    
@@ -573,15 +586,18 @@ begin
       bus_dataRead         => bus_irq_dataRead,
       
       irqRequest           => irqRequest,
+
+-- synthesis translate_off
+      export_irq           => export_irq,
+-- synthesis translate_on
       
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(0 downto 0),      
       SS_wren              => SS_wren(10),     
+      SS_rden              => SS_rden(10),     
       SS_DataRead          => SS_DataRead_IRQ,
-      SS_idle              => SS_idle_irq,
-      
-      export_irq           => export_irq
+      SS_idle              => SS_idle_irq
    );
    
    idma : entity work.dma
@@ -641,6 +657,7 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(5 downto 0),      
       SS_wren              => SS_wren(3),     
+      SS_rden              => SS_rden(3),     
       SS_DataRead          => SS_DataRead_DMA
    );
    
@@ -694,15 +711,18 @@ begin
       bus_write            => bus_tmr_write,       
       bus_dataRead         => bus_tmr_dataRead,
       
+-- synthesis translate_off
+      export_t_current0    => export_t_current0,
+      export_t_current1    => export_t_current1,
+      export_t_current2    => export_t_current2,
+-- synthesis translate_on
+      
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(3 downto 0),      
       SS_wren              => SS_wren(8),     
-      SS_DataRead          => SS_DataRead_TMR,
-      
-      export_t_current0    => export_t_current0,
-      export_t_current1    => export_t_current1,
-      export_t_current2    => export_t_current2
+      SS_rden              => SS_rden(8),     
+      SS_DataRead          => SS_DataRead_TIMER
    );
    
    icd_top : entity work.cd_top
@@ -744,6 +764,7 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(13 downto 0),      
       SS_wren              => SS_wren(13),     
+      SS_rden              => SS_rden(13),     
       SS_DataRead          => SS_DataRead_CD,
       SS_Idle              => SS_Idle_cd
    );
@@ -808,19 +829,24 @@ begin
       video_g               => video_g, 
       video_b               => video_b, 
       
+-- synthesis translate_off
+      export_gtm           => export_gtm,
+      export_line          => export_line,
+      export_gpus          => export_gpus,
+      export_gobj          => export_gobj,
+-- synthesis translate_on
+      
       loading_savestate    => loading_savestate,
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(2 downto 0),
       SS_wren_GPU          => SS_wren(1),     
-      SS_wren_Timing       => SS_wren(2),
-      SS_DataRead          => SS_DataRead_GPU,
-      SS_Idle              => SS_Idle_gpu,
-      
-      export_gtm           => export_gtm,
-      export_line          => export_line,
-      export_gpus          => export_gpus,
-      export_gobj          => export_gobj
+      SS_wren_Timing       => SS_wren(2),      
+      SS_rden_GPU          => SS_rden(1),     
+      SS_rden_Timing       => SS_rden(2),
+      SS_DataRead_GPU      => SS_DataRead_GPU,
+      SS_DataRead_Timing   => SS_DataRead_GPUTiming,
+      SS_Idle              => SS_Idle_gpu
    );
    
    imdec : entity work.mdec
@@ -849,6 +875,7 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(6 downto 0),      
       SS_wren              => SS_wren(6),     
+      SS_rden              => SS_rden(6),     
       SS_DataRead          => SS_DataRead_MDEC,
       SS_Idle              => SS_Idle_mdec
    );
@@ -878,7 +905,8 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(7 downto 0),  
       SS_wren              => SS_wren(9),     
-      SS_DataRead          => SS_DataRead_SPU,
+      SS_rden              => SS_rden(9),     
+      SS_DataRead          => SS_DataRead_SOUND,
       SS_idle              => SS_idle_spu
    );
    
@@ -1016,8 +1044,8 @@ begin
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(18 downto 0),
-      SS_wren_SDRam        => SS_wren(16),     
-      SS_DataRead          => SS_DataRead_SDRam
+      SS_wren_SDRam        => SS_wren(16),
+      SS_rden_SDRam        => SS_rden(16)
    );
    
    icpu : entity work.cpu
@@ -1059,14 +1087,19 @@ begin
       SS_DataWrite      => SS_DataWrite,
       SS_Adr            => SS_Adr(7 downto 0),   
       SS_wren_CPU       => SS_wren(0),     
-      SS_wren_SCP       => SS_wren(12),     
-      SS_DataRead       => SS_DataRead_CPU,
+      SS_wren_SCP       => SS_wren(12),  
+      SS_rden_CPU       => SS_rden(0),     
+      SS_rden_SCP       => SS_rden(12),        
+      SS_DataRead_CPU   => SS_DataRead_CPU,
+      SS_DataRead_SCP   => SS_DataRead_SCP,
       SS_idle           => SS_idle_cpu,
       
-      debug_firstGTE    => debug_firstGTE,
-      
+-- synthesis translate_off
       cpu_done          => cpu_done,  
-      cpu_export        => cpu_export
+      cpu_export        => cpu_export,
+-- synthesis translate_on
+      
+      debug_firstGTE    => debug_firstGTE
    );
    
    igte : entity work.gte
@@ -1093,18 +1126,23 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(5 downto 0),
       SS_wren              => SS_wren(4),     
+      SS_rden              => SS_rden(4),     
       SS_DataRead          => SS_DataRead_GTE,
       SS_idle              => SS_idle_gte,
       
       debug_firstGTE       => debug_firstGTE
    );
    
-   ddr3_BURSTCNT <= ss_ram_BURSTCNT     when (sleep_savestate = '1') else vram_BURSTCNT;  
-   ddr3_ADDR     <= ss_ram_ADDR & "00"  when (sleep_savestate = '1') else x"00" & vram_ADDR;      
-   ddr3_DIN      <= ss_ram_DIN          when (sleep_savestate = '1') else vram_DIN;       
-   ddr3_BE       <= ss_ram_BE           when (sleep_savestate = '1') else vram_BE;        
-   ddr3_WE       <= ss_ram_WE           when (sleep_savestate = '1') else vram_WE;        
-   ddr3_RD       <= ss_ram_RD           when (sleep_savestate = '1') else vram_RD;        
+   ddr3_BURSTCNT <= ss_ram_BURSTCNT     when (ddr3_savestate = '1') else vram_BURSTCNT;  
+   ddr3_ADDR     <= ss_ram_ADDR & "00"  when (ddr3_savestate = '1') else x"00" & vram_ADDR;      
+   ddr3_DIN      <= ss_ram_DIN          when (ddr3_savestate = '1') else vram_DIN;       
+   ddr3_BE       <= ss_ram_BE           when (ddr3_savestate = '1') else vram_BE;        
+   ddr3_WE       <= ss_ram_WE           when (ddr3_savestate = '1') else vram_WE;        
+   ddr3_RD       <= ss_ram_RD           when (ddr3_savestate = '1') else vram_RD;        
+   
+   
+   SS_DataRead_MEMORY <= (others => '0'); -- todo!
+   SS_DataRead_SIO    <= (others => '0');
    
    isavestates : entity work.savestates
    generic map
@@ -1131,14 +1169,28 @@ begin
       savestate_address       => savestate_address,  
       savestate_busy          => savestate_busy,    
 
-      system_idle             => '1',
-      savestate_slow          => open,
+      system_paused           => pausing,
+      savestate_pause         => savestate_pause,
+      ddr3_savestate          => ddr3_savestate,
       
       SS_DataWrite            => SS_DataWrite,   
       SS_Adr                  => SS_Adr,         
       SS_wren                 => SS_wren,       
+      SS_rden                 => SS_rden,       
       SS_DataRead_CPU         => SS_DataRead_CPU,
       SS_DataRead_GPU         => SS_DataRead_GPU,
+      SS_DataRead_GPUTiming   => SS_DataRead_GPUTiming,
+      SS_DataRead_DMA         => SS_DataRead_DMA,
+      SS_DataRead_GTE         => SS_DataRead_GTE,
+      SS_DataRead_JOYPAD      => SS_DataRead_JOYPAD,
+      SS_DataRead_MDEC        => SS_DataRead_MDEC,
+      SS_DataRead_MEMORY      => SS_DataRead_MEMORY,
+      SS_DataRead_TIMER       => SS_DataRead_TIMER,
+      SS_DataRead_SOUND       => SS_DataRead_SOUND,
+      SS_DataRead_IRQ         => SS_DataRead_IRQ,
+      SS_DataRead_SIO         => SS_DataRead_SIO,
+      SS_DataRead_SCP         => SS_DataRead_SCP,
+      SS_DataRead_CD          => SS_DataRead_CD,
 
       sdram_done              => ram_done,
       
@@ -1154,7 +1206,10 @@ begin
       ddr3_DIN                => ss_ram_DIN,     
       ddr3_BE                 => ss_ram_BE,      
       ddr3_WE                 => ss_ram_WE,      
-      ddr3_RD                 => ss_ram_RD      
+      ddr3_RD                 => ss_ram_RD,
+
+      ram_done                => ram_cpu_done,   
+      ram_data                => ram_dataRead(31 downto 0)
    );  
 
    istatemanager : entity work.statemanager

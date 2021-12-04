@@ -104,7 +104,7 @@ entity memorymux is
       bus_mdec_write       : out std_logic;
       bus_mdec_dataRead    : in  std_logic_vector(31 downto 0);
       
-      bus_spu_addr         : out unsigned(9 downto 0); 
+      bus_spu_addr         : out unsigned(9 downto 0) := (others => '0'); 
       bus_spu_dataWrite    : out std_logic_vector(15 downto 0);
       bus_spu_read         : out std_logic;
       bus_spu_write        : out std_logic;
@@ -122,7 +122,7 @@ entity memorymux is
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(18 downto 0);
       SS_wren_SDRam        : in  std_logic;
-      SS_DataRead          : out std_logic_vector(31 downto 0)
+      SS_rden_SDRam        : in  std_logic
    );
 end entity;
 
@@ -744,6 +744,12 @@ begin
                      ram_Adr       <= "00" & std_logic_vector(SS_Adr(18 downto 0)) & "00";
                      ram_be        <= "1111";
                      ram_dataWrite <= SS_DataWrite;
+                  end if;
+                  if (SS_rden_SDRam = '1') then
+                     ram_ena       <= '1';
+                     ram_128       <= '0';
+                     ram_rnw       <= '1';
+                     ram_Adr       <= "00" & std_logic_vector(SS_Adr(18 downto 0)) & "00";
                   end if;
             
                when others => null;

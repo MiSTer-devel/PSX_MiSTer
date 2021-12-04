@@ -236,9 +236,9 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 `include "build_id.v"
 parameter CONF_STR = {
 	"PlayStation;SS3E000000:400000;",
-	"FS,EXE,Load Exe;",
-	"FS2,ISOBIN,Load Iso SDRAM;",
-	"S1,ISOBIN,Load Iso HPS;",
+   "FS,EXE,Load Exe;",
+   "S1,ISOBIN,Load Iso/Bin;",
+   "FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
 	"D0RC,Reload Backup RAM;",
 	"D0RD,Save Backup RAM;",
