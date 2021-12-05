@@ -1109,6 +1109,7 @@ begin
       div5                 => line_div(4), 
       div6                 => line_div(5), 
       
+      pipeline_busy        => pipeline_busy,
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => line_pipeline_new,        
       pipeline_transparent => line_pipeline_transparent,
@@ -1155,6 +1156,7 @@ begin
       drawingAreaTop       => drawingAreaTop,   
       drawingAreaBottom    => drawingAreaBottom,
       
+      pipeline_busy        => pipeline_busy,
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => rect_pipeline_new,        
       pipeline_texture     => rect_pipeline_texture,
@@ -1219,6 +1221,7 @@ begin
       div5                 => poly_div(4), 
       div6                 => poly_div(5), 
       
+      pipeline_busy        => pipeline_busy,
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => poly_pipeline_new,        
       pipeline_texture     => poly_pipeline_texture,

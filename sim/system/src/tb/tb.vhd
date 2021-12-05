@@ -183,11 +183,11 @@ begin
       pause                 => '0',
       loadExe               => psx_LoadExe(0),
       fastboot              => '1',
-      REPRODUCIBLEGPUTIMING => '1',
-      REPRODUCIBLEDMATIMING => '1',
+      REPRODUCIBLEGPUTIMING => '0',
+      REPRODUCIBLEDMATIMING => '0',
       CDDISABLE             => '0',
       ditherOff             => '0',
-      analogPad             => '1',
+      analogPad             => '0',
       -- RAM/BIOS interface        
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 
@@ -257,7 +257,7 @@ begin
       sound_out_left        => sound_out_left, 
       sound_out_right       => sound_out_right,
       -- savestates              
-      increaseSSHeaderCount => '0',
+      increaseSSHeaderCount => '1',
       save_state            => psx_SaveState(0),
       load_state            => psx_LoadState(0),
       savestate_number      => 0,
@@ -267,6 +267,10 @@ begin
    );
    
    iddrram_model : entity tb.ddrram_model
+   generic map
+   (
+      SLOWTIMING => 15
+   )
    port map
    (
       DDRAM_CLK        => clk66,      

@@ -35,6 +35,7 @@ entity gpu_poly is
       div5                 : inout div_type; 
       div6                 : inout div_type; 
       
+      pipeline_busy        : in  std_logic;
       pipeline_stall       : in  std_logic;
       pipeline_new         : out std_logic := '0';
       pipeline_texture     : out std_logic := '0';
@@ -221,7 +222,9 @@ architecture arch of gpu_poly is
    signal xPos                : signed(11 downto 0) := (others => '0'); 
    signal yPos                : signed(11 downto 0) := (others => '0'); 
    signal xStop               : signed(11 downto 0) := (others => '0'); 
-   signal xSize               : unsigned(10 downto 0) := (others => '0');   
+   signal xSize               : unsigned(10 downto 0) := (others => '0'); 
+
+   signal firstPixel          : std_logic;   
    
 begin 
 
@@ -404,6 +407,7 @@ begin
                when IDLE =>
                   drawTiming   <= (others => '0');
                   targetTiming <= to_unsigned(500, 32);
+                  firstPixel   <= '1';
                   if (proc_idle = '1' and fifo_Valid = '1' and fifo_data(31 downto 29) = "001") then
                      state             <= REQUESTPOS;
                      rec_index         <= 0;
@@ -950,7 +954,9 @@ begin
                   end if;
                
                when PROCPIXELS =>
-                  if (pipeline_stall = '0') then
+                  if (pipeline_stall = '0' and (firstPixel = '0' or pipeline_busy = '0')) then
+                     firstPixel <= '0';
+                     
                      xPos  <= xPos + 1;
                      
                      if (rec_shading = '1') then

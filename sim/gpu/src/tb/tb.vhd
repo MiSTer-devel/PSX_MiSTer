@@ -112,7 +112,9 @@ begin
       SS_DataWrite          => (31 downto 0 => '0'),
       SS_Adr                => (2 downto 0 => '0'),
       SS_wren_GPU           => '0',
-      SS_wren_Timing        => '0'
+      SS_wren_Timing        => '0',      
+      SS_rden_GPU           => '0',
+      SS_rden_Timing        => '0'
    );
    
    -- vram is at 0x30000000

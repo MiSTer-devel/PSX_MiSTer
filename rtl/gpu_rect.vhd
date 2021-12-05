@@ -24,6 +24,7 @@ entity gpu_rect is
       drawingAreaTop       : in  unsigned(8 downto 0);
       drawingAreaBottom    : in  unsigned(8 downto 0);
       
+      pipeline_busy        : in  std_logic;
       pipeline_stall       : in  std_logic;
       pipeline_new         : out std_logic := '0';
       pipeline_texture     : out std_logic := '0';
@@ -96,7 +97,9 @@ architecture arch of gpu_rect is
    signal xCnt                : unsigned(9 downto 0) := (others => '0');   
    signal yCnt                : unsigned(8 downto 0) := (others => '0');  
    signal uWork               : unsigned(7 downto 0) := (others => '0');   
-   signal vWork               : unsigned(7 downto 0) := (others => '0');      
+   signal vWork               : unsigned(7 downto 0) := (others => '0');  
+
+   signal firstPixel          : std_logic;
 
 begin 
 
@@ -150,6 +153,7 @@ begin
             
                when IDLE =>
                   drawTiming   <= (others => '0');
+                  firstPixel   <= '1';
                   if (proc_idle = '1' and fifo_Valid = '1' and fifo_data(31 downto 29) = "011") then
                      state             <= REQUESTPOS;
                      rec_texture       <= fifo_data(26);
@@ -235,7 +239,7 @@ begin
                   ysize := resize(signed(rec_sizey), 12);
                   ydiff := (others => '0');
                   if (to_integer(yPos) < to_integer(drawingAreaTop)) then
-                     ydiff := (resize(signed(drawingAreaTop), 12) - yPos);
+                     ydiff := to_signed(to_integer(drawingAreaTop), 12) - yPos;
                      ysize := ysize - ydiff;
                   end if;
                   yPos      <= yPos + ydiff;
@@ -266,7 +270,9 @@ begin
                   end if;
                
                when PROCPIXELS =>
-                  if (pipeline_stall = '0') then
+                  if (pipeline_stall = '0' and (firstPixel = '0' or pipeline_busy = '0')) then
+                     firstPixel <= '0';
+                  
                      xCnt  <= xCnt + 1;
                      xPos  <= xPos + 1;
                      uWork <= uWork + 1;

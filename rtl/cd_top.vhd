@@ -686,7 +686,7 @@ begin
                   FifoParam_reset         <= '1';
                else
                
-                  if (FifoResponse_empty = '0' and nextCmd /= x"11" and nextCmd /= x"13" and nextCmd /= x"14" and nextCmd /= x"19") then
+                  if (FifoResponse_empty = '0' and nextCmd /= x"10" and nextCmd /= x"11" and nextCmd /= x"13" and nextCmd /= x"14" and nextCmd /= x"19") then
                      FifoResponse_reset <= '1';
                   end if;
                   
@@ -791,7 +791,15 @@ begin
                         --todo
                         
                      when x"10" => -- GetLocL
-                        --todo
+                        if (hasCD = '0') then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"80";
+                        else
+                           -- todo: update position?
+                           cmdIRQ            <= '1';
+                           cmdPending        <= '0';
+                        end if;
                         
                      when x"11" => -- GetLocP
                         if (hasCD = '0') then
@@ -834,7 +842,9 @@ begin
                         setLocActive          <= '0';
                         
                      when x"17" | x"18" => -- SetClock/GetClock
-                        --todo
+                        errorResponseCmd_new    <= '1';
+                        errorResponseCmd_error  <= x"01";
+                        errorResponseCmd_reason <= x"40";
                         
                      when x"19" => -- test
                         FifoParam_Rd   <= '1';
@@ -874,16 +884,22 @@ begin
                         end if;
                         
                      when x"1C" => -- Init
-                        --todo
+                        errorResponseCmd_new    <= '1';
+                        errorResponseCmd_error  <= x"01";
+                        errorResponseCmd_reason <= x"40";
                         
                      when x"1D" => -- GetQ
-                        --todo
+                        errorResponseCmd_new    <= '1';
+                        errorResponseCmd_error  <= x"01";
+                        errorResponseCmd_reason <= x"40";
                         
                      when x"1E" => -- ReadTOC
                         --todo
                      
                      when x"1F" => -- VideoCD
-                        --todo
+                        errorResponseCmd_new    <= '1';
+                        errorResponseCmd_error  <= x"01";
+                        errorResponseCmd_reason <= x"40";
                      
                      when others =>
                         errorResponseCmd_new    <= '1';
@@ -999,6 +1015,21 @@ begin
             if (ackPendingIRQNext = '1') then
                FifoResponse_Din  <= pendingDriveResponse;
                FifoResponse_Wr   <= '1';
+            end if;
+            
+            -- long GetLocL response
+            if (nextCmd = x"10") then
+               if (cmd_delay = 9 and FifoResponse_empty = '0') then 
+                  FifoResponse_reset <= '1'; 
+               end if;
+               if (cmd_delay = 8)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header( 7 downto  0); end if;
+               if (cmd_delay = 7)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(15 downto  8); end if;
+               if (cmd_delay = 6)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(23 downto 16); end if;
+               if (cmd_delay = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(31 downto 24); end if;
+               if (cmd_delay = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader( 7 downto  0); end if;
+               if (cmd_delay = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(15 downto  8); end if;
+               if (cmd_delay = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(23 downto 16); end if;
+               if (cmd_delay = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(31 downto 24); end if;
             end if;
             
             -- long GetLocP response

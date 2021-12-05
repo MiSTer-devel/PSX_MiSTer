@@ -9,7 +9,8 @@ use tb.globals.all;
 entity ddrram_model is
    generic
    (
-      loadVram : std_logic := '0'
+      loadVram   : std_logic := '0';
+      SLOWTIMING : integer := 0
    );
    port 
    (
@@ -145,6 +146,11 @@ begin
             cmd_address_save := intern_addr;
             cmd_burst_save   := DDRAM_BURSTCNT;
             wait until rising_edge(DDRAM_CLK);
+            if (SLOWTIMING > 0) then
+               for i in 1 to SLOWTIMING loop
+                  wait until rising_edge(DDRAM_CLK);
+               end loop;
+            end if;
             --report "read from " & integer'image(to_integer(unsigned(cmd_address_save)));
             for i in 0 to (to_integer(unsigned(cmd_burst_save)) - 1) loop
                DDRAM_DOUT       <= std_logic_vector(to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 2) + 1), 32)) & 

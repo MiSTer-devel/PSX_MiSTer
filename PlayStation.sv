@@ -238,7 +238,7 @@ parameter CONF_STR = {
 	"PlayStation;SS3E000000:400000;",
    "FS,EXE,Load Exe;",
    "S1,ISOBIN,Load Iso/Bin;",
-   "FS2,ISOBIN,Load to SDRAM2;",
+   "h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
 	"D0RC,Reload Backup RAM;",
 	"D0RD,Save Backup RAM;",
@@ -299,7 +299,7 @@ parameter CONF_STR = {
 
 wire  [1:0] buttons;
 wire [63:0] status;
-wire [15:0] status_menumask = {~bk_ena};
+wire [15:0] status_menumask = {SDRAM2_EN, ~bk_ena};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0;
 reg  [31:0] sd_lba1;

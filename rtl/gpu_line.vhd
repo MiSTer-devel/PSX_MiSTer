@@ -32,6 +32,7 @@ entity gpu_line is
       div5                 : inout div_type; 
       div6                 : inout div_type; 
       
+      pipeline_busy        : in  std_logic;
       pipeline_stall       : in  std_logic;
       pipeline_new         : out std_logic := '0';
       pipeline_transparent : out std_logic := '0';
@@ -144,6 +145,8 @@ architecture arch of gpu_line is
    signal yPerLine            : unsigned(10 downto 0) := (others => '0');
    
    signal pixelCnt            : unsigned(9 downto 0) := (others => '0');
+   
+   signal firstPixel          : std_logic;
 
 begin 
 
@@ -340,6 +343,7 @@ begin
             case (procstate) is
             
                when PROCIDLE =>
+                  firstPixel   <= '1';
                   if (fifoLine_Empty = '0') then
                      procstate <= PROCRECEIVE;
                   end if;
@@ -462,7 +466,9 @@ begin
                   end if;
                   
                when PROCPIXELS =>
-                  if (pipeline_stall = '0') then
+                  if (pipeline_stall = '0' and (firstPixel = '0' or pipeline_busy = '0')) then
+                     firstPixel <= '0';
+                     
                      pixelCnt <= pixelCnt + 1;
                      
                      nexty := worky + stepDy;
