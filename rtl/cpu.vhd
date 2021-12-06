@@ -13,6 +13,7 @@ entity cpu is
       clk1x                 : in  std_logic;
       clk2x                 : in  std_logic;
       ce                    : in  std_logic;
+      ce_system             : in  std_logic;
       reset                 : in  std_logic;
       
       irqRequest            : in  std_logic;
@@ -741,8 +742,6 @@ begin
    end process;
    
    ss_out( 0) <= std_logic_vector(PC);
-   ss_out(14) <= std_logic_vector(opcode0);
-   ss_out(19) <= std_logic_vector(PCold0);
    ss_out(25)(0) <= fetchReady;
    
    process (clk1x)
@@ -759,6 +758,7 @@ begin
             PC            <= unsigned(ss_in(0)); -- x"BFC00000";
                         
             blockIRQ      <= '0'; -- todo: busy for savestate?
+            blockirqCnt   <= 0;
             fetchReady    <= ss_in(25)(0);
             opcode0       <= unsigned(ss_in(14));
             PCold0        <= unsigned(ss_in(19));
@@ -841,6 +841,9 @@ begin
                        unsigned(cache_q_b( 95 downto 64)) when (cacheHit = '1' and PCold0(3 downto 2) = "10") else
                        unsigned(cache_q_b(127 downto 96)) when (cacheHit = '1' and PCold0(3 downto 2) = "11") else
                        opcode0;
+                       
+   ss_out(14) <= std_logic_vector(opcodeCacheMuxed);
+   ss_out(19) <= std_logic_vector(PCold0);
 
    ss_out(15) <= std_logic_vector(opcode1);
    ss_out(20) <= std_logic_vector(pcOld1);
@@ -881,6 +884,12 @@ begin
             decodeRD         <= unsigned(ss_in(32)(4 downto 0));
             decodeTarget     <= unsigned(ss_in(31)(20 downto 16));
             decodeJumpTarget <= unsigned(ss_in(29)(25 downto 0));
+            
+            if (unsigned(ss_in(14)(31 downto 26)) = 16#12#) then
+               decode_gte_readAddr <= ss_in(14)(22) & unsigned(ss_in(14)(15 downto 11)); -- decodeSource1(1) & decodeRD 
+            else
+               decode_gte_readAddr <= '0' & unsigned(ss_in(14)(20 downto 16)); -- decodeSource2
+            end if;
          
          elsif (ce = '1') then
             
@@ -1645,6 +1654,8 @@ begin
             execute_gte_cmdData           <= unsigned(ss_in(58));
             execute_gte_cmdEna            <= ss_in(59)(9);
             
+            DIVstart                      <= '0';
+            
          elsif (ce = '1') then
          
             DIVstart    <= '0';
@@ -1981,8 +1992,10 @@ begin
    begin
       if (rising_edge(clk1x)) then
       
-         gte_writeEna  <= '0';
-         gte_cmdEna    <= '0';
+         if (ce_system = '1') then
+            gte_writeEna  <= '0';
+            gte_cmdEna    <= '0';
+         end if;
       
          if (reset = '1') then
          
@@ -2015,6 +2028,9 @@ begin
             writebackGTEReadEnable           <= ss_in(47)(30);
             WBgte_writeAddr                  <= unsigned(ss_in(48)(5 downto 0));
             
+            gte_writeEna                     <= '0';
+            gte_cmdEna                       <= '0';
+            
          elsif (ce = '1') then
          
             stall4         <= stallNew4;
@@ -2031,20 +2047,20 @@ begin
             
                if (exception(4 downto 3) > 0) then
                
-                  writebackException            <= '1'; 
+                  writebackException           <= '1'; 
                   
                else
                
-                  pcOld3                        <= pcOld2;
-                  opcode3                       <= opcode2;
-                  writebackTarget               <= resultTarget;
-                  writebackData                 <= resultData;
+                  pcOld3                       <= pcOld2;
+                  opcode3                      <= opcode2;
+                  writebackTarget              <= resultTarget;
+                  writebackData                <= resultData;
                   
-                  writebackException            <= executeException;
+                  writebackException           <= executeException;
                            
-                  CACHECONTROL                  <= WBCACHECONTROL;
+                  CACHECONTROL                 <= WBCACHECONTROL;
                   
-                  writebackMemOPisRead          <= executeReadEnable;
+                  writebackMemOPisRead         <= executeReadEnable;
                   
                   writebackGTEReadEnable       <= executeGTEReadEnable;
                   WBgte_writeAddr              <= '0' & executeGTETarget;

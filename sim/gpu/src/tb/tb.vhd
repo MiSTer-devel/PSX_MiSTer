@@ -94,7 +94,7 @@ begin
       bus_dataRead         => bus_gpu_dataRead,
       
       DMA_GPU_writeEna     => '0',
-      DMA_GPU_readEna      => '0',
+      DMA_GPU_readEna      => '1', -- hack -> make sure read fifo is always empty so vram2cpu doesn't stall
       DMA_GPU_write        => x"00000000",
       
       vram_BUSY             => DDRAM_BUSY,      

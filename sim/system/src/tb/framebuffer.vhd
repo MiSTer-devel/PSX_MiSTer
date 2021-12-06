@@ -19,6 +19,9 @@ end entity;
 
 architecture arch of framebuffer is
 
+   signal linecounter  : integer := 0;
+   signal pixelcounter : integer := 0;
+
 begin 
 
 -- synthesis translate_off
@@ -32,8 +35,6 @@ begin
          variable f_status: FILE_OPEN_STATUS;
          variable line_out : line;
          variable color : unsigned(31 downto 0);
-         variable linecounter  : integer;
-         variable pixelcounter : integer;
          variable il_1         : std_logic := '0';
          variable il_on        : std_logic := '0';
          
@@ -45,9 +46,6 @@ begin
          file_open(f_status, outfile, "gra_fb_out_vga.gra", append_mode);
          write(line_out, string'("640#480#1")); 
          writeline(outfile, line_out);
-         
-         linecounter := 0;
-         pixelcounter := 0;
          
          while (true) loop
             wait until rising_edge(clk);
@@ -68,11 +66,11 @@ begin
                      write(line_out, linecounter);
                   end if;
                   writeline(outfile, line_out);
-                  pixelcounter := pixelcounter + 1;
+                  pixelcounter <= pixelcounter + 1;
                end if;
                if (hblank = '1') then
                   if (pixelcounter > 0) then
-                     linecounter := linecounter + 1;
+                     linecounter <= linecounter + 1;
                      file_close(outfile);
                      file_open(f_status, outfile, "gra_fb_out_vga.gra", append_mode);
                      if (il_1 /= video_interlace) then
@@ -80,10 +78,10 @@ begin
                      end if;
                      il_1 := video_interlace;
                   end if;
-                  pixelcounter := 0;
+                  pixelcounter <= 0;
                end if;
                if (vblank = '1') then
-                  linecounter := 0;
+                  linecounter <= 0;
                end if;
             end if;
          end loop;

@@ -309,6 +309,8 @@ architecture arch of cd_top is
    signal SS_rden_sectorbuffer  : std_logic;
    signal SS_rden_sectorbuffers : std_logic;
 
+   signal ss_idle_timeout : integer range 0 to 7;
+
    -- debug
    -- synthesis translate_off
    type tsectorBuffer is array(0 to 587) of std_logic_vector(31 downto 0);
@@ -1940,8 +1942,14 @@ begin
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
          end if;
          
+         if (cmd_busy = '1' or working = '1' or (driveBusy = '1' and driveDelay < 1024)) then
+            ss_idle_timeout <= 7;
+         elsif (ss_idle_timeout > 0) then
+            ss_idle_timeout <= ss_idle_timeout - 1;
+         end if;
+         
          SS_idle <= '0';
-         if (FifoParam_Empty = '1' and FifoResponse_Empty = '1' and cmd_busy = '0' and working = '0' and (driveBusy = '0' or driveDelay > 1023) and
+         if (FifoParam_Empty = '1' and FifoResponse_Empty = '1' and cmd_busy = '0' and working = '0' and ss_idle_timeout = 0 and
            sectorFetchState = SFETCH_IDLE and readSubchannelState = SSUB_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
             SS_idle <= '1';
          end if;

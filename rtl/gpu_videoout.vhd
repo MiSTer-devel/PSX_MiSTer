@@ -202,16 +202,6 @@ begin
                   when others => null;
                end case;
             end if;
-         
-            if (lineIn /= lineDisp) then
-               lineDisp <= lineIn;
-               readAddr <= lineIn(0) & "00" & x"00";
-               if (interlacedMode = '1') then
-                  readAddr(10) <= lineIn(1);
-               end if;
-               xpos     <= 0;
-               xmax     <= to_integer(DisplayWidth);
-            end if;
             
             if (clkCnt < (clkDiv - 1)) then
                clkCnt <= clkCnt + 1;
@@ -233,6 +223,16 @@ begin
                      hsync_end   <= (nextHCount / 2) + (2 * clkDiv);
                   end if;
                end if;
+            end if;
+            
+            if (lineIn /= lineDisp) then
+               lineDisp <= lineIn;
+               readAddr <= lineIn(0) & "00" & x"00";
+               if (interlacedMode = '1') then
+                  readAddr(10) <= lineIn(1);
+               end if;
+               xpos     <= 0;
+               xmax     <= to_integer(DisplayWidth);
             end if;
             
             if (nextHCount = hsync_start) then video_hsync <= '1'; end if;

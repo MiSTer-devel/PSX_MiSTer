@@ -28,6 +28,7 @@ entity savestates is
       savestate_address       : in  integer;
       savestate_busy          : out std_logic;
 
+      SS_idle                 : in  std_logic;
       system_paused           : in  std_logic;
       savestate_pause         : out std_logic := '0';
       ddr3_savestate          : out std_logic := '0';
@@ -110,6 +111,7 @@ architecture arch of savestates is
    type tstate is
    (
       IDLE,
+      SAVE_WAITPAUSE,
       SAVE_WAITIDLE,
       SAVE_WAITSETTLE,
       SAVEMEMORY_NEXT,
@@ -263,10 +265,9 @@ begin
                   settle               <= 0;
                   sleep_savestate      <= '1';
                elsif (save = '1') then
-                  savestate_pause      <= '1';
                   resetMode            <= '0';
                   savetype_counter     <= 0;
-                  state                <= SAVE_WAITIDLE;
+                  state                <= SAVE_WAITPAUSE;
                   header_amount        <= header_amount + 1;
                elsif (load = '1') then
                   state                <= LOAD_WAITSETTLE;
@@ -280,10 +281,29 @@ begin
             -- SAVE
             -- #################
             
+            when SAVE_WAITPAUSE =>
+               if (settle < 8) then
+                  settle <= settle + 1;
+               else
+                  savestate_pause  <= '1';
+                  if (system_paused = '1') then
+                     state                <= SAVE_WAITIDLE;
+                     settle               <= 0;
+                  end if;
+               end if;
+            
             when SAVE_WAITIDLE =>
-               if (system_paused = '1') then
-                  state                <= SAVE_WAITSETTLE;
-                  settle               <= 0;
+               if (settle < 8) then
+                  settle <= settle + 1;
+               else
+                  if (SS_idle = '1') then
+                     state             <= SAVE_WAITSETTLE;
+                     settle            <= 0;
+                  else
+                     state             <= SAVE_WAITPAUSE;
+                     settle            <= 0;
+                     savestate_pause   <= '0';
+                  end if;
                end if;
             
             when SAVE_WAITSETTLE =>

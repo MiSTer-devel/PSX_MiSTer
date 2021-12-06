@@ -28,6 +28,7 @@ entity gpu is
       
       dmaOn                : in  std_logic;
       gpu_dmaRequest       : out std_logic;
+      DMA_GPU_waiting      : in  std_logic;
       DMA_GPU_writeEna     : in  std_logic;
       DMA_GPU_readEna      : in  std_logic;
       DMA_GPU_write        : in  std_logic_vector(31 downto 0);
@@ -393,7 +394,7 @@ begin
    GPUSTAT(23)             <= GPUSTAT_DisplayDisable;
    GPUSTAT(24)             <= GPUSTAT_IRQRequest;
    GPUSTAT(25)             <= GPUSTAT_DMADataRequest;
-   GPUSTAT(26)             <= GPUSTAT_ReadyRecCmd;
+   GPUSTAT(26)             <= GPUSTAT_ReadyRecCmd and ((not gpu_dmaRequest) or (not DMA_GPU_waiting));
    GPUSTAT(27)             <= GPUSTAT_ReadySendVRAM;
    GPUSTAT(28)             <= GPUSTAT_ReadyRecDMA;
    GPUSTAT(30 downto 29)   <= GPUSTAT_DMADirection;
@@ -537,7 +538,7 @@ begin
                         
                      when 16#01# => -- clear fifo
                         fifoIn_reset <= '1';   
-                        -- todo: must reset drawing units to idle?
+                        -- todo: must reset drawing units to idle? -> ridge racer triggers that in the middle of a rectangle command clearing the screen
                         
                      when 16#02# => -- ack irq
                         GPUSTAT_IRQRequest <= '0';
@@ -828,8 +829,6 @@ begin
    begin
       if rising_edge(clk2x) then
       
-         fifoIn_Valid <= fifoIn_Rd;
-         
          textureWindow_AND_X     <= not (textureWindow(4 downto 0) & "000");
          textureWindow_AND_Y     <= not (textureWindow(9 downto 5) & "000");            
          textureWindow_OR_X      <= (textureWindow(4 downto 0) and textureWindow(14 downto 10)) & "000";
@@ -865,7 +864,11 @@ begin
             GPUSTAT_ReadyRecCmd     <= '1'; --ss_gpu_in(1)(26); -- in savestate should never be busy
             GPUSTAT_ReadyRecDMA     <= '1'; --ss_gpu_in(1)(28);
             
+            fifoIn_Valid            <= '0';
+            
          elsif (ce = '1') then
+         
+            fifoIn_Valid <= fifoIn_Rd;
          
             if (poly_drawModeNew = '1') then
                drawMode(8 downto 0) <= poly_drawModeRec(8 downto 0);
@@ -977,7 +980,7 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset,     
+      reset                => softreset or SS_reset,     
       
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 
@@ -997,7 +1000,7 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset,     
+      reset                => softreset or SS_reset,     
       
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 
@@ -1017,7 +1020,7 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset,     
+      reset                => softreset or SS_reset,     
       
       GPUSTAT_SetMask      => GPUSTAT_SetMask,
       
@@ -1058,7 +1061,7 @@ begin
    (
       clk2x                => clk2x,     
       ce                   => ce,        
-      reset                => softreset,   
+      reset                => softreset or SS_reset,   
 
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 
@@ -1088,7 +1091,7 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset,
+      reset                => softreset or SS_reset,
 
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,      
       
@@ -1142,7 +1145,7 @@ begin
       clk2x                => clk2x,  
       clk2xIndex           => clk2xIndex,      
       ce                   => ce,        
-      reset                => softreset,     
+      reset                => softreset or SS_reset,     
       
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
       
@@ -1197,7 +1200,7 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset,   
+      reset                => softreset or SS_reset,   
 
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,      
       
@@ -1281,7 +1284,7 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset,  
+      reset                => softreset or SS_reset,  
 
       drawMode_in          => drawMode,
       DrawPixelsMask_in    => GPUSTAT_DrawPixelsMask,
@@ -1463,13 +1466,14 @@ begin
             vram_RD <= '0';
          end if;
          
-         reqVRAMDone <= '0';
-         
          if (reset = '1') then
             
-            vramState <= IDLE;
+            vramState   <= IDLE;
+            reqVRAMDone <= '0';
             
          elsif (ce = '1') then
+         
+            reqVRAMDone <= '0';
          
             case (vramState) is
                when IDLE =>

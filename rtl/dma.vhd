@@ -30,6 +30,7 @@ entity dma is
       ram_idle             : in  std_logic;
       
       gpu_dmaRequest       : in  std_logic;
+      DMA_GPU_waiting      : out std_logic := '0';
       DMA_GPU_writeEna     : out std_logic := '0';
       DMA_GPU_readEna      : out std_logic := '0';
       DMA_GPU_write        : out std_logic_vector(31 downto 0);
@@ -62,7 +63,8 @@ entity dma is
       SS_Adr               : in  unsigned(5 downto 0);
       SS_wren              : in  std_logic;
       SS_rden              : in  std_logic;
-      SS_DataRead          : out std_logic_vector(31 downto 0)
+      SS_DataRead          : out std_logic_vector(31 downto 0);
+      SS_idle              : out std_logic
    );
 end entity;
 
@@ -182,6 +184,11 @@ begin
    
    DMA_MDEC_readEna  <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 1 and toDevice = '0') else '0';
    
+   DMA_GPU_waiting   <= '1' when (dmaOn = '1' and activeChannel = 2) else
+                        '1' when (dmaState = GPUBUSY) else
+                        '1' when (DPCR((2 * 4) + 3) = '1' and dmaArray(2).D_CHCR(24) = '1') else 
+                        '0';
+                        
    DMA_GPU_readEna   <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 2 and toDevice = '0') else '0';
    DMA_GPU_writeEna  <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 2 and toDevice = '1') else '0'; 
    DMA_GPU_write     <= fifoIn_Dout;
@@ -226,14 +233,17 @@ begin
          fifoOut_reset <= '0';
          
          fifoOut_Wr    <= '0';
-      
-         irqOut   <= '0';
          
+         fifoIn_Valid   <= fifoIn_Rd;
+         fifoIn_Valid_1 <= fifoIn_Valid;
+      
          if (cpuPaused = '1') then
             REP_counter <= REP_counter + 1;
          else
             REP_counter <= 0;
          end if;
+         
+         requestOnFlyNew := requestOnFly;
       
          if (reset = '1') then
          
@@ -266,15 +276,20 @@ begin
             autoread       <= '0';
             
             fifoIn_reset   <= '1';
-            dataCount      <= 0;
-            requestOnFly   <= 0;
             
             fifoOut_reset  <= '1';
             fifoOut_Done   <= '1';
             
+            irqOut         <= '0';
+            
+            dataCount      <= 0;
+            requestOnFly   <= 0;
             ramwrite_pending <= '0';
+         
 
          elsif (ce = '1') then
+         
+            irqOut     <= '0';
          
             ram_ena    <= '0';
          
@@ -291,8 +306,6 @@ begin
             dmaArray(4).request <= spu_dmaRequest;
             dmaArray(5).request <= '0';
             dmaArray(6).request <= '1';
-            
-            requestOnFlyNew := requestOnFly;
             
             -- bus read
             if (bus_read = '1') then
@@ -684,98 +697,99 @@ begin
                   end if;
             
             end case;
+
+--##############################################################
+--############################### ram handling
+--##############################################################
+         
+            if (ram_done = '1' and toDevice = '1') then
+               requestOnFlyNew := requestOnFlyNew - 1;
+               dataNext        <= ram_dataRead(127 downto 32);
+               dataCount       <= 3;
             
-         end if;
-         
-         if (ram_done = '1' and toDevice = '1') then
-            requestOnFlyNew := requestOnFlyNew - 1;
-            dataNext        <= ram_dataRead(127 downto 32);
-            dataCount       <= 3;
-         
-            readcount <= readcount + 1;
-            if (firstword = '1') then
-               firstword <= '0';
-               dataCount <= firstsize;
-               case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
-                  when "00" => -- manual
-                     if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
-                        wordcount <= '1' & x"0000";
-                        readsize  <= to_unsigned(1000, 10);
-                     else
-                        wordcount <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
-                        if (dmaArray(activeChannel).D_BCR(15 downto 0) < 1000) then
-                           readsize <= dmaArray(activeChannel).D_BCR(9 downto 0);
+               readcount <= readcount + 1;
+               if (firstword = '1') then
+                  firstword <= '0';
+                  dataCount <= firstsize;
+                  case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
+                     when "00" => -- manual
+                        if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
+                           wordcount <= '1' & x"0000";
+                           readsize  <= to_unsigned(1000, 10);
+                        else
+                           wordcount <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                           if (dmaArray(activeChannel).D_BCR(15 downto 0) < 1000) then
+                              readsize <= dmaArray(activeChannel).D_BCR(9 downto 0);
+                           else
+                              readsize <= to_unsigned(1000, 10);
+                           end if;
+                        end if;
+                     
+                     when "01" => -- request
+                        blocksleft  <= dmaArray(activeChannel).D_BCR(31 downto 16) - 1;
+                        wordcount   <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                        if ((dmaArray(activeChannel).D_BCR(15 downto 0) * dmaArray(activeChannel).D_BCR(31 downto 16)) < 1000) then
+                           readsize <= to_unsigned(to_integer(dmaArray(activeChannel).D_BCR(15 downto 0) * dmaArray(activeChannel).D_BCR(31 downto 16)), 10);
                         else
                            readsize <= to_unsigned(1000, 10);
                         end if;
-                     end if;
-                  
-                  when "01" => -- request
-                     blocksleft  <= dmaArray(activeChannel).D_BCR(31 downto 16) - 1;
-                     wordcount   <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
-                     if ((dmaArray(activeChannel).D_BCR(15 downto 0) * dmaArray(activeChannel).D_BCR(31 downto 16)) < 1000) then
-                        readsize <= to_unsigned(to_integer(dmaArray(activeChannel).D_BCR(15 downto 0) * dmaArray(activeChannel).D_BCR(31 downto 16)), 10);
-                     else
-                        readsize <= to_unsigned(1000, 10);
-                     end if;
-                  
-                  when "10" => -- linked list
-                     wordcount <= "0" & x"00" & unsigned(ram_dataRead(31 downto 24)); 
-                     readsize  <= to_unsigned(to_integer(unsigned(ram_dataRead(31 downto 24))) + 1, 10);
-                  
-                  when others => null;
-               end case;
+                     
+                     when "10" => -- linked list
+                        wordcount <= "0" & x"00" & unsigned(ram_dataRead(31 downto 24)); 
+                        readsize  <= to_unsigned(to_integer(unsigned(ram_dataRead(31 downto 24))) + 1, 10);
+                     
+                     when others => null;
+                  end case;
+               end if;
             end if;
-         end if;
-         
-         if (ram_reqprocessed = '1' and autoread = '1') then
-            if (readcount + 4 + dataCount < readsize) then
-               ram_ena         <= '1';
-               requestOnFlyNew := requestOnFlyNew + 1;
+            
+            if (ram_reqprocessed = '1' and autoread = '1') then
+               if (readcount + 4 + dataCount < readsize) then
+                  ram_ena         <= '1';
+                  requestOnFlyNew := requestOnFlyNew + 1;
+               end if;
+               if (directionNeg = '1') then
+                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
+               else
+                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") + 16); 
+               end if;
             end if;
-            if (directionNeg = '1') then
-               ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
-            else
-               ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") + 16); 
+            
+            if (dmaState = WAITING and waitcnt = 8) then
+               readsize     <= to_unsigned(8, 10); -- get the transfer pipeline running
+               readcount    <= (others => '0');
+               firstword    <= '1';
+               firstsize    <= to_integer(3 - dmaArray(activeChannel).D_MADR(3 downto 2));
+               fifoIn_reset <= '1';
+               dataCount    <= 0;
+            elsif (dataCount > 0) then
+               readcount <= readcount + 1;
+               dataCount <= dataCount- 1;
+               dataNext  <= x"00000000" & dataNext(95 downto 32);
             end if;
-         end if;
-         
-         if (dmaState = WAITING and waitcnt = 8) then
-            readsize     <= to_unsigned(8, 10); -- get the transfer pipeline running
-            readcount    <= (others => '0');
-            firstword    <= '1';
-            firstsize    <= to_integer(3 - dmaArray(activeChannel).D_MADR(3 downto 2));
-            fifoIn_reset <= '1';
-            dataCount    <= 0;
-         elsif (dataCount > 0) then
-            readcount <= readcount + 1;
-            dataCount <= dataCount- 1;
-            dataNext  <= x"00000000" & dataNext(95 downto 32);
-         end if;
-         
-         requestOnFly <= requestOnFlyNew;
-         
-         fifoIn_Valid   <= fifoIn_Rd;
-         fifoIn_Valid_1 <= fifoIn_Valid;
-         
-         -- fifo Out
-         if (ram_done = '1') then
-            ramwrite_pending <= '0';
-         end if;
-         
-         if (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_done = '1')) then
-            ram_rnw          <= '0';
-            ram_ena          <= '1';
-            ram_Adr          <= "00" & fifoOut_Dout(50 downto 32) & "00";
-            ram_dataWrite    <= fifoOut_Dout(31 downto 0);
-            ramwrite_pending <= '1';
-         end if; 
-         
-         if (fifoOut_Wr = '1') then
-            fifoOut_Done <= '0';
-         elsif (ram_done = '1' and fifoOut_Empty = '1') then
-            fifoOut_Done <= '1';
-         end if;
+            
+            requestOnFly <= requestOnFlyNew;
+            
+            -- fifo Out
+            if (ram_done = '1') then
+               ramwrite_pending <= '0';
+            end if;
+            
+            if (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_done = '1')) then
+               ram_rnw          <= '0';
+               ram_ena          <= '1';
+               ram_Adr          <= "00" & fifoOut_Dout(50 downto 32) & "00";
+               ram_dataWrite    <= fifoOut_Dout(31 downto 0);
+               ramwrite_pending <= '1';
+            end if; 
+            
+            if (fifoOut_Wr = '1') then
+               fifoOut_Done <= '0';
+            elsif (ram_done = '1' and fifoOut_Empty = '1') then
+               fifoOut_Done <= '1';
+            end if;
+            
+         end if; -- ce
          
       end if;
    end process;
@@ -856,6 +870,11 @@ begin
          
          if (SS_rden = '1') then
             SS_DataRead <= ss_out(to_integer(SS_Adr));
+         end if;
+      
+         SS_idle <= '0';
+         if (dmaOn = '0') then
+            SS_idle <= '1';
          end if;
       
       end if;

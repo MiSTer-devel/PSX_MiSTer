@@ -224,10 +224,10 @@ begin
                      targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * 2), 32);
                   end if;
                
-                  xsize := resize(signed(rec_sizex), 12);
+                  xsize := to_signed(to_integer(rec_sizex), 12);
                   xdiff := (others => '0');
                   if (rec_posx < to_integer(drawingAreaLeft)) then
-                     xdiff := (resize(signed(drawingAreaLeft), 12) - rec_posx);
+                     xdiff := to_signed(to_integer(drawingAreaLeft), 12) - rec_posx;
                      xsize := xsize - xdiff;
                   end if;
                   rec_posx  <= rec_posx + xdiff;
@@ -236,7 +236,7 @@ begin
                   rec_u     <= rec_u + unsigned(xdiff(7 downto 0));
                   rec_sizex <= unsigned(xsize(9 downto 0)); 
                
-                  ysize := resize(signed(rec_sizey), 12);
+                  ysize := to_signed(to_integer(rec_sizey), 12);
                   ydiff := (others => '0');
                   if (to_integer(yPos) < to_integer(drawingAreaTop)) then
                      ydiff := to_signed(to_integer(drawingAreaTop), 12) - yPos;

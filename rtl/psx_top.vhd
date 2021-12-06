@@ -270,6 +270,7 @@ architecture arch of psx_top is
    signal ram_dma_done           : std_logic;
    
    signal gpu_dmaRequest         : std_logic;
+   signal DMA_GPU_waiting        : std_logic;
    signal DMA_GPU_writeEna       : std_logic;
    signal DMA_GPU_readEna        : std_logic;
    signal DMA_GPU_write          : std_logic_vector(31 downto 0);
@@ -350,6 +351,7 @@ architecture arch of psx_top is
    signal ss_ram_WE              : std_logic := '0';
    signal ss_ram_RD              : std_logic := '0'; 
    
+   signal SS_Idle                : std_logic; 
    signal SS_Idle_gpu            : std_logic; 
    signal SS_Idle_mdec           : std_logic; 
    signal SS_Idle_cd             : std_logic; 
@@ -358,6 +360,7 @@ architecture arch of psx_top is
    signal SS_idle_irq            : std_logic; 
    signal SS_idle_cpu            : std_logic; 
    signal SS_idle_gte            : std_logic; 
+   signal SS_idle_dma            : std_logic; 
 
 -- synthesis translate_off
    -- export
@@ -424,6 +427,8 @@ begin
       
       end if;
    end process;
+ 
+   SS_idle <= SS_Idle_gpu and SS_Idle_mdec and SS_Idle_cd and SS_idle_spu and SS_idle_pad and SS_idle_irq and SS_idle_cpu and SS_idle_gte and SS_idle_dma;
    
    -- ce generation
    process (clk1x)
@@ -455,9 +460,7 @@ begin
                cpuPaused <= '0';
             else
          
-               if ((pause = '1' or savestate_pause = '1') and  -- switch to pause/savestate pausing
-                  cpuPaused = '0' and dmaOn = '0' and stallNext = '0' and memMuxIdle = '1' and 
-                  SS_Idle_gpu = '1' and SS_Idle_mdec = '1' and SS_Idle_cd = '1' and SS_idle_spu = '1' and SS_idle_pad = '1' and SS_idle_irq = '1' and SS_idle_cpu = '1' and SS_idle_gte = '1') then 
+               if ((pause = '1' or savestate_pause = '1') and cpuPaused = '0' and dmaOn = '0' and stallNext = '0' and memMuxIdle = '1' and SS_idle = '1') then -- switch to pause/savestate pausing
                   pausing <= '1';
                   ce      <= '0';
                   ce_cpu  <= '0';
@@ -626,6 +629,7 @@ begin
       ram_idle             => ram_idle,
       
       gpu_dmaRequest       => gpu_dmaRequest,  
+      DMA_GPU_waiting      => DMA_GPU_waiting,
       DMA_GPU_writeEna     => DMA_GPU_writeEna,
       DMA_GPU_readEna      => DMA_GPU_readEna, 
       DMA_GPU_write        => DMA_GPU_write,   
@@ -658,7 +662,8 @@ begin
       SS_Adr               => SS_Adr(5 downto 0),      
       SS_wren              => SS_wren(3),     
       SS_rden              => SS_rden(3),     
-      SS_DataRead          => SS_DataRead_DMA
+      SS_DataRead          => SS_DataRead_DMA,
+      SS_idle              => SS_idle_dma
    );
    
    ram_refresh   <= ram_refresh_dma;
@@ -794,6 +799,7 @@ begin
       
       dmaOn                => dmaOn,
       gpu_dmaRequest       => gpu_dmaRequest,  
+      DMA_GPU_waiting      => DMA_GPU_waiting,
       DMA_GPU_writeEna     => DMA_GPU_writeEna,
       DMA_GPU_readEna      => DMA_GPU_readEna, 
       DMA_GPU_write        => DMA_GPU_write,   
@@ -1054,6 +1060,7 @@ begin
       clk1x             => clk1x,
       clk2x             => clk2x,
       ce                => ce_cpu,   
+      ce_system         => ce,
       reset             => reset_intern,
          
       irqRequest        => irqRequest,
@@ -1169,6 +1176,7 @@ begin
       savestate_address       => savestate_address,  
       savestate_busy          => savestate_busy,    
 
+      SS_idle                 => SS_idle,
       system_paused           => pausing,
       savestate_pause         => savestate_pause,
       ddr3_savestate          => ddr3_savestate,
