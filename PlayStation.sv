@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX XXXXXXXXXXXXXXXX X     XXXXXXX
+// X XXXXXXX XXXXXXXXXXXXXXXXxX     XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -259,6 +259,7 @@ parameter CONF_STR = {
 	"OG,Fastboot,Off,On;",
    "OJ,RepTimingGPU,Off,On;",
    "OK,RepTimingDMA,Off,On;",
+   "OQ,DMAinBLOCKs,Off,On;",
    "OL,CD Disable,Off,On;",
    "OP,Pause when OSD is open,Off,On;",
 	"- ;",
@@ -500,6 +501,7 @@ psx
    .fastboot(status[16]),
    .REPRODUCIBLEGPUTIMING(status[19]),
    .REPRODUCIBLEDMATIMING(status[20]),
+   .DMABLOCKATONCE(status[26]),
    .CDDISABLE(status[21]),
    .ditherOff(status[22]),
    .analogPad(status[24]),

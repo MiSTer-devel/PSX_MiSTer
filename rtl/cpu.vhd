@@ -2498,7 +2498,13 @@ begin
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
-         if (ce = '1') then
+         if (reset = '1') then
+         
+            debugTrigger      <= '0';
+            debugStallcounter <= (others => '0');
+            debug300exception <= '0';
+      
+         elsif (ce = '1') then
          
             if (stall = 0) then
                debugStallcounter <= (others => '0');
@@ -2511,7 +2517,6 @@ begin
                debug300exception <= '1';
             end if;
             
-            debugTrigger <= '0';
             if (debugStallcounter(7) = '1' or debug300exception = '1') then
                debugTrigger <= '1';
             end if;

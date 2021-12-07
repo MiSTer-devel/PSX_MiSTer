@@ -12,6 +12,7 @@ entity dma is
       reset                : in  std_logic;
       
       REPRODUCIBLEDMATIMING: in  std_logic;
+      DMABLOCKATONCE       : in  std_logic;
       
       cpuPaused            : in  std_logic;
       dmaOn                : out std_logic;
@@ -104,6 +105,8 @@ architecture arch of dma is
          
    signal triggerDMA          : std_logic_vector(6 downto 0);
       
+   signal readStall           : std_logic;
+      
    signal wordAccu            : integer range 0 to 3 := 0;
    signal DMA_CD_read_accu    : std_logic_vector(23 downto 0);
    signal DMA_SPU_read_accu   : std_logic_vector(15 downto 0);
@@ -122,8 +125,6 @@ architecture arch of dma is
    signal dmacount            : unsigned(9 downto 0);
          
    signal autoread            : std_logic := '0';
-   signal readcount           : unsigned(9 downto 0);
-   signal readsize            : unsigned(9 downto 0);
    signal firstword           : std_logic := '0';
       
    signal dataNext            : std_logic_vector(95 downto 0);
@@ -167,7 +168,7 @@ begin
 
    dmaOn <= '1' when (dmaState = WAITING or dmaState = READHEADER or dmaState = WAITREAD or dmaState = WORKING or dmaState = STOPPING or dmaState = PAUSING or dmaState = GPU_PAUSING) else '0';
 
-   ram_refresh <= '1' when (dmaState = WAITING and cpuPaused = '1' and waitcnt = 9) else '0';
+   ram_refresh <= '1' when ((reset = '1') or (dmaState = WAITING and cpuPaused = '1' and waitcnt = 9)) else '0';
    ram_be      <= "1111";
    ram_128     <= '1';
 
@@ -199,7 +200,7 @@ begin
    DMA_SPU_writeEna  <= '1' when ((fifoIn_Valid = '1' or fifoIn_Valid_1 = '1') and activeChannel = 4 and toDevice = '1') else '0'; 
    DMA_SPU_write     <= fifoIn_Dout(15 downto 0) when fifoIn_Valid = '1' else fifoIn_Dout(31 downto 16);
 
-
+   readStall <= '1' when (activeChannel = 2 and toDevice = '0' and gpu_dmaRequest = '0') else '0';
 
    gSSout: for i in 0 to 6 generate
    begin
@@ -534,7 +535,7 @@ begin
                   end if;
                
                when WORKING =>
-                  if (fifoIn_Valid = '1' or (toDevice = '0' and fifoOut_NearFull = '0' and wordAccu = 0)) then
+                  if (fifoIn_Valid = '1' or (toDevice = '0' and fifoOut_NearFull = '0' and wordAccu = 0 and readStall = '0')) then
                      dmacount    <= dmacount + 1;
                      REP_target  <= REP_target + 1;
                      case (activeChannel) is
@@ -611,15 +612,10 @@ begin
                                  autoread <= '0';
                               else
                                  wordcount  <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
-                                 if (dmaArray(activeChannel).request = '0') then
+                                 if (DMABLOCKATONCE = '0' or dmaArray(activeChannel).request = '0') then
                                     dmaState <= PAUSING;
                                     autoread <= '0';
-                                 elsif (dmacount + dmaArray(activeChannel).D_BCR(15 downto 0) >= 1000) then
-                                    dmaState <= WAITING;
-                                    waitcnt  <= 9;
-                                    autoread <= '0';
                                  end if;
-                                 -- todo timeup check
                               end if;
                            
                            when "10" => -- linked list
@@ -629,7 +625,7 @@ begin
                                  autoread <= '0';
                               else
                                  -- todo add timeup
-                                 if (gpu_dmaRequest = '1') then
+                                 if (DMABLOCKATONCE = '1' and gpu_dmaRequest = '1') then
                                     dmaState <= WAITING;
                                     waitcnt  <= 10;
                                     autoread <= '0';
@@ -707,7 +703,6 @@ begin
                dataNext        <= ram_dataRead(127 downto 32);
                dataCount       <= 3;
             
-               readcount <= readcount + 1;
                if (firstword = '1') then
                   firstword <= '0';
                   dataCount <= firstsize;
@@ -715,28 +710,16 @@ begin
                      when "00" => -- manual
                         if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
                            wordcount <= '1' & x"0000";
-                           readsize  <= to_unsigned(1000, 10);
                         else
                            wordcount <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
-                           if (dmaArray(activeChannel).D_BCR(15 downto 0) < 1000) then
-                              readsize <= dmaArray(activeChannel).D_BCR(9 downto 0);
-                           else
-                              readsize <= to_unsigned(1000, 10);
-                           end if;
                         end if;
                      
                      when "01" => -- request
                         blocksleft  <= dmaArray(activeChannel).D_BCR(31 downto 16) - 1;
                         wordcount   <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
-                        if ((dmaArray(activeChannel).D_BCR(15 downto 0) * dmaArray(activeChannel).D_BCR(31 downto 16)) < 1000) then
-                           readsize <= to_unsigned(to_integer(dmaArray(activeChannel).D_BCR(15 downto 0) * dmaArray(activeChannel).D_BCR(31 downto 16)), 10);
-                        else
-                           readsize <= to_unsigned(1000, 10);
-                        end if;
                      
                      when "10" => -- linked list
                         wordcount <= "0" & x"00" & unsigned(ram_dataRead(31 downto 24)); 
-                        readsize  <= to_unsigned(to_integer(unsigned(ram_dataRead(31 downto 24))) + 1, 10);
                      
                      when others => null;
                   end case;
@@ -744,10 +727,8 @@ begin
             end if;
             
             if (ram_reqprocessed = '1' and autoread = '1') then
-               if (readcount + 4 + dataCount < readsize) then
-                  ram_ena         <= '1';
-                  requestOnFlyNew := requestOnFlyNew + 1;
-               end if;
+               ram_ena         <= '1';
+               requestOnFlyNew := requestOnFlyNew + 1;
                if (directionNeg = '1') then
                   ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
                else
@@ -756,15 +737,12 @@ begin
             end if;
             
             if (dmaState = WAITING and waitcnt = 8) then
-               readsize     <= to_unsigned(8, 10); -- get the transfer pipeline running
-               readcount    <= (others => '0');
                firstword    <= '1';
                firstsize    <= to_integer(3 - dmaArray(activeChannel).D_MADR(3 downto 2));
                fifoIn_reset <= '1';
                dataCount    <= 0;
             elsif (dataCount > 0) then
-               readcount <= readcount + 1;
-               dataCount <= dataCount- 1;
+               dataCount <= dataCount - 1;
                dataNext  <= x"00000000" & dataNext(95 downto 32);
             end if;
             

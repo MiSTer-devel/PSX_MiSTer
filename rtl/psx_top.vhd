@@ -22,6 +22,7 @@ entity psx_top is
       fastboot              : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
+      DMABLOCKATONCE        : in  std_logic;
       CDDISABLE             : in  std_logic;
       ditherOff             : in  std_logic;
       analogPad             : in  std_logic;
@@ -611,6 +612,7 @@ begin
       reset                => reset_intern,
       
       REPRODUCIBLEDMATIMING=> REPRODUCIBLEDMATIMING,
+      DMABLOCKATONCE       => DMABLOCKATONCE,
       
       cpuPaused            => cpuPaused,
       dmaOn                => dmaOn,

@@ -13,6 +13,8 @@ entity gpu_vram2cpu is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      REPRODUCIBLEGPUTIMING: in  std_logic;
+      
       proc_idle            : in  std_logic;
       fifo_Valid           : in  std_logic;
       fifo_data            : in  std_logic_vector(31 downto 0);
@@ -45,6 +47,7 @@ architecture arch of gpu_vram2cpu is
       REQUESTWORD3,
       READVRAM,
       WAITREAD,
+      WAITIMING,
       WRITING,
       FINISH
    );
@@ -58,6 +61,8 @@ architecture arch of gpu_vram2cpu is
    signal xSrc          : unsigned(9 downto 0);
    signal xCnt          : unsigned(10 downto 0);
    signal yCnt          : unsigned(9 downto 0);
+   
+   signal drawTiming    : unsigned(6 downto 0);
    
    --fifo
    signal Fifo_Din      : std_logic_vector(31 downto 0);
@@ -75,8 +80,8 @@ begin
    requestVRAMYPos   <= srcY when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
    requestVRAMSize   <= widt when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
    
-   vramLineEna       <= '1'  when (state = WRITING or state = WAITREAD) else '0';
-   vramLineAddr      <= xSrc when (state = WRITING or state = WAITREAD) else (others => '0');
+   vramLineEna       <= '1'  when (state = WRITING or state = WAITREAD or state = WAITIMING) else '0';
+   vramLineAddr      <= xSrc when (state = WRITING or state = WAITREAD or state = WAITIMING) else (others => '0');
    
    -- fifo has size of two full lines. Filling can start whenever at least a full line fits in.
    ififo: entity mem.SyncFifoFallThrough
@@ -114,7 +119,11 @@ begin
          
          elsif (ce = '1') then
             
-            done              <= '0';
+            done        <= '0';
+         
+            if (state /= IDLE) then
+               drawTiming <= drawTiming + 1;
+            end if;
          
             case (state) is
             
@@ -145,11 +154,22 @@ begin
                   xSrc <= srcX;
                   xCnt <= (others => '0');
                   if (requestVRAMIdle = '1' and Fifo_NearFull = '0') then
-                     state <= WAITREAD;
+                     state      <= WAITREAD;
+                     drawTiming <= (others => '0');
                   end if;
                   
                when WAITREAD =>
                   if (requestVRAMDone = '1') then
+                     if (REPRODUCIBLEGPUTIMING = '1') then
+                        state <= WAITIMING;
+                     else
+                        state <= WRITING; 
+                        xSrc  <= xSrc + 1;
+                     end if;
+                  end if;
+                  
+               when WAITIMING =>
+                  if (drawTiming >= 80) then
                      state <= WRITING; 
                      xSrc  <= xSrc + 1;
                   end if;

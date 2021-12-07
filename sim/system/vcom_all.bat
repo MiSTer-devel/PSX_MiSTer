@@ -68,6 +68,7 @@ src/tb/stringprocessor.vhd ^
 src/tb/tb_interpreter.vhd ^
 src/tb/ddrram_model.vhd ^
 src/tb/sdram_model.vhd ^
+src/tb/sdram_model3x.vhd ^
 src/tb/framebuffer.vhd ^
 src/tb/tb.vhd
 

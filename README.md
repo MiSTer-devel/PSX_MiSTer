@@ -27,13 +27,11 @@ CPU    : 90%
 - exception for read in invalid instruction and data area missing
 
 GPU    : 80%
-- dithering missing
 - mask bits not implemented for special modules(e.g. cpu2vram)
 - vram2vram and vram2cpu line wraparound not implemented
 - vram2vram read/modify/write race condition when copying to same line
 
 Memory : 50%
-- DMA write performance only 32bit/2 cycles, should be 32Bit/1 cycle
 - SPU RAM not implemented
 - rotate register read16 missing
 - some memory delay registers missing
@@ -47,9 +45,9 @@ PAD    : 40%
 - memory card not implemented
 - special controllers not supported
 
-DMA    : 30%
-- DMA read prefetch must be fixed for long DMAs
-- DMA pausing and chopping not implemented 
+DMA    : 60%
+- DMA chopping not implemented 
+- DMA write performance only 32bit/3 cycles, should be 32Bit/1 cycle?
 
 Memctrl: register stubs only
 

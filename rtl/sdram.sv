@@ -132,6 +132,7 @@ reg ch3_ready_ramclock = 0;
 reg ch1_req_1 = 0;
 reg ch2_req_1 = 0;
 reg ch3_req_1 = 0;
+reg refreshForce_1 = 0;
 
 reg ch1_reqprocessed_ramclock = 0;
 
@@ -149,22 +150,25 @@ always @(posedge clk) begin
 	reg [31:0] saved_data;
 	reg [15:0] dq_reg;
 
-	reg       ch1_rq, ch2_rq, ch3_rq;
+	reg       ch1_rq, ch2_rq, ch3_rq, refreshForce_req;
 	reg [1:0] ch;
-   
-   ch1_req_1 <= ch1_req;
-   ch2_req_1 <= ch2_req;
-   ch3_req_1 <= ch3_req;
+	
+	ch1_req_1 <= ch1_req;
+	ch2_req_1 <= ch2_req;
+	ch3_req_1 <= ch3_req;
 
 	ch1_rq <= ch1_rq | (ch1_req & ~ch1_req_1);
 	ch2_rq <= ch2_rq | (ch2_req & ~ch2_req_1);
 	ch3_rq <= ch3_rq | (ch3_req & ~ch3_req_1);
-   
+	
 	if (ch1_ready) ch1_ready_ramclock <= 0;
 	if (ch2_ready) ch2_ready_ramclock <= 0;
 	if (ch3_ready) ch3_ready_ramclock <= 0;
-   
+	
 	if (ch1_reqprocessed) ch1_reqprocessed_ramclock <= 0;
+
+	refreshForce_1 <= refreshForce;
+	refreshForce_req <= refreshForce_req | (refreshForce & ~refreshForce_1);
 
 	refresh_count <= refresh_count+1'b1;
 
@@ -262,10 +266,11 @@ always @(posedge clk) begin
          end
    
          STATE_IDLE: begin
-            if (refreshForce || refresh_count > cycles_per_refresh) begin
-               state         <= STATE_RFSH;
-               command       <= CMD_AUTO_REFRESH;
-               chip          <= 0;
+            if (refreshForce_req || refresh_count > cycles_per_refresh) begin
+               state            <= STATE_RFSH;
+               command          <= CMD_AUTO_REFRESH;
+               chip             <= 0;
+               refreshForce_req <= 0;
                if (refresh_count > cycles_per_refresh)
                   refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
                else

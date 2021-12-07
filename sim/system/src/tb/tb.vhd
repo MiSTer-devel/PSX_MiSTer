@@ -79,6 +79,7 @@ architecture arch of etb is
    signal ram_done            : std_logic;   
    signal ram_reqprocessed    : std_logic;   
    signal ram_idle            : std_logic;   
+   signal ram_refresh         : std_logic;   
    
    -- ddrram
    signal DDRAM_CLK           : std_logic;
@@ -185,10 +186,12 @@ begin
       fastboot              => '1',
       REPRODUCIBLEGPUTIMING => '0',
       REPRODUCIBLEDMATIMING => '0',
+      DMABLOCKATONCE        => '0',
       CDDISABLE             => '0',
       ditherOff             => '0',
       analogPad             => '0',
       -- RAM/BIOS interface        
+      ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 
       ram_Adr               => ram_Adr,      
@@ -224,7 +227,7 @@ begin
       cd_hps_data           => x"0000",
       -- video
       videoout_on           => '1',
-      isPal                 => '1',
+      isPal                 => '0',
       hblank                => hblank,  
       vblank                => vblank,  
       video_ce              => video_ce,
@@ -236,7 +239,7 @@ begin
       KeyTriangle           => KeyTriangle,           
       KeyCircle             => KeyCircle,           
       KeyCross              => KeyCross,           
-      KeySquare             => KeySquare,           
+      KeySquare             => '1', --KeySquare,           
       KeySelect             => KeySelect,      
       KeyStart              => KeyStart,       
       KeyRight              => KeyRight,       
@@ -285,14 +288,17 @@ begin
       DDRAM_WE         => DDRAM_WE        
    );
    
-   isdram_model : entity tb.sdram_model 
+   isdram_model : entity tb.sdram_model3x 
    generic map
    (
+      DOREFRESH     => '1',
       SCRIPTLOADING => '1'
    )
    port map
    (
       clk          => clk33,
+      clk3x        => clk100,
+      refresh      => ram_refresh,
       addr(26 downto 23) => "0000",
       addr(22 downto  0) =>  ram_Adr,
       req          => ram_ena,
@@ -315,6 +321,7 @@ begin
    port map
    (
       clk          => clk33,
+      refresh      => '0',
       addr         => cd_addr,
       req          => cd_req,
       ram_128      => '0',

@@ -16,6 +16,7 @@ entity sdram_model is
    port 
    (
       clk               : in  std_logic;
+      refresh           : in  std_logic;
       addr              : in  std_logic_vector(26 downto 0);
       req               : in  std_logic;
       ram_128           : in  std_logic;
@@ -36,6 +37,7 @@ architecture arch of sdram_model is
    type t_data is array(0 to (2**27)-1) of integer;
    type bit_vector_file is file of bit_vector;
    
+   signal waitrfs    : integer range 0 to 8 := 0;
    signal waitcnt    : integer range 0 to 8 := 0;
    
    signal req_buffer  : std_logic := '0';
@@ -118,7 +120,20 @@ begin
                end loop;
             end if;
             done <= '1';
+            if (DOREFRESH = '1' and refreshcnt >= 260) then
+               refreshcnt <= 0;
+               waitrfs    <= 2;
+            end if;
          end if;
+      elsif (waitrfs > 0) then
+         waitrfs  <= waitrfs - 1;
+         ram_idle <= '0';
+      elsif (refresh = '1') then
+         waitrfs    <= 1;
+         refreshcnt <= 0;
+      elsif (DOREFRESH = '1' and refreshcnt >= 260) then
+         refreshcnt <= 0;
+         waitrfs    <= 2;
       elsif ((req = '1' or req_buffer = '1') and rnw = '0') then
          ram_idle <= '0';
          if (be(3) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 3) := to_integer(unsigned(di(31 downto 24))); end if;
@@ -127,10 +142,6 @@ begin
          if (be(0) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 0) := to_integer(unsigned(di( 7 downto  0))); end if;
          waitcnt    <= 1;
          req_buffer <= '0';
-         if (refreshcnt >= 260) then
-            refreshcnt <= 0;
-            waitcnt    <= 3;
-         end if;
       elsif ((req = '1' or req_buffer = '1') and rnw = '1') then
          ram_idle     <= '0';
          do           <= (others => 'X');
@@ -150,10 +161,6 @@ begin
             else
                waitcnt      <= 2;
             end if;
-            --if (refreshcnt >= 260) then
-            --   refreshcnt <= 0;
-            --   waitcnt    <= 4;
-            --end if;
          end if;
          reqprocessed <= '1';
          req_buffer   <= '0';

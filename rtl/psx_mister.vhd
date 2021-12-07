@@ -18,6 +18,7 @@ entity psx_mister is
       fastboot              : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
+      DMABLOCKATONCE        : in  std_logic;
       CDDISABLE             : in  std_logic;
       ditherOff             : in  std_logic;
       analogPad             : in  std_logic;
@@ -133,6 +134,7 @@ begin
       fastboot              => fastboot,
       REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING,
       REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING,
+      DMABLOCKATONCE        => DMABLOCKATONCE,
       CDDISABLE             => CDDISABLE,
       ditherOff             => ditherOff,
       analogPad             => analogPad,

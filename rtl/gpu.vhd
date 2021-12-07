@@ -1063,6 +1063,8 @@ begin
       ce                   => ce,        
       reset                => softreset or SS_reset,   
 
+      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING, 
+
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 
       fifo_data            => fifoIn_Dout,
