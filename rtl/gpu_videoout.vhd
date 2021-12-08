@@ -13,6 +13,9 @@ entity gpu_videoout is
       
       videoout_on          : in  std_logic;
       
+      fpscountOn           : in  std_logic;
+      fpscountBCD          : in  unsigned(7 downto 0) := x"25";
+      
       fetch                : in  std_logic;
       lineIn               : in  unsigned(8 downto 0);
       lineInNext           : in  unsigned(8 downto 0);
@@ -35,7 +38,7 @@ entity gpu_videoout is
       vram_DOUT            : in  std_logic_vector(63 downto 0);
       vram_DOUT_READY      : in  std_logic;
       
-      video_ce             : out std_logic := '0';
+      video_ce             : buffer std_logic := '0';
       video_r              : out std_logic_vector(7 downto 0);
       video_g              : out std_logic_vector(7 downto 0);
       video_b              : out std_logic_vector(7 downto 0);
@@ -91,6 +94,10 @@ architecture arch of gpu_videoout is
    
    signal fetchNext : std_logic := '0';
    
+   -- overlay
+   signal fpstext            : unsigned(15 downto 0);
+   signal overlay_fps_data   : std_logic_vector(23 downto 0);
+   signal overlay_fps_ena    : std_logic;
    
 begin 
 
@@ -213,9 +220,15 @@ begin
                end if;
                if (xpos > 0 and xpos <= xmax) then
                   video_hblank <= '0';
-                  video_r      <= pixelData_R;
-                  video_g      <= pixelData_G;
-                  video_b      <= pixelData_B;
+                  if (overlay_fps_ena = '1') then
+                     video_r      <= overlay_fps_data( 7 downto 0);
+                     video_g      <= overlay_fps_data(15 downto 8);
+                     video_b      <= overlay_fps_data(23 downto 16);
+                  else
+                     video_r      <= pixelData_R;
+                     video_g      <= pixelData_G;
+                     video_b      <= pixelData_B;
+                  end if;
                else
                   video_hblank <= '1';
                   if (video_hblank = '0') then
@@ -288,6 +301,33 @@ begin
          
       end if;
    end process; 
+   
+   
+   -- fps overlay
+   fpstext( 7 downto 0) <= resize(fpscountBCD(3 downto 0), 8) + 16#30#;
+   fpstext(15 downto 8) <= resize(fpscountBCD(7 downto 4), 8) + 16#30#;
+   
+   ioverlayFPS : entity work.gpu_overlay
+   generic map
+   (
+      COLS                   => 2,
+      BACKGROUNDON           => '1',
+      RGB_BACK               => x"FFFFFF",
+      RGB_FRONT              => x"0000FF",
+      OFFSETX                => 4,
+      OFFSETY                => 4
+   )
+   port map
+   (
+      clk                    => clk2x,
+      ce                     => video_ce,
+      ena                    => fpscountOn,                    
+      i_pixel_out_x          => xpos,
+      i_pixel_out_y          => to_integer(lineDisp),
+      o_pixel_out_data       => overlay_fps_data,
+      o_pixel_out_ena        => overlay_fps_ena,
+      textstring             => fpstext
+   );
 
 
 end architecture;

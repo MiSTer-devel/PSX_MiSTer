@@ -30,8 +30,6 @@ architecture arch of etb is
    
    signal cd_req              : std_logic;
    signal cd_addr             : std_logic_vector(26 downto 0) := (others => '0');
-   signal cd_data             : std_logic_vector(31 downto 0);
-   signal cd_done             : std_logic := '0';
    
    signal cd_hps_req          : std_logic := '0';
    signal cd_hps_lba          : std_logic_vector(31 downto 0);
@@ -41,15 +39,10 @@ architecture arch of etb is
    
    signal cdSize              : unsigned(29 downto 0);
    
-   --sdram
-   signal ram_req             : std_logic;
-   signal ram_addr            : std_logic_vector(26 downto 0) := (others => '0');
-   signal ram_do              : std_logic_vector(127 downto 0);
-   signal ram_done            : std_logic := '0';
-   
    -- hps emulation
-   signal hps_req             : std_logic := '0';
-   signal hps_addr            : std_logic_vector(26 downto 0) := (others => '0');
+   type filetype is file of integer;
+   type t_data is array(0 to (2**28)-1) of integer;
+   signal cdLoaded            : std_logic := '0';
    
    -- savestates
    signal reset_in            : std_logic;
@@ -94,8 +87,8 @@ begin
       
       cd_req               => cd_req,
       cd_addr              => cd_addr,
-      cd_data              => cd_data,
-      cd_done              => cd_done,
+      cd_data              => x"00000000",
+      cd_done              => '0',
       
       cd_hps_on            => '1',
       cd_hps_req           => cd_hps_req,  
@@ -107,36 +100,10 @@ begin
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(13 downto 0),
-      SS_wren              => SS_wren(13)
-   );
+      SS_wren              => SS_wren(13),
+      SS_rden              => '0'
+   );  
    
-   isdram_model : entity work.sdram_model 
-   generic map
-   (
-      FILELOADING => '1',
-      --INITFILE => "test_triangle.iso"
-      INITFILE    => "C:\Projekte\psx\CastlevaniaSOTNTrack1dummy.bin"
-   )
-   port map
-   (
-      clk          => clk1x,
-      addr         => ram_addr,
-      req          => ram_req,
-      ram_128      => '0',
-      rnw          => '1',
-      be           => "0000",
-      di           => x"00000000",
-      do           => ram_do,
-      done         => ram_done,
-      reqprocessed => open,
-      ram_idle     => open,
-      fileSize     => cdSize
-   );
-   
-   ram_addr <= cd_addr when cd_req = '1' else hps_addr;
-   ram_req  <= cd_req or hps_req;
-   
-   cd_data <= ram_do(31 downto 0);
    cd_done <= ram_done;
    
    
@@ -160,7 +127,69 @@ begin
    
    -- hps emulation
    process
+      variable data           : t_data := (others => 0);
+      file infile             : filetype;
+      variable f_status       : FILE_OPEN_STATUS;
+      variable read_byte0     : std_logic_vector(7 downto 0);
+      variable read_byte1     : std_logic_vector(7 downto 0);
+      variable read_byte2     : std_logic_vector(7 downto 0);
+      variable read_byte3     : std_logic_vector(7 downto 0);
+      variable next_vector    : bit_vector (2351 downto 0);
+      variable next_int       : integer;
+      variable actual_len     : natural;
+      variable targetpos      : integer;
+      variable cdData         : std_logic_vector(31 downto 0);
+      
+      -- copy from std_logic_arith, not used here because numeric std is also included
+      function CONV_STD_LOGIC_VECTOR(ARG: INTEGER; SIZE: INTEGER) return STD_LOGIC_VECTOR is
+        variable result: STD_LOGIC_VECTOR (SIZE-1 downto 0);
+        variable temp: integer;
+      begin
+ 
+         temp := ARG;
+         for i in 0 to SIZE-1 loop
+ 
+         if (temp mod 2) = 1 then
+            result(i) := '1';
+         else 
+            result(i) := '0';
+         end if;
+ 
+         if temp > 0 then
+            temp := temp / 2;
+         elsif (temp > integer'low) then
+            temp := (temp - 1) / 2; -- simulate ASR
+         else
+            temp := temp / 2; -- simulate ASR
+         end if;
+        end loop;
+ 
+        return result;  
+      end;
    begin
+      
+      if (cdLoaded = '0') then
+      
+         file_open(f_status, infile, "x.bin", read_mode);
+         
+         targetpos := 0;
+         
+         while (not endfile(infile)) loop
+            
+            read(infile, next_int);  
+            
+            data(targetpos) := next_int;
+            targetpos       := targetpos + 1;
+
+         end loop;
+         
+         file_close(infile);
+         
+         cdSize <= to_unsigned(targetpos * 4, 30);
+         cdLoaded <= '1';
+      end if;
+   
+   
       wait until rising_edge(clk1x);
       if (cd_hps_req = '1') then
          for i in 0 to 100 loop
@@ -172,17 +201,12 @@ begin
          wait until rising_edge(clk1x);
          
          for i in 0 to 587 loop
-            hps_req  <= '1';
-            hps_addr <= std_logic_vector(to_unsigned(to_integer(unsigned(cd_hps_lba)) * 2352 + i * 4, 27));
-            wait until rising_edge(clk1x);
-            hps_req <= '0';
-            wait until rising_edge(clk1x);
+            cdData := std_logic_vector(to_signed(data(to_integer(unsigned(cd_hps_lba)) * (2352 / 4) + i), 32));
             
-            wait until ram_done = '1';
-            cd_hps_data  <= ram_do(15 downto 0);
+            cd_hps_data  <= cdData(15 downto 0);
             cd_hps_write <= '1';
             wait until rising_edge(clk1x);
-            cd_hps_data  <= ram_do(31 downto 16);
+            cd_hps_data  <= cdData(31 downto 16);
             wait until rising_edge(clk1x);
             cd_hps_write <= '0';
          end loop;

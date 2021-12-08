@@ -220,7 +220,7 @@ architecture arch of gpu_poly is
    signal decMode             : integer range 0 to 1;
    
    signal xPos                : signed(11 downto 0) := (others => '0'); 
-   signal yPos                : signed(11 downto 0) := (others => '0'); 
+   signal yPos                : signed(10 downto 0) := (others => '0'); 
    signal xStop               : signed(11 downto 0) := (others => '0'); 
    signal xSize               : unsigned(10 downto 0) := (others => '0'); 
 
@@ -332,19 +332,20 @@ begin
              unsigned(to_signed(-vt(coreVertex).y, 32));
    
    process (clk2x)
-      variable xMax  : integer;
-      variable dx1   : signed(44 downto 0);
-      variable dx2   : signed(44 downto 0);
-      variable dx3   : signed(44 downto 0);
-      variable dy1   : signed(12 downto 0);
-      variable dy2   : signed(12 downto 0);
-      variable dy3   : signed(12 downto 0);
-      variable calc1 : signed(44 downto 0);
-      variable calc2 : signed(44 downto 0);
-      variable calc3 : signed(44 downto 0);
-      variable calc4 : signed(44 downto 0);
-      variable stop  : std_logic;
-      variable skip  : std_logic;
+      variable xMax     : integer;
+      variable dx1      : signed(44 downto 0);
+      variable dx2      : signed(44 downto 0);
+      variable dx3      : signed(44 downto 0);
+      variable dy1      : signed(12 downto 0);
+      variable dy2      : signed(12 downto 0);
+      variable dy3      : signed(12 downto 0);
+      variable calc1    : signed(44 downto 0);
+      variable calc2    : signed(44 downto 0);
+      variable calc3    : signed(44 downto 0);
+      variable calc4    : signed(44 downto 0);
+      variable stop     : std_logic;
+      variable skip     : std_logic;
+      variable checkY   : integer range -2048 to 2047; 
    begin
       if rising_edge(clk2x) then
          
@@ -827,7 +828,7 @@ begin
                   else
                      xPos  <= xStart(43 downto 32);
                   end if;
-                  yPos  <= to_signed(yCoord, 12);
+                  yPos  <= to_signed(yCoord, 11);
                   xStop <= xEnd(43 downto 32);
                   if (xStart(43 downto 32) < 0 and xEnd(43 downto 32) > 1023) then
                      xSize <= to_unsigned(1024, 11);
@@ -899,12 +900,13 @@ begin
                      skip := '1';
                   end if;
                   
+                  checkY := yCoord;
                   if (decMode = 1) then
-                     if (yCoord < to_integer(drawingAreaTop))    then stop := '1'; end if;
-                     if (yCoord > to_integer(drawingAreaBottom)) then skip := '1'; end if;
+                     if (to_signed(yCoord, 11) < to_integer(drawingAreaTop))    then stop := '1'; end if;
+                     if (to_signed(yCoord, 11) > to_integer(drawingAreaBottom)) then skip := '1'; end if;
                   else
-                     if (yCoord > to_integer(drawingAreaBottom)) then stop := '1'; end if;
-                     if (yCoord < to_integer(drawingAreaTop))    then skip := '1'; end if;
+                     if (to_signed(yCoord, 11) > to_integer(drawingAreaBottom)) then stop := '1'; end if;
+                     if (to_signed(yCoord, 11) < to_integer(drawingAreaTop))    then skip := '1'; end if;
                   end if;
                   
                   if (skip = '1') then

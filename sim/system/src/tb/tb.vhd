@@ -190,6 +190,7 @@ begin
       CDDISABLE             => '0',
       ditherOff             => '0',
       analogPad             => '0',
+      fpscountOn            => '1',
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,

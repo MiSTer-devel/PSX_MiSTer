@@ -10,6 +10,9 @@ entity gpu_fillVram is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      interlacedDrawing    : in  std_logic;
+      activeLineLSB        : in  std_logic;
+      
       proc_idle            : in  std_logic;
       fifo_Valid           : in  std_logic;
       fifo_data            : in  std_logic_vector(31 downto 0);
@@ -53,8 +56,9 @@ begin
 
    -- fill VRAM
    process (clk2x)
-      variable row : unsigned(8 downto 0);
-      variable col : unsigned(9 downto 0);
+      variable row     : unsigned(8 downto 0);
+      variable col     : unsigned(9 downto 0);
+      variable lineEnd : std_logic;
    begin
       if rising_edge(clk2x) then
          
@@ -107,17 +111,30 @@ begin
                   timeCnt <= 46 + to_integer(widt * heig);
                   if (pixelStall = '0') then
                   
-                     --todo: interlaced
-                     row := y1 + y;
-                     col := x1 + x;
-   
-                     pixelWrite <= '1';
-                     pixelAddr  <= row & col & '0';
-                     pixelColor <= '0' & color;
+                     lineEnd := '0';
+                  
+                     if (interlacedDrawing = '0' or (activeLineLSB /= y(0))) then
                      
-                     if (x + 1 < widt) then
-                        x <= x + 1;
+                        row := y1 + y;
+                        col := x1 + x;
+      
+                        pixelWrite <= '1';
+                        pixelAddr  <= row & col & '0';
+                        pixelColor <= '0' & color;
+                        
+                        if (x + 1 < widt) then
+                           x <= x + 1;
+                        else
+                           lineEnd := '1';
+                        end if;
+                     
                      else
+                        
+                        lineEnd := '1';
+                        
+                     end if;
+                     
+                     if (lineEnd = '1') then
                         x <= (others => '0');
                         if (y + 1 < heig) then
                            y <= y + 1;
@@ -130,6 +147,7 @@ begin
                            end if;
                         end if;
                      end if;
+                        
                   end if;
                   
                when WAITING =>

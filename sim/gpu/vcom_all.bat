@@ -17,11 +17,14 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/gpu_rect.vhd ^
 ../../rtl/gpu_poly.vhd ^
 ../../rtl/gpu_pixelpipeline.vhd ^
+../../rtl/gpu_overlay.vhd ^
 ../../rtl/gpu_videoout.vhd ^
 ../../rtl/gpu.vhd
 
 vcom -quiet -work sim/tb ^
 ../system/src/tb/globals.vhd ^
 ../system/src/tb/ddrram_model.vhd ^
+../system/src/tb/framebuffer.vhd ^
+../system/src/tb/tb_savestates.vhd ^
 src/tb/tb.vhd
 

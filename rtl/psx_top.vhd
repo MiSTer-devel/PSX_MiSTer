@@ -26,6 +26,7 @@ entity psx_top is
       CDDISABLE             : in  std_logic;
       ditherOff             : in  std_logic;
       analogPad             : in  std_logic;
+      fpscountOn            : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -792,6 +793,7 @@ begin
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
       videoout_on          => videoout_on,
       isPal                => isPal,
+      fpscountOn           => fpscountOn,
       
       bus_addr             => bus_gpu_addr,     
       bus_dataWrite        => bus_gpu_dataWrite,

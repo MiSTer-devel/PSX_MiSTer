@@ -177,8 +177,8 @@ architecture arch of cd_top is
    signal ackRead                   : std_logic := '0';
    signal pause_cmd                 : std_logic := '0';
          
-   signal currentLBA                : integer range 0 to 262143;        
-   signal seekLBA                   : integer range 0 to 262143;       
+   signal currentLBA                : integer range 0 to 524287;        
+   signal seekLBA                   : integer range 0 to 524287;       
    
    signal readAfterSeek             : std_logic := '0';
    signal playAfterSeek             : std_logic := '0';
@@ -190,7 +190,7 @@ architecture arch of cd_top is
 
    -- exchange with data part
    signal readOnDisk                : std_logic := '0';   
-   signal readLBA                   : integer range 0 to 262143; 
+   signal readLBA                   : integer range 0 to 524287; 
    signal trackNumberBCD            : unsigned(7 downto 0) := x"00";
    
    signal copyData                  : std_logic := '0';  
@@ -219,8 +219,8 @@ architecture arch of cd_top is
    signal sectorBuffer_addrB        : std_logic_vector(9 downto 0);
    signal sectorBuffer_DataB        : std_logic_vector(31 downto 0);
       
-   signal positionInIndex           : integer range 0 to 262143; 
-   signal lastReadSector            : integer range 0 to 262143; 
+   signal positionInIndex           : integer range 0 to 524287; 
+   signal lastReadSector            : integer range 0 to 524287; 
    signal fetchCount                : integer range 0 to 588;
    signal fetchDelay                : integer range 0 to 15;
       
@@ -234,7 +234,7 @@ architecture arch of cd_top is
    signal readSubchannelState       : treadSubchannelState := SSUB_IDLE;
    
    signal readSubchannel            : std_logic := '0';
-   signal subchannelLBAwork         : integer range 0 to 262143;  
+   signal subchannelLBAwork         : integer range 0 to 524287;  
    signal sub_SecondsHigh           : unsigned(3 downto 0); 
    signal sub_SecondsLow            : unsigned(3 downto 0); 
    signal sub_MinutesHigh           : unsigned(3 downto 0); 
@@ -293,9 +293,9 @@ architecture arch of cd_top is
    signal ackRead_data              : std_logic := '0';
       
    -- size calculation
-   signal lbaCount                  : integer range 0 to 262143; 
+   signal lbaCount                  : integer range 0 to 524287; 
    signal cdSize_work               : unsigned(29 downto 0);
-   signal lbaCount_work             : integer range 0 to 262143; 
+   signal lbaCount_work             : integer range 0 to 524287; 
    signal cd_SecondsHigh            : unsigned(3 downto 0); 
    signal cd_SecondsLow             : unsigned(3 downto 0); 
    signal cd_MinutesHigh            : unsigned(3 downto 0); 
@@ -1541,7 +1541,7 @@ begin
             subheader            <= ss_in(20);
             lastReadSector       <= to_integer(unsigned(ss_in(6)(19 downto 0))); -- 0
             
-            if (to_integer(unsigned(ss_in(11)(19 downto 0))) <= 262143) then
+            if (to_integer(unsigned(ss_in(11)(19 downto 0))) <= 524287) then
                positionInIndex   <= to_integer(unsigned(ss_in(11)(19 downto 0))); -- 0
             else
                positionInIndex   <= 0;

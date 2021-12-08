@@ -19,6 +19,7 @@ entity gpu is
       REPRODUCIBLEGPUTIMING: in  std_logic;
       videoout_on          : in  std_logic;
       isPal                : in  std_logic;
+      fpscountOn           : in  std_logic;
       
       bus_addr             : in  unsigned(3 downto 0); 
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
@@ -356,6 +357,11 @@ architecture arch of gpu is
    signal videoout_reqVRAMYPos      : unsigned(8 downto 0);
    signal videoout_reqVRAMSize      : unsigned(10 downto 0);
    
+   -- fps counter
+   signal fpscountBCD               : unsigned(7 downto 0) := (others => '0');
+   signal fpscountBCD_next          : unsigned(7 downto 0) := (others => '0');
+   signal fps_SecondCounter         : integer range 0 to 33868799 := 0;
+   signal fps_vramRange_last        : unsigned(18 downto 0) := (others => '0');
    
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
@@ -699,7 +705,7 @@ begin
                if (vDisplayStart > 0) then
                   if (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
                      if (GPUSTAT_VerRes = '1') then
-                        if (interlacedDisplayField = '1') then
+                        if (activeLineLSB = '1') then
                            videoout_lineInNext <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
                         else
                            videoout_lineInNext <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
@@ -719,7 +725,7 @@ begin
                      videoout_fetch      <= '1';
                   elsif (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
                      if (GPUSTAT_VerRes = '1') then
-                        if (interlacedDisplayField = '1') then
+                        if (activeLineLSB = '1') then
                            videoout_lineInNext <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
                         else
                            videoout_lineInNext <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
@@ -733,6 +739,27 @@ begin
               
             end if;
             
+            -- fps counter
+            if (irq_VBLANK = '1') then
+               fps_vramRange_last <= vramRange;
+               if (vramRange /= fps_vramRange_last) then
+                  if (fpscountBCD_next(3 downto 0) = x"9") then
+                     fpscountBCD_next(7 downto 4) <= fpscountBCD_next(7 downto 4) + 1;
+                     fpscountBCD_next(3 downto 0) <= x"0";
+                  else
+                     fpscountBCD_next(3 downto 0) <= fpscountBCD_next(3 downto 0) + 1;
+                  end if;
+               end if;
+            end if;
+            
+            if (fps_SecondCounter = 33868799) then
+               fps_SecondCounter <= 0;
+               fpscountBCD       <= fpscountBCD_next;
+               fpscountBCD_next  <= (others => '0');       
+            else
+               fps_SecondCounter <= fps_SecondCounter + 1;            
+            end if;
+
             -- softreset
             if (softReset = '1') then
                vramRange              <= (others => '0');
@@ -981,6 +1008,9 @@ begin
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
       reset                => softreset or SS_reset,     
+      
+      interlacedDrawing    => interlacedDrawing,
+      activeLineLSB        => activeLineLSB,    
       
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 
@@ -1575,6 +1605,9 @@ begin
       reset                => reset,
           
       videoout_on          => videoout_on,
+      
+      fpscountOn           => fpscountOn,
+      fpscountBCD          => fpscountBCD,
           
       fetch                => videoout_fetch,
       lineIn               => videoout_lineIn,

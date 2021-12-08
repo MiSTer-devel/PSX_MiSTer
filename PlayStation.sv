@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX XXXXXXXXXXXXXXXXxX     XXXXXXX
+// X XXXXXXX XXXXXXXXXXXXXXXXxXx    XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -252,6 +252,7 @@ parameter CONF_STR = {
    "OO,Pad Mode,Digital,Analog;",
 	"-;",
 	"OM,Dithering,On,Off;",
+	"OS,FPS Overlay,Off,On;",
 	"OA,Color,16,24;",
 	"OE,DDR3 Framebuffer,Off,On;",
 	"OB,VRAMViewer,Off,On;",
@@ -505,6 +506,7 @@ psx
    .CDDISABLE(status[21]),
    .ditherOff(status[22]),
    .analogPad(status[24]),
+   .fpscountOn(status[28]),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),

@@ -22,6 +22,7 @@ entity psx_mister is
       CDDISABLE             : in  std_logic;
       ditherOff             : in  std_logic;
       analogPad             : in  std_logic;
+      fpscountOn            : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -138,6 +139,7 @@ begin
       CDDISABLE             => CDDISABLE,
       ditherOff             => ditherOff,
       analogPad             => analogPad,
+      fpscountOn            => fpscountOn,
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,

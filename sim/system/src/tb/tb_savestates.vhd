@@ -14,6 +14,7 @@ entity tb_savestates is
       clk               : in  std_logic;
       reset_in          : in  std_logic;
       reset_out         : out std_logic := '0';
+      loading_savestate : out std_logic := '0';
       SS_reset          : out std_logic := '0';
       SS_DataWrite      : out std_logic_vector(31 downto 0) := (others => '0');
       SS_Adr            : out unsigned(18 downto 0) := (others => '0');
@@ -104,6 +105,8 @@ begin
          wait until rising_edge(clk);
          SS_reset <= '0';
          wait until rising_edge(clk);
+         
+         loading_savestate <= '1';
       
          if (LOADSTATE = '1') then
 
@@ -126,6 +129,7 @@ begin
          reset_out <= '1';
          wait until rising_edge(clk);
          reset_out <= '0';
+         loading_savestate <= '0';
          wait until rising_edge(clk);
       end if;
 
