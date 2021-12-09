@@ -1,7 +1,6 @@
 library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all; 
-use STD.textio.all;
 
 LIBRARY altera_mf;
 USE altera_mf.altera_mf_components.all; 
@@ -641,47 +640,6 @@ begin
          
       end if;
    end process; 
-   
-   -- synthesis translate_off
-   
-   goutput : if 1 = 1 generate
-      signal pixelCount          : integer := 0;
-   begin
-   
-      process
-         file outfile      : text;
-         variable f_status : FILE_OPEN_STATUS;
-         variable line_out : line;
-      begin
-   
-         file_open(f_status, outfile, "R:\\debug_pixel_sim.txt", write_mode);
-         file_close(outfile);
-         
-         file_open(f_status, outfile, "R:\\debug_pixel_sim.txt", append_mode);
-         
-         while (true) loop
-            
-            wait until rising_edge(clk2x);
-            
-            if (pixelWrite = '1' and pixelCount >= 0) then
-            
-               write(line_out, to_integer(pixelAddr(10 downto 1)));
-               write(line_out, string'(" ")); 
-               write(line_out, to_integer(pixelAddr(19 downto 11)));
-               write(line_out, string'(" ")); 
-               write(line_out, to_integer(unsigned(pixelColor)));
-               writeline(outfile, line_out);
-               pixelCount <= pixelCount + 1;
-   
-            end if;
-            
-         end loop;
-         
-      end process;
-   
-   end generate goutput;
-   
-   -- synthesis translate_on
 
 
 end architecture;

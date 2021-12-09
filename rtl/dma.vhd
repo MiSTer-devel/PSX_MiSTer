@@ -79,10 +79,7 @@ architecture arch of dma is
       WAITREAD,
       WORKING,
       STOPPING,
-      PAUSING,
-      GPUBUSY,
-      TIMEUP,
-      GPU_PAUSING
+      PAUSING
    );
    signal dmaState : tdmaState := OFF;
 
@@ -166,7 +163,7 @@ architecture arch of dma is
   
 begin 
 
-   dmaOn <= '1' when (dmaState = WAITING or dmaState = READHEADER or dmaState = WAITREAD or dmaState = WORKING or dmaState = STOPPING or dmaState = PAUSING or dmaState = GPU_PAUSING) else '0';
+   dmaOn <= '1' when (dmaState = WAITING or dmaState = READHEADER or dmaState = WAITREAD or dmaState = WORKING or dmaState = STOPPING or dmaState = PAUSING) else '0';
 
    ram_refresh <= '1' when ((reset = '1') or (dmaState = WAITING and cpuPaused = '1' and waitcnt = 9)) else '0';
    ram_be      <= "1111";
@@ -186,7 +183,6 @@ begin
    DMA_MDEC_readEna  <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 1 and toDevice = '0') else '0';
    
    DMA_GPU_waiting   <= '1' when (dmaOn = '1' and activeChannel = 2) else
-                        '1' when (dmaState = GPUBUSY) else
                         '1' when (DPCR((2 * 4) + 3) = '1' and dmaArray(2).D_CHCR(24) = '1') else 
                         '0';
                         
@@ -216,7 +212,7 @@ begin
    ss_out(27)(23 downto 0)  <= std_logic_vector(DICR);    
    ss_out(27)(30 downto 24) <= std_logic_vector(DICR_IRQs);
 
-   ss_out(4)(7 downto 0)    <= x"07" when (dmaState = GPUBUSY) else x"00";
+   ss_out(4)(7 downto 0)    <= x"07" when (DMA_GPU_waiting = '1') else x"00";
    ss_out(4)(8)             <= isOn;         
    ss_out(2)(18 downto 16)  <= std_logic_vector(to_unsigned(activeChannel, 3));       
    ss_out(4)(9)             <= paused;       
@@ -249,9 +245,6 @@ begin
          if (reset = '1') then
          
             dmaState <= OFF;
-            if (ss_in(4)(7 downto 0) = x"07") then
-               dmaState <= GPUBUSY;
-            end if;
          
             for i in 0 to 6 loop
                dmaArray(i).D_MADR            <= unsigned(ss_in(28 + i)(23 downto 0));
@@ -314,7 +307,12 @@ begin
                   case (bus_addr(3 downto 2)) is
                      when "00" => bus_dataRead <= x"00" & std_logic_vector(dmaArray(channel).D_MADR);
                      when "01" => bus_dataRead <= std_logic_vector(dmaArray(channel).D_BCR); 
-                     when "10" => bus_dataRead <= std_logic_vector(dmaArray(channel).D_CHCR);
+                     when "10" => 
+                        bus_dataRead <= std_logic_vector(dmaArray(channel).D_CHCR);
+                        -- deliver busy bit even if it was cleared by cpu already when channel is still running, maybe R/W bits should be seperate?
+                        if (dmaState /= OFF and activeChannel = channel) then 
+                           bus_dataRead(24) <= '1';
+                        end if;
                      when others => bus_dataRead <= (others => '1');
                   end case;
                else
@@ -385,23 +383,14 @@ begin
                      if (dmaArray(i).D_CHCR(24) = '1') then -- start/busy
                         if (isOn = '0' or activeChannel /= i) then
                         
-                           if (dmaState = GPUBUSY) then
-                              gpupaused <= '1';
-                              paused    <= '0';
-                           end if;
-                           
-                           if (dmaState = TIMEUP) then
-                              dmaArray(activeChannel).timeupPending <= '1';
-                              paused    <= '0';
-                           end if;
-                           
-                           if (triggerNew = '1' or (dmaState /= OFF and dmaState /= TIMEUP and dmaState /= GPUBUSY)) then
+                           if (triggerNew = '1' or (dmaState /= OFF)) then
                               dmaArray(i).requestsPending <= '1';
                            else
                               -- todo : priority
                               triggerNew     := '1';
                               triggerchannel := i;
                            end if;
+                           
                         end if;
                      end if;
                   end if;
@@ -630,7 +619,7 @@ begin
                                     waitcnt  <= 10;
                                     autoread <= '0';
                                  else
-                                    dmaState <= GPU_PAUSING;
+                                    dmaState <= PAUSING;
                                     paused   <= '1';
                                     autoread <= '0';
                                  end if;
@@ -653,14 +642,6 @@ begin
                               irqOut <= '1';
                            end if;
                         end if;
-                        
-                        if (gpupaused = '1') then
-                           isOn          <= '1';
-                           paused        <= '1';
-                           dmaState      <= GPUBUSY;
-                           activeChannel <= 2;
-                           gpupaused     <= '0';
-                        end if;
                      end if;
                   end if;
                
@@ -670,26 +651,6 @@ begin
                         dmaState <= OFF;
                         isOn     <= '0';
                      end if;
-                  end if;
-               
-               when TIMEUP =>
-               
-               when GPU_PAUSING =>
-                  if (fifoOut_Done = '1' and fifoOut_Wr = '0' and requestOnFly = 0) then
-                     if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
-                        dmaState <= GPUBUSY;
-                        paused   <= '1';
-                        autoread <= '0';
-                     end if;
-                  end if;
-               
-               when GPUBUSY =>
-                  if (gpu_dmaRequest = '1') then
-                     dmaState    <= WAITING;
-                     waitcnt     <= 9;
-                     autoread    <= '0';
-                     paused      <= '0';
-                     REP_target  <= 32;
                   end if;
             
             end case;

@@ -1720,6 +1720,44 @@ begin
    
    end generate goutput;
    
+   goutput2 : if 1 = 1 generate
+      signal pixelCount          : integer := 0;
+   begin
+   
+      process
+         file outfile      : text;
+         variable f_status : FILE_OPEN_STATUS;
+         variable line_out : line;
+      begin
+   
+         file_open(f_status, outfile, "R:\\debug_pixel_sim.txt", write_mode);
+         file_close(outfile);
+         
+         file_open(f_status, outfile, "R:\\debug_pixel_sim.txt", append_mode);
+         
+         while (true) loop
+            
+            wait until rising_edge(clk2x);
+            
+            if ((pipeline_pixelWrite = '1' or vram2vram_pixelWrite = '1') and pixelCount >= 0) then
+            
+               write(line_out, to_integer(pixelAddr(10 downto 1)));
+               write(line_out, string'(" ")); 
+               write(line_out, to_integer(pixelAddr(19 downto 11)));
+               write(line_out, string'(" ")); 
+               write(line_out, to_integer(unsigned(pixelColor)));
+               writeline(outfile, line_out);
+               pixelCount <= pixelCount + 1;
+   
+            end if;
+            
+         end loop;
+         
+      end process;
+   
+   end generate goutput2;
+   
+   
    -- synthesis translate_on
 
 end architecture;

@@ -1991,6 +1991,7 @@ begin
          variable clkCounter           : unsigned(31 downto 0);
             
          variable bus_read_1           : std_logic;
+         variable bus_addr_1           : unsigned(3 downto 0);
          variable cmdAck_1             : std_logic;
          variable driveAck_1           : std_logic;
          variable ackDrive_1           : std_logic;
@@ -2151,14 +2152,14 @@ begin
                   write(line_out, to_hstring(clkCounter - 1));
                end if;
                write(line_out, string'(" 0")); 
-               write(line_out, to_hstring(bus_addr));
+               write(line_out, to_hstring(bus_addr_1));
                write(line_out, string'(" 000000")); 
                write(line_out, to_hstring(bus_dataRead));
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
             end if; 
             bus_read_1 := bus_read;
-            
+            bus_addr_1 := bus_addr;
             
             outputCnt <= newoutputCnt;
             clkCounter := clkCounter + 1;

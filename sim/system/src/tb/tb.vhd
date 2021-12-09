@@ -125,13 +125,19 @@ architecture arch of etb is
    signal Analog2Y            : signed(7 downto 0) := (others => '0'); 
    
    --cd
+   type filetype is file of integer;
+   type t_cddata is array(0 to (2**28)-1) of integer;
+   signal cdLoaded            : std_logic := '0';
+   
    signal cd_req              : std_logic;
    signal cd_addr             : std_logic_vector(26 downto 0) := (others => '0');
-   signal cd_data             : std_logic_vector(31 downto 0);
-   signal cd_done             : std_logic := '0';
    
-   signal ram2_do             : std_logic_vector(127 downto 0);
-   
+   signal cd_hps_req          : std_logic := '0';
+   signal cd_hps_lba          : std_logic_vector(31 downto 0);
+   signal cd_hps_ack          : std_logic;
+   signal cd_hps_write        : std_logic;
+   signal cd_hps_data         : std_logic_vector(15 downto 0);
+
    signal cdSize              : unsigned(29 downto 0);
    
    
@@ -216,16 +222,16 @@ begin
       -- cd
       fastCD                => '0',
       cd_Size               => cdSize,
-      cd_req                => cd_req, 
+      cd_req                => cd_req,
       cd_addr               => cd_addr,
-      cd_data               => cd_data,
-      cd_done               => cd_done,
-      cd_hps_on             => '0',
-      cd_hps_req            => open,
-      cd_hps_lba            => open,
-      cd_hps_ack            => '0',
-      cd_hps_write          => '0',
-      cd_hps_data           => x"0000",
+      cd_data               => x"00000000",
+      cd_done               => '0',
+      cd_hps_on             => '1',
+      cd_hps_req            => cd_hps_req,  
+      cd_hps_lba            => cd_hps_lba,  
+      cd_hps_ack            => cd_hps_ack,  
+      cd_hps_write          => cd_hps_write,
+      cd_hps_data           => cd_hps_data, 
       -- video
       videoout_on           => '1',
       isPal                 => '0',
@@ -240,7 +246,7 @@ begin
       KeyTriangle           => KeyTriangle,           
       KeyCircle             => KeyCircle,           
       KeyCross              => KeyCross,           
-      KeySquare             => '1', --KeySquare,           
+      KeySquare             => KeySquare,           
       KeySelect             => KeySelect,      
       KeyStart              => KeyStart,       
       KeyRight              => KeyRight,       
@@ -292,7 +298,7 @@ begin
    isdram_model : entity tb.sdram_model3x 
    generic map
    (
-      DOREFRESH     => '1',
+      DOREFRESH     => '0',
       SCRIPTLOADING => '1'
    )
    port map
@@ -313,30 +319,94 @@ begin
       ram_idle     => ram_idle
    );
    
-   isdram_model2 : entity tb.sdram_model 
-   generic map
-   (
-      FILELOADING => '1',
-      INITFILE    => ""
-   )
-   port map
-   (
-      clk          => clk33,
-      refresh      => '0',
-      addr         => cd_addr,
-      req          => cd_req,
-      ram_128      => '0',
-      rnw          => '1',
-      be           => "0000",
-      di           => x"00000000",
-      do           => ram2_do,
-      done         => cd_done,
-      reqprocessed => open,
-      ram_idle     => open,
-      fileSize     => cdSize
-   );
+   -- hps emulation
+   process
+      variable data           : t_cddata := (others => 0);
+      file infile             : filetype;
+      variable f_status       : FILE_OPEN_STATUS;
+      variable read_byte0     : std_logic_vector(7 downto 0);
+      variable read_byte1     : std_logic_vector(7 downto 0);
+      variable read_byte2     : std_logic_vector(7 downto 0);
+      variable read_byte3     : std_logic_vector(7 downto 0);
+      variable next_vector    : bit_vector (2351 downto 0);
+      variable next_int       : integer;
+      variable actual_len     : natural;
+      variable targetpos      : integer;
+      variable cdData         : std_logic_vector(31 downto 0);
+      
+      -- copy from std_logic_arith, not used here because numeric std is also included
+      function CONV_STD_LOGIC_VECTOR(ARG: INTEGER; SIZE: INTEGER) return STD_LOGIC_VECTOR is
+        variable result: STD_LOGIC_VECTOR (SIZE-1 downto 0);
+        variable temp: integer;
+      begin
+ 
+         temp := ARG;
+         for i in 0 to SIZE-1 loop
+ 
+         if (temp mod 2) = 1 then
+            result(i) := '1';
+         else 
+            result(i) := '0';
+         end if;
+ 
+         if temp > 0 then
+            temp := temp / 2;
+         elsif (temp > integer'low) then
+            temp := (temp - 1) / 2; -- simulate ASR
+         else
+            temp := temp / 2; -- simulate ASR
+         end if;
+        end loop;
+ 
+        return result;  
+      end;
+   begin
+      
+      if (cdLoaded = '0') then
+      
+         file_open(f_status, infile, "x", read_mode);
+         
+         targetpos := 0;
+         
+         while (not endfile(infile)) loop
+            
+            read(infile, next_int);  
+            
+            data(targetpos) := next_int;
+            targetpos       := targetpos + 1;
+
+         end loop;
+         
+         file_close(infile);
+         
+         cdSize <= to_unsigned(targetpos * 4, 30);
+         cdLoaded <= '1';
+      end if;
    
-   cd_data <= ram2_do(31 downto 0);
+   
+      wait until rising_edge(clk33);
+      if (cd_hps_req = '1') then
+         for i in 0 to 100 loop
+            wait until rising_edge(clk33);
+         end loop;
+         cd_hps_ack <= '1';
+         wait until rising_edge(clk33);
+         cd_hps_ack <= '0';
+         wait until rising_edge(clk33);
+         
+         for i in 0 to 587 loop
+            cdData := std_logic_vector(to_signed(data(to_integer(unsigned(cd_hps_lba)) * (2352 / 4) + i), 32));
+            
+            cd_hps_data  <= cdData(15 downto 0);
+            cd_hps_write <= '1';
+            wait until rising_edge(clk33);
+            cd_hps_data  <= cdData(31 downto 16);
+            wait until rising_edge(clk33);
+            cd_hps_write <= '0';
+         end loop;
+         
+      end if;
+   end process;
    
    iframebuffer : entity work.framebuffer
    port map
