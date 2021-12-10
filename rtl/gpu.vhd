@@ -21,6 +21,17 @@ entity gpu is
       isPal                : in  std_logic;
       fpscountOn           : in  std_logic;
       
+      cdSlow               : in  std_logic;
+      
+      errorOn              : in  std_logic;
+      errorEna             : in  std_logic;
+      errorCode            : in  unsigned(3 downto 0);
+      
+      errorLINE            : out std_logic;
+      errorRECT            : out std_logic;
+      errorPOLY            : out std_logic;
+      errorGPU             : out std_logic;
+      
       bus_addr             : in  unsigned(3 downto 0); 
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
       bus_read             : in  std_logic;
@@ -166,6 +177,8 @@ architecture arch of gpu is
    signal proc_idle                 : std_logic;
    signal proc_done                 : std_logic;
    signal proc_requestFifo          : std_logic;
+   signal timeout                   : integer range 0 to 67108863 := 0;
+   
    signal pixelStall                : std_logic;
    signal pixelColor                : std_logic_vector(15 downto 0);
    signal pixelAddr                 : unsigned(19 downto 0);
@@ -861,6 +874,15 @@ begin
          textureWindow_OR_X      <= (textureWindow(4 downto 0) and textureWindow(14 downto 10)) & "000";
          textureWindow_OR_Y      <= (textureWindow(9 downto 5) and textureWindow(19 downto 15)) & "000";
       
+         errorGPU <= '0';
+         if (proc_idle = '1') then
+            timeout <= 0;
+         elsif (timeout < 67108863) then
+            timeout  <= timeout + 1;
+         else
+            errorGPU <= '1';
+         end if;
+      
          if (reset = '1') then
          
             proc_idle <= '1';
@@ -1125,7 +1147,9 @@ begin
       ce                   => ce,        
       reset                => softreset or SS_reset,
 
-      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,      
+      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
+
+      error                => errorLINE,
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
@@ -1181,6 +1205,8 @@ begin
       
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
       
+      error                => errorRECT,
+      
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
       activeLineLSB        => activeLineLSB,    
@@ -1234,7 +1260,9 @@ begin
       ce                   => ce,        
       reset                => softreset or SS_reset,   
 
-      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,      
+      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,    
+
+      error                => errorPOLY,
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
@@ -1608,7 +1636,13 @@ begin
       
       fpscountOn           => fpscountOn,
       fpscountBCD          => fpscountBCD,
-          
+      
+      cdSlow               => cdSlow,      
+                           
+      errorOn              => errorOn,  
+      errorEna             => errorEna, 
+      errorCode            => errorCode, 
+      
       fetch                => videoout_fetch,
       lineIn               => videoout_lineIn,
       lineInNext           => videoout_lineInNext,

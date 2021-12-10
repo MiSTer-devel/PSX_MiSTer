@@ -23,10 +23,11 @@ entity psx_top is
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
-      CDDISABLE             : in  std_logic;
+      INSTANTSEEK           : in  std_logic;
       ditherOff             : in  std_logic;
       analogPad             : in  std_logic;
       fpscountOn            : in  std_logic;
+      errorOn               : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -127,7 +128,7 @@ architecture arch of psx_top is
    signal pausing                : std_logic := '0';
    
    -- Busses
-   signal bus_exp1_addr          : unsigned(22 downto 0); 
+   --signal bus_exp1_addr          : unsigned(22 downto 0); 
    --signal bus_exp1_dataWrite     : std_logic_vector(31 downto 0);
    signal bus_exp1_read          : std_logic;
    --signal bus_exp1_write         : std_logic;
@@ -152,6 +153,12 @@ architecture arch of psx_top is
    signal bus_sio_write          : std_logic;
    signal bus_sio_writeMask      : std_logic_vector(3 downto 0);
    signal bus_sio_dataRead       : std_logic_vector(31 downto 0);
+   
+   signal bus_memc2_addr         : unsigned(3 downto 0); 
+   signal bus_memc2_dataWrite    : std_logic_vector(31 downto 0);
+   signal bus_memc2_read         : std_logic;
+   signal bus_memc2_write        : std_logic;
+   signal bus_memc2_dataRead     : std_logic_vector(31 downto 0);
    
    signal bus_irq_addr           : unsigned(3 downto 0); 
    signal bus_irq_dataWrite      : std_logic_vector(31 downto 0);
@@ -200,7 +207,13 @@ architecture arch of psx_top is
    signal bus_exp2_read          : std_logic;
    signal bus_exp2_write         : std_logic;
    signal bus_exp2_dataRead      : std_logic_vector(31 downto 0);
-   signal bus_exp2_writeMask     : std_logic_vector(3 downto 0);
+   signal bus_exp2_writeMask     : std_logic_vector(3 downto 0);   
+   
+   signal bus_exp3_dataWrite     : std_logic_vector(31 downto 0);
+   signal bus_exp3_read          : std_logic;
+   signal bus_exp3_write         : std_logic;
+   signal bus_exp3_dataRead      : std_logic_vector(31 downto 0);
+   signal bus_exp3_writeMask     : std_logic_vector(3 downto 0);
    
    -- Memory mux
    signal memMuxIdle             : std_logic;
@@ -309,6 +322,18 @@ architecture arch of psx_top is
    signal gte_writeEna           : std_logic; 
    signal gte_cmdData            : unsigned(31 downto 0);
    signal gte_cmdEna             : std_logic; 
+
+   -- overlay + error codes
+   signal cdSlow                 : std_logic;
+   signal errorEna               : std_logic;
+   signal errorCode              : unsigned(3 downto 0);
+   
+   signal errorCD                : std_logic;
+   signal errorCPU               : std_logic;
+   signal errorLINE              : std_logic;
+   signal errorRECT              : std_logic;
+   signal errorPOLY              : std_logic;
+   signal errorGPU               : std_logic;
 
    -- savestates
    signal loading_savestate      : std_logic;
@@ -427,6 +452,11 @@ begin
             bus_exp1_dataRead <= (others => '1');
          end if;
       
+         bus_exp3_dataRead <= (others => '0');
+         if (bus_exp3_read = '1') then
+            bus_exp3_dataRead <= (others => '1');
+         end if;
+      
       end if;
    end process;
  
@@ -485,6 +515,31 @@ begin
       end if;
    end process;
    
+   -- error codes
+      process (clk1x)
+   begin
+      if rising_edge(clk1x) then
+         if (reset_intern = '1') then
+            errorEna  <= '0';
+            errorCode <= x"0";
+         else
+         
+            if (errorEna = '0') then
+               if (errorCD   = '1') then errorEna  <= '1'; errorCode <= x"1"; end if;
+               if (errorCPU  = '1') then errorEna  <= '1'; errorCode <= x"2"; end if;
+               if (errorGPU  = '1') then errorEna  <= '1'; errorCode <= x"3"; end if;
+            end if;
+            
+            if (errorEna = '0' or errorCode = x"3") then
+               if (errorLINE = '1') then errorEna  <= '1'; errorCode <= x"4"; end if;
+               if (errorRECT = '1') then errorEna  <= '1'; errorCode <= x"5"; end if;
+               if (errorPOLY = '1') then errorEna  <= '1'; errorCode <= x"6"; end if;
+            end if;
+            
+         end if;
+      end if;
+   end process;
+   
    imemctrl : entity work.memctrl
    port map
    (
@@ -496,7 +551,20 @@ begin
       bus_dataWrite        => bus_memc_dataWrite,
       bus_read             => bus_memc_read,     
       bus_write            => bus_memc_write,    
-      bus_dataRead         => bus_memc_dataRead
+      bus_dataRead         => bus_memc_dataRead,      
+      
+      bus2_addr            => bus_memc2_addr,     
+      bus2_dataWrite       => bus_memc2_dataWrite,
+      bus2_read            => bus_memc2_read,     
+      bus2_write           => bus_memc2_write,    
+      bus2_dataRead        => bus_memc2_dataRead,
+
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(4 downto 0),      
+      SS_wren              => SS_wren(7),     
+      SS_rden              => SS_rden(7),     
+      SS_DataRead          => SS_DataRead_MEMORY      
    );
 
    ijoypad: entity work.joypad
@@ -559,7 +627,14 @@ begin
       bus_read             => bus_sio_read,     
       bus_write            => bus_sio_write,    
       bus_writeMask        => bus_sio_writeMask,
-      bus_dataRead         => bus_sio_dataRead 
+      bus_dataRead         => bus_sio_dataRead,
+      
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(2 downto 0),      
+      SS_wren              => SS_wren(11),     
+      SS_rden              => SS_rden(11),     
+      SS_DataRead          => SS_DataRead_SIO
    );
    
    irq_SIO       <= '0'; -- todo
@@ -740,9 +815,12 @@ begin
       ce                   => ce,   
       reset                => reset_intern,
      
-      CDDISABLE            => CDDISABLE,
+      INSTANTSEEK          => INSTANTSEEK,
       hasCD                => '1',
       fastCD               => fastCD,
+      
+      cdSlow               => cdSlow,
+      error                => errorCD,
           
       irqOut               => irq_CDROM,
                             
@@ -794,6 +872,17 @@ begin
       videoout_on          => videoout_on,
       isPal                => isPal,
       fpscountOn           => fpscountOn,
+      
+      cdSlow               => cdSlow,
+      
+      errorOn              => errorOn,  
+      errorEna             => errorEna, 
+      errorCode            => errorCode,
+      
+      errorLINE            => errorLINE,
+      errorRECT            => errorRECT,
+      errorPOLY            => errorPOLY,
+      errorGPU             => errorGPU, 
       
       bus_addr             => bus_gpu_addr,     
       bus_dataWrite        => bus_gpu_dataWrite,
@@ -975,7 +1064,7 @@ begin
       mem_dataCache        => mem_dataCache, 
       mem_done             => mem_done,
 
-      bus_exp1_addr        => bus_exp1_addr,   
+      --bus_exp1_addr        => bus_exp1_addr,   
       --bus_exp1_dataWrite   => bus_exp1_dataWrite,
       bus_exp1_read        => bus_exp1_read,   
       --bus_exp1_write       => bus_exp1_write,  
@@ -1000,6 +1089,12 @@ begin
       bus_sio_write        => bus_sio_write,    
       bus_sio_writeMask    => bus_sio_writeMask,
       bus_sio_dataRead     => bus_sio_dataRead, 
+
+      bus_memc2_addr       => bus_memc2_addr,     
+      bus_memc2_dataWrite  => bus_memc2_dataWrite,
+      bus_memc2_read       => bus_memc2_read,     
+      bus_memc2_write      => bus_memc2_write,    
+      bus_memc2_dataRead   => bus_memc2_dataRead, 
 
       bus_irq_addr         => bus_irq_addr,     
       bus_irq_dataWrite    => bus_irq_dataWrite,
@@ -1050,6 +1145,11 @@ begin
       bus_exp2_dataRead    => bus_exp2_dataRead, 
       bus_exp2_writeMask   => bus_exp2_writeMask,
       
+      --bus_exp3_dataWrite   => bus_exp3_dataWrite,
+      bus_exp3_read        => bus_exp3_read,     
+      --bus_exp3_write       => bus_exp3_write,    
+      bus_exp3_dataRead    => bus_exp3_dataRead, 
+      
       loading_savestate    => loading_savestate,
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
@@ -1068,6 +1168,8 @@ begin
       reset             => reset_intern,
          
       irqRequest        => irqRequest,
+      
+      error             => errorCPU,
          
       mem_request       => mem_request,  
       mem_rnw           => mem_rnw,      
@@ -1150,10 +1252,6 @@ begin
    ddr3_BE       <= ss_ram_BE           when (ddr3_savestate = '1') else vram_BE;        
    ddr3_WE       <= ss_ram_WE           when (ddr3_savestate = '1') else vram_WE;        
    ddr3_RD       <= ss_ram_RD           when (ddr3_savestate = '1') else vram_RD;        
-   
-   
-   SS_DataRead_MEMORY <= (others => '0'); -- todo!
-   SS_DataRead_SIO    <= (others => '0');
    
    isavestates : entity work.savestates
    generic map

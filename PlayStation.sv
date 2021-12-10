@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX XXXXXXXXXXXXXXXXxXx    XXXXXXX
+// X XXXXXXX XXXXXXXXXXXXXXXXxXxx   XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -253,6 +253,7 @@ parameter CONF_STR = {
 	"-;",
 	"OM,Dithering,On,Off;",
 	"OS,FPS Overlay,Off,On;",
+	"OT,Error Overlay,On,Off;",
 	"OA,Color,16,24;",
 	"OE,DDR3 Framebuffer,Off,On;",
 	"OB,VRAMViewer,Off,On;",
@@ -261,7 +262,7 @@ parameter CONF_STR = {
    "OJ,RepTimingGPU,Off,On;",
    "OK,RepTimingDMA,Off,On;",
    "OQ,DMAinBLOCKs,Off,On;",
-   "OL,CD Disable,Off,On;",
+   "OL,CD Instant Seek,Off,On;",
    "OP,Pause when OSD is open,Off,On;",
 	"- ;",
 
@@ -503,10 +504,11 @@ psx
    .REPRODUCIBLEGPUTIMING(status[19]),
    .REPRODUCIBLEDMATIMING(status[20]),
    .DMABLOCKATONCE(status[26]),
-   .CDDISABLE(status[21]),
+   .INSTANTSEEK(status[21]),
    .ditherOff(status[22]),
    .analogPad(status[24]),
    .fpscountOn(status[28]),
+   .errorOn(~status[29]),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),

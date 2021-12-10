@@ -15,6 +15,8 @@ entity gpu_line is
       
       REPRODUCIBLEGPUTIMING: in  std_logic;
       
+      error                : out std_logic;
+      
       DrawPixelsMask       : in  std_logic;
       interlacedDrawing    : in  std_logic;
       activeLineLSB        : in  std_logic;
@@ -147,6 +149,8 @@ architecture arch of gpu_line is
    signal pixelCnt            : unsigned(9 downto 0) := (others => '0');
    
    signal firstPixel          : std_logic;
+   
+   signal timeout             : integer range 0 to 67108863 := 0;
 
 begin 
 
@@ -186,6 +190,15 @@ begin
             
             if (recstate /= REQUESTIDLE) then
                drawTiming <= drawTiming + 1;
+            end if;
+            
+            error <= '0';
+            if (recstate = REQUESTIDLE) then
+               timeout <= 0;
+            elsif (timeout < 67108863) then
+               timeout  <= timeout + 1;
+            else
+               error <= '1';
             end if;
          
             case (recstate) is

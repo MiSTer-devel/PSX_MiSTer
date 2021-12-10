@@ -15,6 +15,17 @@ In Framebuffer mode you can choose to view:
 - normal drawing area without any overscan cutoff
 - full VRAM as 1024x512 pixel image (debug mode)
 
+# Error messages
+
+If there is a recognized problem, an overlay is displayed, showing which error has occured.
+You can hide these messages with an OSD option, by default they are on.
+
+List of Errors:
+E1     - missing CD command
+E2     - CPU exception
+E3..E6 - GPU hangs (e.g. corrupt display list)
+
+
 # Status
 
 Work in progress, don't report any bugs!
@@ -33,8 +44,7 @@ GPU    : 80%
 
 Memory : 50%
 - SPU RAM not implemented
-- rotate register read16 missing
-- some memory delay registers missing
+- rotate register not done for all busses
 
 IRQ    : 40%
 - irq_SIO missing     
@@ -44,6 +54,7 @@ IRQ    : 40%
 PAD    : 40%
 - memory card not implemented
 - special controllers not supported
+- second controller port not supported
 
 DMA    : 60%
 - DMA chopping not implemented 

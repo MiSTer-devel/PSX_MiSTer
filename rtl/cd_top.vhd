@@ -12,12 +12,14 @@ entity cd_top is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
-      CDDISABLE            : in  std_logic;
+      INSTANTSEEK          : in  std_logic;
       hasCD                : in  std_logic;
       cdSize               : in  unsigned(29 downto 0);
       fastCD               : in  std_logic;
       
       fullyIdle            : out std_logic;
+      cdSlow               : out std_logic := '0';
+      error                : out std_logic := '0';
       
       irqOut               : out std_logic := '0';
       
@@ -224,6 +226,8 @@ architecture arch of cd_top is
    signal fetchCount                : integer range 0 to 588;
    signal fetchDelay                : integer range 0 to 15;
       
+   signal slow_timeout              : integer range 0 to 16777215 := 0;
+      
    -- read subchannel
    type treadSubchannelState is
    (
@@ -391,7 +395,7 @@ begin
             CDROM_STATUS(6) <= not FifoData_Empty;       -- DRQSTS  Data fifo empty      (0=Empty) ;triggered after reading LAST byte
             CDROM_STATUS(7) <= cmdPending;               -- BUSYSTS Command/parameter transmission busy  (1=Busy)  
          
-            if (bus_write = '1' and CDDISABLE = '0') then
+            if (bus_write = '1') then
             
                if (bus_addr = x"0") then
                   CDROM_STATUS(1 downto 0) <= bus_dataWrite(1 downto 0);
@@ -466,7 +470,7 @@ begin
             
             end if; -- end bus write
          
-            if (bus_read = '1' and CDDISABLE = '0') then
+            if (bus_read = '1') then
                bus_dataRead <= (others => '0');
                case (bus_addr) is
                   when x"0" => 
@@ -554,10 +558,6 @@ begin
                   irqOut <= '1';
                end if;
             end if; 
-            
-            if (CDDISABLE = '1') then
-               irqOut <= '0';
-            end if;
 
          end if; -- ce
       end if;
@@ -606,6 +606,8 @@ begin
          FifoResponse_Wr         <= '0';
          FifoParam_Rd            <= '0';
          FifoParam_reset         <= '0';
+         
+         error                   <= '0';
       
          if (reset = '1') then
             
@@ -714,20 +716,25 @@ begin
                         
                      when x"03" => -- play
                         --todo
+                        error  <= '1';
                         
                      when x"04" => -- forward
                         --todo
+                        error  <= '1';
                         
                      when x"05" => -- backward
                         --todo
+                        error  <= '1';
                         
                      --when "06" => readN at readS 0x1B
                      
                      when x"07" => -- MotorOn
                         --todo
+                        error  <= '1';
                         
                      when x"08" => -- Stop
                         --todo
+                        error  <= '1';
                         
                      when x"09" => -- pause
                         cmdAck      <= '1';
@@ -791,8 +798,10 @@ begin
                      
                      when x"0F" => -- getparam
                         --todo
+                        error  <= '1';
                         
                      when x"10" => -- GetLocL
+                        cmdPending        <= '0';
                         if (hasCD = '0') then
                            errorResponseCmd_new    <= '1';
                            errorResponseCmd_error  <= x"01";
@@ -800,10 +809,10 @@ begin
                         else
                            -- todo: update position?
                            cmdIRQ            <= '1';
-                           cmdPending        <= '0';
                         end if;
                         
                      when x"11" => -- GetLocP
+                        cmdPending        <= '0';
                         if (hasCD = '0') then
                            errorResponseCmd_new    <= '1';
                            errorResponseCmd_error  <= x"01";
@@ -811,11 +820,11 @@ begin
                         else
                            -- todo: update position?
                            cmdIRQ            <= '1';
-                           cmdPending        <= '0';
                         end if;
                         
                      when x"12" => -- SetSession
                         --todo
+                        error  <= '1';
                         
                      when x"13" => -- GetTN
                         cmdIRQ         <= '1';
@@ -823,6 +832,7 @@ begin
                         
                      when x"14" => -- GetTD
                         FifoParam_Rd <= '1';
+                        cmdPending   <= '0';
                         if (hasCD = '0') then
                            errorResponseCmd_new    <= '1';
                            errorResponseCmd_error  <= x"01";
@@ -833,7 +843,6 @@ begin
                            errorResponseCmd_reason <= x"10";
                         else
                            cmdIRQ         <= '1';
-                           cmdPending     <= '0';
                         end if;
                         
                      when x"15" | x"16" => -- SeekL/SeekP
@@ -844,6 +853,7 @@ begin
                         setLocActive          <= '0';
                         
                      when x"17" | x"18" => -- SetClock/GetClock
+                        cmdPending <= '0';
                         errorResponseCmd_new    <= '1';
                         errorResponseCmd_error  <= x"01";
                         errorResponseCmd_reason <= x"40";
@@ -886,19 +896,23 @@ begin
                         end if;
                         
                      when x"1C" => -- Init
+                        cmdPending <= '0';
                         errorResponseCmd_new    <= '1';
                         errorResponseCmd_error  <= x"01";
                         errorResponseCmd_reason <= x"40";
                         
                      when x"1D" => -- GetQ
+                        cmdPending <= '0';
                         errorResponseCmd_new    <= '1';
                         errorResponseCmd_error  <= x"01";
                         errorResponseCmd_reason <= x"40";
                         
                      when x"1E" => -- ReadTOC
                         --todo
+                        error  <= '1';
                      
                      when x"1F" => -- VideoCD
+                        cmdPending <= '0';
                         errorResponseCmd_new    <= '1';
                         errorResponseCmd_error  <= x"01";
                         errorResponseCmd_reason <= x"40";
@@ -1361,8 +1375,13 @@ begin
                internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                internalStatus(1)          <= '1'; -- motor on
                internalStatus(6)          <= '1'; -- seeking
-               driveDelay     <= 19999 - 2; -- todo: real seek time
-               driveDelayNext <= 19999 - 2; -- todo: real seek time
+               if (INSTANTSEEK = '1') then
+                  driveDelay     <= 19999 - 2;
+                  driveDelayNext <= 19999 - 2;
+               else
+                  driveDelay     <= READSPEED2X - 2; -- todo: real seek time
+                  driveDelayNext <= READSPEED2X - 2; -- todo: real seek time
+               end if;
                driveBusy      <= '1';
                if (nextCmd = x"15") then
                   driveState  <= DRIVE_SEEKLOGICAL;
@@ -1530,6 +1549,15 @@ begin
          
          sectorBuffer_wrenA  <= '0';
          sectorBuffers_wrenA <= '0';
+         
+         if ((sectorFetchState /= SFETCH_IDLE or sectorProcessState/= SPROC_IDLE or copyState /= COPY_IDLE) and driveDelay = 0) then
+            cdSlow       <= '1';
+            slow_timeout <= 16777215;
+         elsif (slow_timeout > 0) then
+            slow_timeout <= slow_timeout - 1;
+         else
+            cdSlow <= '0';
+         end if;
 
          if (reset = '1') then
             

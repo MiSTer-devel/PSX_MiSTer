@@ -113,7 +113,6 @@ architecture arch of dma is
    signal paused              : std_logic;
    signal gpupaused           : std_logic;
    signal waitcnt             : integer range 0 to 15;
-   signal dmaTime             : integer range 0 to 65535;
    signal wordcount           : unsigned(16 downto 0);
    signal toDevice            : std_logic;
    signal directionNeg        : std_logic;
@@ -265,7 +264,6 @@ begin
             paused         <= ss_in(4)(9);
             gpupaused      <= ss_in(4)(10);
             waitcnt        <= 0;
-            dmaTime        <= 0;
             
             autoread       <= '0';
             
@@ -406,7 +404,6 @@ begin
                waitcnt       <= 9;
                isOn          <= '1';
                activeChannel <= triggerchannel;
-               dmaTime       <= 0;
                REP_target    <= 32;
             end if;
             

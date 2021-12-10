@@ -14,7 +14,13 @@ entity gpu_videoout is
       videoout_on          : in  std_logic;
       
       fpscountOn           : in  std_logic;
-      fpscountBCD          : in  unsigned(7 downto 0) := x"25";
+      fpscountBCD          : in  unsigned(7 downto 0);      
+      
+      cdSlow               : in  std_logic;
+      
+      errorOn              : in  std_logic;
+      errorEna             : in  std_logic;
+      errorCode            : in  unsigned(3 downto 0);
       
       fetch                : in  std_logic;
       lineIn               : in  unsigned(8 downto 0);
@@ -95,9 +101,16 @@ architecture arch of gpu_videoout is
    signal fetchNext : std_logic := '0';
    
    -- overlay
-   signal fpstext            : unsigned(15 downto 0);
-   signal overlay_fps_data   : std_logic_vector(23 downto 0);
-   signal overlay_fps_ena    : std_logic;
+   signal fpstext             : unsigned(15 downto 0);
+   signal overlay_fps_data    : std_logic_vector(23 downto 0);
+   signal overlay_fps_ena     : std_logic;
+   
+   signal overlay_cd_data     : std_logic_vector(23 downto 0);
+   signal overlay_cd_ena      : std_logic;
+   
+   signal errortext           : unsigned(7 downto 0);
+   signal overlay_error_data  : std_logic_vector(23 downto 0);
+   signal overlay_error_ena   : std_logic;
    
 begin 
 
@@ -220,7 +233,15 @@ begin
                end if;
                if (xpos > 0 and xpos <= xmax) then
                   video_hblank <= '0';
-                  if (overlay_fps_ena = '1') then
+                  if (overlay_error_ena = '1') then
+                     video_r      <= overlay_error_data( 7 downto 0);
+                     video_g      <= overlay_error_data(15 downto 8);
+                     video_b      <= overlay_error_data(23 downto 16);
+                  elsif (overlay_cd_ena = '1') then
+                     video_r      <= overlay_cd_data( 7 downto 0);
+                     video_g      <= overlay_cd_data(15 downto 8);
+                     video_b      <= overlay_cd_data(23 downto 16);
+                  elsif (overlay_fps_ena = '1') then
                      video_r      <= overlay_fps_data( 7 downto 0);
                      video_g      <= overlay_fps_data(15 downto 8);
                      video_b      <= overlay_fps_data(23 downto 16);
@@ -303,7 +324,7 @@ begin
    end process; 
    
    
-   -- fps overlay
+   -- overlays
    fpstext( 7 downto 0) <= resize(fpscountBCD(3 downto 0), 8) + 16#30#;
    fpstext(15 downto 8) <= resize(fpscountBCD(7 downto 4), 8) + 16#30#;
    
@@ -327,6 +348,51 @@ begin
       o_pixel_out_data       => overlay_fps_data,
       o_pixel_out_ena        => overlay_fps_ena,
       textstring             => fpstext
+   );
+   
+   ioverlayCD : entity work.gpu_overlay
+   generic map
+   (
+      COLS                   => 2,
+      BACKGROUNDON           => '1',
+      RGB_BACK               => x"FFFFFF",
+      RGB_FRONT              => x"0000FF",
+      OFFSETX                => 4,
+      OFFSETY                => 24
+   )
+   port map
+   (
+      clk                    => clk2x,
+      ce                     => video_ce,
+      ena                    => cdSlow,                    
+      i_pixel_out_x          => xpos,
+      i_pixel_out_y          => to_integer(lineDisp),
+      o_pixel_out_data       => overlay_cd_data,
+      o_pixel_out_ena        => overlay_cd_ena,
+      textstring             => x"4344"
+   );
+   
+   errortext <= resize(errorCode(3 downto 0), 8) + 16#30#;
+   ioverlayError : entity work.gpu_overlay
+   generic map
+   (
+      COLS                   => 2,
+      BACKGROUNDON           => '1',
+      RGB_BACK               => x"FFFFFF",
+      RGB_FRONT              => x"0000FF",
+      OFFSETX                => 4,
+      OFFSETY                => 44
+   )
+   port map
+   (
+      clk                    => clk2x,
+      ce                     => video_ce,
+      ena                    => errorOn and errorEna,                    
+      i_pixel_out_x          => xpos,
+      i_pixel_out_y          => to_integer(lineDisp),
+      o_pixel_out_data       => overlay_error_data,
+      o_pixel_out_ena        => overlay_error_ena,
+      textstring             => x"45" & errortext
    );
 
 

@@ -14,6 +14,8 @@ entity gpu_rect is
       
       REPRODUCIBLEGPUTIMING: in  std_logic;
       
+      error                : out std_logic;
+      
       DrawPixelsMask       : in  std_logic;
       interlacedDrawing    : in  std_logic;
       activeLineLSB        : in  std_logic;
@@ -100,6 +102,8 @@ architecture arch of gpu_rect is
    signal vWork               : unsigned(7 downto 0) := (others => '0');  
 
    signal firstPixel          : std_logic;
+   
+   signal timeout             : integer range 0 to 67108863 := 0;
 
 begin 
 
@@ -120,7 +124,7 @@ begin
       variable ydiff : signed(11 downto 0);
    begin
       if rising_edge(clk2x) then
-         
+      
          if (reset = '1') then
          
             state <= IDLE;
@@ -147,6 +151,15 @@ begin
          
             if (state /= IDLE) then
                drawTiming <= drawTiming + 1;
+            end if;
+            
+            error <= '0';
+            if (state = IDLE) then
+               timeout <= 0;
+            elsif (timeout < 67108863) then
+               timeout  <= timeout + 1;
+            else
+               error <= '1';
             end if;
          
             case (state) is

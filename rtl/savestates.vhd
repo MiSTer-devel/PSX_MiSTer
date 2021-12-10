@@ -122,6 +122,7 @@ architecture arch of savestates is
       SAVEMEMORY_READ,
       SAVEMEMORY_WRITE,
       SAVESIZEAMOUNT,
+      SAVEWAITHPSDONE,
       LOAD_WAITSETTLE,
       LOAD_HEADERAMOUNTCHECK,
       LOADMEMORY_NEXT,
@@ -147,6 +148,8 @@ architecture arch of savestates is
    signal SS_Adr_2x           : unsigned(18 downto 0) := (others => '0');
    signal SS_wren_2x          : std_logic_vector(SAVETYPESCOUNT - 1 downto 0);
    signal SS_rden_2x          : std_logic_vector(SAVETYPESCOUNT - 1 downto 0);
+   
+   signal unstallwait         : integer range 0 to 67108863 := 0;
    
    signal ddr3_ADDR_save      : std_logic_vector(25 downto 0) := (others => '0');
    signal ddr3_DOUT_saved     : std_logic_vector(63 downto 0);
@@ -403,11 +406,18 @@ begin
             
             when SAVESIZEAMOUNT =>
                if (DDR3_busy = '0') then
+                  state       <= SAVEWAITHPSDONE;
+                  unstallwait <= 67108863;
+               end if;
+             
+            when SAVEWAITHPSDONE =>
+               if (unstallwait > 0) then
+                  unstallwait <= unstallwait - 1;
+               else
                   state            <= IDLE;
                   saving_savestate <= '0';
                   ddr3_savestate   <= '0';
                end if;
-            
 
             -- #################
             -- LOAD

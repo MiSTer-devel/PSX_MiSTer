@@ -15,6 +15,8 @@ entity gpu_poly is
       
       REPRODUCIBLEGPUTIMING: in  std_logic;
       
+      error                : out std_logic;
+      
       DrawPixelsMask       : in  std_logic;
       interlacedDrawing    : in  std_logic;
       activeLineLSB        : in  std_logic;
@@ -226,6 +228,8 @@ architecture arch of gpu_poly is
 
    signal firstPixel          : std_logic;   
    
+   signal timeout             : integer range 0 to 67108863 := 0;
+   
 begin 
 
    requestFifo <= '1' when (state = REQUESTCOLOR or state = REQUESTPOS or state = REQUESTTEXTURE) else '0';
@@ -344,8 +348,7 @@ begin
       variable calc3    : signed(44 downto 0);
       variable calc4    : signed(44 downto 0);
       variable stop     : std_logic;
-      variable skip     : std_logic;
-      variable checkY   : integer range -2048 to 2047; 
+      variable skip     : std_logic; 
    begin
       if rising_edge(clk2x) then
          
@@ -401,6 +404,15 @@ begin
             
             if (state /= IDLE) then
                drawTiming <= drawTiming + 1;
+            end if;
+            
+            error <= '0';
+            if (state = IDLE) then
+               timeout <= 0;
+            elsif (timeout < 67108863) then
+               timeout  <= timeout + 1;
+            else
+               error <= '1';
             end if;
          
             case (state) is
@@ -900,7 +912,6 @@ begin
                      skip := '1';
                   end if;
                   
-                  checkY := yCoord;
                   if (decMode = 1) then
                      if (to_signed(yCoord, 11) < to_integer(drawingAreaTop))    then stop := '1'; end if;
                      if (to_signed(yCoord, 11) > to_integer(drawingAreaBottom)) then skip := '1'; end if;

@@ -18,6 +18,8 @@ entity cpu is
       
       irqRequest            : in  std_logic;
       
+      error                 : out std_logic := '0';
+      
       mem_request           : out std_logic;
       mem_rnw               : out std_logic; 
       mem_isData            : out std_logic; 
@@ -2498,6 +2500,9 @@ begin
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
+      
+         error <= '0';
+      
          if (reset = '1') then
          
             debugTrigger      <= '0';
@@ -2519,6 +2524,7 @@ begin
             
             if (debugStallcounter(7) = '1' or debug300exception = '1') then
                debugTrigger <= '1';
+               error        <= '1';
             end if;
             
          end if;
