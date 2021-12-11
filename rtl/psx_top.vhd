@@ -24,6 +24,7 @@ entity psx_top is
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
+      FAKESPU               : in  std_logic;
       ditherOff             : in  std_logic;
       analogPad             : in  std_logic;
       fpscountOn            : in  std_logic;
@@ -270,6 +271,8 @@ architecture arch of psx_top is
    signal irq_SIO                : std_logic;
    signal irq_SPU                : std_logic;
    signal irq_LIGHTPEN           : std_logic;
+   
+   signal enaSPUirq              : std_logic;
    
    -- dma
    signal cpuPaused              : std_logic;
@@ -979,6 +982,8 @@ begin
       SS_Idle              => SS_Idle_mdec
    );
    
+   irq_SPU <= irq_VBLANK and enaSPUirq;
+   
    ispu : entity work.spu
    port map
    (
@@ -986,7 +991,10 @@ begin
       ce                   => ce,        
       reset                => reset_intern,     
       
-      irqOut               => irq_SPU,
+      --irqOut               => irq_SPU,
+      
+      FAKESPU              => FAKESPU,
+      enaSPUirq            => enaSPUirq,
       
       bus_addr             => bus_spu_addr,     
       bus_dataWrite        => bus_spu_dataWrite,

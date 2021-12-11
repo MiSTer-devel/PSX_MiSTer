@@ -20,6 +20,7 @@ entity psx_mister is
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
+      FAKESPU               : in  std_logic;
       ditherOff             : in  std_logic;
       analogPad             : in  std_logic;
       fpscountOn            : in  std_logic;
@@ -138,6 +139,7 @@ begin
       REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING,
       DMABLOCKATONCE        => DMABLOCKATONCE,
       INSTANTSEEK           => INSTANTSEEK,
+      FAKESPU               => FAKESPU,
       ditherOff             => ditherOff,
       analogPad             => analogPad,
       fpscountOn            => fpscountOn,

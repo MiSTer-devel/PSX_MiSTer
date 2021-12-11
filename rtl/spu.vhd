@@ -17,6 +17,9 @@ entity spu is
       
       irqOut               : out std_logic := '0';
       
+      FAKESPU              : in  std_logic;
+      enaSPUirq            : out std_logic;
+      
       bus_addr             : in  unsigned(9 downto 0); 
       bus_dataWrite        : in  std_logic_vector(15 downto 0);
       bus_read             : in  std_logic;
@@ -365,8 +368,6 @@ begin
                      when 16#196# => NOISEMODE(31 downto 16)   <= bus_dataWrite;
                      when 16#198# => REVERBON(15 downto 0)     <= bus_dataWrite;
                      when 16#19A# => REVERBON(31 downto 16)    <= bus_dataWrite;
-                     when 16#19C# => ENDX(15 downto 0)         <= bus_dataWrite;
-                     when 16#19E# => ENDX(31 downto 16)        <= bus_dataWrite;
                                      
                      when 16#1A6# => TRANSFERADDR              <= bus_dataWrite; -- todo: trigger RAMIRQ
                      
@@ -451,6 +452,14 @@ begin
             else
                sampleticks     <= (others => '0');
                capturePosition <= capturePosition + 2;
+            end if;
+            
+            enaSPUirq <= '0';
+            if (FAKESPU = '1') then
+               ENDX <= x"00FFFFFF";
+               if (CNT(15) = '1' and CNT(6) = '1') then
+                  enaSPUirq <= '1';
+               end if;
             end if;
 
          end if; -- ce
