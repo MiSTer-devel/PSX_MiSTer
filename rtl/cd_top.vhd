@@ -606,6 +606,8 @@ begin
    ss_out(15)( 7 downto  0)  <= std_logic_vector(setLocFrame);
    ss_out(17)( 7 downto  0)  <= session; 
    ss_out(15)(23 downto 16)  <= std_logic_vector(fastForwardRate); 
+   ss_out(16)(23 downto 16)  <= XaFilterFile;
+   ss_out(16)(31 downto 24)  <= XaFilterChannel;
    
    -- command processing
    process(clk1x)
@@ -638,6 +640,9 @@ begin
             
             session                 <= ss_in(17)(7 downto 0); -- 0
             fastForwardRate         <= signed(ss_in(15)(23 downto 16)); -- 0
+            
+            XaFilterFile            <= ss_in(16)(23 downto 16);
+            XaFilterChannel         <= ss_in(16)(31 downto 24);
             
          elsif (ce = '1') then
          
@@ -707,7 +712,7 @@ begin
                   FifoParam_reset         <= '1';
                else
                
-                  if (FifoResponse_empty = '0' and nextCmd /= x"10" and nextCmd /= x"11" and nextCmd /= x"13" and nextCmd /= x"14" and nextCmd /= x"19") then
+                  if (FifoResponse_empty = '0' and nextCmd /= x"0F" and nextCmd /= x"10" and nextCmd /= x"11" and nextCmd /= x"13" and nextCmd /= x"14" and nextCmd /= x"19") then
                      FifoResponse_reset <= '1';
                   end if;
                   
@@ -871,8 +876,8 @@ begin
                         cmdPending   <= '0';
                      
                      when x"0F" => -- getparam
-                        --todo
-                        error  <= '1';
+                        cmdPending  <= '0';
+                        cmdIRQ      <= '1';
                         
                      when x"10" => -- GetLocL
                         cmdPending        <= '0';
@@ -1114,6 +1119,18 @@ begin
             if (ackPendingIRQNext = '1') then
                FifoResponse_Din  <= pendingDriveResponse;
                FifoResponse_Wr   <= '1';
+            end if;
+            
+            -- long getparam response
+            if (nextCmd = x"0F") then
+               if (cmd_delay = 6 and FifoResponse_empty = '0') then 
+                  FifoResponse_reset <= '1'; 
+               end if;
+               if (cmd_delay = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
+               if (cmd_delay = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= modeReg; end if;
+               if (cmd_delay = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"00"; end if;
+               if (cmd_delay = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= XaFilterFile; end if;
+               if (cmd_delay = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= XaFilterChannel; end if;
             end if;
             
             -- long GetLocL response
