@@ -320,6 +320,8 @@ architecture arch of gpu is
    signal pipeline_u                : unsigned(7 downto 0);
    signal pipeline_v                : unsigned(7 downto 0);
    
+   signal pipeline_clearCache       : std_logic;
+   
    signal pipeline_textPalNew       : std_logic;
    signal pipeline_textPalX         : unsigned(9 downto 0);   
    signal pipeline_textPalY         : unsigned(8 downto 0); 
@@ -918,6 +920,8 @@ begin
          elsif (ce = '1') then
          
             fifoIn_Valid <= fifoIn_Rd;
+            
+            pipeline_clearCache <= '0';
          
             if (poly_drawModeNew = '1') then
                drawMode(8 downto 0) <= poly_drawModeRec(8 downto 0);
@@ -939,7 +943,7 @@ begin
                   GPUSTAT_ReadyRecDMA <= '0';
                   
                elsif (cmdNew = 16#01#) then -- clear cache
-                  -- todo
+                  pipeline_clearCache <= '1';
                   
                elsif (cmdNew = 16#1F#) then -- irq request
                   if (GPUSTAT_IRQRequest = '0') then
@@ -1349,6 +1353,8 @@ begin
       drawMode_in          => drawMode,
       DrawPixelsMask_in    => GPUSTAT_DrawPixelsMask,
       SetMask_in           => GPUSTAT_SetMask,
+      
+      clearCache           => pipeline_clearCache,
       
       pipeline_busy        => pipeline_busy,
       pipeline_stall       => pipeline_stall,      

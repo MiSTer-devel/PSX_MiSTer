@@ -17,6 +17,8 @@ entity gpu_pixelpipeline is
       DrawPixelsMask_in    : in  std_logic;
       SetMask_in           : in  std_logic;
       
+      clearCache           : in  std_logic;
+      
       pipeline_busy        : out std_logic;
       pipeline_stall       : out std_logic;
       pipeline_new         : in  std_logic;
@@ -95,6 +97,8 @@ architecture arch of gpu_pixelpipeline is
    
    signal CLUTDataB_S         : std_logic_vector(15 downto 0) := (others => '0');
   
+   signal clearCacheBuffer    : std_logic;
+   
    signal textPalReq          : std_logic;
    signal textPalReqX         : unsigned(9 downto 0);   
    signal textPalReqY         : unsigned(8 downto 0);
@@ -355,7 +359,6 @@ begin
             stage1_valid   <= '0';
             stage3_valid   <= '0';
             stage4_valid   <= '0';
-            tagValid       <= (others => '0');
             textPalFetched <= '0';
          
          elsif (ce = '1') then
@@ -375,6 +378,11 @@ begin
                SetMask        <= SetMask_in;       
             end if;
             
+            if (clearCache = '1') then
+               clearCacheBuffer <= '1';
+               textPalFetched   <= '0';
+            end if;
+            
             if (textPalInNew = '1' and drawMode(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
                textPalReq  <= '1';
                textPalReqX <= textPalInX;
@@ -383,6 +391,10 @@ begin
             
             case (state) is
                when IDLE =>
+                  if (clearCacheBuffer = '1' and pipeline_busy = '0') then
+                     clearCacheBuffer <= '0';
+                     tagValid         <= (others => '0');
+                  end if;
                   if (textPalReq = '1' and pipeline_busy = '0') then
                      textPalReq     <= '0';
                      state          <= REQUESTPALETTE;

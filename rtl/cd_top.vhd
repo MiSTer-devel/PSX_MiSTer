@@ -108,7 +108,7 @@ architecture arch of cd_top is
    signal fifoParamCount            : integer range 0 to 16;
    signal working                   : std_logic := '0';
    signal workCommand               : std_logic_vector(7 downto 0);
-   signal workDelay                 : integer range 0 to 3999999;
+   signal workDelay                 : integer range 0 to 33554431;
    signal cmdAck                    : std_logic := '0';
    signal cmdIRQ                    : std_logic := '0';
    signal driveAck                  : std_logic := '0';
@@ -123,6 +123,9 @@ architecture arch of cd_top is
    signal setLocSecond              : unsigned(7 downto 0);
    signal setLocFrame               : unsigned(7 downto 0);
    
+   signal session                   : std_logic_vector(7 downto 0);
+   signal fastForwardRate           : signed(7 downto 0);
+   
    signal setFilterReadStep         : integer range 0 to 3;
    signal XaFilterFile              : std_logic_vector(7 downto 0);
    signal XaFilterChannel           : std_logic_vector(7 downto 0);
@@ -131,6 +134,10 @@ architecture arch of cd_top is
    signal setMode                   : std_logic := '0';
    signal newMode                   : std_logic_vector(7 downto 0);
    signal readSN                    : std_logic := '0';
+   signal play                      : std_logic := '0';
+   signal setSession                : std_logic := '0';
+   signal cmdStartMotor             : std_logic := '0';
+   signal cmdStop                   : std_logic := '0';
    signal drive_stop                : std_logic := '0';
    signal shell_close               : std_logic := '0';
    
@@ -198,6 +205,7 @@ architecture arch of cd_top is
    signal copyData                  : std_logic := '0';  
    signal seekOK                    : std_logic := '1';  -- todo
    signal startReading              : std_logic := '0';  
+   signal startPlaying              : std_logic := '0';  
    signal processDataSector         : std_logic := '0';  
    signal writeSectorPointer        : unsigned(2 downto 0) := (others => '0');
    signal readSectorPointer         : unsigned(2 downto 0) := (others => '0');
@@ -595,7 +603,9 @@ begin
    ss_out(18)(3)             <= setLocActive; 
    ss_out(14)(23 downto 16)  <= std_logic_vector(setLocMinute); 
    ss_out(14)(31 downto 24)  <= std_logic_vector(setLocSecond); 
-   ss_out(15)( 7 downto  0)  <= std_logic_vector(setLocFrame);  
+   ss_out(15)( 7 downto  0)  <= std_logic_vector(setLocFrame);
+   ss_out(17)( 7 downto  0)  <= session; 
+   ss_out(15)(23 downto 16)  <= std_logic_vector(fastForwardRate); 
    
    -- command processing
    process(clk1x)
@@ -626,6 +636,9 @@ begin
             setLocSecond            <= unsigned(ss_in(14)(31 downto 24));
             setLocFrame             <= unsigned(ss_in(15)(7 downto 0));
             
+            session                 <= ss_in(17)(7 downto 0); -- 0
+            fastForwardRate         <= signed(ss_in(15)(23 downto 16)); -- 0
+            
          elsif (ce = '1') then
          
             handleCommand           <= '0';
@@ -637,6 +650,10 @@ begin
             seekOnDiskCmd           <= '0';
             setMode                 <= '0';
             readSN                  <= '0';
+            play                    <= '0';
+            setSession              <= '0';
+            cmdStartMotor           <= '0';
+            cmdStop                 <= '0';
             drive_stop              <= '0';
             startMotorCMD           <= '0';
             shell_close             <= '0';
@@ -715,26 +732,83 @@ begin
                         cmdPending     <= '0';
                         
                      when x"03" => -- play
-                        --todo
-                        error  <= '1';
+                        cmdPending <= '0';
+                        if (hasCD = '0') then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"80";
+                        else
+                           -- todo: missing checks
+                           cmdAck          <= '1';
+                           play            <= '1';
+                           fastForwardRate <= (others => '0');
+                        end if;
                         
                      when x"04" => -- forward
-                        --todo
-                        error  <= '1';
+                        if (driveState /= DRIVE_PLAYING) then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"80";
+                        else
+                           if (fastForwardRate < 0) then
+                              fastForwardRate <= to_signed(4, 8);
+                           elsif (fastForwardRate < 12) then
+                              fastForwardRate <= fastForwardRate + 4;
+                           end if;
+                           cmdAck      <= '1';
+                           cmdPending  <= '0';
+                        end if;
                         
                      when x"05" => -- backward
-                        --todo
-                        error  <= '1';
+                        if (driveState /= DRIVE_PLAYING) then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"80";
+                        else
+                           if (fastForwardRate > 0) then
+                              fastForwardRate <= to_signed(-4, 8);
+                           elsif (fastForwardRate > -12) then
+                              fastForwardRate <= fastForwardRate - 4;
+                           end if;
+                           cmdAck      <= '1';
+                           cmdPending  <= '0';
+                        end if;
                         
                      --when "06" => readN at readS 0x1B
                      
                      when x"07" => -- MotorOn
-                        --todo
-                        error  <= '1';
+                        cmdPending  <= '0';
+                        if (internalStatus(1) = '1') then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"20";
+                        else
+                           cmdAck      <= '1';
+                           if (working = '0') then
+                              working     <= '1';
+                              workDelay   <= 400000 - 2;
+                              workCommand <= nextCmd;
+                              if (hasCD = '1') then
+                                 cmdStartMotor <= '1';
+                              end if;
+                           end if;
+                        end if;
                         
                      when x"08" => -- Stop
-                        --todo
-                        error  <= '1';
+                        cmdAck      <= '1';
+                        cmdPending  <= '0';
+                        if (internalStatus(1) = '1') then
+                           if (modeReg(7) = '1') then
+                              workDelay   <= 25000000 - 2;
+                           else
+                              workDelay   <= 13000000 - 2;
+                           end if;
+                        else
+                           workDelay   <= 7000 - 2;
+                        end if;
+                        working     <= '1';
+                        workCommand <= nextCmd;
+                        cmdStop     <= '1';
                         
                      when x"09" => -- pause
                         cmdAck      <= '1';
@@ -823,8 +897,17 @@ begin
                         end if;
                         
                      when x"12" => -- SetSession
-                        --todo
-                        error  <= '1';
+                        cmdPending     <= '0';
+                        FifoParam_Rd   <= '1';
+                        if (hasCD = '0' or driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"80";
+                        else
+                           session    <= FifoParam_Dout;
+                           setSession <= '1';
+                           cmdAck     <= '1';
+                        end if;
                         
                      when x"13" => -- GetTN
                         cmdIRQ         <= '1';
@@ -1271,6 +1354,7 @@ begin
             seekOnDiskDrive         <= '0';
             errorResponseDrive_new  <= '0';
             startReading            <= '0';
+            startPlaying            <= '0';
             ackRead                 <= '0';
             pause_cmd               <= '0';
             processDataSector       <= '0';
@@ -1283,14 +1367,6 @@ begin
                elsif (sectorFetchState = SFETCH_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
                   handleDrive <= '1';
                   driveBusy   <= '0';
-               end if;
-            end if;
-         
-            if (startMotor = '1') then
-               if (driveState /= DRIVE_SPINNINGUP) then
-                  driveState <= DRIVE_SPINNINGUP;
-                  driveDelay <= 44100*300;
-                  driveBusy  <= '1';
                end if;
             end if;
             
@@ -1308,7 +1384,8 @@ begin
                            startReading  <= '1';
                            readAfterSeek <= '0';
                         elsif (playAfterSeek = '1') then
-                           --todo start playing
+                           startPlaying  <= '1';
+                           playAfterSeek <= '0';
                         else
                            ackDrive <= '1';
                         end if;
@@ -1354,10 +1431,19 @@ begin
                   when DRIVE_SPINNINGUP =>
                      driveState     <= DRIVE_IDLE;
                      internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
-                     internalStatus(1)          <= hasCD;
+                     if (hasCD = '1') then
+                        internalStatus(1) <= '1';
+                     end if;
                   
                   when DRIVE_CHANGESESSION =>
-                     --todo
+                     driveState     <= DRIVE_IDLE;
+                     internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+                     if (hasCD = '1') then
+                        internalStatus(1) <= '1';
+                     end if;
+                     if (session = x"01") then --todo: multisession
+                        ackDrive <= '1';
+                     end if;
                   
                   when others => null;
                end case;
@@ -1409,6 +1495,32 @@ begin
                   end if;
             end if;
             
+            if (play = '1') then
+               -- todo !
+               --if ((!setLocActive || seekLBA == lastReadSector) && (driveState == DRIVESTATE::READING || ((driveState == DRIVESTATE::SEEKLOGICAL || driveState == DRIVESTATE::SEEKPHYSICAL || driveState == DRIVESTATE::SEEKIMPLICIT) && readAfterSeek)))
+               --{
+               --   setLocActive = false;
+               --}
+               --else
+                  if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                     -- todo: updatePositionWhileSeeking();
+                  end if;
+                  if (setLocActive = '1') then
+                     seekOnDiskDrive   <= '1';
+                     readAfterSeek     <= '0';
+                     playAfterSeek     <= '1';
+                  else
+                     startPlaying <= '1';
+                  end if;
+            end if;
+            
+            if (setSession = '1') then
+               driveState     <= DRIVE_CHANGESESSION;
+               driveBusy      <= '1';
+               driveDelay     <= 33868800 / 2;
+               driveDelayNext <= 33868800 / 2;
+            end if;
+            
             if (startReading = '1') then
                --todo: check for setLocActive needed when coming from readSN?
                --todo: check for seekstate required? should never end here when still in seek?
@@ -1432,10 +1544,52 @@ begin
                readSectorPointer  <= (others => '0');
             end if;
             
+            if (startPlaying = '1') then
+               --todo: check for setLocActive needed when coming from readSN?
+               --todo: check for seekstate required? should never end here when still in seek?
+               internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+               internalStatus(1)          <= '1'; -- motor on
+               internalStatus(7)          <= '1'; -- playing_cdda
+               if (fastCD = '1') then
+                  driveDelay         <= 9999 - 1;
+                  driveDelayNext     <= 9999 - 1;
+               else
+                  if (modeReg(7) = '1') then
+                     driveDelay      <= READSPEED2X - 1;
+                     driveDelayNext  <= READSPEED2X - 1;
+                  else
+                     driveDelay      <= READSPEED1X - 1;
+                     driveDelayNext  <= READSPEED1X - 1;
+                  end if;
+               end if;
+               driveBusy          <= '1';
+               driveState         <= DRIVE_PLAYING;
+               writeSectorPointer <= (others => '0');
+               readSectorPointer  <= (others => '0');
+               -- todo: ResetAudioDecoder
+            end if;
+            
+            if (cmdStop = '1') then
+               lastSectorHeaderValid      <= '0';
+               driveState                 <= DRIVE_IDLE;
+               driveBusy                  <= '0';
+               internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+               internalStatus(1)          <= '0';   --motor off
+            end if;
+            
             if (drive_stop = '1') then
                driveState <= DRIVE_IDLE;
                driveBusy  <= '0';
                internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+            end if;
+            
+            if (startMotor = '1' or cmdStartMotor = '1') then
+               if (driveState /= DRIVE_SPINNINGUP) then
+                  driveState     <= DRIVE_SPINNINGUP;
+                  driveDelay     <= 44100*300;
+                  driveDelayNext <= 44100*300;
+                  driveBusy      <= '1';
+               end if;
             end if;
             
             if (shell_close = '1') then
