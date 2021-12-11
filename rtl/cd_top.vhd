@@ -996,8 +996,17 @@ begin
                         errorResponseCmd_reason <= x"40";
                         
                      when x"1E" => -- ReadTOC
-                        --todo
-                        error  <= '1';
+                        cmdPending <= '0';
+                        if (hasCD = '0') then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"80";
+                        else
+                           cmdAck      <= '1';
+                           working     <= '1';
+                           workDelay   <= 16934400 - 2;
+                           workCommand <= nextCmd;
+                        end if;
                      
                      when x"1F" => -- VideoCD
                         cmdPending <= '0';
