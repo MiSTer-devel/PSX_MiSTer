@@ -10,6 +10,8 @@ entity gpu_fillVram is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      REPRODUCIBLEGPUTIMING: in  std_logic;
+      
       interlacedDrawing    : in  std_logic;
       activeLineLSB        : in  std_logic;
       
@@ -122,8 +124,8 @@ begin
                         pixelAddr  <= row & col & '0';
                         pixelColor <= '0' & color;
                         
-                        if (x + 1 < widt) then
-                           x <= x + 1;
+                        if (x + 4 < widt) then
+                           x <= x + 4;
                         else
                            lineEnd := '1';
                         end if;
@@ -139,7 +141,7 @@ begin
                         if (y + 1 < heig) then
                            y <= y + 1;
                         else
-                           if (timer + 1 < timeCnt) then
+                           if (REPRODUCIBLEGPUTIMING = '1') then
                               state <= WAITING;
                            else
                               state <= IDLE;

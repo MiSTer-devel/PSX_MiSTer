@@ -176,7 +176,7 @@ begin
       case (state) is
       
          when STATE_IDLE =>
-            if (refresh_buffer = '1' or (DOREFRESH = '1' and refreshcnt > cycles_per_refresh)) then
+            if (DOREFRESH = '1' and (refresh_buffer = '1' or refreshcnt > cycles_per_refresh)) then
                state <= STATE_RFSH;
                if (refreshcnt > cycles_per_refresh) then
                   refreshcnt <= refreshcnt - cycles_per_refresh + 1;

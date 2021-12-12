@@ -14,7 +14,8 @@ entity gpu_vram2vram is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
-      GPUSTAT_SetMask      : in  std_logic;
+      DrawPixelsMask       : in  std_logic;
+      SetMask              : in  std_logic;
       
       proc_idle            : in  std_logic;
       fifo_Valid           : in  std_logic;
@@ -62,6 +63,8 @@ architecture arch of gpu_vram2vram is
    signal dstY         : unsigned(8 downto 0);   
    signal widt         : unsigned(10 downto 0);
    signal heig         : unsigned(9 downto 0);
+   
+   signal dir          : std_logic;
                        
    signal xSrc         : unsigned(9 downto 0);
    signal xDst         : unsigned(9 downto 0);
@@ -81,6 +84,8 @@ begin
    vramLineAddr      <= xSrc when (state = WRITING or state = READFIRST) else (others => '0');
    
    process (clk2x)
+      variable srcXCheck : unsigned(9 downto 0);
+      variable dstXCheck : unsigned(9 downto 0);
    begin
       if rising_edge(clk2x) then
          
@@ -119,6 +124,13 @@ begin
                   end if;
             
                when REQUESTWORD4 =>
+                  dir <= '0';
+                  srcXCheck := srcX + unsigned(fifo_data(9 downto 0)) - 1;
+                  dstXCheck := dstX + unsigned(fifo_data(9 downto 0)) - 1;
+                  if (srcX < dstX or (srcXCheck < dstXCheck)) then
+                     dir <= '1';
+                  end if;
+                  
                   if (fifo_Valid = '1') then
                      state      <= READVRAM;
                      widt       <= '0' & unsigned(fifo_data( 9 downto  0));
@@ -128,8 +140,14 @@ begin
                   end if;
                   
                when READVRAM =>
-                  xSrc <= srcX;
-                  xDst <= dstX;
+                  if (dir = '1') then
+                     xSrc <= resize(srcX + widt - 1, 10);
+                     xDst <= resize(dstX + widt - 1, 10);
+                  else
+                     xSrc <= srcX;
+                     xDst <= dstX;
+                  end if;
+
                   xCnt <= (others => '0');
                   if (requestVRAMIdle = '1') then
                      state <= WAITREAD;
@@ -143,18 +161,33 @@ begin
                when READFIRST => 
                   if (pixelEmpty = '1') then
                      state <= WRITING; 
-                     xSrc  <= xSrc + 1;
+                     if (dir = '1') then
+                        xSrc <= xSrc - 1;
+                     else
+                        xSrc <= xSrc + 1;
+                     end if;
                   end if;
                   
                when WRITING => 
-                  -- todo: AND/OR masking
-               
-                  pixelWrite <= '1';
+                  if (DrawPixelsMask = '0' or vramLineData(15) = '0') then
+                     pixelWrite <= '1';
+                  end if;  
+                   
                   pixelAddr  <= dstY & xDst & '0';
                   pixelColor <= vramLineData;
+                  
+                  if (SetMask = '1') then
+                     pixelColor(15) <= '1';
+                  end if;
                
-                  xSrc  <= xSrc + 1;
-                  xDst  <= xDst + 1;
+                  if (dir = '1') then
+                     xSrc  <= xSrc - 1;
+                     xDst  <= xDst - 1;
+                  else
+                     xSrc  <= xSrc + 1;
+                     xDst  <= xDst + 1;
+                  end if;
+                  
                   xCnt  <= xCnt + 1;
                   if (xCnt + 1 = widt) then
                      srcY  <= srcY + 1;

@@ -122,6 +122,8 @@ begin
       variable ysize : signed(11 downto 0);
       variable xdiff : signed(11 downto 0);
       variable ydiff : signed(11 downto 0);
+      variable ynew  : signed(11 downto 0);
+      variable yAdd  : integer range 1 to 2;
    begin
       if rising_edge(clk2x) then
       
@@ -255,6 +257,11 @@ begin
                      ydiff := to_signed(to_integer(drawingAreaTop), 12) - yPos;
                      ysize := ysize - ydiff;
                   end if;
+                  ynew := yPos + ydiff;
+                  if (interlacedDrawing = '1' and (activeLineLSB = ynew(0))) then
+                     ydiff := ydiff + 1;
+                     ysize := ysize - 1;
+                  end if;
                   yPos      <= yPos + ydiff;
                   vWork     <= vWork + unsigned(ydiff(7 downto 0));
                   rec_sizey <= unsigned(ysize(8 downto 0)); 
@@ -291,10 +298,14 @@ begin
                      uWork <= uWork + 1;
                      
                      if (xCnt + 1 >= rec_sizex or xPos + 1 > to_integer(drawingAreaRight)) then
-                        yCnt  <= yCnt + 1;
-                        ypos  <= yPos + 1;
-                        vWork <= vWork + 1;
-                        if (yCnt + 1 >= rec_sizey or ypos + 1 > to_integer(drawingAreaBottom)) then
+                        yAdd := 1;
+                        if (interlacedDrawing = '1') then
+                           yAdd := 2;
+                        end if;
+                        yCnt  <= yCnt + yAdd;
+                        ypos  <= yPos + yAdd;
+                        vWork <= vWork + yAdd;
+                        if (yCnt + yAdd >= rec_sizey or ypos + yAdd > to_integer(drawingAreaBottom)) then
                            if (REPRODUCIBLEGPUTIMING = '1') then
                               state <= WAITIMING;
                            else
@@ -311,20 +322,18 @@ begin
                         end if;
                      end if; 
                      
-                     if (interlacedDrawing = '0' or (activeLineLSB /= yPos(0))) then
-                        if (xPos >= to_integer(drawingAreaLeft) and xPos <= to_integer(drawingAreaRight) and ypos >= to_integer(drawingAreaTop) and ypos <= to_integer(drawingAreaBottom)) then
-                           pipeline_new         <= '1';
-                           pipeline_texture     <= rec_texture;
-                           pipeline_transparent <= rec_transparency;
-                           pipeline_rawTexture  <= rec_rawTexture;
-                           pipeline_x           <= unsigned(xPos(9 downto 0));
-                           pipeline_y           <= unsigned(yPos(8 downto 0));
-                           pipeline_cr          <= unsigned(rec_color( 7 downto  0));
-                           pipeline_cg          <= unsigned(rec_color(15 downto  8));
-                           pipeline_cb          <= unsigned(rec_color(23 downto 16));
-                           pipeline_u           <= uWork;
-                           pipeline_v           <= vWork;
-                        end if;
+                     if (xPos >= to_integer(drawingAreaLeft) and xPos <= to_integer(drawingAreaRight) and ypos >= to_integer(drawingAreaTop) and ypos <= to_integer(drawingAreaBottom)) then
+                        pipeline_new         <= '1';
+                        pipeline_texture     <= rec_texture;
+                        pipeline_transparent <= rec_transparency;
+                        pipeline_rawTexture  <= rec_rawTexture;
+                        pipeline_x           <= unsigned(xPos(9 downto 0));
+                        pipeline_y           <= unsigned(yPos(8 downto 0));
+                        pipeline_cr          <= unsigned(rec_color( 7 downto  0));
+                        pipeline_cg          <= unsigned(rec_color(15 downto  8));
+                        pipeline_cb          <= unsigned(rec_color(23 downto 16));
+                        pipeline_u           <= uWork;
+                        pipeline_v           <= vWork;
                      end if;
                   end if;
                

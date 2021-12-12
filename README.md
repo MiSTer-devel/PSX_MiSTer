@@ -21,9 +21,8 @@ If there is a recognized problem, an overlay is displayed, showing which error h
 You can hide these messages with an OSD option, by default they are on.
 
 List of Errors:
-E1     - missing CD command
-E2     - CPU exception
-E3..E6 - GPU hangs (e.g. corrupt display list)
+- E2     - CPU exception
+- E3..E6 - GPU hangs (e.g. corrupt display list)
 
 
 # Status
@@ -38,7 +37,7 @@ CPU    : 90%
 - exception for read in invalid instruction and data area missing
 
 GPU    : 80%
-- mask bits not implemented for special modules(e.g. cpu2vram)
+- mask bits not implemented for cpu2vram
 - vram2vram and vram2cpu line wraparound not implemented
 - vram2vram read/modify/write race condition when copying to same line
 

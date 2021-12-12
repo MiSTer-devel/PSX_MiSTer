@@ -1033,7 +1033,9 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset or SS_reset,     
+      reset                => softreset or SS_reset, 
+
+      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,      
       
       interlacedDrawing    => interlacedDrawing,
       activeLineLSB        => activeLineLSB,    
@@ -1078,7 +1080,8 @@ begin
       ce                   => ce,        
       reset                => softreset or SS_reset,     
       
-      GPUSTAT_SetMask      => GPUSTAT_SetMask,
+      DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
+      SetMask              => GPUSTAT_SetMask,
       
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 
@@ -1420,9 +1423,9 @@ begin
       );
    end generate;
    
-   pixelColor <= vramFill_pixelColor or cpu2vram_pixelColor or vram2vram_pixelColor or pipeline_pixelColor;
-   pixelAddr  <= vramFill_pixelAddr  or cpu2vram_pixelAddr  or vram2vram_pixelAddr  or pipeline_pixelAddr ;
-   pixelWrite <= vramFill_pixelWrite or cpu2vram_pixelWrite or vram2vram_pixelWrite or pipeline_pixelWrite;
+   pixelColor <= cpu2vram_pixelColor or vram2vram_pixelColor or pipeline_pixelColor;
+   pixelAddr  <= cpu2vram_pixelAddr  or vram2vram_pixelAddr  or pipeline_pixelAddr ;
+   pixelWrite <= cpu2vram_pixelWrite or vram2vram_pixelWrite or pipeline_pixelWrite;
    
    -- pixel writing fifo
    iSyncFifo_OUT: entity mem.SyncFifo
@@ -1458,7 +1461,13 @@ begin
             
          elsif (ce = '1') then
          
-            if (pixelWrite = '1') then
+            if (vramFill_pixelWrite = '1') then
+            
+               fifoOut_Wr    <= '1';
+               fifoOut_Din   <= "1111" & std_logic_vector(vramFill_pixelAddr(19 downto 3)) & vramFill_pixelColor & vramFill_pixelColor & vramFill_pixelColor & vramFill_pixelColor;
+               pixel64filled <= '0';
+         
+            elsif (pixelWrite = '1') then
             
                pixel64timeout <= 15;
             

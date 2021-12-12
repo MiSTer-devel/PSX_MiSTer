@@ -572,6 +572,7 @@ begin
                               else
                                  fifoOut_Din(31 downto 0) <= x"00" & std_logic_vector(dmaArray(6).D_MADR(23 downto 2) - 1) & "00";
                               end if;
+                              REP_target                <= REP_target + 3;
                            end if;
                      
                         when others => report "DMA channel not implemented" severity failure; 

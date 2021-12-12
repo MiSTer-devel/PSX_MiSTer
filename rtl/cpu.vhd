@@ -100,7 +100,9 @@ architecture arch of cpu is
    signal cop0_CAUSE                   : unsigned(31 downto 0) := (others => '0');
    signal cop0_EPC                     : unsigned(31 downto 0) := (others => '0');
    signal cop0_PRID                    : unsigned(31 downto 0) := (others => '0');
-         
+     
+   signal cop0_SR_next                 : unsigned(31 downto 0) := (others => '0');
+     
    signal CACHECONTROL                 : unsigned(31 downto 0) := (others => '0');
                
    -- common   
@@ -639,7 +641,7 @@ begin
       end if;
       
       
-      if (blockirq = '0' and cop0_SR(0) = '1' and cop0_SR(10) = '1' and cop0_CAUSE(10) = '1') then
+      if (blockirq = '0' and cop0_SR_next(0) = '1' and cop0_SR_next(10) = '1' and cop0_CAUSE(10) = '1') then
       
          if (stall = 0) then
             blockirqNext    <= '1';
@@ -889,10 +891,10 @@ begin
             decodeTarget     <= unsigned(ss_in(31)(20 downto 16));
             decodeJumpTarget <= unsigned(ss_in(29)(25 downto 0));
             
-            if (unsigned(ss_in(14)(31 downto 26)) = 16#12#) then
-               decode_gte_readAddr <= ss_in(14)(22) & unsigned(ss_in(14)(15 downto 11)); -- decodeSource1(1) & decodeRD 
+            if (unsigned(ss_in(31)(29 downto 24)) = 16#12#) then
+               decode_gte_readAddr <= ss_in(31)(1) & unsigned(ss_in(32)(4 downto 0)); -- decodeSource1(1) & decodeRD 
             else
-               decode_gte_readAddr <= '0' & unsigned(ss_in(14)(20 downto 16)); -- decodeSource2
+               decode_gte_readAddr <= '0' & unsigned(ss_in(31)(12 downto 8)); -- decodeSource2
             end if;
          
          elsif (ce = '1') then
@@ -1543,6 +1545,10 @@ begin
                   EXEGTeReadEnable <= '1';
                   EXELoadType      <= LOADTYPE_DWORD;
                   EXEReadEnable    <= '1';
+                  if (gte_busy = '1' or execute_gte_cmdEna = '1') then
+                     stallNew3    <= '1';
+                     EXEstalltype <= EXESTALLTYPE_GTECMD;
+                  end if;
                end if;                        
                
             when 16#33# => -- LWC3 -> NOP 
@@ -1723,8 +1729,6 @@ begin
                   executeMemWriteEnable         <= '0';
                   executeGTEReadEnable          <= '0';
                   executeCOP0WriteEnable        <= '0';
-                  execute_gte_writeEna          <= '0';
-                  execute_gte_cmdEna            <= '0';
                   
                   executeStalltype              <= EXESTALLTYPE_NONE;
                         
@@ -1902,6 +1906,11 @@ begin
       
       if (SS_wren_SCP = '1') then
          scratchpad_wren_a <= "1111";
+      end if;
+      
+      cop0_SR_next <= cop0_SR;
+      if (stall = 0 and executeCOP0WriteEnable = '1' and to_integer(executeCOP0WriteDestination) = 16#C#) then
+         cop0_SR_next <= executeCOP0WriteValue and x"F27FFF3F";
       end if;
       
       if (exception(4 downto 3) = 0 and stall = 0) then

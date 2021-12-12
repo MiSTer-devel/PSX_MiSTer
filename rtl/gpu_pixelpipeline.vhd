@@ -383,7 +383,7 @@ begin
                textPalFetched   <= '0';
             end if;
             
-            if (textPalInNew = '1' and drawMode(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
+            if (textPalInNew = '1' and drawMode_in(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
                textPalReq  <= '1';
                textPalReqX <= textPalInX;
                textPalReqY <= textPalInY;
@@ -403,7 +403,7 @@ begin
                      textPalY       <= textPalReqY;
                      reqVRAMXPos    <= textPalReqX;
                      reqVRAMYPos    <= textPalReqY;
-                     if (drawMode(7) = '1') then
+                     if (drawMode_in(7) = '1') then
                         reqVRAMSize <= to_unsigned(256, 11); 
                      else
                         reqVRAMSize <= to_unsigned(16, 11);
