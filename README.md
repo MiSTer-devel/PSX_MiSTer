@@ -29,7 +29,7 @@ List of Errors:
 
 Work in progress, don't report any bugs!
 
-- only very few games working
+- some games working
 
 --
 
@@ -45,7 +45,7 @@ Memory : 50%
 - SPU RAM not implemented
 - rotate register not done for all busses
 
-IRQ    : 40%
+IRQ    : 70%
 - irq_SIO missing     
 - irq_SPU missing    
 - irq_LIGHTPEN missing
@@ -74,7 +74,7 @@ MDEC   : 90%
 - timing slightly too fast (4996/5376)
 - writing to MDECControl -> should reset
  
-CD     : 30%
+CD     : 50%
 - single track only
 - region only EU
 - no audio yet

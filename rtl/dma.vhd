@@ -90,6 +90,7 @@ architecture arch of dma is
       request           : std_logic;
       timeupPending     : std_logic;
       requestsPending   : std_logic;
+      channelOn         : std_logic;
    end record;
   
    type tdmaArray is array (0 to 6) of dmaRecord;
@@ -203,8 +204,9 @@ begin
       ss_out(35 + i)              <= std_logic_vector(dmaArray(i).D_BCR);          
       ss_out(42 + i)              <= std_logic_vector(dmaArray(i).D_CHCR);         
       ss_out(19 + i)(8)           <= dmaArray(i).request;        
-      ss_out(19 + i)(10)          <= dmaArray(i).timeupPending;  
       ss_out(19 + i)(9)           <= dmaArray(i).requestsPending;
+      ss_out(19 + i)(10)          <= dmaArray(i).timeupPending;  
+      ss_out(19 + i)(11)          <= dmaArray(i).channelOn;  
    end generate;
 
    ss_out(26)               <= std_logic_vector(DPCR);     
@@ -250,8 +252,9 @@ begin
                dmaArray(i).D_BCR             <= unsigned(ss_in(35 + i));
                dmaArray(i).D_CHCR            <= unsigned(ss_in(42 + i));
                dmaArray(i).request           <= ss_in(19 + i)(8);
-               dmaArray(i).timeupPending     <= ss_in(19 + i)(10);
                dmaArray(i).requestsPending   <= ss_in(19 + i)(9);
+               dmaArray(i).timeupPending     <= ss_in(19 + i)(10);
+               dmaArray(i).channelOn         <= ss_in(19 + i)(11);
             end loop;
             
             DPCR           <= unsigned(ss_in(26)); -- x"07654321";
@@ -308,6 +311,7 @@ begin
                      when "10" => 
                         bus_dataRead <= std_logic_vector(dmaArray(channel).D_CHCR);
                         -- deliver busy bit even if it was cleared by cpu already when channel is still running, maybe R/W bits should be seperate?
+                        bus_dataRead(24) <= dmaArray(channel).channelOn;
                         if (dmaState /= OFF and activeChannel = channel) then 
                            bus_dataRead(24) <= '1';
                         end if;
@@ -335,6 +339,9 @@ begin
                         dmaArray(channel).D_CHCR(22 downto 20) <= unsigned(bus_dataWrite(22 downto 20));
                         dmaArray(channel).D_CHCR(          24) <= bus_dataWrite(24);
                         dmaArray(channel).D_CHCR(30 downto 28) <= unsigned(bus_dataWrite(30 downto 28));
+                        if (bus_dataWrite(24) = '0') then
+                           dmaArray(channel).channelOn <= '0';
+                        end if;
                         if (dmaArray(channel).request = '1') then
                            triggerDMA(channel) <= '1';
                         end if;
@@ -377,19 +384,17 @@ begin
             triggerchannel := 0;
             for i in 0 to 6 loop
                if (triggerDMA(i) = '1') then
-                  if (DPCR((i * 4) + 3) = '1') then -- enable
-                     if (dmaArray(i).D_CHCR(24) = '1') then -- start/busy
-                        if (isOn = '0' or activeChannel /= i) then
-                        
-                           if (triggerNew = '1' or (dmaState /= OFF)) then
-                              dmaArray(i).requestsPending <= '1';
-                           else
-                              -- todo : priority
-                              triggerNew     := '1';
-                              triggerchannel := i;
-                           end if;
-                           
+                  if ((DPCR((i * 4) + 3) = '1' and dmaArray(i).D_CHCR(24) = '1') or dmaArray(i).channelOn = '1') then -- enable + start or already on(retrigger after busy)
+                     if (isOn = '0' or activeChannel /= i) then
+                     
+                        if (triggerNew = '1' or (dmaState /= OFF)) then
+                           dmaArray(i).requestsPending <= '1';
+                        else
+                           -- todo : priority
+                           triggerNew     := '1';
+                           triggerchannel := i;
                         end if;
+                        
                      end if;
                   end if;
                end if;
@@ -399,6 +404,7 @@ begin
                dmaArray(triggerchannel).requestsPending <= '0';
                dmaArray(triggerchannel).timeupPending   <= '0';
                dmaArray(triggerchannel).D_CHCR(28)      <= '0';
+               dmaArray(triggerchannel).channelOn       <= '1';
                
                dmaState      <= WAITING;
                waitcnt       <= 9;
@@ -634,6 +640,7 @@ begin
                         dmaState <= OFF;
                         isOn     <= '0';
                         dmaArray(activeChannel).D_CHCR(24) <= '0';
+                        dmaArray(activeChannel).channelOn  <= '0';
                         if (DICR(16 + activeChannel) = '1') then
                            DICR_IRQs(activeChannel) <= '1';
                            if (DICR(23) = '1') then

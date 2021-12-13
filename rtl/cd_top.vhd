@@ -1740,6 +1740,8 @@ begin
          end if;
 
          if (reset = '1') then
+         
+            cd_hps_req           <= '0';
             
             sectorFetchState     <= SFETCH_IDLE;
             sectorProcessState   <= SPROC_IDLE;
@@ -1805,12 +1807,14 @@ begin
                      fetchDelay       <= 15;
                   end if;
                   
-               when SFETCH_DELAY => -- delay to give processing a head start with copy
-                  if (fetchDelay > 0) then
-                     fetchDelay <= fetchDelay - 1;
-                  else
-                     sectorFetchState <= SFETCH_START;
-                  end if;   
+               when SFETCH_DELAY => -- delay to give processing a head start with copy and wait for HPS ack before new request
+                  if (cd_hps_on = '0' or cd_hps_ack = '0') then
+                     if (fetchDelay > 0) then
+                        fetchDelay <= fetchDelay - 1;
+                     else
+                        sectorFetchState <= SFETCH_START;
+                     end if;   
+                  end if;
                   
                when SFETCH_START =>
                   if (cd_hps_on = '1') then

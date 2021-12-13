@@ -231,13 +231,13 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXXXXXX XXXXXXXXXXXXXXXXxXxxX  XXXXXXX
+// X XXX XXX XXXXXXXXXXXXXXXXx xxX  XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
 	"PlayStation;SS3E000000:400000;",
-   "FS,EXE,Load Exe;",
    "S1,ISOBIN,Load Iso/Bin;",
+   "F1,EXE,Load Exe;",
    "h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
 	"D0RC,Reload Backup RAM;",
@@ -273,11 +273,6 @@ parameter CONF_STR = {
 	"P1O24,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",	
 	"P1O78,Stereo Mix,None,25%,50%,100%;",
 	"P1o23,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
-
-	"P3,Miscellaneous;",
-	"P3-;",
-	"D5P3O5,Pause when OSD is open,Off,On;",
-	"P3OR,Rewind Capture,Off,On;",
 
 	"- ;",
 	"R0,Reset;",
