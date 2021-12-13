@@ -311,7 +311,6 @@ begin
                      when "10" => 
                         bus_dataRead <= std_logic_vector(dmaArray(channel).D_CHCR);
                         -- deliver busy bit even if it was cleared by cpu already when channel is still running, maybe R/W bits should be seperate?
-                        bus_dataRead(24) <= dmaArray(channel).channelOn;
                         if (dmaState /= OFF and activeChannel = channel) then 
                            bus_dataRead(24) <= '1';
                         end if;
