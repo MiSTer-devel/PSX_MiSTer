@@ -17,26 +17,30 @@ entity joypad is
       
       irqRequest           : out std_logic := '0';
       
-      KeyTriangle          : in  std_logic; 
-      KeyCircle            : in  std_logic; 
-      KeyCross             : in  std_logic; 
-      KeySquare            : in  std_logic;
-      KeySelect            : in  std_logic;
-      KeyStart             : in  std_logic;
-      KeyRight             : in  std_logic;
-      KeyLeft              : in  std_logic;
-      KeyUp                : in  std_logic;
-      KeyDown              : in  std_logic;
-      KeyR1                : in  std_logic;
-      KeyR2                : in  std_logic;
-      KeyR3                : in  std_logic;
-      KeyL1                : in  std_logic;
-      KeyL2                : in  std_logic;
-      KeyL3                : in  std_logic;
-      Analog1X             : in  signed(7 downto 0);
-      Analog1Y             : in  signed(7 downto 0);
-      Analog2X             : in  signed(7 downto 0);
-      Analog2Y             : in  signed(7 downto 0);      
+      KeyTriangle          : in  std_logic_vector(1 downto 0); 
+      KeyCircle            : in  std_logic_vector(1 downto 0); 
+      KeyCross             : in  std_logic_vector(1 downto 0); 
+      KeySquare            : in  std_logic_vector(1 downto 0);
+      KeySelect            : in  std_logic_vector(1 downto 0);
+      KeyStart             : in  std_logic_vector(1 downto 0);
+      KeyRight             : in  std_logic_vector(1 downto 0);
+      KeyLeft              : in  std_logic_vector(1 downto 0);
+      KeyUp                : in  std_logic_vector(1 downto 0);
+      KeyDown              : in  std_logic_vector(1 downto 0);
+      KeyR1                : in  std_logic_vector(1 downto 0);
+      KeyR2                : in  std_logic_vector(1 downto 0);
+      KeyR3                : in  std_logic_vector(1 downto 0);
+      KeyL1                : in  std_logic_vector(1 downto 0);
+      KeyL2                : in  std_logic_vector(1 downto 0);
+      KeyL3                : in  std_logic_vector(1 downto 0);
+      Analog1XP1           : in  signed(7 downto 0);
+      Analog1YP1           : in  signed(7 downto 0);
+      Analog2XP1           : in  signed(7 downto 0);
+      Analog2YP1           : in  signed(7 downto 0);         
+      Analog1XP2           : in  signed(7 downto 0);
+      Analog1YP2           : in  signed(7 downto 0);
+      Analog2XP2           : in  signed(7 downto 0);
+      Analog2YP2           : in  signed(7 downto 0);      
       
       bus_addr             : in  unsigned(3 downto 0); 
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
@@ -57,46 +61,46 @@ end entity;
 
 architecture arch of joypad is
 
-   signal receiveFilled    : std_logic;
-   signal receiveBuffer    : std_logic_vector(7 downto 0);
+   signal receiveFilled       : std_logic;
+      
+   signal JOY_STAT            : std_logic_vector(31 downto 0);
+   signal JOY_STAT_ACK        : std_logic;
+   signal transmitFilled      : std_logic;
+   signal transmitBuffer      : std_logic_vector(7 downto 0);
+   signal transmitValue       : std_logic_vector(7 downto 0);
+      
+   signal transmitting        : std_logic;
+   signal waitAck             : std_logic;
+      
+   signal baudCnt             : unsigned(20 downto 0) := (others => '0');
+      
+   signal JOY_MODE            : std_logic_vector(15 downto 0);
+   signal JOY_CTRL            : std_logic_vector(15 downto 0);
+   signal JOY_BAUD            : std_logic_vector(15 downto 0);
+      
+   signal beginTransfer       : std_logic := '0';
+   signal actionNext          : std_logic := '0';
+   signal actionNextPad       : std_logic := '0';
+      
+   -- devices  
+   signal isActivePad1        : std_logic;
+   signal isActivePad2        : std_logic;
+      
+   signal selectedPad1        : std_logic;
+   signal selectedPad2        : std_logic;
+      
+   signal ack                 : std_logic;
+   signal ackPad1             : std_logic;
+   signal ackPad2             : std_logic;
    
-   signal JOY_STAT         : std_logic_vector(31 downto 0);
-   signal JOY_STAT_ACK     : std_logic;
-   signal transmitFilled   : std_logic;
-   signal transmitBuffer   : std_logic_vector(7 downto 0);
-   signal transmitValue    : std_logic_vector(7 downto 0);
+   signal receiveBuffer       : std_logic_vector(7 downto 0);
+   signal receiveBufferPad1   : std_logic_vector(7 downto 0);
+   signal receiveBufferPad2   : std_logic_vector(7 downto 0);
    
-   signal transmitting     : std_logic;
-   signal waitAck          : std_logic;
-   
-   signal baudCnt          : unsigned(20 downto 0) := (others => '0');
-   
-   signal JOY_MODE         : std_logic_vector(15 downto 0);
-   signal JOY_CTRL         : std_logic_vector(15 downto 0);
-   signal JOY_BAUD         : std_logic_vector(15 downto 0);
-   
-   signal activeDevice     : integer range 0 to 2;
-   
-   signal beginTransfer    : std_logic := '0';
-   signal actionNext       : std_logic := '0';
-   
-   type tcontrollerState is
-   (
-      IDLE,
-      READY,
-      ID,
-      BUTTONLSB,
-      BUTTONMSB,
-      ANALOGRIGHTX,
-      ANALOGRIGHTY,
-      ANALOGLEFTX,
-      ANALOGLEFTY
-   );
-   signal controllerState : tcontrollerState := IDLE;
-   
-   signal analogPadSave   : std_logic := '0';
-   signal rumbleOnFirst   : std_logic := '0';
-  
+   signal receiveValid        : std_logic;
+   signal receiveValidPad1    : std_logic;
+   signal receiveValidPad2    : std_logic;
+
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
    signal ss_in  : t_ssarray := (others => (others => '0'));  
@@ -125,15 +129,14 @@ begin
    ss_out(3)( 7 downto  0) <= transmitBuffer;
    ss_out(3)(15 downto  8) <= transmitValue;
    ss_out(3)(23 downto 16) <= receiveBuffer;   
-   ss_out(3)(31 downto 24) <= std_logic_vector(to_unsigned(activeDevice, 8));    
-   ss_out(4)(15 downto 8)  <= std_logic_vector(to_unsigned(tcontrollerState'POS(controllerState), 8));       
+   --ss_out(3)(31 downto 24) <= std_logic_vector(to_unsigned(activeDevice, 8));    
+   --ss_out(4)(15 downto 8)  <= std_logic_vector(to_unsigned(tcontrollerState'POS(controllerState), 8));       
    ss_out(4)(19)           <= receiveFilled; 
    ss_out(4)(16)           <= transmitFilled;
    ss_out(4)(17)           <= transmitting;  
    ss_out(4)(18)           <= waitAck;        
 
    process (clk1x)
-      variable ack : std_logic;
    begin
       if rising_edge(clk1x) then
       
@@ -153,13 +156,11 @@ begin
             transmitBuffer  <= ss_in(3)(7 downto 0);
             transmitValue   <= ss_in(3)(15 downto 8);
             receiveBuffer   <= ss_in(3)(23 downto 16);
-            activeDevice    <= to_integer(unsigned(ss_in(3)(31 downto 24)));
-            controllerState <= tcontrollerState'VAL(to_integer(unsigned(ss_in(4)(15 downto 8))));
+            --activeDevice    <= to_integer(unsigned(ss_in(3)(31 downto 24)));
+            --controllerState <= tcontrollerState'VAL(to_integer(unsigned(ss_in(4)(15 downto 8))));
             
             beginTransfer   <= '0';
             actionNext      <= '0';
-
-            rumbleOn        <= '0';
 
          elsif (ce = '1') then
          
@@ -225,16 +226,11 @@ begin
                               irqRequest <= '0';                           
                            end if;
                            
-                           if (bus_dataWrite(17) = '0') then -- not selected
-                              activeDevice <= 0;                          
-                           end if;
-                           
                            if (bus_dataWrite(17 downto 16) = "11") then -- select and tx en
                               if (transmitting = '0' and waitAck = '0' and transmitFilled = '1') then
                                  beginTransfer <= '1';
                               end if;
                            else
-                              controllerState <= IDLE;
                               baudCnt         <= (others => '0');
                               transmitting    <= '0';
                               waitAck         <= '0';
@@ -251,9 +247,13 @@ begin
                end case;
             end if;
             
-            actionNext <= '0';
+            actionNext    <= '0';
+            actionNextPad <= '0';
             if (baudCnt > 0) then
                baudCnt <= baudCnt - 1;
+               if (baudCnt = 3) then
+                  actionNextPad <= '1';
+               end if;
                if (baudCnt = 2) then
                   actionNext <= '1';
                end if;
@@ -271,108 +271,16 @@ begin
             elsif (actionNext = '1') then
                if (transmitting = '1') then
                   JOY_CTRL(2)    <= '1';
-                  receiveBuffer  <= x"FF";
+                  if (receiveValid = '1') then
+                     receiveBuffer <= receiveBufferPad1 or receiveBufferPad2;
+                  else
+                     receiveBuffer  <= x"FF";
+                  end if;
                   receiveFilled  <= '1';
                   transmitting   <= '0';
-                  ack := '0';
-                  if (JOY_CTRL(13) = '0') then -- controllerIndex 0
-                     if (activeDevice = 0) then
-                        if (controllerState = IDLE and transmitValue = x"01") then
-                           controllerState <= READY;
-                           activeDevice    <= 1;
-                           ack             := '1'; 
-                           analogPadSave   <= analogPad;
-                        end if;
-                     elsif (activeDevice = 1) then
-                        case (controllerState) is
-                           when IDLE => 
-                              if (transmitValue = x"01") then
-                                 controllerState <= READY;
-                                 activeDevice    <= 1;
-                                 ack             := '1';
-                                 analogPadSave   <= analogPad;
-                              end if;
-                              
-                           when READY => 
-                              if (transmitValue = x"42") then
-                                 if (analogPadSave = '1') then
-                                    receiveBuffer   <= x"73";
-                                 else
-                                    receiveBuffer   <= x"41";
-                                 end if;
-                                 controllerState <= ID;
-                                 ack := '1';
-                              end if;
-                              
-                           when ID => 
-                              receiveBuffer   <= x"5A";
-                              controllerState <= BUTTONLSB;
-                              ack := '1';
-                              
-                           when BUTTONLSB => 
-                              receiveBuffer(0) <= not KeySelect;
-                              receiveBuffer(1) <= not KeyL3;
-                              receiveBuffer(2) <= not KeyR3;
-                              receiveBuffer(3) <= not KeyStart;
-                              receiveBuffer(4) <= not KeyUp;
-                              receiveBuffer(5) <= not KeyRight;
-                              receiveBuffer(6) <= not KeyDown;
-                              receiveBuffer(7) <= not KeyLeft;
-                              controllerState <= BUTTONMSB;
-                              ack := '1';
-                              rumbleOnFirst <= '0';
-                              if (analogPadSave = '1' and transmitValue(7 downto 6) = "01") then
-                                 rumbleOnFirst <= '1';
-                              end if;
-                              
-                              
-                           when BUTTONMSB => 
-                              receiveBuffer(0) <= not KeyL2;
-                              receiveBuffer(1) <= not KeyR2;
-                              receiveBuffer(2) <= not KeyL1;
-                              receiveBuffer(3) <= not KeyR1;
-                              receiveBuffer(4) <= not KeyTriangle;
-                              receiveBuffer(5) <= not KeyCircle;
-                              receiveBuffer(6) <= not KeyCross;
-                              receiveBuffer(7) <= not KeySquare;
-                              if (analogPadSave = '1') then
-                                 controllerState <= ANALOGRIGHTX;
-                                 ack := '1';
-                              else
-                                 controllerState <= IDLE;
-                              end if;
-                              rumbleOn <= '0';
-                              if (analogPadSave = '1' and transmitValue(0) = '1' and rumbleOnFirst = '1') then
-                                 rumbleOn <= '1';
-                              end if;
-                              
-                           when ANALOGRIGHTX => 
-                              receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog2X) + 128, 8));
-                              controllerState <= ANALOGRIGHTY;
-                              ack := '1';
-                           
-                           when ANALOGRIGHTY => 
-                              receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog2Y) + 128, 8));
-                              controllerState <= ANALOGLEFTX;
-                              ack := '1';
-                           
-                           when ANALOGLEFTX =>
-                              receiveBuffer   <=std_logic_vector(to_unsigned(to_integer(Analog1X) + 128, 8));
-                              controllerState <= ANALOGLEFTY;
-                              ack := '1';
-                           
-                           when ANALOGLEFTY =>
-                              receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog1Y) + 128, 8));
-                              controllerState <= IDLE;
-                              
-                        end case;
-                     end if;
-                  end if;
                   if (ack = '1') then
                      waitAck <= '1';
                      baudCnt <= to_unsigned(452, 21); -- 170 for memory card
-                  else
-                     activeDevice <= 0;
                   end if;
                elsif (waitAck = '1') then
                   JOY_STAT_ACK <= '1';
@@ -389,6 +297,102 @@ begin
          end if;
       end if;
    end process;
+   
+   ack          <= ackPad1 or ackPad2;
+   receiveValid <= receiveValidPad1 or receiveValidPad2;
+   
+   selectedPad1 <= '1' when (JOY_CTRL(13) = '0' and JOY_CTRL(1 downto 0) = "11") else '0';
+   selectedPad2 <= '1' when (JOY_CTRL(13) = '1' and JOY_CTRL(1 downto 0) = "11") else '0';
+   
+   ijoypad_pad1 : entity work.joypad_pad
+   port map
+   (
+      clk1x                => clk1x,    
+      ce                   => ce,       
+      reset                => reset,    
+       
+      analogPad            => analogPad,
+
+      selected             => selectedPad1,
+      actionNext           => actionNextPad,
+      transmitting         => transmitting,
+      transmitValue        => transmitValue,
+ 
+      isActive             => isActivePad1,
+      slotIdle             => '1',
+
+      receiveValid         => receiveValidPad1,
+      receiveBuffer        => receiveBufferPad1,
+      ack                  => ackPad1,
+
+      rumbleOn             => rumbleOn,
+
+      KeyTriangle          => KeyTriangle(0),
+      KeyCircle            => KeyCircle(0),  
+      KeyCross             => KeyCross(0),   
+      KeySquare            => KeySquare(0),  
+      KeySelect            => KeySelect(0),  
+      KeyStart             => KeyStart(0),   
+      KeyRight             => KeyRight(0),   
+      KeyLeft              => KeyLeft(0),    
+      KeyUp                => KeyUp(0),      
+      KeyDown              => KeyDown(0),    
+      KeyR1                => KeyR1(0),      
+      KeyR2                => KeyR2(0),      
+      KeyR3                => KeyR3(0),      
+      KeyL1                => KeyL1(0),      
+      KeyL2                => KeyL2(0),      
+      KeyL3                => KeyL3(0),      
+      Analog1X             => Analog1XP1,   
+      Analog1Y             => Analog1YP1,   
+      Analog2X             => Analog2XP1,   
+      Analog2Y             => Analog2YP1
+   );
+   
+   ijoypad_pad2 : entity work.joypad_pad
+   port map
+   (
+      clk1x                => clk1x,    
+      ce                   => ce,       
+      reset                => reset,    
+       
+      analogPad            => analogPad,
+
+      selected             => selectedPad2,
+      actionNext           => actionNextPad,
+      transmitting         => transmitting,
+      transmitValue        => transmitValue,
+ 
+      isActive             => isActivePad2,
+      slotIdle             => '1',
+
+      receiveValid         => receiveValidPad2,
+      receiveBuffer        => receiveBufferPad2,
+      ack                  => ackPad2,
+
+      rumbleOn             => rumbleOn,
+
+      KeyTriangle          => KeyTriangle(1),
+      KeyCircle            => KeyCircle(1),  
+      KeyCross             => KeyCross(1),   
+      KeySquare            => KeySquare(1),  
+      KeySelect            => KeySelect(1),  
+      KeyStart             => KeyStart(1),   
+      KeyRight             => KeyRight(1),   
+      KeyLeft              => KeyLeft(1),    
+      KeyUp                => KeyUp(1),      
+      KeyDown              => KeyDown(1),    
+      KeyR1                => KeyR1(1),      
+      KeyR2                => KeyR2(1),      
+      KeyR3                => KeyR3(1),      
+      KeyL1                => KeyL1(1),      
+      KeyL2                => KeyL2(1),      
+      KeyL3                => KeyL3(1),      
+      Analog1X             => Analog1XP2,   
+      Analog1Y             => Analog1YP2,   
+      Analog2X             => Analog2XP2,   
+      Analog2Y             => Analog2YP2
+   );
    
 --##############################################################
 --############################### savestates
@@ -409,7 +413,7 @@ begin
          end if;
          
          SS_idle <= '0';
-         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNext = '0') then
+         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNext = '0' and isActivePad1 = '0' and isActivePad2 = '0') then
             SS_idle <= '1';
          end if;
          

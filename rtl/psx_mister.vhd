@@ -77,26 +77,30 @@ entity psx_mister is
       video_g               : out std_logic_vector(7 downto 0);
       video_b               : out std_logic_vector(7 downto 0);
       -- Keys - all active high   
-      KeyTriangle           : in  std_logic; 
-      KeyCircle             : in  std_logic; 
-      KeyCross              : in  std_logic; 
-      KeySquare             : in  std_logic;
-      KeySelect             : in  std_logic;
-      KeyStart              : in  std_logic;
-      KeyRight              : in  std_logic;
-      KeyLeft               : in  std_logic;
-      KeyUp                 : in  std_logic;
-      KeyDown               : in  std_logic;
-      KeyR1                 : in  std_logic;
-      KeyR2                 : in  std_logic;
-      KeyR3                 : in  std_logic;
-      KeyL1                 : in  std_logic;
-      KeyL2                 : in  std_logic;
-      KeyL3                 : in  std_logic;
-      Analog1X              : in  signed(7 downto 0);
-      Analog1Y              : in  signed(7 downto 0);
-      Analog2X              : in  signed(7 downto 0);
-      Analog2Y              : in  signed(7 downto 0);                  
+      KeyTriangle           : in  std_logic_vector(1 downto 0); 
+      KeyCircle             : in  std_logic_vector(1 downto 0); 
+      KeyCross              : in  std_logic_vector(1 downto 0); 
+      KeySquare             : in  std_logic_vector(1 downto 0);
+      KeySelect             : in  std_logic_vector(1 downto 0);
+      KeyStart              : in  std_logic_vector(1 downto 0);
+      KeyRight              : in  std_logic_vector(1 downto 0);
+      KeyLeft               : in  std_logic_vector(1 downto 0);
+      KeyUp                 : in  std_logic_vector(1 downto 0);
+      KeyDown               : in  std_logic_vector(1 downto 0);
+      KeyR1                 : in  std_logic_vector(1 downto 0);
+      KeyR2                 : in  std_logic_vector(1 downto 0);
+      KeyR3                 : in  std_logic_vector(1 downto 0);
+      KeyL1                 : in  std_logic_vector(1 downto 0);
+      KeyL2                 : in  std_logic_vector(1 downto 0);
+      KeyL3                 : in  std_logic_vector(1 downto 0);
+      Analog1XP1            : in  signed(7 downto 0);
+      Analog1YP1            : in  signed(7 downto 0);
+      Analog2XP1            : in  signed(7 downto 0);
+      Analog2YP1            : in  signed(7 downto 0);         
+      Analog1XP2            : in  signed(7 downto 0);
+      Analog1YP2            : in  signed(7 downto 0);
+      Analog2XP2            : in  signed(7 downto 0);
+      Analog2YP2            : in  signed(7 downto 0);                  
       -- sound                          
       sound_out_left        : out std_logic_vector(15 downto 0) := (others => '0');
       sound_out_right       : out std_logic_vector(15 downto 0) := (others => '0');
@@ -212,10 +216,14 @@ begin
       KeyL1                 => KeyL1,           
       KeyL2                 => KeyL2,           
       KeyL3                 => KeyL3,           
-      Analog1X              => Analog1X,       
-      Analog1Y              => Analog1Y,       
-      Analog2X              => Analog2X,       
-      Analog2Y              => Analog2Y,      
+      Analog1XP1            => Analog1XP1,       
+      Analog1YP1            => Analog1YP1,       
+      Analog2XP1            => Analog2XP1,       
+      Analog2YP1            => Analog2YP1,
+      Analog1XP2            => Analog1XP2,
+      Analog1YP2            => Analog1YP2,
+      Analog2XP2            => Analog2XP2,
+      Analog2YP2            => Analog2YP2,     
       -- sound              => -- sound       
       sound_out_left        => sound_out_left, 
       sound_out_right       => sound_out_right,

@@ -321,6 +321,8 @@ reg         ioctl_wait = 0;
 
 wire [16:0] joy;
 wire [16:0] joy_unmod;
+wire [16:0] joy2;
+
 wire [10:0] ps2_key;
 
 wire [21:0] gamma_bus;
@@ -328,6 +330,8 @@ wire [15:0] sdram_sz;
 
 wire [15:0] joystick_analog_l0;
 wire [15:0] joystick_analog_r0;
+wire [15:0] joystick_analog_l1;
+wire [15:0] joystick_analog_r1;
 
 wire [32:0] RTC_time;
 
@@ -342,6 +346,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
 	.forced_scandoubler(forced_scandoubler),
 
 	.joystick_0(joy_unmod),
+	.joystick_1(joy2),
 	.ps2_key(ps2_key),
 
 	.status(status),
@@ -378,7 +383,9 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
 	.gamma_bus(gamma_bus),
 
    .joystick_l_analog_0(joystick_analog_l0),
-   .joystick_r_analog_0(joystick_analog_r0)
+   .joystick_r_analog_0(joystick_analog_r0),  
+   .joystick_l_analog_1(joystick_analog_l1),
+   .joystick_r_analog_1(joystick_analog_r1)
 );
 
 assign joy = joy_unmod[16] ? 16'b0 : joy_unmod;
@@ -472,7 +479,7 @@ savestate_ui savestate_ui
 	.joyDown        (joy_unmod[2]  ),
 	.joyUp          (joy_unmod[3]  ),
 	.joyStart       (joy_unmod[9]  ),
-	.joyRewind      (joy_unmod[11] ),
+	.joyRewind      (0             ),
 	.rewindEnable   (status[27]    ), 
 	.status_slot    (status[38:37] ),
 	.OSD_saveload   (status[18:17] ),
@@ -558,26 +565,30 @@ psx
    .video_g         (g),
    .video_b         (b),
    //Keys
-   .KeyTriangle(joy[4]),    
-   .KeyCircle(joy[5]),       
-   .KeyCross(joy[6]),       
-   .KeySquare(joy[7]),       
-   .KeySelect(joy[8]),       
-   .KeyStart(joy[9]),        
-	.KeyRight(joy[0]),
-	.KeyLeft(joy[1]),
-	.KeyUp(joy[3]),
-	.KeyDown(joy[2]),      
-   .KeyR1(joy[11]),          
-   .KeyR2(joy[13]),          
-   .KeyR3(joy[15]),          
-   .KeyL1(joy[10]),          
-   .KeyL2(joy[12]),          
-   .KeyL3(joy[14]),          
-   .Analog1X(joystick_analog_l0[7:0]),       
-   .Analog1Y(joystick_analog_l0[15:8]),       
-   .Analog2X(joystick_analog_r0[7:0]),           
-   .Analog2Y(joystick_analog_r0[15:8]),           
+   .KeyTriangle({joy2[4], joy[4] }),    
+   .KeyCircle  ({joy2[5] ,joy[5] }),       
+   .KeyCross   ({joy2[6] ,joy[6] }),       
+   .KeySquare  ({joy2[7] ,joy[7] }),       
+   .KeySelect  ({joy2[8] ,joy[8] }),       
+   .KeyStart   ({joy2[9] ,joy[9] }),        
+   .KeyRight   ({joy2[0] ,joy[0] }),
+   .KeyLeft    ({joy2[1] ,joy[1] }),
+   .KeyUp      ({joy2[3] ,joy[3] }),
+   .KeyDown    ({joy2[2] ,joy[2] }),      
+   .KeyR1      ({joy2[11],joy[11]}),          
+   .KeyR2      ({joy2[13],joy[13]}),          
+   .KeyR3      ({joy2[15],joy[15]}),          
+   .KeyL1      ({joy2[10],joy[10]}),          
+   .KeyL2      ({joy2[12],joy[12]}),          
+   .KeyL3      ({joy2[14],joy[14]}),          
+   .Analog1XP1(joystick_analog_l0[7:0]),       
+   .Analog1YP1(joystick_analog_l0[15:8]),       
+   .Analog2XP1(joystick_analog_r0[7:0]),           
+   .Analog2YP1(joystick_analog_r0[15:8]),    
+   .Analog1XP2(joystick_analog_l1[7:0]),       
+   .Analog1YP2(joystick_analog_l1[15:8]),       
+   .Analog2XP2(joystick_analog_r1[7:0]),           
+   .Analog2YP2(joystick_analog_r1[15:8]),           
    //sound       
 	.sound_out_left(AUDIO_L),
 	.sound_out_right(AUDIO_R),

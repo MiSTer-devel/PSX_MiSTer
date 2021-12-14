@@ -103,26 +103,30 @@ architecture arch of etb is
    signal video_b             : std_logic_vector(7 downto 0);
    
    -- keys
-   signal KeyTriangle         : std_logic := '0'; 
-   signal KeyCircle           : std_logic := '0'; 
-   signal KeyCross            : std_logic := '0'; 
-   signal KeySquare           : std_logic := '0';
-   signal KeySelect           : std_logic := '0';
-   signal KeyStart            : std_logic := '0';
-   signal KeyRight            : std_logic := '0';
-   signal KeyLeft             : std_logic := '0';
-   signal KeyUp               : std_logic := '0';
-   signal KeyDown             : std_logic := '0';
-   signal KeyR1               : std_logic := '0';
-   signal KeyR2               : std_logic := '0';
-   signal KeyR3               : std_logic := '0';
-   signal KeyL1               : std_logic := '0';
-   signal KeyL2               : std_logic := '0';
-   signal KeyL3               : std_logic := '0';
-   signal Analog1X            : signed(7 downto 0) := (others => '0');
-   signal Analog1Y            : signed(7 downto 0) := (others => '0');
-   signal Analog2X            : signed(7 downto 0) := (others => '0');
-   signal Analog2Y            : signed(7 downto 0) := (others => '0'); 
+   signal KeyTriangle         : std_logic_vector(1 downto 0) := (others => '0'); 
+   signal KeyCircle           : std_logic_vector(1 downto 0) := (others => '0'); 
+   signal KeyCross            : std_logic_vector(1 downto 0) := (others => '0'); 
+   signal KeySquare           : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeySelect           : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyStart            : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyRight            : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyLeft             : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyUp               : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyDown             : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyR1               : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyR2               : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyR3               : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyL1               : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyL2               : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyL3               : std_logic_vector(1 downto 0) := (others => '0');
+   signal Analog1XP1          : signed(7 downto 0) := (others => '0');
+   signal Analog1YP1          : signed(7 downto 0) := (others => '0');
+   signal Analog2XP1          : signed(7 downto 0) := (others => '0');
+   signal Analog2YP1          : signed(7 downto 0) := (others => '0');    
+   signal Analog1XP2          : signed(7 downto 0) := (others => '0');
+   signal Analog1YP2          : signed(7 downto 0) := (others => '0');
+   signal Analog2XP2          : signed(7 downto 0) := (others => '0');
+   signal Analog2YP2          : signed(7 downto 0) := (others => '0'); 
    
    --cd
    type filetype is file of integer;
@@ -134,8 +138,8 @@ architecture arch of etb is
    
    signal cd_hps_req          : std_logic := '0';
    signal cd_hps_lba          : std_logic_vector(31 downto 0);
-   signal cd_hps_ack          : std_logic;
-   signal cd_hps_write        : std_logic;
+   signal cd_hps_ack          : std_logic := '0';
+   signal cd_hps_write        : std_logic := '0';
    signal cd_hps_data         : std_logic_vector(15 downto 0);
 
    signal cdSize              : unsigned(29 downto 0);
@@ -148,27 +152,6 @@ begin
    clk100 <= not clk100 after 5 ns;
    
    reset  <= not psx_on(0);
-   
-   KeyTriangle <= '0';
-   KeyCircle   <= '0';
-   KeyCross    <= '0';
-   KeySquare   <= '0';
-   KeySelect   <= '0';
-   KeyStart    <= '0';
-   KeyRight    <= '0'; --'1' after 300 ms;
-   KeyLeft     <= '0';
-   KeyUp       <= '0';
-   KeyDown     <= '0';
-   KeyR1       <= '0';
-   KeyR2       <= '0';
-   KeyR3       <= '0';
-   KeyL1       <= '0';
-   KeyL2       <= '0';
-   KeyL3       <= '0';
-   Analog1X    <= (others => '0');
-   Analog1Y    <= (others => '0');
-   Analog2X    <= (others => '0');
-   Analog2Y    <= (others => '0');
    
    -- registers
    iReg_psx_on            : entity procbus.eProcReg generic map (Reg_psx_on)        port map (clk100, proc_bus_in, psx_on        , psx_on);      
@@ -193,10 +176,12 @@ begin
       REPRODUCIBLEGPUTIMING => '0',
       REPRODUCIBLEDMATIMING => '0',
       DMABLOCKATONCE        => '0',
-      CDDISABLE             => '0',
+      INSTANTSEEK           => '0',
+      FAKESPU               => '0',
       ditherOff             => '0',
       analogPad             => '0',
-      fpscountOn            => '1',
+      fpscountOn            => '0',
+      errorOn               => '0',
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
@@ -259,10 +244,14 @@ begin
       KeyL1                 => KeyL1,           
       KeyL2                 => KeyL2,           
       KeyL3                 => KeyL3,           
-      Analog1X              => Analog1X,       
-      Analog1Y              => Analog1Y,       
-      Analog2X              => Analog2X,       
-      Analog2Y              => Analog2Y,      
+      Analog1XP1            => Analog1XP1,       
+      Analog1YP1            => Analog1YP1,       
+      Analog2XP1            => Analog2XP1,       
+      Analog2YP1            => Analog2YP1,
+      Analog1XP2            => Analog1XP2,
+      Analog1YP2            => Analog1YP2,
+      Analog2XP2            => Analog2XP2,
+      Analog2YP2            => Analog2YP2, 
       -- sound              => -- sound       
       sound_out_left        => sound_out_left, 
       sound_out_right       => sound_out_right,
