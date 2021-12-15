@@ -52,6 +52,7 @@ entity psx_top is
       ddr3_WE               : out std_logic := '0';
       ddr3_RD               : out std_logic := '0'; 
       -- cd
+      hasCD                 : in  std_logic;
       fastCD                : in  std_logic;
       cd_Size               : in  unsigned(29 downto 0);
       cd_req                : out std_logic := '0';
@@ -827,7 +828,7 @@ begin
       reset                => reset_intern,
      
       INSTANTSEEK          => INSTANTSEEK,
-      hasCD                => '1',
+      hasCD                => hasCD,
       fastCD               => fastCD,
       
       cdSlow               => cdSlow,

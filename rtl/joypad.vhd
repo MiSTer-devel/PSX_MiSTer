@@ -85,6 +85,7 @@ architecture arch of joypad is
    -- devices  
    signal isActivePad1        : std_logic;
    signal isActivePad2        : std_logic;
+   signal isActiveMem1        : std_logic;
       
    signal selectedPad1        : std_logic;
    signal selectedPad2        : std_logic;
@@ -92,14 +93,17 @@ architecture arch of joypad is
    signal ack                 : std_logic;
    signal ackPad1             : std_logic;
    signal ackPad2             : std_logic;
+   signal ackMem1             : std_logic;
    
    signal receiveBuffer       : std_logic_vector(7 downto 0);
    signal receiveBufferPad1   : std_logic_vector(7 downto 0);
    signal receiveBufferPad2   : std_logic_vector(7 downto 0);
+   signal receiveBufferMem1   : std_logic_vector(7 downto 0);
    
    signal receiveValid        : std_logic;
    signal receiveValidPad1    : std_logic;
    signal receiveValidPad2    : std_logic;
+   signal receiveValidMem1    : std_logic;
 
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
@@ -266,13 +270,13 @@ begin
                transmitting   <= '1';
                baudCnt        <= to_unsigned(to_integer(unsigned(JOY_BAUD)) * 8, 21);
                if (unsigned(JOY_BAUD) = 0) then
-                  baudCnt     <= to_unsigned(2, 21);
+                  baudCnt     <= to_unsigned(8, 21);
                end if;
             elsif (actionNext = '1') then
                if (transmitting = '1') then
                   JOY_CTRL(2)    <= '1';
                   if (receiveValid = '1') then
-                     receiveBuffer <= receiveBufferPad1 or receiveBufferPad2;
+                     receiveBuffer <= receiveBufferPad1 or receiveBufferPad2 or receiveBufferMem1;
                   else
                      receiveBuffer  <= x"FF";
                   end if;
@@ -280,7 +284,11 @@ begin
                   transmitting   <= '0';
                   if (ack = '1') then
                      waitAck <= '1';
-                     baudCnt <= to_unsigned(452, 21); -- 170 for memory card
+                     if (ackMem1 = '1') then
+                        baudCnt <= to_unsigned(172, 21);
+                     else
+                        baudCnt <= to_unsigned(452, 21);
+                     end if;
                   end if;
                elsif (waitAck = '1') then
                   JOY_STAT_ACK <= '1';
@@ -298,8 +306,8 @@ begin
       end if;
    end process;
    
-   ack          <= ackPad1 or ackPad2;
-   receiveValid <= receiveValidPad1 or receiveValidPad2;
+   ack          <= ackPad1 or ackPad2 or ackMem1;
+   receiveValid <= receiveValidPad1 or receiveValidPad2 or receiveValidMem1;
    
    selectedPad1 <= '1' when (JOY_CTRL(13) = '0' and JOY_CTRL(1 downto 0) = "11") else '0';
    selectedPad2 <= '1' when (JOY_CTRL(13) = '1' and JOY_CTRL(1 downto 0) = "11") else '0';
@@ -319,7 +327,7 @@ begin
       transmitValue        => transmitValue,
  
       isActive             => isActivePad1,
-      slotIdle             => '1',
+      slotIdle             => not isActiveMem1,
 
       receiveValid         => receiveValidPad1,
       receiveBuffer        => receiveBufferPad1,
@@ -392,6 +400,26 @@ begin
       Analog1Y             => Analog1YP2,   
       Analog2X             => Analog2XP2,   
       Analog2Y             => Analog2YP2
+   );
+   
+   ijoypad_mem1 : entity work.joypad_mem
+   port map
+   (
+      clk1x                => clk1x,    
+      ce                   => ce,       
+      reset                => reset,    
+      
+      selected             => selectedPad1,
+      actionNext           => actionNextPad,
+      transmitting         => transmitting,
+      transmitValue        => transmitValue,
+      
+      isActive             => isActiveMem1,
+      slotIdle             => not isActivePad1,
+      
+      receiveValid         => receiveValidMem1,
+      receiveBuffer        => receiveBufferMem1,
+      ack                  => ackMem1
    );
    
 --##############################################################

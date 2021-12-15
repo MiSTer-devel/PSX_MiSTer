@@ -337,7 +337,7 @@ wire [32:0] RTC_time;
 
 wire [63:0] status_in = cart_download ? {status[63:39],ss_slot,status[36:17],1'b0,status[15:0]} : {status[63:39],ss_slot,status[36:0]};
 
-hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
+hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2), .BLKSZ(0)) hps_io
 (
 	.clk_sys(clk_1x),
 	.HPS_BUS(HPS_BUS),
@@ -420,6 +420,7 @@ reg [31:0] ramdownload_wrdata;
 reg        ramdownload_wr;
 
 reg[29:0]  cd_Size;
+reg        hasCD = 0;
 
 reg cart_download_1 = 0;
 reg cd_download_1 = 0;
@@ -452,11 +453,13 @@ always @(posedge clk_1x) begin
    if (cd_download_1 & ~cd_download) begin
       cd_Size   <= ioctl_addr;
       cd_hps_on <= 0;
+      hasCD     <= 1;
    end
      
    if (img_mounted[1]) begin
       cd_Size   <= img_size[29:0];
       cd_hps_on <= 1;
+      hasCD     <= 1;
    end
    
 end
@@ -536,6 +539,7 @@ psx
    .DDRAM_BE        (DDRAM_BE        ),
    .DDRAM_WE        (DDRAM_WE        ),
    // cd
+   .hasCD           (hasCD),
    .fastCD          (0),
    .cd_Size         (cd_Size),
    .cd_req          (cd_req),
