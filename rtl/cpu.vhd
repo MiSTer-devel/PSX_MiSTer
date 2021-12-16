@@ -613,7 +613,7 @@ begin
    mem1_address    <= FetchAddr;
 
    process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, branch, PCbranch, mem4_request, mem_done, mem_dataRead, memoryMuxStage, PC, fetchReady, stall1, exceptionNew, opcode0, mem_dataCache, reset, FetchAddr, 
-            cacheUpdate, tagValid, tag_q_b, blockirqCnt, FetchLastAddr)
+            cacheUpdate, tagValid, tag_q_b, blockirqCnt, FetchLastAddr, cop0_SR_next)
       variable request : std_logic;
    begin
       request         := '0';
@@ -960,7 +960,7 @@ begin
 --############################### stage 3
 --##############################################################
 
-   process (decodeValue1, decodeValue2, decodeSource1, decodeSource2, resultTarget, writebackTarget, writeDoneTarget, resultWriteEnable, writebackWriteEnable, writeDoneWriteEnable, resultData, writebackData, writeDoneData, blockLoadforward)
+   process (decodeValue1, decodeValue2, decodeSource1, decodeSource2, resultTarget, writebackTarget, writeDoneTarget, resultWriteEnable, writebackWriteEnable, writeDoneWriteEnable, resultData, writebackData, writeDoneData, blockLoadforward, execute_lastreadGTE)
    begin
    
       value1 <= decodeValue1;
@@ -1885,7 +1885,8 @@ begin
    
    scratchpad_dataread <= unsigned(scratchpad_q_b);
    
-   process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask, SS_wren_SCP)
+   process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask, SS_wren_SCP, 
+	         executeCOP0WriteEnable, executeCOP0WriteDestination, executeCOP0WriteValue)
       variable skipmem : std_logic;
    begin
    

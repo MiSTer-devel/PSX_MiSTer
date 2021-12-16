@@ -284,7 +284,7 @@ begin
 
          elsif (ce = '1') then
          
-            irqOut     <= '0';
+            irqOut     <= DICR_readback(31);
          
             ram_ena    <= '0';
          
@@ -361,9 +361,6 @@ begin
                         DICR(          15) <= bus_dataWrite(15);
                         DICR(23 downto 16) <= unsigned(bus_dataWrite(23 downto 16));
                         DICR_IRQs          <= DICR_IRQs and (not unsigned(bus_dataWrite(30 downto 24)));
-                        --if (bus_dataWrite(15) = '1') then  -- force bit not used in duckstation, why?
-                        --   irqOut <= '1';
-                        --end if;
                      when others => null;
                   end case;
                end if;
@@ -642,9 +639,6 @@ begin
                         dmaArray(activeChannel).channelOn  <= '0';
                         if (DICR(16 + activeChannel) = '1') then
                            DICR_IRQs(activeChannel) <= '1';
-                           if (DICR(23) = '1') then
-                              irqOut <= '1';
-                           end if;
                         end if;
                      end if;
                   end if;
@@ -718,7 +712,7 @@ begin
                ramwrite_pending <= '0';
             end if;
             
-            if (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_done = '1')) then
+            if (fifoOut_Rd = '1') then
                ram_rnw          <= '0';
                ram_ena          <= '1';
                ram_Adr          <= "00" & fifoOut_Dout(50 downto 32) & "00";
@@ -769,7 +763,7 @@ begin
       Empty    => fifoIn_Empty   
    );
    
-   fifoOut_Rd <= '1' when (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_done = '1')) else '0';
+   fifoOut_Rd <= ce when (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_done = '1')) else '0';
    
    DMAfifoOut: entity mem.SyncFifoFallThrough
    generic map
