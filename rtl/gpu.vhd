@@ -48,7 +48,9 @@ entity gpu is
       
       irq_VBLANK           : out std_logic := '0';
       irq_GPU              : out std_logic := '0';
-                     
+           
+      vram_pause           : in  std_logic;
+      vram_paused          : out std_logic := '0';
       vram_BUSY            : in  std_logic;                    
       vram_DOUT            : in  std_logic_vector(63 downto 0);
       vram_DOUT_READY      : in  std_logic;
@@ -349,6 +351,7 @@ architecture arch of gpu is
    signal VRAMIdle                  : std_logic;
    signal reqVRAMIdle               : std_logic;
    signal reqVRAMDone               : std_logic;
+   signal vram_pauseCnt             : integer range 0 to 7;
    
    signal reqVRAMEnable             : std_logic;
    signal reqVRAMXPos               : unsigned(9 downto 0);
@@ -1513,10 +1516,10 @@ begin
       end if;
    end process;
    
-   fifoOut_Rd <= '1' when (ce = '1' and vramState = IDLE and vram_BUSY = '0' and fifoOut_Empty = '0' and reqVRAMEnable = '0') else '0';
+   fifoOut_Rd <= '1' when (ce = '1' and vramState = IDLE and vram_BUSY = '0' and fifoOut_Empty = '0' and reqVRAMEnable = '0' and vram_pause = '0') else '0';
    
    VRAMIdle    <= '1' when (vramState = IDLE and (vram_WE = '0' or vram_BUSY = '0')) else '0';
-   reqVRAMIdle <= VRAMIdle and not videoout_reqVRAMEnable;
+   reqVRAMIdle <= VRAMIdle and (not videoout_reqVRAMEnable) and (not vram_pause);
    
    reqVRAMEnable <= vram2vram_reqVRAMEnable or vram2cpu_reqVRAMEnable or line_reqVRAMEnable or rect_reqVRAMEnable or poly_reqVRAMEnable or pipeline_reqVRAMEnable or videoout_reqVRAMEnable;
    reqVRAMXPos   <= vram2vram_reqVRAMXPos   or vram2cpu_reqVRAMXPos   or line_reqVRAMXPos   or rect_reqVRAMXPos   or poly_reqVRAMXPos   or pipeline_reqVRAMXPos   or videoout_reqVRAMXPos  ;  
@@ -1541,6 +1544,17 @@ begin
             vram_RD <= '0';
          end if;
          
+         vram_paused <= '0';
+         if (VRAMIdle = '1' and vram_pause = '1') then
+            if (vram_pauseCnt = 7) then
+               vram_paused <= '1';
+            else
+               vram_pauseCnt <= vram_pauseCnt + 1;
+            end if;
+         else
+            vram_pauseCnt <= 0;
+         end if;
+         
          if (reset = '1') then
             
             vramState   <= IDLE;
@@ -1552,7 +1566,7 @@ begin
          
             case (vramState) is
                when IDLE =>
-                  if (vram_WE = '0' or vram_BUSY = '0') then
+                  if ((vram_WE = '0' or vram_BUSY = '0') and vram_pause = '0') then
                      if (reqVRAMEnable = '1') then
                         reqVRAMStore <= (not pipeline_reqVRAMEnable) and (not videoout_reqVRAMEnable);
                         reqVRAMSizeRounded := reqVRAMSize;
@@ -1674,7 +1688,7 @@ begin
       requestVRAMXPos      => videoout_reqVRAMXPos,  
       requestVRAMYPos      => videoout_reqVRAMYPos,  
       requestVRAMSize      => videoout_reqVRAMSize,  
-      requestVRAMIdle      => VRAMIdle,
+      requestVRAMIdle      => VRAMIdle and (not vram_pause),
       requestVRAMDone      => reqVRAMDone,
                            
       vram_DOUT            => vram_DOUT,      

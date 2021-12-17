@@ -51,6 +51,8 @@ architecture arch of irq is
    signal irqIn    : unsigned(10 downto 0);
    signal irqIn_1  : unsigned(10 downto 0);
    
+   signal first    : std_logic := '0';
+   
    -- savestates
    type t_ssarray is array(0 to 1) of std_logic_vector(31 downto 0);
    signal ss_in  : t_ssarray := (others => (others => '0'));  
@@ -89,7 +91,9 @@ begin
             I_STATUS    <= unsigned(ss_in(0)(10 downto 0));
             I_MASK      <= unsigned(ss_in(1)(10 downto 0));
             irqIn_1     <= (others => '0');
-
+            
+            first       <= '1';
+            
          elsif (ce = '1') then
          
             I_STATUSNew := I_STATUS;
@@ -121,7 +125,10 @@ begin
             irqIn_1 <= irqIn;
             I_STATUSNew := I_STATUSNew or (irqIn and (not irqIn_1));
             
-            I_STATUS <= I_STATUSNew;
+            first <= '0';
+            if (first = '0') then
+               I_STATUS <= I_STATUSNew;
+            end if;
             
             SS_idle <= '0';
             if ((I_STATUSNew and I_MASK) = 0) then

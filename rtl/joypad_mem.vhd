@@ -6,8 +6,21 @@ entity joypad_mem is
    port 
    (
       clk1x                : in  std_logic;
+      clk2x                : in  std_logic;
+      clk2xIndex           : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
+      
+      mem_request          : out std_logic := '0';
+      mem_BURSTCNT         : out std_logic_vector(7 downto 0) := (others => '0'); 
+      mem_ADDR             : out std_logic_vector(19 downto 0) := (others => '0');                       
+      mem_DIN              : out std_logic_vector(63 downto 0) := (others => '0');
+      mem_BE               : out std_logic_vector(7 downto 0) := (others => '0'); 
+      mem_WE               : out std_logic := '0';
+      mem_RD               : out std_logic := '0';
+      mem_ack              : in  std_logic;
+      mem_DOUT             : in  std_logic_vector(63 downto 0);
+      mem_DOUT_READY       : in  std_logic;
       
       selected             : in  std_logic;
       actionNext           : in  std_logic := '0';
@@ -63,15 +76,33 @@ architecture arch of joypad_mem is
    signal checksum      : std_logic_vector(7 downto 0);
   
    -- memory
-   signal mem_addrA     : std_logic_vector(16 downto 0);
+   signal mem_addrA     : std_logic_vector(6 downto 0) := (others => '0');
    signal mem_DataInA   : std_logic_vector(7 downto 0);
    signal mem_wrenA     : std_logic := '0';
    signal mem_DataOutA  : std_logic_vector(7 downto 0);
   
-   signal mem_addrB     : std_logic_vector(16 downto 0);
-   signal mem_DataInB   : std_logic_vector(7 downto 0);
+   signal mem_addrB     : std_logic_vector(3 downto 0) := (others => '0');
+   signal mem_DataInB   : std_logic_vector(63 downto 0);
    signal mem_wrenB     : std_logic := '0';
-   signal mem_DataOutB  : std_logic_vector(7 downto 0);
+   signal mem_DataOutB  : std_logic_vector(63 downto 0);
+
+   type tMemState is
+   (
+      MEMIDLE,
+      MEMCPUWRITE_READDATA,
+      MEMCPUWRITE_REQWRITE,
+      MEMCPUWRITE_WAITACK,
+      MEMCPUREAD_REQDATA,
+      MEMCPUREAD_WAITACK,
+      MEMCPUREAD_READDATA
+   );
+   signal memstate      : tMemState := MEMIDLE;
+
+   signal triggerRead   : std_logic := '0';
+   signal triggerWrite  : std_logic := '0';
+   
+   signal cardAddr2X    : std_logic_vector(9 downto 0);
+   signal readCnt2X     : std_logic_vector(3 downto 0);
 
 begin 
 
@@ -86,6 +117,9 @@ begin
          ack            <= '0';
          
          mem_wrenA      <= '0';
+         
+         triggerRead    <= '0';
+         triggerWrite   <= '0';
          
          if (receiveValid = '1') then
             lastData <= receiveBuffer;
@@ -146,14 +180,14 @@ begin
                         when READID1       => ack <= '1'; receiveValid <= '1'; receiveBuffer <= x"5A";                           state <= READID2;                     
                         when READID2       => ack <= '1'; receiveValid <= '1'; receiveBuffer <= x"5D";                           state <= READADDR1;                     
                         when READADDR1     => ack <= '1'; receiveValid <= '1'; receiveBuffer <= x"00";                           state <= READADDR2;      cardAddr(9 downto 8) <= transmitValue(1 downto 0);
-                        when READADDR2     => ack <= '1'; receiveValid <= '1'; receiveBuffer <= lastData;                        state <= READACK1;       cardAddr(7 downto 0) <= transmitValue;
-                        when READACK1      => ack <= '1'; receiveValid <= '1'; receiveBuffer <= x"5C";                           state <= READACK2;
+                        when READADDR2     => ack <= '1'; receiveValid <= '1'; receiveBuffer <= lastData;                        state <= READACK1;       cardAddr(7 downto 0) <= transmitValue; 
+                        when READACK1      => ack <= '1'; receiveValid <= '1'; receiveBuffer <= x"5C";                           state <= READACK2;       triggerRead <= '1';
                         when READACK2      => ack <= '1'; receiveValid <= '1'; receiveBuffer <= x"5D";                           state <= READCONFADDR1;
                         when READCONFADDR1 => ack <= '1'; receiveValid <= '1'; receiveBuffer <= "000000" & cardAddr(9 downto 8); state <= READCONFADDR2;  
                         when READCONFADDR2 => ack <= '1'; receiveValid <= '1'; receiveBuffer <= cardAddr(7 downto 0);            state <= READDATA;       
                            addrCounter <= (others => '0');
                            checksum    <= ("000000" & cardAddr(9 downto 8)) xor cardAddr(7 downto 0);
-                           mem_addrA   <= cardAddr & "0000000";
+                           mem_addrA   <= "0000000";
                         
                         when READDATA      =>
                            ack           <= '1'; 
@@ -185,10 +219,11 @@ begin
                            receiveValid  <= '1';
                            mem_wrenA     <= '1';
                            mem_DataInA   <= transmitValue;
-                           mem_addrA     <= cardAddr & std_logic_vector(addrCounter);
+                           mem_addrA     <= std_logic_vector(addrCounter);
                            checksum      <= checksum xor transmitValue;
                            if (addrCounter = 127) then
-                              state       <= WRITECHECKSUM;
+                              state        <= WRITECHECKSUM;
+                              triggerWrite <= '1';
                            else
                               addrCounter <= addrCounter + 1;
                            end if;
@@ -208,27 +243,118 @@ begin
       end if; -- clock
    end process;
    
-   iramSectorBuffer: entity work.dpram
+   iramSectorBuffer: entity work.dpram_dif
    generic map 
    ( 
-      addr_width => 17, 
-      data_width => 8
+      addr_width_a  => 7,
+      data_width_a  => 8,
+      addr_width_b  => 4,
+      data_width_b  => 64
    )
    port map
    (
-      clock_a     => clk1x,
+      clock       => clk2x,
+      
       address_a   => mem_addrA,
       data_a      => mem_DataInA,
       wren_a      => mem_wrenA,
       q_a         => mem_DataOutA,
-                     
-      clock_b     => clk1x,
+      
       address_b   => mem_addrB,
       data_b      => mem_DataInB,
-      wren_b      => '0',
+      wren_b      => mem_wrenB,
       q_b         => mem_DataOutB
    );
    
+   
+   process (clk2x)
+   begin
+      if rising_edge(clk2x) then
+      
+         mem_wrenB <= '0';
+      
+         if (reset = '1') then
+
+            memstate    <= MEMIDLE;
+            mem_request <= '0';
+
+         else
+            
+            case (memstate) is
+            
+               when MEMIDLE =>
+                  if (triggerWrite = '1') then
+                     memstate   <= MEMCPUWRITE_READDATA;
+                     mem_addrB  <= (others => '0');
+                     cardAddr2X <= cardAddr;
+                  elsif (triggerRead = '1') then
+                     memstate   <= MEMCPUREAD_REQDATA;
+                     readCnt2X  <= (others => '0');
+                     cardAddr2X <= cardAddr;
+                  end if;
+            
+               -- write from CPU to DDR3
+               when MEMCPUWRITE_READDATA =>
+                  memstate <= MEMCPUWRITE_REQWRITE;
+            
+               when MEMCPUWRITE_REQWRITE =>
+                  memstate     <= MEMCPUWRITE_WAITACK;
+                  mem_request  <= '1';
+                  mem_BURSTCNT <= x"01";
+                  mem_ADDR     <= "000" & cardAddr2X & mem_addrB & "000";
+                  mem_DIN      <= mem_DataOutB;
+                  mem_BE       <= x"FF";
+                  mem_WE       <= '1';
+                  mem_RD       <= '0';
+                  
+               when MEMCPUWRITE_WAITACK =>
+                  if (mem_ack = '1') then
+                     mem_request <= '0';
+                     if (unsigned(mem_addrB) = 15) then
+                        memstate    <= MEMIDLE;
+                     else
+                        mem_addrB <= std_logic_vector(unsigned(mem_addrB) + 1);
+                        memstate  <= MEMCPUWRITE_READDATA;
+                     end if;
+                  end if;
+                  
+               -- read from DDR3 to CPU
+               when MEMCPUREAD_REQDATA =>
+                  memstate     <= MEMCPUREAD_WAITACK;
+                  mem_request  <= '1';
+                  mem_BURSTCNT <= x"10";
+                  mem_ADDR     <= "000" & cardAddr2X & "0000" & "000";
+                  mem_BE       <= x"FF";
+                  mem_WE       <= '0';
+                  mem_RD       <= '1';
+               
+               when MEMCPUREAD_WAITACK =>
+                  if (mem_ack = '1') then
+                     memstate <= MEMCPUREAD_READDATA;
+                  end if;
+                  
+               when MEMCPUREAD_READDATA =>
+                  if (mem_DOUT_READY = '1') then
+                  
+                     mem_addrB   <= readCnt2X;
+                     mem_DataInB <= mem_DOUT;
+                     mem_wrenB   <= '1';
+                  
+                     if (unsigned(readCnt2X) = 15) then
+                        memstate    <= MEMIDLE;
+                        mem_request <= '0';
+                     else 
+                        readCnt2X <= std_logic_vector(unsigned(readCnt2X) + 1);
+                     end if;
+                  end if;
+            
+            end case;
+         
+         
+         end if;
+      
+      end if;
+   end process;
    
 end architecture;
 

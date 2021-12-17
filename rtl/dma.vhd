@@ -212,6 +212,7 @@ begin
    ss_out(26)               <= std_logic_vector(DPCR);     
    ss_out(27)(23 downto 0)  <= std_logic_vector(DICR);    
    ss_out(27)(30 downto 24) <= std_logic_vector(DICR_IRQs);
+   ss_out(27)(31)           <= DICR_readback(31);
 
    ss_out(4)(7 downto 0)    <= x"07" when (DMA_GPU_waiting = '1') else x"00";
    ss_out(4)(8)             <= isOn;         
@@ -275,16 +276,15 @@ begin
             fifoOut_reset  <= '1';
             fifoOut_Done   <= '1';
             
-            irqOut         <= '0';
-            
             dataCount      <= 0;
             requestOnFly   <= 0;
             ramwrite_pending <= '0';
          
+            irqOut         <= '0';
 
          elsif (ce = '1') then
          
-            irqOut     <= DICR_readback(31);
+            irqOut     <= '0';
          
             ram_ena    <= '0';
          
@@ -361,6 +361,9 @@ begin
                         DICR(          15) <= bus_dataWrite(15);
                         DICR(23 downto 16) <= unsigned(bus_dataWrite(23 downto 16));
                         DICR_IRQs          <= DICR_IRQs and (not unsigned(bus_dataWrite(30 downto 24)));
+                        if (bus_dataWrite(15) = '1') then  -- force bit not used in duckstation, why?
+                           irqOut <= '1';
+                        end if;
                      when others => null;
                   end case;
                end if;
@@ -508,10 +511,20 @@ begin
                      autoread <= '0';
                   else
                      dmaArray(activeChannel).D_MADR <= unsigned(fifoIn_Dout(23 downto 0));
-                     waitcnt   <= 9;
-                     dmaState  <= WAITING;
-                     autoread  <= '0';
-                     -- todo: add timeup check
+                     if (fifoIn_Dout(23) = '1') then
+                        dmaState <= STOPPING;
+                        autoread <= '0';
+                     else
+                        if (DMABLOCKATONCE = '1' and gpu_dmaRequest = '1') then
+                           waitcnt   <= 9;
+                           dmaState  <= WAITING;
+                           autoread  <= '0';
+                        else
+                           dmaState <= PAUSING;
+                           paused   <= '1';
+                           autoread <= '0';
+                        end if;
+                     end if;
                   end if;  
                
                when WAITREAD =>
@@ -613,7 +626,6 @@ begin
                                  dmaState <= STOPPING;
                                  autoread <= '0';
                               else
-                                 -- todo add timeup
                                  if (DMABLOCKATONCE = '1' and gpu_dmaRequest = '1') then
                                     dmaState <= WAITING;
                                     waitcnt  <= 10;
@@ -639,6 +651,9 @@ begin
                         dmaArray(activeChannel).channelOn  <= '0';
                         if (DICR(16 + activeChannel) = '1') then
                            DICR_IRQs(activeChannel) <= '1';
+                           if (DICR(23) = '1') then
+                              irqOut <= '1';
+                           end if;
                         end if;
                      end if;
                   end if;

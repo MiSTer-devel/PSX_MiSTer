@@ -322,6 +322,7 @@ always@(posedge clk_sys) begin : uio_block
 				  'h36: begin io_dout <= info_n; info_n <= 0; end
 				  'h39: io_dout <= 1;
 				  'h3C: if(upload_req) begin io_dout <= 1; upload_req <= 0; end
+				  'h3E: io_dout <= 1; // shadow mask
 			endcase
 
 			sd_buff_addr <= 0;
