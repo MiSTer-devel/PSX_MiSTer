@@ -231,14 +231,14 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXXXXx xxX  XXXXXXX
+// X XXX XXX XXXXX XXXXXXXXXXx xxX  XXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
 	"PlayStation;SS3E000000:400000;",
-   "S1,ISOBIN,Load Iso/Bin;",
-   "F1,EXE,Load Exe;",
-   "h1FS2,ISOBIN,Load to SDRAM2;",
+	"S1,ISOBIN,Load Iso/Bin;",
+	"F1,EXE,Load Exe;",
+	"h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
 	"D0RC,Reload Backup RAM;",
 	"D0RD,Save Backup RAM;",
@@ -249,22 +249,23 @@ parameter CONF_STR = {
 	"RH,Save state (Alt-F1);",
 	"RI,Restore state (F1);",
 	"-;",
-   "OO,Pad Mode,Digital,Analog;",
+	"o78,System Type,NTSC-U,NTSC-J,PAL;",
+	"OO,Pad Mode,Digital,Analog;",
+	"OG,Fastboot,Off,On;",
+	"OP,Pause when OSD is open,Off,On;",
 	"-;",
 	"OM,Dithering,On,Off;",
 	"OS,FPS Overlay,Off,On;",
 	"OT,Error Overlay,On,Off;",
 	"OA,Color,16,24;",
+	"-;",
 	"OE,DDR3 Framebuffer,Off,On;",
 	"OB,VRAMViewer,Off,On;",
-	"OF,System Type,NTSC,PAL;",
-	"OG,Fastboot,Off,On;",
-   "OJ,RepTimingGPU,Off,On;",
-   "OK,RepTimingDMA,Off,On;",
-   "OQ,DMAinBLOCKs,Off,On;",
-   "OL,CD Instant Seek,Off,On;",
-   "OU,Fake SPU,On,Off;",
-   "OP,Pause when OSD is open,Off,On;",
+	"OJ,RepTimingGPU,Off,On;",
+	"OK,RepTimingDMA,Off,On;",
+	"OQ,DMAinBLOCKs,Off,On;",
+	"OL,CD Instant Seek,Off,On;",
+	"OU,Fake SPU,On,Off;",
 	"- ;",
 
 	"P1,Video & Audio;",
@@ -539,6 +540,7 @@ psx
    .DDRAM_BE        (DDRAM_BE        ),
    .DDRAM_WE        (DDRAM_WE        ),
    // cd
+   .region          (status[40:39]),
    .hasCD           (hasCD),
    .fastCD          (0),
    .cd_Size         (cd_Size),
@@ -554,7 +556,7 @@ psx
    .cd_hps_data     (sd_buff_dout), 
    // video
    .videoout_on     (~status[14]),
-   .isPal           (status[15]),
+   .isPal           (status[40]),
    .hsync           (hs),
    .vsync           (vs),
    .hblank          (hbl),

@@ -52,6 +52,7 @@ entity psx_top is
       ddr3_WE               : out std_logic := '0';
       ddr3_RD               : out std_logic := '0'; 
       -- cd
+      region                : in  std_logic_vector(1 downto 0);
       hasCD                 : in  std_logic;
       fastCD                : in  std_logic;
       cd_Size               : in  unsigned(29 downto 0);
@@ -963,6 +964,7 @@ begin
       INSTANTSEEK          => INSTANTSEEK,
       hasCD                => hasCD,
       fastCD               => fastCD,
+      region               => region,
       
       cdSlow               => cdSlow,
       error                => errorCD,

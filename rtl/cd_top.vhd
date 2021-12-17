@@ -16,6 +16,7 @@ entity cd_top is
       hasCD                : in  std_logic;
       cdSize               : in  unsigned(29 downto 0);
       fastCD               : in  std_logic;
+      region               : in  std_logic_vector(1 downto 0);
       
       fullyIdle            : out std_logic;
       cdSlow               : out std_logic := '0';
@@ -1042,10 +1043,16 @@ begin
                      end if;
                      if (workDelay = 6) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"20"; end if; -- ? 
                      if (workDelay = 5) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"00"; end if; -- ? 
-                     if (workDelay = 4) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('S')), 8)); end if; -- todo different regions
+                     if (workDelay = 4) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('S')), 8)); end if;
                      if (workDelay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('C')), 8)); end if; 
                      if (workDelay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if; 
-                     if (workDelay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if; 
+                     if (region = "00") then -- ntsc-u
+                        if (workDelay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('A')), 8)); end if; 
+                     elsif (region = "01") then -- ntsc-j
+                        if (workDelay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('I')), 8)); end if; 
+                     elsif (region = "10") then -- pal
+                        if (workDelay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if; 
+                     end if;
                   end if;
                else
                   working <= '0';
@@ -1223,17 +1230,37 @@ begin
                      if (cmd_delay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"16"; end if;
                      if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"C1"; end if;
                   
-                  when x"22" => -- region (todo: different regions)
-                     if (cmd_delay = 10) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('f')), 8)); end if;
-                     if (cmd_delay = 9)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('o')), 8)); end if;
-                     if (cmd_delay = 8)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('r')), 8)); end if;
-                     if (cmd_delay = 7)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos(' ')), 8)); end if;
-                     if (cmd_delay = 6)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if;
-                     if (cmd_delay = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('u')), 8)); end if;
-                     if (cmd_delay = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('r')), 8)); end if;
-                     if (cmd_delay = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('o')), 8)); end if;
-                     if (cmd_delay = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('p')), 8)); end if;
-                     if (cmd_delay = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('e')), 8)); end if;
+                  when x"22" => -- region
+                     if (region = "00") then -- ntsc-u
+                        if (cmd_delay = 7)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('f')), 8)); end if;
+                        if (cmd_delay = 6)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('o')), 8)); end if;
+                        if (cmd_delay = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('r')), 8)); end if;
+                        if (cmd_delay = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos(' ')), 8)); end if;
+                        if (cmd_delay = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('U')), 8)); end if;
+                        if (cmd_delay = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('/')), 8)); end if;
+                        if (cmd_delay = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('C')), 8)); end if;
+                     elsif (region = "01") then -- ntsc-j
+                        if (cmd_delay = 9)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('f')), 8)); end if;
+                        if (cmd_delay = 8)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('o')), 8)); end if;
+                        if (cmd_delay = 7)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('r')), 8)); end if;
+                        if (cmd_delay = 6)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos(' ')), 8)); end if;
+                        if (cmd_delay = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('J')), 8)); end if;
+                        if (cmd_delay = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('a')), 8)); end if;
+                        if (cmd_delay = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('p')), 8)); end if;
+                        if (cmd_delay = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('a')), 8)); end if;
+                        if (cmd_delay = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('n')), 8)); end if;
+                     elsif (region = "10") then -- pal
+                        if (cmd_delay = 10) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('f')), 8)); end if;
+                        if (cmd_delay = 9)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('o')), 8)); end if;
+                        if (cmd_delay = 8)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('r')), 8)); end if;
+                        if (cmd_delay = 7)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos(' ')), 8)); end if;
+                        if (cmd_delay = 6)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if;
+                        if (cmd_delay = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('u')), 8)); end if;
+                        if (cmd_delay = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('r')), 8)); end if;
+                        if (cmd_delay = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('o')), 8)); end if;
+                        if (cmd_delay = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('p')), 8)); end if;
+                        if (cmd_delay = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('e')), 8)); end if;
+                     end if;
                
                   when others => null;
                end case;
