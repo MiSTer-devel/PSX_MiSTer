@@ -475,7 +475,7 @@ begin
       ce                   => ce,       
       reset                => reset,    
       
-      memcard_available    => memcard1_available,
+      memcard_available    => memcard2_available,
       mem_request          => mem2_request,   
       mem_BURSTCNT         => mem2_BURSTCNT,  
       mem_ADDR             => mem2_ADDR,      
