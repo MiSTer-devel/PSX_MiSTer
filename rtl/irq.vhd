@@ -130,10 +130,7 @@ begin
                I_STATUS <= I_STATUSNew;
             end if;
             
-            SS_idle <= '0';
-            if ((I_STATUSNew and I_MASK) = 0) then
-               SS_idle <= '1';
-            end if;
+            SS_idle <= '1';
             
          end if;
       end if;

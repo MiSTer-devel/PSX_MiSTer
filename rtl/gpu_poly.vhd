@@ -336,6 +336,7 @@ begin
              unsigned(to_signed(-vt(coreVertex).y, 32));
    
    process (clk2x)
+      variable cull     : std_logic;    
       variable xMax     : integer;
       variable dx1      : signed(44 downto 0);
       variable dx2      : signed(44 downto 0);
@@ -604,6 +605,31 @@ begin
                   div3.start     <= '1';
                   div3.dividend  <= dx3;
                   div3.divisor   <= x"000" & dy3;
+                  
+                  -- culling of large polygons
+                  cull := '0';
+                  if (vt(0).y = vt(2).y)                 then cull := '1'; end if;
+                  if (abs(vt(2).x - vt(0).x) >= 16#400#) then cull := '1'; end if;
+                  if (abs(vt(2).x - vt(1).x) >= 16#400#) then cull := '1'; end if;
+                  if (abs(vt(1).x - vt(0).x) >= 16#400#) then cull := '1'; end if;
+                  if (abs(vt(2).y - vt(0).y) >= 16#200#) then cull := '1'; end if;
+                  
+                  if (cull = '1') then
+                     div1.start <= '0';
+                     div2.start <= '0';
+                     div3.start <= '0';
+                     if (nextQuad = '1') then 
+                        state <= ISSUE;
+                     else
+                        if (REPRODUCIBLEGPUTIMING = '1') then
+                           state <= WAITIMING;
+                        else
+                           state <= IDLE;
+                           done  <= '1';
+                        end if;
+                     end if;
+                  end if;
+                  
                
                when CALCBOUNDARY2 =>
                   baseStep     <= div1.quotient;

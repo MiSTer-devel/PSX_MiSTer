@@ -180,7 +180,7 @@ assign USER_OUT = '1;
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = status[8:7];
 
-assign LED_USER  = cart_download | bk_pending;
+assign LED_USER  = cart_download;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign BUTTONS   = 0;
@@ -223,7 +223,7 @@ pll pll
 	.locked(pll_locked)
 );
 
-wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_download | img_mounted[1];
+wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd_download | img_mounted[1];
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | cart_download | bk_loading | cd_do
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXX XXXXXXXXXXx xxX  XXXXXXXXX
+// X XXX XXX XXXXXxXXXXXXXXXXx xxX  XXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -240,8 +240,10 @@ parameter CONF_STR = {
 	"F1,EXE,Load Exe;",
 	"h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
-	"D0RC,Reload Backup RAM;",
-	"D0RD,Save Backup RAM;",
+	"SC2,MCD,Mount Memory Card 1;",
+	"SC3,MCD,Mount Memory Card 2;",
+	"D0RC,Reload Memory Cards;",
+	"D0RD,Save Memory Cards;",
 	"D0ON,Autosave,Off,On;",
 	"D0-;",
 	"o4,Savestates to SDCard,On,Off;",
@@ -266,6 +268,7 @@ parameter CONF_STR = {
 	"OQ,DMAinBLOCKs,Off,On;",
 	"OL,CD Instant Seek,Off,On;",
 	"OU,Fake SPU,On,Off;",
+	"OF,Force 60Hz PAL,Off,On;",
 	"- ;",
 
 	"P1,Video & Audio;",
@@ -299,18 +302,21 @@ parameter CONF_STR = {
 
 wire  [1:0] buttons;
 wire [63:0] status;
-wire [15:0] status_menumask = {SDRAM2_EN, ~bk_ena};
+wire [15:0] status_menumask = {SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
-reg  [31:0] sd_lba0;
+reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
-reg   [1:0] sd_rd;
-reg   [1:0] sd_wr;
-wire  [1:0] sd_ack;
+reg  [ 9:0] sd_lba2;
+reg  [ 9:0] sd_lba3;
+reg   [3:0] sd_rd;
+reg   [3:0] sd_wr;
+wire  [3:0] sd_ack;
 wire  [7:0] sd_buff_addr;
 wire [15:0] sd_buff_dout;
-wire [15:0] sd_buff_din;
+wire [15:0] sd_buff_din2;
+wire [15:0] sd_buff_din3;
 wire        sd_buff_wr;
-wire  [1:0] img_mounted;
+wire  [3:0] img_mounted;
 wire        img_readonly;
 wire [63:0] img_size;
 wire        ioctl_download;
@@ -338,7 +344,7 @@ wire [32:0] RTC_time;
 
 wire [63:0] status_in = cart_download ? {status[63:39],ss_slot,status[36:17],1'b0,status[15:0]} : {status[63:39],ss_slot,status[36:0]};
 
-hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2), .BLKSZ(0)) hps_io
+hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(0)) hps_io
 (
 	.clk_sys(clk_1x),
 	.HPS_BUS(HPS_BUS),
@@ -364,14 +370,14 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2), .BLKSZ(0)) hps_io
 	.ioctl_index(ioctl_index),
 	.ioctl_wait(ioctl_wait),
 
-	.sd_lba('{sd_lba0, sd_lba1}),
-   .sd_blk_cnt('{0,0}),
+	.sd_lba('{sd_lba0, sd_lba1, sd_lba2, sd_lba3}),
+	.sd_blk_cnt('{0,0, 0, 0}),
 	.sd_rd(sd_rd),
 	.sd_wr(sd_wr),
 	.sd_ack(sd_ack),
 	.sd_buff_addr(sd_buff_addr),
 	.sd_buff_dout(sd_buff_dout),
-	.sd_buff_din('{sd_buff_din, 0}),
+	.sd_buff_din('{0, 0, sd_buff_din2, sd_buff_din3}),
 	.sd_buff_wr(sd_buff_wr),
 
 	.TIMESTAMP(RTC_time),
@@ -428,6 +434,23 @@ reg cd_download_1 = 0;
 reg loadExe = 0;
 reg cd_hps_on = 0;
 
+reg sd_mounted2 = 0;
+reg sd_mounted3 = 0;
+
+reg memcard1_load = 0;
+reg memcard2_load = 0;
+reg memcard_save = 0;
+
+wire bk_load     = status[12];
+wire bk_save     = status[13];
+wire bk_autosave = status[23];
+
+reg old_load = 0; 
+reg old_save = 0; 
+reg old_save_a = 0;
+
+wire bk_save_a = OSD_STATUS & bk_autosave;
+
 always @(posedge clk_1x) begin
 	ramdownload_wr <= 0;
 	if(cart_download | bios_download | cd_download) begin
@@ -458,10 +481,47 @@ always @(posedge clk_1x) begin
    end
      
    if (img_mounted[1]) begin
-      cd_Size   <= img_size[29:0];
-      cd_hps_on <= 1;
-      hasCD     <= 1;
+      if (img_size > 0) begin
+         cd_Size   <= img_size[29:0];
+         cd_hps_on <= 1;
+         hasCD     <= 1;
+      end else begin
+         hasCD     <= 0;
+      end
    end
+   
+   memcard1_load <= 0;
+   memcard2_load <= 0;
+   memcard_save <= 0;
+   
+   if (img_mounted[2]) begin
+      if (img_size > 0) begin
+         sd_mounted2   <= 1;
+         memcard1_load <= 1;
+      end else begin
+         sd_mounted2 <= 0;
+      end
+   end
+   
+   if (img_mounted[3]) begin
+      if (img_size > 0) begin
+         sd_mounted3   <= 1;
+         memcard2_load <= 1;
+      end else begin
+         sd_mounted3 <= 0;
+      end
+   end
+   
+   old_load   <= bk_load;
+	old_save   <= bk_save;
+	old_save_a <= bk_save_a;
+   
+   if (~old_load & bk_load) begin 
+      memcard1_load <= 1;
+      memcard2_load <= 1;
+   end
+   
+   if ((~old_save & bk_save) | (~old_save_a & bk_save_a)) memcard_save <= 1;
    
 end
 
@@ -554,9 +614,32 @@ psx
    .cd_hps_ack      (sd_ack[1]),
    .cd_hps_write    (sd_buff_wr),
    .cd_hps_data     (sd_buff_dout), 
+   // memcard
+   .memcard1_load   (memcard1_load),
+   .memcard2_load   (memcard2_load),
+   .memcard_save    (memcard_save),
+   .memcard1_available (sd_mounted2),
+   .memcard1_rd     (sd_rd[2]),
+   .memcard1_wr     (sd_wr[2]),
+   .memcard1_lba    (sd_lba2),
+   .memcard1_ack    (sd_ack[2]),
+   .memcard1_write  (sd_buff_wr),
+   .memcard1_addr   (sd_buff_addr[5:0]),
+   .memcard1_dataIn (sd_buff_dout),
+   .memcard1_dataOut(sd_buff_din2),    
+   .memcard2_available (sd_mounted3),   
+   .memcard2_rd     (sd_rd[3]),
+   .memcard2_wr     (sd_wr[3]),
+   .memcard2_lba    (sd_lba3),
+   .memcard2_ack    (sd_ack[3]),
+   .memcard2_write  (sd_buff_wr),
+   .memcard2_addr   (sd_buff_addr[5:0]),
+   .memcard2_dataIn (sd_buff_dout),
+   .memcard2_dataOut(sd_buff_din3), 
    // video
    .videoout_on     (~status[14]),
    .isPal           (status[40]),
+   .pal60           (status[15]),
    .hsync           (hs),
    .vsync           (vs),
    .hblank          (hbl),
@@ -675,12 +758,12 @@ sdram sdram
    .ch2_be   ((cart_download | bios_download) ? 4'b1111            : sdram_be),
 	.ch2_ready(sdram_writeack),
 
-	.ch3_addr({sd_lba0[7:0],bram_addr}),
-	.ch3_din(bram_dout),
-	.ch3_dout(sdr_bram_din),
-	.ch3_req(bram_req),
-	.ch3_rnw(~bk_loading),
-	.ch3_ready(sdr_bram_ack)
+	.ch3_addr(0),
+	.ch3_din(),
+	.ch3_dout(),
+	.ch3_req(1'b0),
+	.ch3_rnw(1'b1),
+	.ch3_ready()
 );
 
 wire        cd_req;
@@ -730,141 +813,15 @@ sdram sdram2
    .ch2_be   (4'b1111),
 	.ch2_ready(sdram_writeack2),
 
-	.ch3_addr({sd_lba0[7:0],bram_addr}),
-	.ch3_din(bram_dout),
+	.ch3_addr(0),
+	.ch3_din(),
 	.ch3_dout(),
 	.ch3_req(1'b0),
 	.ch3_rnw(1'b1),
 	.ch3_ready()
 );
 
-//wire [63:0] ss_dout, ss_din;
-//wire [27:2] ss_addr;
-//wire [7:0]  ss_be;
-//wire        ss_rnw, ss_req, ss_ack;
-
 assign DDRAM_CLK = clk_2x;
-//ddram ddram
-//(
-//	.*,
-//
-//	.ch1_addr(romcopy_active ? romcopy_readpos[26:1]+ROM_START[26:1] : {sdram_addr, 1'b0}),
-//	.ch1_din(16'b0),
-//	.ch1_dout({ddr_sdram_dout2, ddr_sdram_dout1}),
-//	.ch1_req(romcopy_active ? romcopy_ddrreq : sdram_req & ~sdram_en),
-//	.ch1_rnw(1'b1),
-//	.ch1_ready(ddr_sdram_ack),
-//
-//	.ch2_addr({bus_addr, 1'b0}),
-//	.ch2_din(bus_din),
-//	.ch2_dout(ddr_bus_dout),
-//	.ch2_req(~cart_download & bus_req & ~sdram_en),
-//	.ch2_rnw(bus_rd),
-//	.ch2_ready(ddr_bus_ack),
-//
-//	.ch3_addr({sd_lba0[7:0],bram_addr}),
-//	.ch3_din(bram_dout),
-//	.ch3_dout(ddr_bram_din),
-//	.ch3_req(bram_req & ~sdram_en),
-//	.ch3_rnw(~bk_loading),
-//	.ch3_ready(ddr_bram_ack),
-//
-//	.ch4_addr({ss_addr, 1'b0}),
-//	.ch4_din(ss_din),
-//	.ch4_dout(ss_dout),
-//	.ch4_req(ss_req),
-//	.ch4_rnw(ss_rnw),
-//	.ch4_be(ss_be),
-//	.ch4_ready(ss_ack),
-//   
-//   .ch5_addr({fb_addr, 1'b0}),
-//   .ch5_din(fb_din),
-//   .ch5_req(fb_req),
-//   .ch5_ready(fb_ack)
-//   
-//);
-
-/////////////////
-
-//wire [127:0] time_din_h = {32'd0, time_din, "RT"};
-wire [15:0] bram_dout;
-wire [15:0] bram_din = sdr_bram_din;
-wire        bram_ack = sdr_bram_ack;
-assign sd_buff_din = bram_buff_out;
-wire [15:0] bram_buff_out;
-
-altsyncram	altsyncram_component
-(
-	.address_a (bram_addr),
-	.address_b (sd_buff_addr),
-	.clock0 (clk_1x),
-	.clock1 (clk_1x),
-	.data_a (bram_din),
-	.data_b (sd_buff_dout),
-	.wren_a (~bk_loading & bram_ack),
-	.wren_b (sd_buff_wr),
-	.q_a (bram_dout),
-	.q_b (bram_buff_out),
-	.byteena_a (1'b1),
-	.byteena_b (1'b1),
-	.clocken0 (1'b1),
-	.clocken1 (1'b1),
-	.rden_a (1'b1),
-	.rden_b (1'b1)
-);
-defparam
-	altsyncram_component.address_reg_b = "CLOCK1",
-	altsyncram_component.clock_enable_input_a = "BYPASS",
-	altsyncram_component.clock_enable_input_b = "BYPASS",
-	altsyncram_component.clock_enable_output_a = "BYPASS",
-	altsyncram_component.clock_enable_output_b = "BYPASS",
-	altsyncram_component.indata_reg_b = "CLOCK1",
-	altsyncram_component.intended_device_family = "Cyclone V",
-	altsyncram_component.lpm_type = "altsyncram",
-	altsyncram_component.numwords_a = 256,
-	altsyncram_component.numwords_b = 256,
-	altsyncram_component.operation_mode = "BIDIR_DUAL_PORT",
-	altsyncram_component.outdata_aclr_a = "NONE",
-	altsyncram_component.outdata_aclr_b = "NONE",
-	altsyncram_component.outdata_reg_a = "UNREGISTERED",
-	altsyncram_component.outdata_reg_b = "UNREGISTERED",
-	altsyncram_component.power_up_uninitialized = "FALSE",
-	altsyncram_component.read_during_write_mode_port_a = "NEW_DATA_NO_NBE_READ",
-	altsyncram_component.read_during_write_mode_port_b = "NEW_DATA_NO_NBE_READ",
-	altsyncram_component.widthad_a = 8,
-	altsyncram_component.widthad_b = 8,
-	altsyncram_component.width_a = 16,
-	altsyncram_component.width_b = 16,
-	altsyncram_component.width_byteena_a = 1,
-	altsyncram_component.width_byteena_b = 1,
-	altsyncram_component.wrcontrol_wraddress_reg_b = "CLOCK1";
-
-reg [7:0] bram_addr;
-reg bram_tx_start = 0;
-reg bram_tx_finish;
-reg bram_req;
-
-always @(posedge clk_1x) begin
-	reg state;
-
-	bram_req <= 0;
-
-	if (bram_tx_start) begin
-		if (~&bram_addr)
-			bram_tx_finish <= 1;
-	end else if(~bram_tx_start) {bram_addr, state, bram_tx_finish} <= 0;
-	else if(~bram_tx_finish) begin
-		if(!state) begin
-			bram_req <= 1;
-			state <= 1;
-		end
-		else if(bram_ack) begin
-			state <= 0;
-			if(~&bram_addr) bram_addr <= bram_addr + 1'd1;
-			else bram_tx_finish <= 1;
-		end
-	end
-end
 
 ////////////////////////////  VIDEO  ////////////////////////////////////
 
@@ -916,141 +873,6 @@ video_freak video_freak
 	.CROP_OFF(0),
 	.SCALE(status[35:34])
 );
-
-
-/////////////////////////  STATE SAVE/LOAD  /////////////////////////////
-//wire bk_load     = status[12];
-//wire bk_save     = status[13];
-//wire bk_autosave = status[23];
-//wire bk_write    = (save_eeprom|save_sram|save_flash) && bus_req;
-
-reg  bk_ena      = 0;
-reg  bk_pending  = 0;
-reg  bk_loading  = 0;
-assign sd_lba0 = 0;
-
-//reg bk_record_rtc = 0;
-//
-//wire extra_data_addr = sd_lba0[8:0] > save_sz;
-//
-//always @(posedge clk_1x) begin
-//	if (bk_write)      bk_pending <= 1;
-//	else if (bk_state) bk_pending <= 0;
-//end
-//reg use_img;
-//reg [8:0] save_sz;
-//
-//always @(posedge clk_1x) begin : size_block
-//	reg old_downloading;
-//
-//	old_downloading <= cart_download;
-//	if(~old_downloading & cart_download) {use_img, save_sz} <= 0;
-//
-//	if(bus_req & ~use_img) begin
-//		if(save_eeprom) save_sz <= save_sz | 8'hF;
-//		if(save_sram)   save_sz <= save_sz | 8'h3F;
-//		if(save_flash)  save_sz <= save_sz | {flash_1m, 7'h7F};
-//	end
-//
-//	if(img_mounted[0] && img_size && !img_readonly) begin
-//		use_img <= 1;
-//		if (!(img_size[17:9] & (img_size[17:9] - 9'd1))) // Power of two
-//			save_sz <= img_size[17:9] - 1'd1;
-//		else                                             // Assume one extra sector of RTC data
-//			save_sz <= img_size[17:9] - 2'd2;
-//	end
-//
-//	bk_ena <= |save_sz;
-//end
-//
-//reg  bk_state  = 0;
-//wire bk_save_a = OSD_STATUS & bk_autosave;
-//
-//always @(posedge clk_1x) begin
-//	reg old_load = 0, old_save = 0, old_save_a = 0, old_ack;
-//	reg [1:0] state;
-//
-//	old_load   <= bk_load;
-//	old_save   <= bk_save;
-//	old_save_a <= bk_save_a;
-//	old_ack    <= sd_ack[0];
-//
-//	if(~old_ack & sd_ack[0]) {sd_rd[0], sd_wr[0]} <= 0;
-//
-//	if(!bk_state) begin
-//		bram_tx_start <= 0;
-//		state <= 0;
-//		sd_lba0 <= 0;
-//		time_dout <= {5'd0, RTC_time, 42'd0};
-//		bk_loading <= 0;
-//		if(bk_ena & ((~old_load & bk_load) | (~old_save & bk_save) | (~old_save_a & bk_save_a & bk_pending) | (cart_download & img_mounted[0]))) begin
-//			bk_state <= 1;
-//			bk_loading <= bk_load | img_mounted[0];
-//		end
-//	end
-//	else if(bk_loading) begin
-//		case(state)
-//			0: begin
-//					sd_rd[0] <= 1;
-//					state <= 1;
-//				end
-//			1: if(old_ack & ~sd_ack[0]) begin
-//					bram_tx_start <= 1;
-//					state <= 2;
-//				end
-//			2: if(bram_tx_finish) begin
-//					bram_tx_start <= 0;
-//					state <= 0;
-//					sd_lba0 <= sd_lba0 + 1'd1;
-//
-//					// always read max possible size
-//					if(sd_lba0[8:0] == 9'h100) begin
-//						bk_record_rtc <= 0;
-//						bk_state <= 0;
-//						RTC_load <= 0;
-//					end
-//				end
-//		endcase
-//
-//		if (extra_data_addr) begin
-//			if (~|sd_buff_addr && sd_buff_wr && sd_buff_dout == "RT") begin
-//				bk_record_rtc <= 1;
-//				RTC_load <= 0;
-//			end
-//		end
-//
-//		if (bk_record_rtc) begin
-//			if (sd_buff_addr < 6 && sd_buff_addr >= 1)
-//				time_dout[{sd_buff_addr[2:0] - 3'd1, 4'b0000} +: 16] <= sd_buff_dout;
-//
-//			if (sd_buff_addr > 5)
-//				RTC_load <= 1;
-//
-//			if (&sd_buff_addr)
-//				bk_record_rtc <= 0;
-//		end
-//	end
-//	else begin
-//		case(state)
-//			0: begin
-//					bram_tx_start <= 1;
-//					state <= 1;
-//				end
-//			1: if(bram_tx_finish) begin
-//					bram_tx_start <= 0;
-//					sd_wr[0] <= 1;
-//					state <= 2;
-//				end
-//			2: if(old_ack & ~sd_ack[0]) begin
-//					state <= 0;
-//					sd_lba0 <= sd_lba0 + 1'd1;
-//
-//					if (sd_lba0[8:0] == {1'b0, save_sz} + (has_rtc ? 9'd1 : 9'd0))
-//						bk_state <= 0;
-//				end
-//		endcase
-//	end
-//end
 
 ////////////////////////////  CODES  ///////////////////////////////////
 

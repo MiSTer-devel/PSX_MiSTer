@@ -8,6 +8,15 @@ SDRam of any size is required.
 Only scph1001.bin tested.
 Rename to boot.rom
 
+# Memory Card
+One card can be mounted for each controller slot.
+
+Cards are in raw .mcd format. An empty example card can be found in the memcard folder.
+
+You need to save them either manually in OSD or activate autosave. 
+
+Saving or loading a card will pause the core for a short time.
+
 # Video output
 Core uses either normal output or direct framebuffer mode.
 

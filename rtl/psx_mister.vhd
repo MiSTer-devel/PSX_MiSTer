@@ -62,9 +62,32 @@ entity psx_mister is
       cd_hps_ack            : in  std_logic;
       cd_hps_write          : in  std_logic;
       cd_hps_data           : in  std_logic_vector(15 downto 0);
+      -- memcard
+      memcard1_load         : in  std_logic;
+      memcard2_load         : in  std_logic;
+      memcard_save          : in  std_logic;
+      memcard1_available    : in  std_logic;
+      memcard1_rd           : out std_logic := '0';
+      memcard1_wr           : out std_logic := '0';
+      memcard1_lba          : out std_logic_vector(9 downto 0);
+      memcard1_ack          : in  std_logic;
+      memcard1_write        : in  std_logic;
+      memcard1_addr         : in  std_logic_vector(5 downto 0);
+      memcard1_dataIn       : in  std_logic_vector(15 downto 0);
+      memcard1_dataOut      : out std_logic_vector(15 downto 0);
+      memcard2_available    : in  std_logic;               
+      memcard2_rd           : out std_logic := '0';
+      memcard2_wr           : out std_logic := '0';
+      memcard2_lba          : out std_logic_vector(9 downto 0);
+      memcard2_ack          : in  std_logic;
+      memcard2_write        : in  std_logic;
+      memcard2_addr         : in  std_logic_vector(5 downto 0);
+      memcard2_dataIn       : in  std_logic_vector(15 downto 0);
+      memcard2_dataOut      : out std_logic_vector(15 downto 0);
       -- video
       videoout_on           : in  std_logic;
       isPal                 : in  std_logic;
+      pal60                 : in  std_logic;
       hsync                 : out std_logic;
       vsync                 : out std_logic;
       hblank                : out std_logic;
@@ -187,9 +210,32 @@ begin
       cd_hps_ack            => cd_hps_ack,
       cd_hps_write          => cd_hps_write,
       cd_hps_data           => cd_hps_data, 
+      --memcard
+      memcard1_load          => memcard1_load,       
+      memcard2_load          => memcard2_load,       
+      memcard_save          => memcard_save,       
+      memcard1_available    => memcard1_available, 
+      memcard1_rd           => memcard1_rd,        
+      memcard1_wr           => memcard1_wr,        
+      memcard1_lba          => memcard1_lba,       
+      memcard1_ack          => memcard1_ack,       
+      memcard1_write        => memcard1_write,     
+      memcard1_addr         => memcard1_addr,      
+      memcard1_dataIn       => memcard1_dataIn,    
+      memcard1_dataOut      => memcard1_dataOut,   
+      memcard2_available    => memcard2_available, 
+      memcard2_rd           => memcard2_rd,        
+      memcard2_wr           => memcard2_wr,        
+      memcard2_lba          => memcard2_lba,       
+      memcard2_ack          => memcard2_ack,       
+      memcard2_write        => memcard2_write,     
+      memcard2_addr         => memcard2_addr,      
+      memcard2_dataIn       => memcard2_dataIn,    
+      memcard2_dataOut      => memcard2_dataOut,   
       -- video
       videoout_on           => videoout_on,
       isPal                 => isPal,
+      pal60                 => pal60,
       hsync                 => hsync, 
       vsync                 => vsync, 
       hblank                => hblank,

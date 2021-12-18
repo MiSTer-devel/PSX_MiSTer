@@ -2490,7 +2490,7 @@ begin
          end if;
       
          SS_idle <= '0';
-         if (hiloWait = 0) then
+         if (hiloWait = 0 and blockIRQ = '0' and (irqRequest = '0' or cop0_SR(0) = '0' or cop0_SR_next(10) = '0')) then
             SS_idle <= '1';
          end if;
       

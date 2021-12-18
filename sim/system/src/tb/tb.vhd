@@ -144,6 +144,28 @@ architecture arch of etb is
 
    signal cdSize              : unsigned(29 downto 0);
    
+   -- memcard
+   signal memcard1_load       : std_logic := '0';
+   signal memcard2_load       : std_logic := '0';
+   signal memcard_save        : std_logic := '0';
+   signal memcard1_available  : std_logic := '0';
+   signal memcard1_rd         : std_logic;
+   signal memcard1_wr         : std_logic;
+   signal memcard1_lba        : std_logic_vector(9 downto 0);
+   signal memcard1_ack        : std_logic := '0';
+   signal memcard1_write      : std_logic := '0';
+   signal memcard1_addr       : std_logic_vector(5 downto 0) := (others => '0');
+   signal memcard1_dataIn     : std_logic_vector(15 downto 0);
+   signal memcard1_dataOut    : std_logic_vector(15 downto 0);
+   signal memcard2_available  : std_logic := '0';               
+   signal memcard2_rd         : std_logic := '0';
+   signal memcard2_wr         : std_logic := '0';
+   signal memcard2_lba        : std_logic_vector(9 downto 0);
+   signal memcard2_ack        : std_logic := '0';
+   signal memcard2_write      : std_logic := '0';
+   signal memcard2_addr       : std_logic_vector(5 downto 0) := (others => '0');
+   signal memcard2_dataIn     : std_logic_vector(15 downto 0);
+   signal memcard2_dataOut    : std_logic_vector(15 downto 0);
    
 begin
 
@@ -205,6 +227,8 @@ begin
       DDRAM_BE              => DDRAM_BE,        
       DDRAM_WE              => DDRAM_WE,
       -- cd
+      region                => "00",
+      hasCD                 => '1',
       fastCD                => '0',
       cd_Size               => cdSize,
       cd_req                => cd_req,
@@ -217,9 +241,32 @@ begin
       cd_hps_ack            => cd_hps_ack,  
       cd_hps_write          => cd_hps_write,
       cd_hps_data           => cd_hps_data, 
+      -- memcard
+      memcard1_load         => memcard1_load,      
+      memcard2_load         => memcard2_load,      
+      memcard_save          => memcard_save,      
+      memcard1_available    => memcard1_available,
+      memcard1_rd           => memcard1_rd,       
+      memcard1_wr           => memcard1_wr,       
+      memcard1_lba          => memcard1_lba,      
+      memcard1_ack          => memcard1_ack,      
+      memcard1_write        => memcard1_write,    
+      memcard1_addr         => memcard1_addr,     
+      memcard1_dataIn       => memcard1_dataIn,   
+      memcard1_dataOut      => memcard1_dataOut,  
+      memcard2_available    => memcard2_available,
+      memcard2_rd           => memcard2_rd,       
+      memcard2_wr           => memcard2_wr,       
+      memcard2_lba          => memcard2_lba,      
+      memcard2_ack          => memcard2_ack,      
+      memcard2_write        => memcard2_write,    
+      memcard2_addr         => memcard2_addr,     
+      memcard2_dataIn       => memcard2_dataIn,   
+      memcard2_dataOut      => memcard2_dataOut,  
       -- video
       videoout_on           => '1',
       isPal                 => '0',
+      pal60                 => '0',
       hblank                => hblank,  
       vblank                => vblank,  
       video_ce              => video_ce,
@@ -395,6 +442,103 @@ begin
          end loop;
          
       end if;
+   end process;
+   
+   -- memcard testinterface
+   process
+   begin
+      if (1 = 1) then
+      
+         wait for 5 ms;
+         
+         memcard1_available <= '1';
+         memcard2_available <= '1';
+         memcard1_load      <= '1';
+         memcard2_load      <= '1';
+         wait until rising_edge(clk33);
+      
+         memcard1_load      <= '0';
+         memcard2_load      <= '0';
+         wait until rising_edge(clk33);
+      
+         wait for 25 ms;
+         
+         memcard_save       <= '1';
+         wait until rising_edge(clk33);
+      
+         memcard_save       <= '0';
+         wait until rising_edge(clk33);
+      
+         wait;
+      end if;
+   end process;
+   
+   process
+   begin
+      wait until rising_edge(clk33);
+   
+      if (memcard1_rd = '1') then
+         memcard1_ack <= '1';
+         wait until rising_edge(clk33);
+         
+         for i in 0 to 63 loop
+            memcard1_write  <= '1';
+            memcard1_dataIn <= std_logic_vector(to_unsigned(i, 16));
+            memcard1_addr   <= std_logic_vector(to_unsigned(i, 6));
+            wait until rising_edge(clk33);
+            memcard1_write  <= '0';
+            wait until rising_edge(clk33);
+         end loop;
+         
+         memcard1_ack <= '0';
+      end if;
+      
+      if (memcard1_wr = '1') then
+         memcard1_ack <= '1';
+         wait until rising_edge(clk33);
+         
+         for i in 0 to 63 loop
+            memcard1_addr   <= std_logic_vector(to_unsigned(i, 6));
+            wait until rising_edge(clk33);
+         end loop;
+         
+         memcard1_ack <= '0';
+      end if;
+         
+   end process;
+   
+   process
+   begin
+      wait until rising_edge(clk33);
+   
+      if (memcard2_rd = '1') then
+         memcard2_ack <= '1';
+         wait until rising_edge(clk33);
+         
+         for i in 0 to 63 loop
+            memcard2_write  <= '1';
+            memcard2_dataIn <= std_logic_vector(to_unsigned(i, 16));
+            memcard2_addr   <= std_logic_vector(to_unsigned(i, 6));
+            wait until rising_edge(clk33);
+            memcard2_write  <= '0';
+            wait until rising_edge(clk33);
+         end loop;
+         
+         memcard2_ack <= '0';
+      end if;
+      
+      if (memcard2_wr = '1') then
+         memcard2_ack <= '1';
+         wait until rising_edge(clk33);
+         
+         for i in 0 to 63 loop
+            memcard2_addr   <= std_logic_vector(to_unsigned(i, 6));
+            wait until rising_edge(clk33);
+         end loop;
+         
+         memcard2_ack <= '0';
+      end if;
+         
    end process;
    
    iframebuffer : entity work.framebuffer

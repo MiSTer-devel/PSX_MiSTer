@@ -19,6 +19,7 @@ entity gpu is
       REPRODUCIBLEGPUTIMING: in  std_logic;
       videoout_on          : in  std_logic;
       isPal                : in  std_logic;
+      pal60                : in  std_logic;
       fpscountOn           : in  std_logic;
       
       cdSlow               : in  std_logic;
@@ -623,7 +624,7 @@ begin
             end if;
             
             --gpu timing calc
-            if (GPUSTAT_PalVideoMode = '1') then
+            if (GPUSTAT_PalVideoMode = '1' and pal60 = '0') then
                htotal <= 2169;
                vtotal <= 314;
             else
@@ -1545,7 +1546,7 @@ begin
          end if;
          
          vram_paused <= '0';
-         if (VRAMIdle = '1' and vram_pause = '1') then
+         if (VRAMIdle = '1' and vram_pause = '1' and vram_WE = '0') then
             if (vram_pauseCnt = 7) then
                vram_paused <= '1';
             else

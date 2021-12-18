@@ -66,9 +66,32 @@ entity psx_top is
       cd_hps_ack            : in  std_logic;
       cd_hps_write          : in  std_logic;
       cd_hps_data           : in  std_logic_vector(15 downto 0);
+      -- memcard
+      memcard1_load         : in  std_logic;
+      memcard2_load         : in  std_logic;
+      memcard_save          : in  std_logic;
+      memcard1_available    : in  std_logic;
+      memcard1_rd           : out std_logic := '0';
+      memcard1_wr           : out std_logic := '0';
+      memcard1_lba          : out std_logic_vector(9 downto 0);
+      memcard1_ack          : in  std_logic;
+      memcard1_write        : in  std_logic;
+      memcard1_addr         : in  std_logic_vector(5 downto 0);
+      memcard1_dataIn       : in  std_logic_vector(15 downto 0);
+      memcard1_dataOut      : out std_logic_vector(15 downto 0);
+      memcard2_available    : in  std_logic;               
+      memcard2_rd           : out std_logic := '0';
+      memcard2_wr           : out std_logic := '0';
+      memcard2_lba          : out std_logic_vector(9 downto 0);
+      memcard2_ack          : in  std_logic;
+      memcard2_write        : in  std_logic;
+      memcard2_addr         : in  std_logic_vector(5 downto 0);
+      memcard2_dataIn       : in  std_logic_vector(15 downto 0);
+      memcard2_dataOut      : out std_logic_vector(15 downto 0);
       -- video
       videoout_on           : in  std_logic;
       isPal                 : in  std_logic;
+      pal60                 : in  std_logic;
       hsync                 : out std_logic;
       vsync                 : out std_logic;
       hblank                : out std_logic;
@@ -146,8 +169,10 @@ architecture arch of psx_top is
    
    signal arbiter_active         : std_logic := '0';
    
-   signal memcard1_acknext       : std_logic := '0';
-   signal memcard2_acknext       : std_logic := '0';
+   signal memDDR3card1_acknext   : std_logic := '0';
+   signal memDDR3card2_acknext   : std_logic := '0';
+   signal memHPScard1_acknext    : std_logic := '0';
+   signal memHPScard2_acknext    : std_logic := '0';
    
    signal arbiter_BURSTCNT       : std_logic_vector(7 downto 0) := (others => '0'); 
    signal arbiter_ADDR           : std_logic_vector(27 downto 0) := (others => '0');                       
@@ -156,23 +181,23 @@ architecture arch of psx_top is
    signal arbiter_WE             : std_logic := '0';
    signal arbiter_RD             : std_logic := '0';
    
-   signal memcard1_request       : std_logic;
-   signal memcard1_ack           : std_logic := '0';
-   signal memcard1_BURSTCNT      : std_logic_vector(7 downto 0) := (others => '0'); 
-   signal memcard1_ADDR          : std_logic_vector(19 downto 0) := (others => '0');                       
-   signal memcard1_DIN           : std_logic_vector(63 downto 0) := (others => '0');
-   signal memcard1_BE            : std_logic_vector(7 downto 0) := (others => '0'); 
-   signal memcard1_WE            : std_logic := '0';
-   signal memcard1_RD            : std_logic := '0';
+   signal memDDR3card1_request   : std_logic;
+   signal memDDR3card1_ack       : std_logic := '0';
+   signal memDDR3card1_BURSTCNT  : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memDDR3card1_ADDR      : std_logic_vector(19 downto 0) := (others => '0');                       
+   signal memDDR3card1_DIN       : std_logic_vector(63 downto 0) := (others => '0');
+   signal memDDR3card1_BE        : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memDDR3card1_WE        : std_logic := '0';
+   signal memDDR3card1_RD        : std_logic := '0';
    
-   signal memcard2_request       : std_logic;
-   signal memcard2_ack           : std_logic := '0';
-   signal memcard2_BURSTCNT      : std_logic_vector(7 downto 0) := (others => '0'); 
-   signal memcard2_ADDR          : std_logic_vector(19 downto 0) := (others => '0');                       
-   signal memcard2_DIN           : std_logic_vector(63 downto 0) := (others => '0');
-   signal memcard2_BE            : std_logic_vector(7 downto 0) := (others => '0'); 
-   signal memcard2_WE            : std_logic := '0';
-   signal memcard2_RD            : std_logic := '0';
+   signal memDDR3card2_request   : std_logic;
+   signal memDDR3card2_ack       : std_logic := '0';
+   signal memDDR3card2_BURSTCNT  : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memDDR3card2_ADDR      : std_logic_vector(19 downto 0) := (others => '0');                       
+   signal memDDR3card2_DIN       : std_logic_vector(63 downto 0) := (others => '0');
+   signal memDDR3card2_BE        : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memDDR3card2_WE        : std_logic := '0';
+   signal memDDR3card2_RD        : std_logic := '0';
 
    -- Busses
    --signal bus_exp1_addr          : unsigned(22 downto 0); 
@@ -382,6 +407,28 @@ architecture arch of psx_top is
    signal errorRECT              : std_logic;
    signal errorPOLY              : std_logic;
    signal errorGPU               : std_logic;
+   
+   -- memcard
+   signal memcard1_pause         : std_logic;
+   signal memcard2_pause         : std_logic;
+   
+   signal memHPScard1_request    : std_logic;
+   signal memHPScard1_ack        : std_logic := '0';
+   signal memHPScard1_BURSTCNT   : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memHPScard1_ADDR       : std_logic_vector(19 downto 0) := (others => '0');                       
+   signal memHPScard1_DIN        : std_logic_vector(63 downto 0) := (others => '0');
+   signal memHPScard1_BE         : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memHPScard1_WE         : std_logic := '0';
+   signal memHPScard1_RD         : std_logic := '0';
+                                 
+   signal memHPScard2_request    : std_logic;
+   signal memHPScard2_ack        : std_logic := '0';
+   signal memHPScard2_BURSTCNT   : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memHPScard2_ADDR       : std_logic_vector(19 downto 0) := (others => '0');                       
+   signal memHPScard2_DIN        : std_logic_vector(63 downto 0) := (others => '0');
+   signal memHPScard2_BE         : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memHPScard2_WE         : std_logic := '0';
+   signal memHPScard2_RD         : std_logic := '0';
 
    -- savestates
    signal loading_savestate      : std_logic;
@@ -527,7 +574,7 @@ begin
                pausing <= '1';
             end if;
             
-            if (pause = '0' and savestate_pause = '0') then
+            if (pause = '0' and savestate_pause = '0' and memcard1_pause = '0' and memcard2_pause = '0') then
                pausing <= '0';
             end if;
          
@@ -540,7 +587,8 @@ begin
                cpuPaused <= '0';
             else
          
-               if ((pause = '1' or savestate_pause = '1') and cpuPaused = '0' and dmaOn = '0' and stallNext = '0' and memMuxIdle = '1' and SS_idle = '1') then -- switch to pause/savestate pausing
+               -- switch to pause/savestate pausing
+               if ((pause = '1' or savestate_pause = '1' or memcard1_pause = '1' or memcard2_pause = '1') and cpuPaused = '0' and dmaOn = '0' and stallNext = '0' and memMuxIdle = '1' and SS_idle = '1') then
                   pausing <= '1';
                   ce      <= '0';
                   ce_cpu  <= '0';
@@ -593,23 +641,30 @@ begin
    begin
       if rising_edge(clk2x) then
       
-         memcard1_ack    <= '0';
-         memcard2_ack    <= '0';
+         memDDR3card1_ack    <= '0';
+         memDDR3card2_ack    <= '0';         
+         memHPScard1_ack     <= '0';
+         memHPScard2_ack     <= '0';
       
          if (reset_intern = '1') then
             arbiter_active    <= '0';
             vram_pause        <= '0';
             ddr3state         <= ARBITERIDLE;
-            memcard1_acknext  <= '0';
-            memcard2_acknext  <= '0';
+            
+            memDDR3card1_acknext  <= '0';
+            memDDR3card2_acknext  <= '0';            
+            memHPScard1_acknext   <= '0';
+            memHPScard2_acknext   <= '0';
          else
          
             case (ddr3state) is
             
                when ARBITERIDLE =>
-                  memcard1_acknext  <= '0';
-                  memcard2_acknext  <= '0';
-                  if (memcard1_request = '1' or memcard2_request = '1') then
+                  memDDR3card1_acknext  <= '0';
+                  memDDR3card2_acknext  <= '0';                  
+                  memHPScard1_acknext   <= '0';
+                  memHPScard2_acknext   <= '0';
+                  if (memDDR3card1_request = '1' or memDDR3card2_request = '1' or memHPScard1_request = '1' or memHPScard2_request = '1') then
                      vram_pause <= '1';
                      ddr3state  <= WAITGPUPAUSED;
                   end if;
@@ -618,22 +673,38 @@ begin
                   if (vram_paused = '1') then
                      ddr3state      <= REQUEST; 
                      arbiter_active <= '1';
-                     if (memcard1_request = '1') then
-                        memcard1_acknext <= '1';
-                        arbiter_BURSTCNT <= memcard1_BURSTCNT;
-                        arbiter_ADDR     <= x"01" & memcard1_ADDR;    
-                        arbiter_DIN      <= memcard1_DIN;     
-                        arbiter_BE       <= memcard1_BE;      
-                        arbiter_WE       <= memcard1_WE;      
-                        arbiter_RD       <= memcard1_RD;
-                     elsif (memcard2_request = '1') then
-                        memcard2_acknext <= '1';
-                        arbiter_BURSTCNT <= memcard2_BURSTCNT;
-                        arbiter_ADDR     <= x"02" & memcard2_ADDR;    
-                        arbiter_DIN      <= memcard2_DIN;     
-                        arbiter_BE       <= memcard2_BE;      
-                        arbiter_WE       <= memcard2_WE;      
-                        arbiter_RD       <= memcard2_RD;
+                     if (memDDR3card1_request = '1') then
+                        memDDR3card1_acknext <= '1';
+                        arbiter_BURSTCNT     <= memDDR3card1_BURSTCNT;
+                        arbiter_ADDR         <= x"01" & memDDR3card1_ADDR;    
+                        arbiter_DIN          <= memDDR3card1_DIN;     
+                        arbiter_BE           <= memDDR3card1_BE;      
+                        arbiter_WE           <= memDDR3card1_WE;      
+                        arbiter_RD           <= memDDR3card1_RD;
+                     elsif (memDDR3card2_request = '1') then
+                        memDDR3card2_acknext <= '1';
+                        arbiter_BURSTCNT     <= memDDR3card2_BURSTCNT;
+                        arbiter_ADDR         <= x"02" & memDDR3card2_ADDR;    
+                        arbiter_DIN          <= memDDR3card2_DIN;     
+                        arbiter_BE           <= memDDR3card2_BE;      
+                        arbiter_WE           <= memDDR3card2_WE;      
+                        arbiter_RD           <= memDDR3card2_RD;
+                     elsif (memHPScard1_request = '1') then
+                        memHPScard1_acknext <= '1';
+                        arbiter_BURSTCNT     <= memHPScard1_BURSTCNT;
+                        arbiter_ADDR         <= x"01" & memHPScard1_ADDR;    
+                        arbiter_DIN          <= memHPScard1_DIN;     
+                        arbiter_BE           <= memHPScard1_BE;      
+                        arbiter_WE           <= memHPScard1_WE;      
+                        arbiter_RD           <= memHPScard1_RD;
+                     elsif (memHPScard2_request = '1') then
+                        memHPScard2_acknext <= '1';
+                        arbiter_BURSTCNT     <= memHPScard2_BURSTCNT;
+                        arbiter_ADDR         <= x"02" & memHPScard2_ADDR;    
+                        arbiter_DIN          <= memHPScard2_DIN;     
+                        arbiter_BE           <= memHPScard2_BE;      
+                        arbiter_WE           <= memHPScard2_WE;      
+                        arbiter_RD           <= memHPScard2_RD;
                      end if;
                   end if;
                
@@ -642,12 +713,19 @@ begin
                      ddr3state  <= WAITDONE; 
                      arbiter_WE <= '0';     
                      arbiter_RD <= '0';
-                     if (memcard1_acknext = '1') then memcard1_ack <= '1'; end if;
-                     if (memcard2_acknext = '1') then memcard2_ack <= '1'; end if;
+                     if (memDDR3card1_acknext = '1') then memDDR3card1_ack <= '1'; end if;
+                     if (memDDR3card2_acknext = '1') then memDDR3card2_ack <= '1'; end if;                    
+                     if (memHPScard1_acknext  = '1') then memHPScard1_ack <= '1';  end if;
+                     if (memHPScard2_acknext  = '1') then memHPScard2_ack <= '1';  end if;
                   end if;
                
                when WAITDONE =>
-                  if ((memcard1_request and memcard1_acknext) = '0' and (memcard2_request and memcard2_acknext) = '0') then
+                  if (
+                      (memDDR3card1_request and memDDR3card1_acknext) = '0' and 
+                      (memDDR3card2_request and memDDR3card2_acknext) = '0' and 
+                      (memHPScard1_request  and memHPScard1_acknext ) = '0' and 
+                      (memHPScard2_request  and memHPScard2_acknext ) = '0' 
+                     ) then
                      ddr3state      <= ARBITERIDLE;
                      arbiter_active <= '0';
                      vram_pause     <= '0';
@@ -697,6 +775,9 @@ begin
       
       analogPad            => analogPad,
       
+      memcard1_available   => memcard1_available,
+      memcard2_available   => memcard2_available,
+      
       irqRequest           => irq_PAD,
       
       KeyTriangle          => KeyTriangle,           
@@ -724,23 +805,23 @@ begin
       Analog2XP2           => Analog2XP2,
       Analog2YP2           => Analog2YP2,
       
-      mem1_request         => memcard1_request,   
-      mem1_BURSTCNT        => memcard1_BURSTCNT,  
-      mem1_ADDR            => memcard1_ADDR,      
-      mem1_DIN             => memcard1_DIN,       
-      mem1_BE              => memcard1_BE,        
-      mem1_WE              => memcard1_WE,        
-      mem1_RD              => memcard1_RD,       
-      mem1_ack             => memcard1_ack,       
+      mem1_request         => memDDR3card1_request,   
+      mem1_BURSTCNT        => memDDR3card1_BURSTCNT,  
+      mem1_ADDR            => memDDR3card1_ADDR,      
+      mem1_DIN             => memDDR3card1_DIN,       
+      mem1_BE              => memDDR3card1_BE,        
+      mem1_WE              => memDDR3card1_WE,        
+      mem1_RD              => memDDR3card1_RD,       
+      mem1_ack             => memDDR3card1_ack,       
       
-      mem2_request         => memcard2_request,   
-      mem2_BURSTCNT        => memcard2_BURSTCNT,  
-      mem2_ADDR            => memcard2_ADDR,      
-      mem2_DIN             => memcard2_DIN,       
-      mem2_BE              => memcard2_BE,        
-      mem2_WE              => memcard2_WE,        
-      mem2_RD              => memcard2_RD,       
-      mem2_ack             => memcard2_ack,  
+      mem2_request         => memDDR3card2_request,   
+      mem2_BURSTCNT        => memDDR3card2_BURSTCNT,  
+      mem2_ADDR            => memDDR3card2_ADDR,      
+      mem2_DIN             => memDDR3card2_DIN,       
+      mem2_BE              => memDDR3card2_BE,        
+      mem2_WE              => memDDR3card2_WE,        
+      mem2_RD              => memDDR3card2_RD,       
+      mem2_ack             => memDDR3card2_ack,  
       
       mem_DOUT             => ddr3_DOUT,      
       mem_DOUT_READY       => ddr3_DOUT_READY,
@@ -1018,6 +1099,7 @@ begin
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
       videoout_on          => videoout_on,
       isPal                => isPal,
+      pal60                => pal60,
       fpscountOn           => fpscountOn,
       
       cdSlow               => cdSlow,
@@ -1406,6 +1488,80 @@ begin
    ddr3_BE       <= ss_ram_BE           when (ddr3_savestate = '1') else arbiter_BE       when (arbiter_active = '1') else  vram_BE;        
    ddr3_WE       <= ss_ram_WE           when (ddr3_savestate = '1') else arbiter_WE       when (arbiter_active = '1') else  vram_WE;        
    ddr3_RD       <= ss_ram_RD           when (ddr3_savestate = '1') else arbiter_RD       when (arbiter_active = '1') else  vram_RD;        
+   
+   imemcard1 : entity work.memcard
+   port map
+   (
+      clk2x                => clk2x, 
+      ce                   => ce,    
+      reset                => reset, 
+      
+      save                 => memcard_save,
+      load                 => memcard1_load,
+                            
+      pause                => memcard1_pause,
+      system_paused        => pausing,
+                           
+      mounted              => memcard1_available,
+      anyChange            => memDDR3card1_WE,
+                            
+      mem_request          => memHPScard1_request, 
+      mem_BURSTCNT         => memHPScard1_BURSTCNT,      
+      mem_ADDR             => memHPScard1_ADDR,                     
+      mem_DIN              => memHPScard1_DIN,    
+      mem_BE               => memHPScard1_BE,      
+      mem_WE               => memHPScard1_WE,      
+      mem_RD               => memHPScard1_RD,   
+      mem_ack              => memHPScard1_ack,   
+      mem_DOUT             => ddr3_DOUT,      
+      mem_DOUT_READY       => ddr3_DOUT_READY,
+                           
+      memcard_rd           => memcard1_rd,     
+      memcard_wr           => memcard1_wr,     
+      memcard_lba          => memcard1_lba,    
+      memcard_ack          => memcard1_ack,    
+      memcard_write        => memcard1_write,  
+      memcard_addr         => memcard1_addr,   
+      memcard_dataIn       => memcard1_dataIn, 
+      memcard_dataOut      => memcard1_dataOut
+   );
+   
+   imemcard2 : entity work.memcard
+   port map
+   (
+      clk2x                => clk2x, 
+      ce                   => ce,    
+      reset                => reset, 
+      
+      save                 => memcard_save,
+      load                 => memcard2_load,
+                            
+      pause                => memcard2_pause,
+      system_paused        => pausing,
+                           
+      mounted              => memcard2_available,
+      anyChange            => memDDR3card2_WE,
+                            
+      mem_request          => memHPScard2_request, 
+      mem_BURSTCNT         => memHPScard2_BURSTCNT,      
+      mem_ADDR             => memHPScard2_ADDR,                     
+      mem_DIN              => memHPScard2_DIN,    
+      mem_BE               => memHPScard2_BE,      
+      mem_WE               => memHPScard2_WE,      
+      mem_RD               => memHPScard2_RD,   
+      mem_ack              => memHPScard2_ack,   
+      mem_DOUT             => ddr3_DOUT,      
+      mem_DOUT_READY       => ddr3_DOUT_READY,
+                           
+      memcard_rd           => memcard2_rd,     
+      memcard_wr           => memcard2_wr,     
+      memcard_lba          => memcard2_lba,    
+      memcard_ack          => memcard2_ack,    
+      memcard_write        => memcard2_write,  
+      memcard_addr         => memcard2_addr,   
+      memcard_dataIn       => memcard2_dataIn, 
+      memcard_dataOut      => memcard2_dataOut
+   );
    
    isavestates : entity work.savestates
    generic map

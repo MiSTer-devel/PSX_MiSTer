@@ -15,6 +15,9 @@ entity joypad is
       
       analogPad            : in  std_logic;
       
+      memcard1_available   : in  std_logic;
+      memcard2_available   : in  std_logic;
+      
       rumbleOn             : out std_logic := '0';
       
       irqRequest           : out std_logic := '0';
@@ -437,7 +440,8 @@ begin
       clk2xIndex           => clk2xIndex,      
       ce                   => ce,       
       reset                => reset,    
-      
+       
+      memcard_available    => memcard1_available,
       mem_request          => mem1_request,   
       mem_BURSTCNT         => mem1_BURSTCNT,  
       mem_ADDR             => mem1_ADDR,      
@@ -471,6 +475,7 @@ begin
       ce                   => ce,       
       reset                => reset,    
       
+      memcard_available    => memcard1_available,
       mem_request          => mem2_request,   
       mem_BURSTCNT         => mem2_BURSTCNT,  
       mem_ADDR             => mem2_ADDR,      

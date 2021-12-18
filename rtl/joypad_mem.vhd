@@ -11,6 +11,7 @@ entity joypad_mem is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      memcard_available    : in  std_logic;
       mem_request          : out std_logic := '0';
       mem_BURSTCNT         : out std_logic_vector(7 downto 0) := (others => '0'); 
       mem_ADDR             : out std_logic_vector(19 downto 0) := (others => '0');                       
@@ -139,7 +140,7 @@ begin
             end if;
          
             if (actionNext = '1' and transmitting = '1') then
-               if (selected = '1') then
+               if (selected = '1' and memcard_available = '1') then
                   if (isActive = '0' and slotIdle = '1') then
                      if (state = IDLE and transmitValue = x"81") then
                         state           <= COMMAND;
@@ -312,6 +313,8 @@ begin
                      mem_request <= '0';
                      if (unsigned(mem_addrB) = 15) then
                         memstate    <= MEMIDLE;
+                        mem_WE      <= '0';
+                        mem_RD      <= '0';
                      else
                         mem_addrB <= std_logic_vector(unsigned(mem_addrB) + 1);
                         memstate  <= MEMCPUWRITE_READDATA;
@@ -343,6 +346,8 @@ begin
                      if (unsigned(readCnt2X) = 15) then
                         memstate    <= MEMIDLE;
                         mem_request <= '0';
+                        mem_WE      <= '0';
+                        mem_RD      <= '0';
                      else 
                         readCnt2X <= std_logic_vector(unsigned(readCnt2X) + 1);
                      end if;
