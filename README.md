@@ -5,8 +5,11 @@
 SDRam of any size is required.
 
 # Bios
-Only scph1001.bin tested.
 Rename to boot.rom
+
+You can also place a cd_bios.rom in the same directory as the CD or 1 directory above, to have it uses together with that CD.
+
+This can be used for games that depend on the BIOS region(US,EU,J).
 
 # Memory Card
 One card can be mounted for each controller slot.
