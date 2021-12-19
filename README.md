@@ -57,15 +57,12 @@ Memory : 50%
 - SPU RAM not implemented
 - rotate register not done for all busses
 
-IRQ    : 70%
-- irq_SIO missing     
-- irq_SPU missing    
+IRQ    : 80%
+- irq_SIO missing        
 - irq_LIGHTPEN missing
 
-PAD    : 40%
-- memory card not implemented
-- special controllers not supported
-- second controller port not supported
+PAD    : 70%
+- special controllers(mouse, lightgun) not supported
 
 DMA    : 60%
 - DMA chopping not implemented 
@@ -88,7 +85,6 @@ MDEC   : 90%
  
 CD     : 50%
 - single track only
-- region only EU
 - no audio yet
 
 SPU    : 5%
