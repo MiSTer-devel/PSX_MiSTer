@@ -73,19 +73,19 @@ entity psx_top is
       memcard1_available    : in  std_logic;
       memcard1_rd           : out std_logic := '0';
       memcard1_wr           : out std_logic := '0';
-      memcard1_lba          : out std_logic_vector(9 downto 0);
+      memcard1_lba          : out std_logic_vector(6 downto 0);
       memcard1_ack          : in  std_logic;
       memcard1_write        : in  std_logic;
-      memcard1_addr         : in  std_logic_vector(5 downto 0);
+      memcard1_addr         : in  std_logic_vector(8 downto 0);
       memcard1_dataIn       : in  std_logic_vector(15 downto 0);
       memcard1_dataOut      : out std_logic_vector(15 downto 0);
       memcard2_available    : in  std_logic;               
       memcard2_rd           : out std_logic := '0';
       memcard2_wr           : out std_logic := '0';
-      memcard2_lba          : out std_logic_vector(9 downto 0);
+      memcard2_lba          : out std_logic_vector(6 downto 0);
       memcard2_ack          : in  std_logic;
       memcard2_write        : in  std_logic;
-      memcard2_addr         : in  std_logic_vector(5 downto 0);
+      memcard2_addr         : in  std_logic_vector(8 downto 0);
       memcard2_dataIn       : in  std_logic_vector(15 downto 0);
       memcard2_dataOut      : out std_logic_vector(15 downto 0);
       -- video

@@ -1224,18 +1224,23 @@ reg hdmi_out_de;
 reg [23:0] hdmi_out_d;
 
 always @(posedge hdmi_tx_clk) begin
-	reg hs,vs,de;
-	reg [23:0] d;
+	reg hs1,vs1,de1,hs2,vs2,de2;
+	reg [23:0] d1,d2;
 	
-	hs <= (~vga_fb & direct_video) ? dv_hs   : (direct_video & csync_en) ? hdmi_cs_osd : hdmi_hs_osd;
-	vs <= (~vga_fb & direct_video) ? dv_vs   : hdmi_vs_osd;
-	de <= (~vga_fb & direct_video) ? dv_de   : hdmi_de_osd;
-	d  <= (~vga_fb & direct_video) ? dv_data : hdmi_data_osd;
+	hs1 <= (~vga_fb & direct_video) ? dv_hs   : (direct_video & csync_en) ? hdmi_cs_osd : hdmi_hs_osd;
+	vs1 <= (~vga_fb & direct_video) ? dv_vs   : hdmi_vs_osd;
+	de1 <= (~vga_fb & direct_video) ? dv_de   : hdmi_de_osd;
+	d1  <= (~vga_fb & direct_video) ? dv_data : hdmi_data_osd;
+	
+	hs2 <= hs1;
+	vs2 <= vs1;
+	de2 <= de1;
+	d2  <= d1;
 
-	hdmi_out_hs <= hs;
-	hdmi_out_vs <= vs;
-	hdmi_out_de <= de;
-	hdmi_out_d  <= d;
+	hdmi_out_hs <= hs2;
+	hdmi_out_vs <= vs2;
+	hdmi_out_de <= de2;
+	hdmi_out_d  <= d2;
 end
 
 assign HDMI_TX_HS = hdmi_out_hs;

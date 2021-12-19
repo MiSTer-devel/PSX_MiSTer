@@ -101,6 +101,12 @@ begin
       isPal                   => '1',
       videoout_on             => '1',
       fpscountOn              => '0',
+      
+      cdSlow                  => '0',
+                              
+      errorOn                 => '0',
+      errorEna                => '0',
+      errorCode               => x"0",
          
       dmaOn                   => '0',
          

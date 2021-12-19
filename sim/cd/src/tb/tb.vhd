@@ -69,7 +69,7 @@ begin
       ce                   => '1',        
       reset                => reset_out,  
 
-      CDDISABLE            => '0',
+      INSTANTSEEK          => '1',
       hasCD                => '1',
       cdSize               => cdSize,
       fastCD               => '0',
@@ -104,14 +104,11 @@ begin
       SS_rden              => '0'
    );  
    
-   cd_done <= ram_done;
-   
-   
    itb_savestates : entity work.tb_savestates
    generic map
    (
-      LOADSTATE         => '1',
-      FILENAME          => "C:\Projekte\psx\FPSXApp\CastlevaniaSOTNTrack1.sst"
+      LOADSTATE         => '0',
+      --FILENAME          => ""
    )
    port map
    (

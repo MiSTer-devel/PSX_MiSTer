@@ -151,19 +151,19 @@ architecture arch of etb is
    signal memcard1_available  : std_logic := '0';
    signal memcard1_rd         : std_logic;
    signal memcard1_wr         : std_logic;
-   signal memcard1_lba        : std_logic_vector(9 downto 0);
+   signal memcard1_lba        : std_logic_vector(6 downto 0);
    signal memcard1_ack        : std_logic := '0';
    signal memcard1_write      : std_logic := '0';
-   signal memcard1_addr       : std_logic_vector(5 downto 0) := (others => '0');
+   signal memcard1_addr       : std_logic_vector(8 downto 0) := (others => '0');
    signal memcard1_dataIn     : std_logic_vector(15 downto 0);
    signal memcard1_dataOut    : std_logic_vector(15 downto 0);
    signal memcard2_available  : std_logic := '0';               
    signal memcard2_rd         : std_logic := '0';
    signal memcard2_wr         : std_logic := '0';
-   signal memcard2_lba        : std_logic_vector(9 downto 0);
+   signal memcard2_lba        : std_logic_vector(6 downto 0);
    signal memcard2_ack        : std_logic := '0';
    signal memcard2_write      : std_logic := '0';
-   signal memcard2_addr       : std_logic_vector(5 downto 0) := (others => '0');
+   signal memcard2_addr       : std_logic_vector(8 downto 0) := (others => '0');
    signal memcard2_dataIn     : std_logic_vector(15 downto 0);
    signal memcard2_dataOut    : std_logic_vector(15 downto 0);
    
@@ -481,10 +481,10 @@ begin
          memcard1_ack <= '1';
          wait until rising_edge(clk33);
          
-         for i in 0 to 63 loop
+         for i in 0 to 511 loop
             memcard1_write  <= '1';
             memcard1_dataIn <= std_logic_vector(to_unsigned(i, 16));
-            memcard1_addr   <= std_logic_vector(to_unsigned(i, 6));
+            memcard1_addr   <= std_logic_vector(to_unsigned(i, 9));
             wait until rising_edge(clk33);
             memcard1_write  <= '0';
             wait until rising_edge(clk33);
@@ -497,8 +497,8 @@ begin
          memcard1_ack <= '1';
          wait until rising_edge(clk33);
          
-         for i in 0 to 63 loop
-            memcard1_addr   <= std_logic_vector(to_unsigned(i, 6));
+         for i in 0 to 511 loop
+            memcard1_addr   <= std_logic_vector(to_unsigned(i, 9));
             wait until rising_edge(clk33);
          end loop;
          
@@ -515,10 +515,10 @@ begin
          memcard2_ack <= '1';
          wait until rising_edge(clk33);
          
-         for i in 0 to 63 loop
+         for i in 0 to 511 loop
             memcard2_write  <= '1';
             memcard2_dataIn <= std_logic_vector(to_unsigned(i, 16));
-            memcard2_addr   <= std_logic_vector(to_unsigned(i, 6));
+            memcard2_addr   <= std_logic_vector(to_unsigned(i, 9));
             wait until rising_edge(clk33);
             memcard2_write  <= '0';
             wait until rising_edge(clk33);
@@ -531,8 +531,8 @@ begin
          memcard2_ack <= '1';
          wait until rising_edge(clk33);
          
-         for i in 0 to 63 loop
-            memcard2_addr   <= std_logic_vector(to_unsigned(i, 6));
+         for i in 0 to 511 loop
+            memcard2_addr   <= std_logic_vector(to_unsigned(i, 9));
             wait until rising_edge(clk33);
          end loop;
          

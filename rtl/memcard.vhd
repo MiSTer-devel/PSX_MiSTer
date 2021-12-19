@@ -31,10 +31,10 @@ entity memcard is
 
       memcard_rd           : out std_logic := '0';
       memcard_wr           : out std_logic := '0';
-      memcard_lba          : out std_logic_vector(9 downto 0);
+      memcard_lba          : out std_logic_vector(6 downto 0);
       memcard_ack          : in  std_logic;
       memcard_write        : in  std_logic;
-      memcard_addr         : in  std_logic_vector(5 downto 0);
+      memcard_addr         : in  std_logic_vector(8 downto 0);
       memcard_dataIn       : in  std_logic_vector(15 downto 0);
       memcard_dataOut      : out std_logic_vector(15 downto 0)
    );
@@ -69,11 +69,11 @@ architecture arch of memcard is
   
    signal anyChangeBuf  : std_logic := '0';
   
-   signal readCnt       : std_logic_vector(3 downto 0);   
-   signal blockCnt      : unsigned(9 downto 0);   
+   signal readCnt       : std_logic_vector(6 downto 0);   
+   signal blockCnt      : unsigned(6 downto 0);   
   
    -- memory
-   signal mem_addrA     : std_logic_vector(3 downto 0) := (others => '0');
+   signal mem_addrA     : std_logic_vector(6 downto 0) := (others => '0');
    signal mem_DataInA   : std_logic_vector(63 downto 0);
    signal mem_wrenA     : std_logic := '0';
    signal mem_DataOutA  : std_logic_vector(63 downto 0);
@@ -160,8 +160,8 @@ begin
                when LOAD_WAITACK =>
                   if (mem_ack = '1') then
                      mem_request <= '0';
-                     if (unsigned(mem_addrA) = 15) then
-                        if (blockCnt = 1023) then
+                     if (unsigned(mem_addrA) = 127) then
+                        if (blockCnt = 127) then
                            state <= IDLE;
                            pause <= '0';
                         else
@@ -184,8 +184,8 @@ begin
                when SAVE_REQDATA =>
                   state        <= SAVE_WAITACK;
                   mem_request  <= '1';
-                  mem_BURSTCNT <= x"10";
-                  mem_ADDR     <= "000" & std_logic_vector(blockCnt) & "0000" & "000";
+                  mem_BURSTCNT <= x"80";
+                  mem_ADDR     <= "000" & std_logic_vector(blockCnt) & "0000000" & "000";
                   mem_BE       <= x"FF";
                   mem_WE       <= '0';
                   mem_RD       <= '1';
@@ -203,7 +203,7 @@ begin
                      mem_DataInA <= mem_DOUT;
                      mem_wrenA   <= '1';
                   
-                     if (unsigned(readCnt) = 15) then
+                     if (unsigned(readCnt) = 127) then
                         state       <= SAVE_REQWRITE;
                         mem_request <= '0';
                      else 
@@ -224,7 +224,7 @@ begin
                when SAVE_WAITACKDONE =>
                   mem_addrA <= (others => '0');
                   if (memcard_ack = '0') then 
-                     if (blockCnt = 1023) then
+                     if (blockCnt = 127) then
                         state <= IDLE;
                         pause <= '0';
                      else
@@ -243,9 +243,9 @@ begin
    iramSectorBuffer: entity work.dpram_dif
    generic map 
    ( 
-      addr_width_a  => 4,
+      addr_width_a  => 7,
       data_width_a  => 64,
-      addr_width_b  => 6,
+      addr_width_b  => 9,
       data_width_b  => 16
    )
    port map

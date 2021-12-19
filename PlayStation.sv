@@ -223,7 +223,7 @@ pll pll
 	.locked(pll_locked)
 );
 
-wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd_download | img_mounted[1];
+wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd_download;
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
@@ -236,7 +236,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 `include "build_id.v"
 parameter CONF_STR = {
 	"PlayStation;SS3E000000:400000;",
-	"S1,ISOBIN,Load Iso/Bin;",
+	"S1,ISOCUE,Load CD;",
 	"F1,EXE,Load Exe;",
 	"h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
@@ -306,12 +306,12 @@ wire [15:0] status_menumask = {SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
-reg  [ 9:0] sd_lba2;
-reg  [ 9:0] sd_lba3;
+reg  [ 6:0] sd_lba2;
+reg  [ 6:0] sd_lba3;
 reg   [3:0] sd_rd;
 reg   [3:0] sd_wr;
 wire  [3:0] sd_ack;
-wire  [7:0] sd_buff_addr;
+wire  [8:0] sd_buff_addr;
 wire [15:0] sd_buff_dout;
 wire [15:0] sd_buff_din2;
 wire [15:0] sd_buff_din3;
@@ -344,7 +344,7 @@ wire [32:0] RTC_time;
 
 wire [63:0] status_in = cart_download ? {status[63:39],ss_slot,status[36:17],1'b0,status[15:0]} : {status[63:39],ss_slot,status[36:0]};
 
-hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(0)) hps_io
+hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
 (
 	.clk_sys(clk_1x),
 	.HPS_BUS(HPS_BUS),
@@ -624,7 +624,7 @@ psx
    .memcard1_lba    (sd_lba2),
    .memcard1_ack    (sd_ack[2]),
    .memcard1_write  (sd_buff_wr),
-   .memcard1_addr   (sd_buff_addr[5:0]),
+   .memcard1_addr   (sd_buff_addr[8:0]),
    .memcard1_dataIn (sd_buff_dout),
    .memcard1_dataOut(sd_buff_din2),    
    .memcard2_available (sd_mounted3),   
@@ -633,7 +633,7 @@ psx
    .memcard2_lba    (sd_lba3),
    .memcard2_ack    (sd_ack[3]),
    .memcard2_write  (sd_buff_wr),
-   .memcard2_addr   (sd_buff_addr[5:0]),
+   .memcard2_addr   (sd_buff_addr[8:0]),
    .memcard2_dataIn (sd_buff_dout),
    .memcard2_dataOut(sd_buff_din3), 
    // video
