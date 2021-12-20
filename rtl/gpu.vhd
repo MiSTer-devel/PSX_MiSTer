@@ -21,6 +21,7 @@ entity gpu is
       isPal                : in  std_logic;
       pal60                : in  std_logic;
       fpscountOn           : in  std_logic;
+      noTexture            : in  std_logic;
       
       cdSlow               : in  std_logic;
       
@@ -625,13 +626,14 @@ begin
             
             --gpu timing calc
             if (GPUSTAT_PalVideoMode = '1' and pal60 = '0') then
-               htotal <= 2169;
+               htotal <= 2169; -- overwritten below
                vtotal <= 314;
             else
-               htotal <= 2173;
+               htotal <= 2173; -- overwritten below
                vtotal <= 263;
             end if;
             
+            -- todo: different values for ntsc
             if (GPUSTAT_HorRes2 = '1') then
                htotal  <= 2169; -- 368
             else
@@ -1355,7 +1357,9 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset or SS_reset,  
+      reset                => softreset or SS_reset,
+
+      noTexture            => noTexture,      
 
       drawMode_in          => drawMode,
       DrawPixelsMask_in    => GPUSTAT_DrawPixelsMask,

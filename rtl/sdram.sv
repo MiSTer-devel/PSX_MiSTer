@@ -42,7 +42,8 @@ module sdram
 	output             ram_idle,                   
 
 	input      [26:0]  ch1_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
-	output reg [127:0] ch1_dout,   // data output to cpu
+	output reg [127:0] ch1_dout,    // data output to cpu
+	output reg [31:0]  ch1_dout32,  // data output to cpu
 	input      [15:0]  ch1_din,     // data input from cpu
 	input              ch1_req,     // request
 	input              ch1_rnw,     // 1 - read, 0 - write
@@ -124,6 +125,14 @@ always @(posedge clk_base) begin
 	ch3_ready <= ch3_ready_ramclock;
 
 	ch1_reqprocessed <= ch1_reqprocessed_ramclock;
+   
+   if (ch1_ready_ramclock) begin
+      if (ch1_addr_0) begin
+         ch1_dout32 <= { 8'b0, ch1_dout[31:8] };
+      end else begin
+         ch1_dout32 <= ch1_dout[31:0];
+      end
+   end
 end
 
 reg ch1_ready_ramclock = 0;
@@ -137,6 +146,8 @@ reg refreshForce_1 = 0;
 reg ch1_reqprocessed_ramclock = 0;
 
 reg req128    = 0;
+
+reg ch1_addr_0 = 0;
 
 reg  [3:0] state = STATE_STARTUP;
 
@@ -187,7 +198,7 @@ always @(posedge clk) begin
    if(data_ready_delay1[1]) ch1_dout[111: 96]  <= dq_reg;
    if(data_ready_delay1[0]) ch1_dout[127:112]  <= dq_reg;
    if(data_ready_delay1[2] &&  req128) ch1_ready_ramclock <= 1;
-   if(data_ready_delay1[7] && ~req128) ch1_ready_ramclock <= 1;
+   if(data_ready_delay1[6] && ~req128) ch1_ready_ramclock <= 1;
 
 	if(data_ready_delay2[7]) ch2_dout[15:00]    <= dq_reg;
 	if(data_ready_delay2[6]) ch2_dout[31:16]    <= dq_reg;
@@ -276,7 +287,7 @@ always @(posedge clk) begin
                else
                   refresh_count <= 14'd0;
    
-            end else if(ch1_rq) begin
+            end else if(ch1_req | ch1_rq) begin
                {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, 1'b1, ch1_addr[25:1]};
                chip       <= ch1_addr[26];
                saved_data <= ch1_din;
@@ -287,6 +298,7 @@ always @(posedge clk) begin
                state      <= STATE_WAIT;
                req128     <= ch1_128;
                ch1_reqprocessed_ramclock <= ch1_rnw;
+               ch1_addr_0 <= ch1_addr[0];
             end else if(ch2_rq) begin
                {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch2_be[1:0], ch2_rnw, ch2_addr[25:1]};
                chip       <= ch2_addr[26];

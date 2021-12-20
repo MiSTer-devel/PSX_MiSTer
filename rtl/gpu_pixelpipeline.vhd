@@ -13,6 +13,8 @@ entity gpu_pixelpipeline is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      noTexture            : in  std_logic;
+      
       drawMode_in          : in  unsigned(13 downto 0) := (others => '0');
       DrawPixelsMask_in    : in  std_logic;
       SetMask_in           : in  std_logic;
@@ -384,7 +386,7 @@ begin
             end if;
             
             if (textPalInNew = '1' and drawMode_in(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
-               textPalReq  <= '1';
+               textPalReq  <= not noTexture;
                textPalReqX <= textPalInX;
                textPalReqY <= textPalInY;
             end if;
@@ -481,7 +483,7 @@ begin
                -- stage 0 - receive
                if (pipeline_stall_1 = '1') then
                   stage0_valid         <= stageS_valid;      
-                  stage0_texture       <= stageS_texture;    
+                  stage0_texture       <= stageS_texture and (not noTexture);    
                   stage0_transparent   <= stageS_transparent;
                   stage0_rawTexture    <= stageS_rawTexture; 
                   stage0_dithering     <= stageS_dithering; 
@@ -495,7 +497,7 @@ begin
                   stage0_oldPixel      <= stageS_oldPixel;  
                else
                   stage0_valid         <= pipeline_new and ((not DrawPixelsMask) or (not vramLineData(15)));
-                  stage0_texture       <= pipeline_texture;
+                  stage0_texture       <= pipeline_texture and (not noTexture);    
                   stage0_transparent   <= pipeline_transparent;
                   stage0_rawTexture    <= pipeline_rawTexture; 
                   stage0_dithering     <= pipeline_dithering; 

@@ -25,10 +25,12 @@ entity psx_mister is
       analogPad             : in  std_logic;
       fpscountOn            : in  std_logic;
       errorOn               : in  std_logic;
+      noTexture             : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
       ram_dataRead          : in  std_logic_vector(127 downto 0);
+      ram_dataRead32        : in  std_logic_vector(31 downto 0);
       ram_Adr               : out std_logic_vector(22 downto 0);
       ram_be                : out std_logic_vector(3 downto 0) := (others => '0');
       ram_rnw               : out std_logic;
@@ -173,10 +175,12 @@ begin
       analogPad             => analogPad,
       fpscountOn            => fpscountOn,
       errorOn               => errorOn,
+      noTexture             => noTexture,
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 
+      ram_dataRead32        => ram_dataRead32, 
       ram_Adr               => ram_Adr, 
       ram_be                => ram_be,        
       ram_rnw               => ram_rnw,      

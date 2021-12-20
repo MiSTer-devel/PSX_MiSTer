@@ -557,7 +557,7 @@ begin
                      cmdMV    <= gte_cmdData(16 downto 15);
                      cmdTV    <= gte_cmdData(14 downto 13);
                      case (to_integer(gte_cmdData(5 downto 0))) is
-                        when 16#01# => state <= CALC_RTPS; 
+                        when 16#01# => state <= CALC_RTPS; vector0 <= REG_V0X;
                         when 16#06# => state <= CALC_NCLIP; 
                         when 16#0C# => state <= CALC_OP; 
                         when 16#10# => state <= CALC_DPCS; calcColor <= REG_RGBC(23 downto 0);
@@ -575,7 +575,7 @@ begin
                         when 16#2A# => state <= CALC_DPCT; calcColor <= REG_RGB0(23 downto 0);
                         when 16#2D# => state <= CALC_AVSZ3;
                         when 16#2E# => state <= CALC_AVSZ4;
-                        when 16#30# => state <= CALC_RTPT;
+                        when 16#30# => state <= CALC_RTPT; vector0 <= REG_V0X;
                         when 16#3D# => state <= CALC_GPF;
                         when 16#3E# => state <= CALC_GPL;
                         when 16#3F# => state <= CALC_NCCT;                        
@@ -593,27 +593,26 @@ begin
                   
                when CALC_RTPS | CALC_RTPT =>
                   case (calcStep) is
-                     when 0 =>
-                        case (batchCount) is
-                           when 0 => vector0 <= REG_V0X; vector1 <= REG_V0Y; vector2 <= REG_V0Z;
-                           when 1 => vector0 <= REG_V1X; vector1 <= REG_V1Y; vector2 <= REG_V1Z;
-                           when 2 => vector0 <= REG_V2X; vector1 <= REG_V2Y; vector2 <= REG_V2Z;
-                        end case;
-                  
                      --                     mul1                        mul2                  add                           sub  swap    svSh  useIR    IRs    IRsF        satIR     satIRF  uRes trigger
-                     when 1 => MAC1req <= (resize(REG_RT11, 32), resize(vector0, 32), resize(signed(REG_TR0), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
+                     when 0 => MAC1req <= (resize(REG_RT11, 32), resize(vector0, 32), resize(signed(REG_TR0), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
                                MAC2req <= (resize(REG_RT21, 32), resize(vector0, 32), resize(signed(REG_TR1), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
-                               MAC3req <= (resize(REG_RT31, 32), resize(vector0, 32), resize(signed(REG_TR2), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
+                               MAC3req <= (resize(REG_RT31, 32), resize(vector0, 32), resize(signed(REG_TR2), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1');
+
+                              case (batchCount) is
+                                 when 0 => vector1 <= REG_V0Y; vector2 <= REG_V0Z;
+                                 when 1 => vector1 <= REG_V1Y; vector2 <= REG_V1Z;
+                                 when 2 => vector1 <= REG_V2Y; vector2 <= REG_V2Z;
+                              end case;                               
                                
-                     when 2 => MAC1req <= (resize(REG_RT12, 32), resize(vector1, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
+                     when 1 => MAC1req <= (resize(REG_RT12, 32), resize(vector1, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
                                MAC2req <= (resize(REG_RT22, 32), resize(vector1, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
                                MAC3req <= (resize(REG_RT32, 32), resize(vector1, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1');
                                                                                                                             
-                     when 3 => MAC1req <= (resize(REG_RT13, 32), resize(vector2, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
+                     when 2 => MAC1req <= (resize(REG_RT13, 32), resize(vector2, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
                                MAC2req <= (resize(REG_RT23, 32), resize(vector2, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
                                MAC3req <= (resize(REG_RT33, 32), resize(vector2, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift,      '1', cmdsatIR,      '0',  '1',  '1');
 
-                     when 5 => -- push sz and start divide
+                     when 4 => -- push sz and start divide
                         div_trigger <= '1';
                         div_lhs     <= unsigned(REG_H);
                         if (mac3Shifted < 0) then
@@ -631,9 +630,9 @@ begin
                         REG_SZ0 <= REG_SZ1; REG_SZ1 <= REG_SZ2; REG_SZ2 <= REG_SZ3;
 
                               --             mul1                       mul2                    add         sub  swap useIR IRs cOvf uRes trigger
-                     when 14 => MAC0req <= (resize(REG_IR1, 17), '0' & signed(div_result), signed(REG_OFX), '0', '0', '0', '0', '1', '0', '1'); 
-                     when 15 => MAC0req <= (resize(REG_IR2, 17), '0' & signed(div_result), signed(REG_OFY), '0', '0', '0', '0', '1', '0', '1'); 
-                     when 17 => -- push SXY
+                     when 12 => MAC0req <= (resize(REG_IR1, 17), '0' & signed(div_result), signed(REG_OFX), '0', '0', '0', '0', '1', '0', '1'); 
+                     when 13 => MAC0req <= (resize(REG_IR2, 17), '0' & signed(div_result), signed(REG_OFY), '0', '0', '0', '0', '1', '0', '1'); 
+                     when 15 => -- push SXY
                         if (mac0Last(34 downto 16) < -1024) then
                            REG_SX2 <= to_signed(-1024, 16);
                            REG_FLAG(14) <= '1'; REG_FLAG(31) <= '1';
@@ -654,19 +653,19 @@ begin
                         end if; 
                         REG_SX0 <= REG_SX1; REG_SX1 <= REG_SX2;
                         REG_SY0 <= REG_SY1; REG_SY1 <= REG_SY2;
-                        
-                     when 18 => 
-                        if (state = CALC_RTPS or batchCount = 2) then 
+                        if (state = CALC_RTPT and batchCount < 2) then
+                           calcStep   <= 0;
+                           batchCount <= batchCount + 1;
+                           case (batchCount) is
+                                 when 0 => vector0 <= REG_V1X;
+                                 when 1 => vector0 <= REG_V2X;
+                                 when 2 => null; -- cannot happen
+                           end case;
+                        else
                            MAC0req <= (resize(REG_DQA, 17), '0' & signed(div_result), signed(REG_DQB), '0', '0', '1', '1', '1', '0', '1');
                         end if;
                                
-                     when 20 =>
-                        if (state = CALC_RTPS or batchCount = 2) then
-                           state <= IDLE;
-                        else
-                           calcStep   <= 0;
-                           batchCount <= batchCount + 1;
-                        end if;
+                     when 17 => state <= IDLE;
                      when others => null;
                   end case;
                
@@ -679,7 +678,7 @@ begin
                      when 3 => MAC0req <= (resize(REG_SX0, 17), resize(REG_SY2,18), x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
                      when 4 => MAC0req <= (resize(REG_SX1, 17), resize(REG_SY0,18), x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
                      when 5 => MAC0req <= (resize(REG_SX2, 17), resize(REG_SY1,18), x"00000000", '1', '0', '0', '0', '1', '1', '1'); 
-                     when 8 => state <= IDLE;
+                     when 7 => state <= IDLE;
                      when others => null;
                   end case;
                   

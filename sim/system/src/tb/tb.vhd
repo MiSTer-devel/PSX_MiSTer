@@ -71,6 +71,7 @@ architecture arch of etb is
    --sdram access 
    signal ram_dataWrite       : std_logic_vector(31 downto 0);
    signal ram_dataRead        : std_logic_vector(127 downto 0);
+   signal ram_dataRead32      : std_logic_vector(31 downto 0);
    signal ram_Adr             : std_logic_vector(22 downto 0);
    signal ram_be              : std_logic_vector(3 downto 0);
    signal ram_rnw             : std_logic;
@@ -204,10 +205,12 @@ begin
       analogPad             => '0',
       fpscountOn            => '0',
       errorOn               => '0',
+      noTexture             => '0',
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 
+      ram_dataRead32        => ram_dataRead32, 
       ram_Adr               => ram_Adr,      
       ram_be                => ram_be,      
       ram_rnw               => ram_rnw,      
@@ -350,6 +353,7 @@ begin
       be           => ram_be,
       di           => ram_dataWrite,
       do           => ram_dataRead,
+      do32         => ram_dataRead32,
       done         => ram_done,
       reqprocessed => ram_reqprocessed,
       ram_idle     => ram_idle
@@ -447,7 +451,7 @@ begin
    -- memcard testinterface
    process
    begin
-      if (1 = 1) then
+      if (0 = 1) then
       
          wait for 5 ms;
          
@@ -469,6 +473,8 @@ begin
          memcard_save       <= '0';
          wait until rising_edge(clk33);
       
+         wait;
+      else
          wait;
       end if;
    end process;

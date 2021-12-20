@@ -49,8 +49,7 @@ architecture arch of gte_UNRDivide is
       CALC_X,
       CALC_D,
       CALC_R,
-      CALCRESULT,
-      CLIP
+      CALCRESULT
    );
    signal state : tstate := IDLE;
    
@@ -64,13 +63,13 @@ architecture arch of gte_UNRDivide is
    signal calc_val_xn   : signed(10 downto 0);
    signal calc_val_d    : signed(19 downto 0);
    signal calc_val_r    : unsigned(19 downto 0);
-   signal calc_result   : unsigned(31 downto 0);
 
 begin 
 
    process (clk2x)
-      variable var_calc_d : signed(27 downto 0);
-      variable var_calc_r : signed(27 downto 0);
+      variable var_calc_d  : signed(27 downto 0);
+      variable var_calc_r  : signed(27 downto 0);
+      variable calc_result : unsigned(31 downto 0);
    begin
       if rising_edge(clk2x) then
       
@@ -123,11 +122,8 @@ begin
                calc_val_r <= unsigned(var_calc_r(27 downto 8));
 
             when CALCRESULT =>
-               state       <= CLIP;
-               calc_result <= resize(((calc_lhs * calc_val_r) + x"8000") / x"10000", 32);
-
-            when CLIP =>
-               state      <= IDLE;
+               state       <= IDLE;
+               calc_result := resize(((calc_lhs * calc_val_r) + x"8000") / x"10000", 32);
                if (calc_result > x"1FFFF") then
                   result   <= (others => '1');
                else

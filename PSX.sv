@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXxXXXXXXXXXXx xxX  XXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXXXXXXXXX  XXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -269,6 +269,7 @@ parameter CONF_STR = {
 	"OL,CD Instant Seek,Off,On;",
 	"OU,Fake SPU,On,Off;",
 	"OF,Force 60Hz PAL,Off,On;",
+	"OR,Textures,On,Off;",
 	"- ;",
 
 	"P1,Video & Audio;",
@@ -577,10 +578,12 @@ psx
    .analogPad(status[24]),
    .fpscountOn(status[28]),
    .errorOn(~status[29]),
+   .noTexture(status[27]),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),
    .ram_dataRead(sdr_sdram_dout),
+   .ram_dataRead32(sdr_sdram_dout32),
    .ram_Adr(sdram_addr),
    .ram_be(sdram_be), 
    .ram_rnw(sdram_rnw),  
@@ -698,6 +701,7 @@ localparam ROM_START = (65536+131072)*4;
 wire         sdr_refresh;
 wire  [31:0] sdr_sdram_din;
 wire [127:0] sdr_sdram_dout;
+wire  [31:0] sdr_sdram_dout32;
 wire [127:0] sdr_sdram_dout2;
 wire  [15:0] sdr_bram_din;
 wire         sdr_sdram_ack;
@@ -744,6 +748,7 @@ sdram sdram
 	.ch1_addr(sdram_addr),
 	.ch1_din(),
 	.ch1_dout(sdr_sdram_dout),
+	.ch1_dout32(sdr_sdram_dout32),
 	.ch1_req(sdram_req & sdram_rnw),
 	.ch1_rnw(1'b1),
 	.ch1_128(sdram_128),

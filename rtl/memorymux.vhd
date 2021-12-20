@@ -22,6 +22,7 @@ entity memorymux is
       
       ram_dataWrite        : out std_logic_vector(31 downto 0) := (others => '0');
       ram_dataRead         : in  std_logic_vector(127 downto 0);
+      ram_dataRead32       : in  std_logic_vector(31 downto 0);
       ram_Adr              : out std_logic_vector(22 downto 0) := (others => '0');
       ram_be               : out std_logic_vector(3 downto 0) := (others => '0');
       ram_rnw              : out std_logic := '0';
@@ -142,7 +143,6 @@ architecture arch of memorymux is
    type tState is
    (
       IDLE,
-      READRAM,
       READCACHE,
       WRITERAM,
       --CHECKRAM,
@@ -169,6 +169,11 @@ architecture arch of memorymux is
    
    signal byteStep         : unsigned(1 downto 0);
    signal waitcnt          : integer range 0 to 127;
+   
+   signal mem_dataRead_buf : std_logic_vector(31 downto 0);
+   signal mem_done_buf     : std_logic := '0';
+   
+   signal readram          : std_logic := '0';
    
    signal addressData_buf  : unsigned(31 downto 0);
    signal dataWrite_buf    : std_logic_vector(31 downto 0);
@@ -197,7 +202,7 @@ architecture arch of memorymux is
    
 begin 
 
-   isIdle <= '1' when (state = IDLE) else '0';
+   isIdle <= '1' when (state = IDLE and readram = '0') else '0';
 
    process (state, mem_request, mem_rnw, mem_isData, mem_addressData, mem_reqsize, mem_writeMask, mem_dataWrite, ce)
       variable address : unsigned(28 downto 0);
@@ -358,13 +363,17 @@ begin
                      bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or bus_exp2_dataRead or bus_exp3_dataRead or
                      data_cd or data_spu;
   
+   mem_dataRead   <= ram_dataRead32 when (readram = '1' and ram_done = '1') else mem_dataRead_buf;
+                     
+   mem_done       <= '1'            when (readram = '1' and ram_done = '1') else mem_done_buf;
+  
    process (clk1x)
       variable biosPatch  : std_logic_vector(31 downto 0);
    begin
       if rising_edge(clk1x) then
       
          ram_ena        <= '0';
-         mem_done       <= '0';
+         mem_done_buf   <= '0';
          reset_exe      <= '0';
          
          bus_cd_read    <= '0';
@@ -375,6 +384,10 @@ begin
          
          if (loadExe = '1') then
             loadExe_latched <= '1';
+         end if;
+         
+         if (ram_done = '1') then
+            readram <= '0';
          end if;
       
          if (reset = '1') then
@@ -404,6 +417,8 @@ begin
                
                   elsif (mem_request = '1') then
                   
+                     readram <= '0';
+                  
                      if (mem_isData = '0') then
                
                         if (mem_addressInstr(28 downto 0) < 16#800000#) then -- RAM
@@ -411,12 +426,14 @@ begin
                            ram_128 <= '0';
                            ram_rnw <= '1';
                            ram_Adr <= "00" & std_logic_vector(mem_addressInstr(20 downto 0));
-                           state   <= READRAM;
+                           state   <= IDLE;
+                           readram <= '1';
                            if (mem_isCache = '1') then
                               ram_Adr(3 downto 0) <= (others => '0');
                               state               <= READCACHE;
                               waitcnt             <= 1;
                               ram_128             <= '1';
+                              readram             <= '0';
                            end if;
                         elsif (mem_addressInstr(28 downto 0) >= 16#1FC00000# and mem_addressInstr(28 downto 0) < 16#1FC80000#) then -- BIOS
                            ram_ena <= '1';
@@ -444,7 +461,8 @@ begin
                            ram_rnw <= mem_rnw;
                            ram_Adr <= "00" & std_logic_vector(mem_addressData(20 downto 0));
                            if (mem_rnw = '1') then
-                              state   <= READRAM;
+                              state   <= IDLE;
+                              readram <= '1';
                            else
                               state   <= WRITERAM;
                            end if;
@@ -490,24 +508,13 @@ begin
                      end if;
                      
                   end if;
-                  
-               when READRAM =>
-                  if (ram_done = '1') then
-                     if (ram_Adr(0) = '1') then
-                        mem_dataRead <= x"00" & ram_dataRead(31 downto 8);
-                     else
-                        mem_dataRead <= ram_dataRead(31 downto 0);
-                     end if;
-                     mem_done     <= '1';
-                     state        <= IDLE;
-                  end if;       
 
                when READCACHE =>
                   if (ram_done = '1') then
                      mem_dataCache <= ram_dataRead;
                      if (NOMEMWAIT = '1') then
-                        mem_done <= '1';
-                        state    <= IDLE;
+                        mem_done_buf <= '1';
+                        state        <= IDLE;
                      else
                         state    <= WAITING;
                      end if;
@@ -518,13 +525,13 @@ begin
                      --state <= CHECKRAM;
                      --ram_ena <= '1';
                      --ram_rnw <= '1';
-                     mem_done     <= '1';
+                     mem_done_buf <= '1';
                      state        <= IDLE;
                   end if;
                   
                --when CHECKRAM =>
                --   if (ram_done = '1') then
-               --      mem_done     <= '1';
+               --      mem_done_buf <= '1';
                --      state        <= IDLE;
                --      if (ram_be(0) = '1' and ram_dataRead( 7 downto  0) /= ram_dataWrite( 7 downto  0)) then state <= ERRORRAM; end if;
                --      if (ram_be(1) = '1' and ram_dataRead(15 downto  8) /= ram_dataWrite(15 downto  8)) then state <= ERRORRAM; end if;
@@ -548,23 +555,23 @@ begin
                            when others => null;
                         end case;
                         case (addressBIOS_buf(1 downto 0)) is
-                           when "00" => mem_dataRead <= biosPatch;
-                           when "01" => mem_dataRead <= x"00" & biosPatch(31 downto 8);
-                           when "10" => mem_dataRead <= x"0000" & biosPatch(31 downto 16);
-                           when "11" => mem_dataRead <= x"000000" & biosPatch(31 downto 24);
+                           when "00" => mem_dataRead_buf <= biosPatch;
+                           when "01" => mem_dataRead_buf <= x"00" & biosPatch(31 downto 8);
+                           when "10" => mem_dataRead_buf <= x"0000" & biosPatch(31 downto 16);
+                           when "11" => mem_dataRead_buf <= x"000000" & biosPatch(31 downto 24);
                            when others => null;
                         end case;
                      else
                         if (ram_Adr(0) = '1') then
-                           mem_dataRead <= x"00" & ram_dataRead(31 downto 8);
+                           mem_dataRead_buf <= x"00" & ram_dataRead(31 downto 8);
                         else
-                           mem_dataRead <= ram_dataRead(31 downto 0);
+                           mem_dataRead_buf <= ram_dataRead(31 downto 0);
                         end if;
                      end if;
                         
                      if (NOMEMWAIT = '1') then
-                        mem_done <= '1';
-                        state    <= IDLE;
+                        mem_done_buf <= '1';
+                        state        <= IDLE;
                      else
                         state    <= WAITING;
                      end if;
@@ -573,22 +580,22 @@ begin
                when BUSACTION =>
                   if (rotate32 = '1') then
                      case (addressData_buf(1 downto 0)) is
-                        when "00" => mem_dataRead <= dataFromBusses;
-                        when "01" => mem_dataRead <= x"00" & dataFromBusses(31 downto 8);
-                        when "10" => mem_dataRead <= x"0000" & dataFromBusses(31 downto 16);
-                        when "11" => mem_dataRead <= x"000000" & dataFromBusses(31 downto 24);
+                        when "00" => mem_dataRead_buf <= dataFromBusses;
+                        when "01" => mem_dataRead_buf <= x"00" & dataFromBusses(31 downto 8);
+                        when "10" => mem_dataRead_buf <= x"0000" & dataFromBusses(31 downto 16);
+                        when "11" => mem_dataRead_buf <= x"000000" & dataFromBusses(31 downto 24);
                         when others => null;
                      end case;
                   elsif (rotate16 = '1') then
                      if (addressData_buf(0) = '1') then
-                        mem_dataRead <= x"00" & dataFromBusses(31 downto 8);
+                        mem_dataRead_buf <= x"00" & dataFromBusses(31 downto 8);
                      else
-                        mem_dataRead <= dataFromBusses;
+                        mem_dataRead_buf <= dataFromBusses;
                      end if;
                   else
-                     mem_dataRead <= dataFromBusses;
+                     mem_dataRead_buf <= dataFromBusses;
                   end if;
-                  mem_done     <= '1';
+                  mem_done_buf <= '1';
                   state        <= IDLE;
                   
                -- CD
@@ -675,8 +682,8 @@ begin
                   if (waitcnt > 0) then
                      waitcnt <= waitcnt - 1;
                   else
-                     mem_done <= '1';
-                     state    <= IDLE;
+                     mem_done_buf <= '1';
+                     state        <= IDLE;
                   end if;
                   
 -- #################################################

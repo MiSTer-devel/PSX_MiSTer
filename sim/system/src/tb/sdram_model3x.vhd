@@ -24,7 +24,8 @@ entity sdram_model3x is
       rnw               : in  std_logic;
       be                : in  std_logic_vector(3 downto 0);
       di                : in  std_logic_vector(31 downto 0);
-      do                : out std_logic_vector(127 downto 0);
+      do                : buffer std_logic_vector(127 downto 0);
+      do32              : out std_logic_vector(31 downto 0);
       done              : buffer std_logic := '0';
       reqprocessed      : buffer std_logic := '0';
       ram_idle          : out std_logic := '0';
@@ -87,6 +88,14 @@ begin
       
       done         <= done_3x;
       reqprocessed <= reqprocessed_3x;
+      
+      if (done_3x = '1') then
+         if (addr_buffer(0) = '1') then
+            do32 <= x"00" & do(31 downto 8);
+         else
+            do32 <= do(31 downto 0);
+         end if;
+      end if;
    
    end process;
    
@@ -162,7 +171,7 @@ begin
       data_ready_delay1 <= '0' & data_ready_delay1(10 downto 1);
 
       if(data_ready_delay1(2) = '1' and ram_128_buffer = '1') then done_3x <= '1'; end if;
-      if(data_ready_delay1(7) = '1' and ram_128_buffer = '0') then done_3x <= '1'; end if;
+      if(data_ready_delay1(6) = '1' and ram_128_buffer = '0') then done_3x <= '1'; end if;
       
       if(data_ready_delay1(7) = '1') then
          addr_rotate := addr_buffer;
@@ -194,7 +203,7 @@ begin
                rnw_128_buffer  <= '0';
                state           <= STATE_WAIT;
                
-            elsif (req_buffer = '1' and rnw = '1') then
+            elsif ((req = '1' or req_buffer = '1') and rnw = '1') then
                reqprocessed_3x <= '1';
                req_buffer      <= '0';
                addr_buffer     <= addr;
