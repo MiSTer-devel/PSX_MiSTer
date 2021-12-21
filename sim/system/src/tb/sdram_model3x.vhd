@@ -194,13 +194,14 @@ begin
                end if;
                refresh_buffer <= '0';
             
-            elsif (req_buffer = '1' and rnw = '0') then
+            elsif ((req = '1' or req_buffer = '1') and rnw = '0') then
                if (be(3) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 3) := to_integer(unsigned(di(31 downto 24))); end if;
                if (be(2) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 2) := to_integer(unsigned(di(23 downto 16))); end if;
                if (be(1) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 1) := to_integer(unsigned(di(15 downto  8))); end if;
                if (be(0) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 0) := to_integer(unsigned(di( 7 downto  0))); end if;
                req_buffer      <= '0';
                rnw_128_buffer  <= '0';
+               reqprocessed_3x <= '1';
                state           <= STATE_WAIT;
                
             elsif ((req = '1' or req_buffer = '1') and rnw = '1') then

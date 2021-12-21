@@ -20,6 +20,7 @@ entity psx_top is
       pause                 : in  std_logic;
       loadExe               : in  std_logic;
       fastboot              : in  std_logic;
+      FASTMEM               : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
@@ -350,7 +351,6 @@ architecture arch of psx_top is
    signal cpuPaused              : std_logic;
    signal dmaOn                  : std_logic;
    
-   signal ram_refresh_dma        : std_logic;
    signal ram_dma_dataWrite      : std_logic_vector(31 downto 0);
    signal ram_dma_Adr            : std_logic_vector(22 downto 0);
    signal ram_dma_be             : std_logic_vector(3 downto 0);
@@ -409,6 +409,8 @@ architecture arch of psx_top is
    signal errorRECT              : std_logic;
    signal errorPOLY              : std_logic;
    signal errorGPU               : std_logic;
+   signal errorMASK              : std_logic;
+   signal errorCHOP              : std_logic;
    
    -- memcard
    signal memcard1_pause         : std_logic;
@@ -626,6 +628,8 @@ begin
                if (errorCD   = '1') then errorEna  <= '1'; errorCode <= x"1"; end if;
                if (errorCPU  = '1') then errorEna  <= '1'; errorCode <= x"2"; end if;
                if (errorGPU  = '1') then errorEna  <= '1'; errorCode <= x"3"; end if;
+               if (errorMASK = '1') then errorEna  <= '1'; errorCode <= x"7"; end if;
+               if (errorCHOP = '1') then errorEna  <= '1'; errorCode <= x"8"; end if;
             end if;
             
             if (errorEna = '0' or errorCode = x"3") then
@@ -916,6 +920,8 @@ begin
       ce                   => ce,   
       reset                => reset_intern,
       
+      errorCHOP            => errorCHOP, 
+      
       REPRODUCIBLEDMATIMING=> REPRODUCIBLEDMATIMING,
       DMABLOCKATONCE       => DMABLOCKATONCE,
       
@@ -923,7 +929,7 @@ begin
       dmaOn                => dmaOn,
       irqOut               => irq_DMA,
       
-      ram_refresh          => ram_refresh_dma,  
+      ram_refresh          => ram_refresh,
       ram_dataWrite        => ram_dma_dataWrite,
       ram_dataRead         => ram_dataRead, 
       ram_Adr              => ram_dma_Adr,      
@@ -972,8 +978,6 @@ begin
       SS_DataRead          => SS_DataRead_DMA,
       SS_idle              => SS_idle_dma
    );
-   
-   ram_refresh   <= ram_refresh_dma;
    
    ram_dataWrite <= ram_dma_dataWrite when (cpuPaused = '1') else ram_cpu_dataWrite;
    ram_Adr       <= ram_dma_Adr       when (cpuPaused = '1') else ram_cpu_Adr;      
@@ -1115,6 +1119,7 @@ begin
       errorRECT            => errorRECT,
       errorPOLY            => errorPOLY,
       errorGPU             => errorGPU, 
+      errorMASK            => errorMASK, 
       
       bus_addr             => bus_gpu_addr,     
       bus_dataWrite        => bus_gpu_dataWrite,
@@ -1264,10 +1269,6 @@ begin
    );
 
    imemorymux : entity work.memorymux
-   generic map
-   (
-      NOMEMWAIT => '1' --is_simu
-   )
    port map
    (
       clk1x                => clk1x,
@@ -1280,6 +1281,7 @@ begin
       reset_exe            => reset_exe,
       
       fastboot             => fastboot,
+      NOMEMWAIT            => FASTMEM,
             
       ram_dataWrite        => ram_cpu_dataWrite,
       ram_dataRead         => ram_dataRead, 

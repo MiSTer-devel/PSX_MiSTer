@@ -35,7 +35,8 @@ You can hide these messages with an OSD option, by default they are on.
 List of Errors:
 - E2     - CPU exception
 - E3..E6 - GPU hangs (e.g. corrupt display list)
-
+- E7     - CPU2VRAM with mask-AND enabled
+- E8     - DMA chopping enabled
 
 # Status
 
@@ -66,7 +67,7 @@ PAD    : 70%
 
 DMA    : 60%
 - DMA chopping not implemented 
-- DMA write performance only 32bit/3 cycles, should be 32Bit/1 cycle?
+- DMA write performance only 32bit/2 cycles, should be 32Bit/1 cycle?
 
 Memctrl: register stubs only
 

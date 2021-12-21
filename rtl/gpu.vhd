@@ -33,6 +33,7 @@ entity gpu is
       errorRECT            : out std_logic;
       errorPOLY            : out std_logic;
       errorGPU             : out std_logic;
+      errorMASK            : out std_logic;
       
       bus_addr             : in  unsigned(3 downto 0); 
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
@@ -1065,6 +1066,10 @@ begin
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
       reset                => softreset or SS_reset,     
+      
+      DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
+      SetMask              => GPUSTAT_SetMask,
+      errorMASK            => errorMASK,
       
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 

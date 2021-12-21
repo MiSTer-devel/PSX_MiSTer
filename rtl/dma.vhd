@@ -11,6 +11,8 @@ entity dma is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      errorCHOP            : out std_logic;
+      
       REPRODUCIBLEDMATIMING: in  std_logic;
       DMABLOCKATONCE       : in  std_logic;
       
@@ -128,6 +130,9 @@ architecture arch of dma is
    signal dataCount           : integer range 0 to 3 := 0;
    signal firstsize           : integer range 0 to 3 := 0;
    signal requestOnFly        : integer range 0 to 2;
+   
+   signal requestedDwords     : integer range 0 to 65536;
+   signal requiredDwords      : integer range 0 to 65536;
       
    signal fifoIn_reset        : std_logic := '0';
    signal fifoIn_Din          : std_logic_vector(31 downto 0);
@@ -281,6 +286,8 @@ begin
             ramwrite_pending <= '0';
          
             irqOut         <= '0';
+            
+            errorCHOP      <= '0';
 
          elsif (ce = '1') then
          
@@ -446,6 +453,11 @@ begin
                      if (activeChannel = 3) then
                         wordAccu <= 3;
                      end if;
+                     
+                     if (dmaArray(activeChannel).D_CHCR(8) = '1') then
+                        errorCHOP <= '1';
+                     end if;
+                     
                      if (dmaArray(activeChannel).D_CHCR(0) = '1') then
                         if (requestOnFly = 0) then
                            ram_rnw         <= '1';
@@ -678,31 +690,40 @@ begin
                dataCount       <= 3;
             
                if (firstword = '1') then
-                  firstword <= '0';
-                  dataCount <= firstsize;
+                  firstword       <= '0';
+                  dataCount       <= firstsize;
                   case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
                      when "00" => -- manual
                         if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
                            wordcount <= '1' & x"0000";
+                           requiredDwords <= 16#10000#;
                         else
-                           wordcount <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                           wordcount      <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                           requiredDwords <= to_integer(dmaArray(activeChannel).D_BCR(15 downto 0));
                         end if;
                      
                      when "01" => -- request
-                        blocksleft  <= dmaArray(activeChannel).D_BCR(31 downto 16) - 1;
-                        wordcount   <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                        blocksleft     <= dmaArray(activeChannel).D_BCR(31 downto 16) - 1;
+                        wordcount      <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                        requiredDwords <= to_integer(dmaArray(activeChannel).D_BCR(15 downto 0));
                      
                      when "10" => -- linked list
-                        wordcount <= "0" & x"00" & unsigned(ram_dataRead(31 downto 24)); 
+                        wordcount      <= "0" & x"00" & unsigned(ram_dataRead(31 downto 24)); 
+                        requiredDwords <= to_integer(unsigned(ram_dataRead(31 downto 24))) + 1;
                      
                      when others => null;
                   end case;
                end if;
             end if;
             
+            if (DMABLOCKATONCE = '0' and firstword = '0' and autoread = '1' and requestedDwords >= requiredDwords) then
+               autoread <= '0';
+            end if;
+            
             if (ram_reqprocessed = '1' and autoread = '1') then
                ram_ena         <= '1';
                requestOnFlyNew := requestOnFlyNew + 1;
+               requestedDwords <= requestedDwords + 4;
                if (directionNeg = '1') then
                   ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
                else
@@ -711,10 +732,11 @@ begin
             end if;
             
             if (dmaState = WAITING and waitcnt = 8) then
-               firstword    <= '1';
-               firstsize    <= to_integer(3 - dmaArray(activeChannel).D_MADR(3 downto 2));
-               fifoIn_reset <= '1';
-               dataCount    <= 0;
+               firstword        <= '1';
+               firstsize        <= to_integer(3 - dmaArray(activeChannel).D_MADR(3 downto 2));
+               requestedDwords  <= to_integer(4 - dmaArray(activeChannel).D_MADR(3 downto 2));
+               fifoIn_reset     <= '1';
+               dataCount        <= 0;
             elsif (dataCount > 0) then
                dataCount <= dataCount - 1;
                dataNext  <= x"00000000" & dataNext(95 downto 32);
@@ -723,7 +745,7 @@ begin
             requestOnFly <= requestOnFlyNew;
             
             -- fifo Out
-            if (ram_done = '1') then
+            if (ram_reqprocessed = '1') then
                ramwrite_pending <= '0';
             end if;
             
@@ -748,8 +770,7 @@ begin
    
    fifoIn_Wr  <= '1' when (toDevice = '1' and (ram_done = '1' or dataCount > 0)) else '0'; 
    
-   fifoIn_Din <= ram_dataRead(31 downto 0) when ram_done = '1' else
-               dataNext(31 downto 0);
+   fifoIn_Din <= ram_dataRead(31 downto 0) when ram_done = '1' else dataNext(31 downto 0);
    
    
    fifoIn_Rd <= '1' when (fifoIn_Empty = '0' and dmaState = WAITING and waitcnt = 1) else
@@ -778,7 +799,7 @@ begin
       Empty    => fifoIn_Empty   
    );
    
-   fifoOut_Rd <= ce when (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_done = '1')) else '0';
+   fifoOut_Rd <= ce when (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_reqprocessed = '1')) else '0';
    
    DMAfifoOut: entity mem.SyncFifoFallThrough
    generic map

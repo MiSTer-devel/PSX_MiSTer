@@ -10,6 +10,10 @@ entity gpu_cpu2vram is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      DrawPixelsMask       : in  std_logic;
+      SetMask              : in  std_logic;
+      errorMASK            : out std_logic;
+      
       proc_idle            : in  std_logic;
       fifo_Valid           : in  std_logic;
       fifo_data            : in  std_logic_vector(31 downto 0);
@@ -54,6 +58,11 @@ begin
       variable col : unsigned(9 downto 0);
    begin
       if rising_edge(clk2x) then
+         
+         errorMASK <= '0';
+         if (state /= IDLE and DrawPixelsMask = '1') then
+            errorMASK <= '1';
+         end if;
          
          if (reset = '1') then
          
@@ -113,6 +122,10 @@ begin
                         pixelColor <= fifo_data(15 downto 0);
                      else
                         pixelColor <= fifo_data_1;
+                     end if;
+                     
+                     if (SetMask = '1') then
+                        pixelColor(15) <= '1';
                      end if;
                      
                      if (x + 1 < copySizeX) then

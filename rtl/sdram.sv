@@ -159,6 +159,7 @@ always @(posedge clk) begin
 	reg        saved_wr;
 	reg [12:0] cas_addr;
 	reg [31:0] saved_data;
+	reg  [3:0] saved_be;
 	reg [15:0] dq_reg;
 
 	reg       ch1_rq, ch2_rq, ch3_rq, refreshForce_req;
@@ -299,15 +300,17 @@ always @(posedge clk) begin
                req128     <= ch1_128;
                ch1_reqprocessed_ramclock <= ch1_rnw;
                ch1_addr_0 <= ch1_addr[0];
-            end else if(ch2_rq) begin
+            end else if(ch2_req | ch2_rq) begin
                {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch2_be[1:0], ch2_rnw, ch2_addr[25:1]};
                chip       <= ch2_addr[26];
                saved_data <= ch2_din;
                saved_wr   <= ~ch2_rnw;
+               saved_be   <= ch2_be;
                ch         <= 1;
                ch2_rq     <= 0;
                command    <= CMD_ACTIVE;
                state      <= STATE_WAIT;
+               ch1_reqprocessed_ramclock <= 1;
             end else if(ch3_rq) begin
                {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, ch3_rnw, ch3_addr[23:1], 2'b00};
                chip       <= ch3_addr[24];
@@ -350,7 +353,7 @@ always @(posedge clk) begin
                SDRAM_A[0]           <= 1;
                command              <= CMD_WRITE;
                SDRAM_DQ             <= saved_data[31:16];
-               SDRAM_A[12:11]       <= ~ch2_be[3:2];
+               SDRAM_A[12:11]       <= ~saved_be[3:2];
                ch2_ready_ramclock   <= 1;
             end
             else begin

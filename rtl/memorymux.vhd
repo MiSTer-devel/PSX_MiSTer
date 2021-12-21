@@ -3,10 +3,6 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all; 
 
 entity memorymux is
-   generic
-   (
-      NOMEMWAIT : std_logic
-   );
    port 
    (
       clk1x                : in  std_logic;
@@ -17,6 +13,7 @@ entity memorymux is
       reset_exe            : out std_logic := '0';
       
       fastboot             : in  std_logic;
+      NOMEMWAIT            : in  std_logic;
       
       isIdle               : out std_logic;
       
@@ -143,11 +140,11 @@ architecture arch of memorymux is
    type tState is
    (
       IDLE,
-      READCACHE,
       WRITERAM,
       --CHECKRAM,
       --ERRORRAM,
       READBIOS,
+      READBIOSCACHE,
       BUSACTION,
       CD_WRITE,
       CD_READ_WAIT,
@@ -367,6 +364,8 @@ begin
                      
    mem_done       <= '1'            when (readram = '1' and ram_done = '1') else mem_done_buf;
   
+   mem_dataCache  <= ram_dataRead;
+  
    process (clk1x)
       variable biosPatch  : std_logic_vector(31 downto 0);
    begin
@@ -430,10 +429,7 @@ begin
                            readram <= '1';
                            if (mem_isCache = '1') then
                               ram_Adr(3 downto 0) <= (others => '0');
-                              state               <= READCACHE;
-                              waitcnt             <= 1;
                               ram_128             <= '1';
-                              readram             <= '0';
                            end if;
                         elsif (mem_addressInstr(28 downto 0) >= 16#1FC00000# and mem_addressInstr(28 downto 0) < 16#1FC80000#) then -- BIOS
                            ram_ena <= '1';
@@ -445,9 +441,13 @@ begin
                            waitcnt <= 16;
                            if (mem_isCache = '1') then
                               ram_Adr(3 downto 0) <= (others => '0');
-                              state               <= READCACHE;
+                              state               <= READBIOSCACHE;
                               waitcnt             <= 87;
                               ram_128             <= '1';
+                              if (NOMEMWAIT = '1') then
+                                 state   <= IDLE;
+                                 readram <= '1';
+                              end if;
                            end if;
                         else
                            report "should never happen" severity failure; 
@@ -507,18 +507,7 @@ begin
             
                      end if;
                      
-                  end if;
-
-               when READCACHE =>
-                  if (ram_done = '1') then
-                     mem_dataCache <= ram_dataRead;
-                     if (NOMEMWAIT = '1') then
-                        mem_done_buf <= '1';
-                        state        <= IDLE;
-                     else
-                        state    <= WAITING;
-                     end if;
-                  end if;                       
+                  end if;                  
                   
                when WRITERAM =>
                   if (ram_done = '1') then
@@ -576,6 +565,11 @@ begin
                         state    <= WAITING;
                      end if;
                   end if;
+                  
+               when READBIOSCACHE =>
+                  if (ram_done = '1') then
+                     state    <= WAITING;
+                  end if; 
                   
                when BUSACTION =>
                   if (rotate32 = '1') then

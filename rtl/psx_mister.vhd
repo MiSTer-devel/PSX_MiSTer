@@ -16,6 +16,7 @@ entity psx_mister is
       pause                 : in  std_logic;
       loadExe               : in  std_logic;
       fastboot              : in  std_logic;
+      FASTMEM               : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
@@ -166,6 +167,7 @@ begin
       pause                 => pause,
       loadExe               => loadExe,
       fastboot              => fastboot,
+      FASTMEM               => FASTMEM,
       REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING,
       REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING,
       DMABLOCKATONCE        => DMABLOCKATONCE,
