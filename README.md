@@ -37,6 +37,7 @@ List of Errors:
 - E3..E6 - GPU hangs (e.g. corrupt display list)
 - E7     - CPU2VRAM with mask-AND enabled
 - E8     - DMA chopping enabled
+- E8     - GPU FIFO overflow
 
 # Status
 
@@ -53,6 +54,7 @@ GPU    : 80%
 - mask bits not implemented for cpu2vram
 - vram2vram and vram2cpu line wraparound not implemented
 - vram2vram read/modify/write race condition when copying to same line
+- videoout using original, asynchronous timings
 
 Memory : 50%
 - SPU RAM not implemented

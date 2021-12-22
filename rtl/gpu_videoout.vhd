@@ -7,49 +7,50 @@ library mem;
 entity gpu_videoout is
    port 
    (
-      clk2x                : in  std_logic;
-      ce                   : in  std_logic;
-      reset                : in  std_logic;
+      clk2x                   : in  std_logic;
+      ce                      : in  std_logic;
+      reset                   : in  std_logic;
+         
+      videoout_on             : in  std_logic;
+         
+      fpscountOn              : in  std_logic;
+      fpscountBCD             : in  unsigned(7 downto 0);      
+         
+      cdSlow                  : in  std_logic;
+         
+      errorOn                 : in  std_logic;
+      errorEna                : in  std_logic;
+      errorCode               : in  unsigned(3 downto 0);
+         
+      fetch                   : in  std_logic;
+      lineIn                  : in  unsigned(8 downto 0);
+      lineInNext              : in  unsigned(8 downto 0);
+      nextHCount              : in  integer range 0 to 4095;
+      DisplayWidth            : in  unsigned(9 downto 0);
+      DisplayOffsetX          : in  unsigned(9 downto 0);
+      DisplayOffsetY          : in  unsigned(8 downto 0);
+      GPUSTAT_HorRes2         : in  std_logic;
+      GPUSTAT_HorRes1         : in  std_logic_vector(1 downto 0);
+      GPUSTAT_ColorDepth24    : in  std_logic;
+      GPUSTAT_DisplayDisable  : in  std_logic;
+      interlacedMode          : in  std_logic;
       
-      videoout_on          : in  std_logic;
-      
-      fpscountOn           : in  std_logic;
-      fpscountBCD          : in  unsigned(7 downto 0);      
-      
-      cdSlow               : in  std_logic;
-      
-      errorOn              : in  std_logic;
-      errorEna             : in  std_logic;
-      errorCode            : in  unsigned(3 downto 0);
-      
-      fetch                : in  std_logic;
-      lineIn               : in  unsigned(8 downto 0);
-      lineInNext           : in  unsigned(8 downto 0);
-      nextHCount           : in  integer range 0 to 4095;
-      DisplayWidth         : in  unsigned(9 downto 0);
-      DisplayOffsetX       : in  unsigned(9 downto 0);
-      DisplayOffsetY       : in  unsigned(8 downto 0);
-      GPUSTAT_HorRes2      : in  std_logic;
-      GPUSTAT_HorRes1      : in  std_logic_vector(1 downto 0);
-      GPUSTAT_ColorDepth24 : in  std_logic;
-      interlacedMode       : in  std_logic;
-      
-      requestVRAMEnable    : out std_logic := '0';
-      requestVRAMXPos      : out unsigned(9 downto 0);
-      requestVRAMYPos      : out unsigned(8 downto 0);
-      requestVRAMSize      : out unsigned(10 downto 0);
-      requestVRAMIdle      : in  std_logic;
-      requestVRAMDone      : in  std_logic;
-      
-      vram_DOUT            : in  std_logic_vector(63 downto 0);
-      vram_DOUT_READY      : in  std_logic;
-      
-      video_ce             : buffer std_logic := '0';
-      video_r              : out std_logic_vector(7 downto 0);
-      video_g              : out std_logic_vector(7 downto 0);
-      video_b              : out std_logic_vector(7 downto 0);
-      video_hblank         : out std_logic := '1';
-      video_hsync          : out std_logic := '0'
+      requestVRAMEnable       : out std_logic := '0';
+      requestVRAMXPos         : out unsigned(9 downto 0);
+      requestVRAMYPos         : out unsigned(8 downto 0);
+      requestVRAMSize         : out unsigned(10 downto 0);
+      requestVRAMIdle         : in  std_logic;
+      requestVRAMDone         : in  std_logic;
+         
+      vram_DOUT               : in  std_logic_vector(63 downto 0);
+      vram_DOUT_READY         : in  std_logic;
+         
+      video_ce                : buffer std_logic := '0';
+      video_r                 : out std_logic_vector(7 downto 0);
+      video_g                 : out std_logic_vector(7 downto 0);
+      video_b                 : out std_logic_vector(7 downto 0);
+      video_hblank            : out std_logic := '1';
+      video_hsync             : out std_logic := '0'
    );
 end entity;
 
@@ -135,7 +136,7 @@ begin
             case (state) is
             
                when WAITNEWLINE =>
-                  if (videoout_on = '1' and lineInNext /= lineAct and fetch = '1') then
+                  if (videoout_on = '1' and lineInNext /= lineAct and fetch = '1' and GPUSTAT_DisplayDisable = '0') then
                      state     <= REQUEST;
                      lineAct   <= lineInNext;
                      reqPosX   <= DisplayOffsetX;
@@ -245,6 +246,10 @@ begin
                      video_r      <= overlay_fps_data( 7 downto 0);
                      video_g      <= overlay_fps_data(15 downto 8);
                      video_b      <= overlay_fps_data(23 downto 16);
+                  elsif (GPUSTAT_DisplayDisable = '1') then
+                     video_r      <= (others => '0');
+                     video_g      <= (others => '0');
+                     video_b      <= (others => '0');
                   else
                      video_r      <= pixelData_R;
                      video_g      <= pixelData_G;

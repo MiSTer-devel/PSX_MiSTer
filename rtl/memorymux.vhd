@@ -140,7 +140,6 @@ architecture arch of memorymux is
    type tState is
    (
       IDLE,
-      WRITERAM,
       --CHECKRAM,
       --ERRORRAM,
       READBIOS,
@@ -171,6 +170,7 @@ architecture arch of memorymux is
    signal mem_done_buf     : std_logic := '0';
    
    signal readram          : std_logic := '0';
+   signal writeram         : std_logic := '0';
    
    signal addressData_buf  : unsigned(31 downto 0);
    signal dataWrite_buf    : std_logic_vector(31 downto 0);
@@ -199,7 +199,7 @@ architecture arch of memorymux is
    
 begin 
 
-   isIdle <= '1' when (state = IDLE and readram = '0') else '0';
+   isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0') else '0';
 
    process (state, mem_request, mem_rnw, mem_isData, mem_addressData, mem_reqsize, mem_writeMask, mem_dataWrite, ce)
       variable address : unsigned(28 downto 0);
@@ -362,7 +362,9 @@ begin
   
    mem_dataRead   <= ram_dataRead32 when (readram = '1' and ram_done = '1') else mem_dataRead_buf;
                      
-   mem_done       <= '1'            when (readram = '1' and ram_done = '1') else mem_done_buf;
+   mem_done       <= '1'            when (readram = '1'  and ram_done = '1') else 
+                     '1'            when (writeram = '1' and ram_done = '1') else 
+                     mem_done_buf;
   
    mem_dataCache  <= ram_dataRead;
   
@@ -387,6 +389,10 @@ begin
          
          if (ram_done = '1') then
             readram <= '0';
+         end if;
+         
+         if (ram_done = '1') then
+            writeram <= '0';
          end if;
       
          if (reset = '1') then
@@ -416,7 +422,8 @@ begin
                
                   elsif (mem_request = '1') then
                   
-                     readram <= '0';
+                     readram  <= '0';
+                     writeram <= '0';
                   
                      if (mem_isData = '0') then
                
@@ -464,7 +471,8 @@ begin
                               state   <= IDLE;
                               readram <= '1';
                            else
-                              state   <= WRITERAM;
+                              state    <= IDLE;
+                              writeram <= '1';
                            end if;
                            ram_be        <= mem_writeMask;
                            ram_dataWrite <= mem_dataWrite;
@@ -508,29 +516,6 @@ begin
                      end if;
                      
                   end if;                  
-                  
-               when WRITERAM =>
-                  if (ram_done = '1') then
-                     --state <= CHECKRAM;
-                     --ram_ena <= '1';
-                     --ram_rnw <= '1';
-                     mem_done_buf <= '1';
-                     state        <= IDLE;
-                  end if;
-                  
-               --when CHECKRAM =>
-               --   if (ram_done = '1') then
-               --      mem_done_buf <= '1';
-               --      state        <= IDLE;
-               --      if (ram_be(0) = '1' and ram_dataRead( 7 downto  0) /= ram_dataWrite( 7 downto  0)) then state <= ERRORRAM; end if;
-               --      if (ram_be(1) = '1' and ram_dataRead(15 downto  8) /= ram_dataWrite(15 downto  8)) then state <= ERRORRAM; end if;
-               --      if (ram_be(2) = '1' and ram_dataRead(23 downto 16) /= ram_dataWrite(23 downto 16)) then state <= ERRORRAM; end if;
-               --      if (ram_be(3) = '1' and ram_dataRead(31 downto 24) /= ram_dataWrite(31 downto 24)) then state <= ERRORRAM; end if;
-               --   end if;
-               --
-               --when ERRORRAM =>
-               --   report "should never happen" severity failure; 
-               --   ram_Adr <= (others => '1');
                   
                when READBIOS =>
                   if (ram_done = '1') then

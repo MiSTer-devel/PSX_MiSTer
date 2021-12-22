@@ -34,6 +34,7 @@ entity gpu is
       errorPOLY            : out std_logic;
       errorGPU             : out std_logic;
       errorMASK            : out std_logic;
+      errorFIFO            : out std_logic;
       
       bus_addr             : in  unsigned(3 downto 0); 
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
@@ -171,8 +172,6 @@ architecture arch of gpu is
    signal fifoIn_reset              : std_logic; 
    signal fifoIn_Din                : std_logic_vector(31 downto 0);
    signal fifoIn_Wr                 : std_logic; 
-   signal fifoIn_Full               : std_logic;
-   signal fifoIn_NearFull           : std_logic;
    signal fifoIn_Dout               : std_logic_vector(31 downto 0);
    signal fifoIn_Rd                 : std_logic;
    signal fifoIn_Empty              : std_logic;
@@ -346,7 +345,6 @@ architecture arch of gpu is
    type tvramState is
    (
       IDLE,
-      WRITEPIXEL,
       READVRAM
    );
    signal vramState : tvramState := IDLE;
@@ -828,8 +826,8 @@ begin
       reset    => fifoIn_reset,  
       Din      => fifoIn_Din,     
       Wr       => fifoIn_Wr,      
-      Full     => fifoIn_Full,    
-      NearFull => fifoIn_NearFull,
+      Full     => ERRORFIFO,    
+      NearFull => open,
       Dout     => fifoIn_Dout,    
       Rd       => fifoIn_Rd,      
       Empty    => fifoIn_Empty   
@@ -1441,7 +1439,7 @@ begin
    pixelWrite <= cpu2vram_pixelWrite or vram2vram_pixelWrite or pipeline_pixelWrite;
    
    -- pixel writing fifo
-   iSyncFifo_OUT: entity mem.SyncFifo
+   iSyncFifo_OUT: entity mem.SyncFifoFallThrough
    generic map
    (
       SIZE             => 256,
@@ -1454,7 +1452,7 @@ begin
       reset    => fifoOut_reset,  
       Din      => fifoOut_Din,     
       Wr       => fifoOut_Wr,      
-      Full     => fifoOut_Full,    
+      Full     => open,    
       NearFull => fifoOut_NearFull,
       Dout     => fifoOut_Dout,    
       Rd       => fifoOut_Rd,      
@@ -1600,18 +1598,14 @@ begin
                            reqVRAMnext   <= (others => '0');
                         end if;
                      elsif (fifoOut_Empty = '0') then
-                        vramState <= WRITEPIXEL;
+                        vram_WE       <= '1';
+                        vram_ADDR     <= fifoOut_Dout(80 downto 64) & "000";
+                        vram_BE       <= fifoOut_Dout(84) & fifoOut_Dout(84) & fifoOut_Dout(83) & fifoOut_Dout(83) & fifoOut_Dout(82) & fifoOut_Dout(82) & fifoOut_Dout(81) & fifoOut_Dout(81);
+                        vram_DIN      <= fifoOut_Dout(63 downto 0);
+                        vram_BURSTCNT <= x"01";
                      end if;
                   end if;
                   
-               when WRITEPIXEL =>
-                  vramState     <= IDLE;
-                  vram_WE       <= '1';
-                  vram_ADDR     <= fifoOut_Dout(80 downto 64) & "000";
-                  vram_BE       <= fifoOut_Dout(84) & fifoOut_Dout(84) & fifoOut_Dout(83) & fifoOut_Dout(83) & fifoOut_Dout(82) & fifoOut_Dout(82) & fifoOut_Dout(81) & fifoOut_Dout(81);
-                  vram_DIN      <= fifoOut_Dout(63 downto 0);
-                  vram_BURSTCNT <= x"01";
-            
                when READVRAM =>
                   if (vram_DOUT_READY = '1') then
                      reqVRAMaddr <= reqVRAMaddr + 1;
@@ -1667,49 +1661,50 @@ begin
    igpu_videoout : entity work.gpu_videoout
    port map
    (
-      clk2x                => clk2x,
-      ce                   => ce,   
-      reset                => reset,
-          
-      videoout_on          => videoout_on,
-      
-      fpscountOn           => fpscountOn,
-      fpscountBCD          => fpscountBCD,
-      
-      cdSlow               => cdSlow,      
-                           
-      errorOn              => errorOn,  
-      errorEna             => errorEna, 
-      errorCode            => errorCode, 
-      
-      fetch                => videoout_fetch,
-      lineIn               => videoout_lineIn,
-      lineInNext           => videoout_lineInNext,
-      nextHCount           => nextHCount,
-      DisplayWidth         => DisplayWidth,
-      DisplayOffsetX       => DisplayOffsetX,
-      DisplayOffsetY       => DisplayOffsetY,
-      GPUSTAT_HorRes2      => GPUSTAT_HorRes2,
-      GPUSTAT_HorRes1      => GPUSTAT_HorRes1,
-      GPUSTAT_ColorDepth24 => GPUSTAT_ColorDepth24,
-      interlacedMode       => GPUSTAT_VerRes,
-                           
-      requestVRAMEnable    => videoout_reqVRAMEnable,
-      requestVRAMXPos      => videoout_reqVRAMXPos,  
-      requestVRAMYPos      => videoout_reqVRAMYPos,  
-      requestVRAMSize      => videoout_reqVRAMSize,  
-      requestVRAMIdle      => VRAMIdle and (not vram_pause),
-      requestVRAMDone      => reqVRAMDone,
-                           
-      vram_DOUT            => vram_DOUT,      
-      vram_DOUT_READY      => vram_DOUT_READY,
-      
-      video_ce             => video_ce,
-      video_r              => video_r, 
-      video_g              => video_g, 
-      video_b              => video_b, 
-      video_hblank         => hblank,
-      video_hsync          => hsync
+      clk2x                   => clk2x,
+      ce                      => ce,   
+      reset                   => reset,
+            
+      videoout_on             => videoout_on,
+         
+      fpscountOn              => fpscountOn,
+      fpscountBCD             => fpscountBCD,
+         
+      cdSlow                  => cdSlow,      
+                              
+      errorOn                 => errorOn,  
+      errorEna                => errorEna, 
+      errorCode               => errorCode, 
+         
+      fetch                   => videoout_fetch,
+      lineIn                  => videoout_lineIn,
+      lineInNext              => videoout_lineInNext,
+      nextHCount              => nextHCount,
+      DisplayWidth            => DisplayWidth,
+      DisplayOffsetX          => DisplayOffsetX,
+      DisplayOffsetY          => DisplayOffsetY,
+      GPUSTAT_HorRes2         => GPUSTAT_HorRes2,
+      GPUSTAT_HorRes1         => GPUSTAT_HorRes1,
+      GPUSTAT_ColorDepth24    => GPUSTAT_ColorDepth24,
+      GPUSTAT_DisplayDisable  => GPUSTAT_DisplayDisable,
+      interlacedMode          => GPUSTAT_VerRes,
+                              
+      requestVRAMEnable       => videoout_reqVRAMEnable,
+      requestVRAMXPos         => videoout_reqVRAMXPos,  
+      requestVRAMYPos         => videoout_reqVRAMYPos,  
+      requestVRAMSize         => videoout_reqVRAMSize,  
+      requestVRAMIdle         => VRAMIdle and (not vram_pause),
+      requestVRAMDone         => reqVRAMDone,
+                              
+      vram_DOUT               => vram_DOUT,      
+      vram_DOUT_READY         => vram_DOUT_READY,
+         
+      video_ce                => video_ce,
+      video_r                 => video_r, 
+      video_g                 => video_g, 
+      video_b                 => video_b, 
+      video_hblank            => hblank,
+      video_hsync             => hsync
    );
    
 --##############################################################

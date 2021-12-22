@@ -411,6 +411,7 @@ architecture arch of psx_top is
    signal errorGPU               : std_logic;
    signal errorMASK              : std_logic;
    signal errorCHOP              : std_logic;
+   signal errorGPUFIFO           : std_logic;
    
    -- memcard
    signal memcard1_pause         : std_logic;
@@ -625,11 +626,12 @@ begin
          else
          
             if (errorEna = '0') then
-               if (errorCD   = '1') then errorEna  <= '1'; errorCode <= x"1"; end if;
-               if (errorCPU  = '1') then errorEna  <= '1'; errorCode <= x"2"; end if;
-               if (errorGPU  = '1') then errorEna  <= '1'; errorCode <= x"3"; end if;
-               if (errorMASK = '1') then errorEna  <= '1'; errorCode <= x"7"; end if;
-               if (errorCHOP = '1') then errorEna  <= '1'; errorCode <= x"8"; end if;
+               if (errorCD      = '1') then errorEna  <= '1'; errorCode <= x"1"; end if;
+               if (errorCPU     = '1') then errorEna  <= '1'; errorCode <= x"2"; end if;
+               if (errorGPU     = '1') then errorEna  <= '1'; errorCode <= x"3"; end if;
+               if (errorMASK    = '1') then errorEna  <= '1'; errorCode <= x"7"; end if;
+               if (errorCHOP    = '1') then errorEna  <= '1'; errorCode <= x"8"; end if;
+               if (errorGPUFIFO = '1') then errorEna  <= '1'; errorCode <= x"9"; end if;
             end if;
             
             if (errorEna = '0' or errorCode = x"3") then
@@ -1120,6 +1122,7 @@ begin
       errorPOLY            => errorPOLY,
       errorGPU             => errorGPU, 
       errorMASK            => errorMASK, 
+      errorFIFO            => errorGPUFIFO, 
       
       bus_addr             => bus_gpu_addr,     
       bus_dataWrite        => bus_gpu_dataWrite,

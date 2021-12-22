@@ -98,7 +98,6 @@ architecture arch of gpu_line is
    signal fifoLine_Din        : std_logic_vector(97 downto 0);
    signal fifoLine_Wr         : std_logic := '0'; 
    signal fifoLine_Full       : std_logic;
-   signal fifoLine_NearFull   : std_logic;
    signal fifoLine_Dout       : std_logic_vector(97 downto 0);
    signal fifoLine_Rd         : std_logic;
    signal fifoLine_Empty      : std_logic;
@@ -198,6 +197,10 @@ begin
             elsif (timeout < 67108863) then
                timeout  <= timeout + 1;
             else
+               error <= '1';
+            end if;
+            
+            if (fifoLine_Full = '1') then
                error <= '1';
             end if;
          
@@ -300,7 +303,7 @@ begin
       Din      => fifoLine_Din,     
       Wr       => fifoLine_Wr,      
       Full     => fifoLine_Full,    
-      NearFull => fifoLine_NearFull,
+      NearFull => open,
       Dout     => fifoLine_Dout,    
       Rd       => fifoLine_Rd,      
       Empty    => fifoLine_Empty   

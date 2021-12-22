@@ -386,6 +386,11 @@ architecture arch of cpu is
    
    signal debugTrigger                 : std_logic := '0';
    
+   signal stallcountNo                 : integer;
+   signal stallcount1                  : integer;
+   signal stallcount3                  : integer;
+   signal stallcount4                  : integer;
+   
    -- export
 -- synthesis translate_off
    type tRegs is array(0 to 31) of unsigned(31 downto 0);
@@ -2529,6 +2534,11 @@ begin
             debugTrigger      <= '0';
             debugStallcounter <= (others => '0');
             debug300exception <= '0';
+            
+            stallcountNo      <= 0;
+            stallcount1       <= 0;
+            stallcount3       <= 0;
+            stallcount4       <= 0;
       
          elsif (ce = '1') then
          
@@ -2546,6 +2556,21 @@ begin
             if (debugStallcounter(7) = '1' or debug300exception = '1') then
                debugTrigger <= '1';
                error        <= '1';
+            end if;
+            
+            if (stallcountNo = 0 and stallcount4 = 0 and stallcount3 = 0 and stallcount1 = 0) then
+               stallcountNo <= 0;
+            end if;
+            
+            -- performance counters
+            if (stall = 0) then
+               stallcountNo <= stallcountNo + 1;
+            elsif (stall4 = '1') then
+               stallcount4 <= stallcount4 + 1;
+            elsif (stall3 = '1') then
+               stallcount3 <= stallcount3 + 1;
+            elsif (stall1 = '1') then
+               stallcount1 <= stallcount1 + 1;
             end if;
             
          end if;

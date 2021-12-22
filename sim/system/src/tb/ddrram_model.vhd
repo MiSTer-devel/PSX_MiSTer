@@ -162,7 +162,7 @@ begin
          end if;  
          
          if (DDRAM_WE = '1') then
-            DDRAM_BUSY       <= '1';
+            --DDRAM_BUSY       <= '1';
             cmd_address_save := intern_addr;
             cmd_burst_save   := DDRAM_BURSTCNT;
             cmd_din_save     := DDRAM_DIN;
@@ -221,7 +221,7 @@ begin
                   file_close(ssfile);
                end if;
                
-               wait until rising_edge(DDRAM_CLK);
+               --wait until rising_edge(DDRAM_CLK);
             end loop;
             --wait for 200 ns;
             DDRAM_BUSY       <= '0';
