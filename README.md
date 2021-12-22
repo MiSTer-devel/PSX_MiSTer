@@ -37,7 +37,7 @@ List of Errors:
 - E3..E6 - GPU hangs (e.g. corrupt display list)
 - E7     - CPU2VRAM with mask-AND enabled
 - E8     - DMA chopping enabled
-- E8     - GPU FIFO overflow
+- E9     - GPU FIFO overflow
 
 # Status
 
