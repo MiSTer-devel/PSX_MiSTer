@@ -93,6 +93,8 @@ architecture arch of dma is
       timeupPending     : std_logic;
       requestsPending   : std_logic;
       channelOn         : std_logic;
+      chopwaiting       : std_logic;
+      chopwaitcount     : unsigned(7 downto 0);
    end record;
   
    type tdmaArray is array (0 to 6) of dmaRecord;
@@ -122,6 +124,9 @@ architecture arch of dma is
    signal nextAddr            : std_logic_vector(23 downto 0);
    signal blocksleft          : unsigned(15 downto 0);
    signal dmacount            : unsigned(9 downto 0);
+         
+   signal chopsize            : unsigned(7 downto 0);
+   signal chopwaittime        : unsigned(7 downto 0);
          
    signal autoread            : std_logic := '0';
    signal firstword           : std_logic := '0';
@@ -229,6 +234,7 @@ begin
       variable channel         : integer range 0 to 7;
       variable triggerNew      : std_logic;
       variable triggerchannel  : integer range 0 to 6;
+      variable triggerPrio     : unsigned(2 downto 0);
       variable requestOnFlyNew : integer range 0 to 2;
    begin
       if rising_edge(clk1x) then
@@ -261,6 +267,8 @@ begin
                dmaArray(i).requestsPending   <= ss_in(19 + i)(9);
                dmaArray(i).timeupPending     <= ss_in(19 + i)(10);
                dmaArray(i).channelOn         <= ss_in(19 + i)(11);
+               dmaArray(i).chopwaiting       <= '0';
+               dmaArray(i).chopwaitcount     <= (others => '0');
             end loop;
             
             DPCR           <= unsigned(ss_in(26)); -- x"07654321";
@@ -388,17 +396,16 @@ begin
             -- trigger
             triggerNew     := '0';
             triggerchannel := 0;
+            triggerPrio    := "111";
             for i in 0 to 6 loop
-               if (triggerDMA(i) = '1') then
+               if (triggerDMA(i) = '1' and dmaArray(i).chopwaiting = '0' and dmaState = OFF) then
                   if ((DPCR((i * 4) + 3) = '1' and dmaArray(i).D_CHCR(24) = '1') or dmaArray(i).channelOn = '1') then -- enable + start or already on(retrigger after busy)
                      if (isOn = '0' or activeChannel /= i) then
                      
-                        if (triggerNew = '1' or (dmaState /= OFF)) then
-                           dmaArray(i).requestsPending <= '1';
-                        else
-                           -- todo : priority
+                        if (triggerNew = '0' or (unsigned(DPCR((i * 4) + 2 downto (i*4))) <= triggerPrio)) then
                            triggerNew     := '1';
                            triggerchannel := i;
+                           triggerPrio    := unsigned(DPCR((i * 4) + 2 downto (i*4)));
                         end if;
                         
                      end if;
@@ -438,6 +445,18 @@ begin
                end case;
             end if;
             
+            -- chopping wait
+            for i in 0 to 6 loop
+               if (dmaArray(i).chopwaiting = '1' and cpuPaused = '0') then
+                  if (dmaArray(i).chopwaitcount > 1) then
+                     dmaArray(i).chopwaitcount <= dmaArray(i).chopwaitcount - 1;
+                  else
+                     dmaArray(i).chopwaiting   <= '0';
+                     dmaArray(i).chopwaitcount <= (others => '0');
+                  end if;
+               end if;
+            end loop;
+            
             case (dmaState) is
             
                when OFF => null;
@@ -446,6 +465,12 @@ begin
                   if (waitcnt > 0 and cpuPaused = '1') then
                      waitcnt <= waitcnt - 1;
                   end if;
+                  
+                  if (waitcnt = 9) then
+                     chopsize     <= to_unsigned(1, 8) sll to_integer(dmaArray(activeChannel).D_CHCR(18 downto 16));
+                     chopwaittime <= to_unsigned(1, 8) sll to_integer(dmaArray(activeChannel).D_CHCR(22 downto 20));
+                  end if;
+                  
                   if (waitcnt = 8) then
                      dmacount     <= (others => '0');
                      toDevice     <= dmaArray(activeChannel).D_CHCR(0);
@@ -453,8 +478,11 @@ begin
                      if (activeChannel = 3) then
                         wordAccu <= 3;
                      end if;
+                     if (activeChannel = 4) then
+                        wordAccu <= 1;
+                     end if;
                      
-                     if (dmaArray(activeChannel).D_CHCR(8) = '1') then
+                     if (dmaArray(activeChannel).D_CHCR(8) = '1' and activeChannel /= 3 and activeChannel /= 6) then
                         errorCHOP <= '1';
                      end if;
                      
@@ -471,10 +499,22 @@ begin
                      else
                         case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
                            when "00" => -- manual
-                              if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
-                                 wordcount <= '1' & x"0000";
+                              if (dmaArray(activeChannel).D_CHCR(8) = '1') then -- chopping
+                                 wordcount <= resize(chopsize, 17);
+                                 if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
+                                    dmaArray(activeChannel).D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
+                                 elsif (dmaArray(activeChannel).D_BCR(15 downto 0) > chopsize) then
+                                    dmaArray(activeChannel).D_BCR(15 downto 0) <= dmaArray(activeChannel).D_BCR(15 downto 0) - chopsize;
+                                 else
+                                    wordcount                                  <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                                    dmaArray(activeChannel).D_BCR(15 downto 0) <= (others => '0');
+                                 end if;
                               else
-                                 wordcount <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                                 if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
+                                    wordcount <= '1' & x"0000";
+                                 else
+                                    wordcount <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                                 end if;
                               end if;
                            
                            when "01" => -- request
@@ -487,8 +527,28 @@ begin
                      directionNeg <= '0';
                      if (dmaArray(activeChannel).D_CHCR(10) = '0' and dmaArray(activeChannel).D_CHCR(1) = '1') then
                         directionNeg <= '1';
-                     end if;                         
+                     end if;    
+                     
+                     if (dmaArray(activeChannel).D_CHCR(0) = '0') then -- from device -> can start immidiatly
+                        waitcnt <= 0;
+                        case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
+                           when "00" => -- manual
+                              dmaState    <= WORKING;
+                           
+                           when "01" => -- request
+                              dmaState    <= WORKING;
+                              
+                           when "10" => -- linked list -> forbidden
+                              dmaState <= OFF;
+                              isOn     <= '0';
+                           
+                           when others => 
+                              dmaState <= OFF;
+                              isOn     <= '0';
+                        end case;
+                     end if;
                   end if;
+                  
                   if (waitcnt = 1) then
                      if (fifoIn_Empty = '1' and toDevice = '1') then
                         waitcnt <= waitcnt;
@@ -516,8 +576,7 @@ begin
                   nextAddr  <= fifoIn_Dout(23 downto 0);
                   if (unsigned(fifoIn_Dout(31 downto 24)) > 0) then
                      dmaArray(activeChannel).D_MADR <= dmaArray(activeChannel).D_MADR + 4;
-                     dmaState  <= WAITREAD;
-                     waitcnt   <= 4;              
+                     dmaState  <= WAITREAD;           
                   elsif (fifoIn_Dout(23) = '1' or fifoIn_Dout(23 downto 0) = x"000000" or dmaArray(activeChannel).D_CHCR(0) = '0') then
                      dmaState <= STOPPING;
                      autoread <= '0';
@@ -539,13 +598,7 @@ begin
                      end if;
                   end if;  
                
-               when WAITREAD =>
-                  if (waitcnt > 0) then
-                     waitcnt <= waitcnt - 1;
-                  end if;
-                  if (waitcnt = 1) then
-                     dmaState    <= WORKING;
-                  end if;
+               when WAITREAD => dmaState <= WORKING;
                
                when WORKING =>
                   if (fifoIn_Valid = '1' or (toDevice = '0' and fifoOut_NearFull = '0' and wordAccu = 0 and readStall = '0')) then
@@ -615,8 +668,16 @@ begin
                      if (wordcount <= 1) then
                         case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
                            when "00" => -- manual
-                              dmaState <= STOPPING;
-                              autoread <= '0';
+                              if (dmaArray(activeChannel).D_CHCR(8) = '1' and dmaArray(activeChannel).D_BCR(15 downto 0) > 0) then
+                                 dmaState <= PAUSING;
+                                 autoread <= '0';
+                                 dmaArray(activeChannel).chopwaiting   <= '1';
+                                 dmaArray(activeChannel).chopwaitcount <= chopwaittime;
+                                 dmaArray(activeChannel).D_CHCR(28)    <= '1';
+                              else
+                                 dmaState <= STOPPING;
+                                 autoread <= '0';
+                              end if;
                                  
                            when "01" => -- request
                               dmaArray(activeChannel).D_BCR(31 downto 16) <= blocksleft;
@@ -694,12 +755,26 @@ begin
                   dataCount       <= firstsize;
                   case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
                      when "00" => -- manual
-                        if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
-                           wordcount <= '1' & x"0000";
-                           requiredDwords <= 16#10000#;
+                        if (dmaArray(activeChannel).D_CHCR(8) = '1') then -- chopping
+                           wordcount      <= resize(chopsize, 17);
+                           requiredDwords <= to_integer(chopsize);
+                           if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
+                              dmaArray(activeChannel).D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
+                           elsif (dmaArray(activeChannel).D_BCR(15 downto 0) > chopsize) then
+                              dmaArray(activeChannel).D_BCR(15 downto 0) <= dmaArray(activeChannel).D_BCR(15 downto 0) - chopsize;
+                           else
+                              wordcount                                  <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                              requiredDwords                             <= to_integer(dmaArray(activeChannel).D_BCR(15 downto 0));
+                              dmaArray(activeChannel).D_BCR(15 downto 0) <= (others => '0');
+                           end if;
                         else
-                           wordcount      <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
-                           requiredDwords <= to_integer(dmaArray(activeChannel).D_BCR(15 downto 0));
+                           if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
+                              wordcount <= '1' & x"0000";
+                              requiredDwords <= 16#10000#;
+                           else
+                              wordcount      <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                              requiredDwords <= to_integer(dmaArray(activeChannel).D_BCR(15 downto 0));
+                           end if;
                         end if;
                      
                      when "01" => -- request
@@ -773,9 +848,9 @@ begin
    fifoIn_Din <= ram_dataRead(31 downto 0) when ram_done = '1' else dataNext(31 downto 0);
    
    
-   fifoIn_Rd <= '1' when (fifoIn_Empty = '0' and dmaState = WAITING and waitcnt = 1) else
-                '1' when (fifoIn_Empty = '0' and dmaState = WAITREAD and waitcnt = 1) else 
-                '1' when (fifoIn_Empty = '0' and dmaState = working and (activeChannel /= 4 or fifoIn_Valid = '0')) else 
+   fifoIn_Rd <= '1' when (fifoIn_Empty = '0' and toDevice = '1' and dmaState = WAITING and waitcnt = 1) else
+                '1' when (fifoIn_Empty = '0' and toDevice = '1' and dmaState = WAITREAD) else 
+                '1' when (fifoIn_Empty = '0' and toDevice = '1' and dmaState = working and (activeChannel /= 4 or fifoIn_Valid = '0')) else 
                 '0';
 
    

@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -257,11 +257,12 @@ parameter CONF_STR = {
 	"OP,Pause when OSD is open,Off,On;",
 	"-;",
 	"OM,Dithering,On,Off;",
+	"o9,Deinterlacing,Weave,Bob;",
 	"OS,FPS Overlay,Off,On;",
 	"OT,Error Overlay,On,Off;",
-	"OA,Color,16,24;",
 	"-;",
 	"OE,DDR3 Framebuffer,Off,On;",
+	"OA,DDR3 FB Color,16,24;",
 	"OB,VRAMViewer,Off,On;",
 	"OV,Fast Memory,Off,On;",
 	"OJ,RepTimingGPU,Off,On;",
@@ -836,7 +837,7 @@ assign CLK_VIDEO = clk_2x;
 
 wire hs, vs, hbl, vbl, video_interlace;
 
-assign VGA_F1 = status[14] ? 1'b0 : video_interlace;
+assign VGA_F1 = status[14] ? 1'b0 : (video_interlace & ~status[41]);
 assign VGA_SL = sl[1:0];
 
 wire [2:0] scale = status[4:2];
