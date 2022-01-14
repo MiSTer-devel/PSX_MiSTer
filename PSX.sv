@@ -238,7 +238,7 @@ parameter CONF_STR = {
 	"PSX;SS3E000000:400000;",
 	"S1,ISOCUE,Load CD;",
 	"F1,EXE,Load Exe;",
-	"h1FS2,ISOBIN,Load to SDRAM2;",
+	//"h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
 	"SC2,MCD,Mount Memory Card 1;",
 	"SC3,MCD,Mount Memory Card 2;",
@@ -254,6 +254,7 @@ parameter CONF_STR = {
 	"o78,System Type,NTSC-U,NTSC-J,PAL;",
 	"OO,Pad Mode,Digital,Analog;",
 	"OG,Fastboot,Off,On;",
+   "d1OU,Sound,Enabled,Disabled;",
 	"OP,Pause when OSD is open,Off,On;",
 	"-;",
 	"OM,Dithering,On,Off;",
@@ -269,7 +270,6 @@ parameter CONF_STR = {
 	"OK,RepTimingDMA,Off,On;",
 	"OQ,DMAinBLOCKs,Off,On;",
 	"OL,CD Instant Seek,Off,On;",
-	"OU,Fake SPU,On,Off;",
 	"OF,Force 60Hz PAL,Off,On;",
 	"OR,Textures,On,Off;",
 	"- ;",
@@ -576,12 +576,12 @@ psx
    .REPRODUCIBLEDMATIMING(status[20]),
    .DMABLOCKATONCE(status[26]),
    .INSTANTSEEK(status[21]),
-   .FAKESPU(~status[30]),
    .ditherOff(status[22]),
    .analogPad(status[24]),
    .fpscountOn(status[28]),
    .errorOn(~status[29]),
    .noTexture(status[27]),
+   .SPUon(~status[30] & SDRAM2_EN),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),
@@ -620,6 +620,14 @@ psx
    .cd_hps_ack      (sd_ack[1]),
    .cd_hps_write    (sd_buff_wr),
    .cd_hps_data     (sd_buff_dout), 
+   // spuram
+   .spuram_dataWrite(spuram_dataWrite),
+   .spuram_Adr      (spuram_Adr      ),
+   .spuram_be       (spuram_be       ),
+   .spuram_rnw      (spuram_rnw      ),
+   .spuram_ena      (spuram_ena      ),
+   .spuram_dataRead (spuram_dataRead ),
+   .spuram_done     (spuram_done     ),
    // memcard
    .memcard1_load   (memcard1_load),
    .memcard2_load   (memcard2_load),
@@ -713,7 +721,6 @@ wire  [22:0] sdram_addr;
 wire   [3:0] sdram_be;
 wire         sdram_req;
 wire         sdram_ack;
-wire         sdram_ack2;
 wire         sdram_reqprocessed;
 wire         sdram_readack;
 wire         sdram_readack2;
@@ -724,7 +731,6 @@ wire         sdram_128;
 wire         ram_idle;
 
 assign sdram_ack = sdram_readack | sdram_writeack;
-assign sdram_ack2 = sdram_readack2 | sdram_writeack2;
 
 sdram sdram
 (
@@ -779,8 +785,20 @@ wire [26:0] cd_addr;
 wire [31:0] cd_data;
 wire        cd_done;
 
+wire [31:0] spuram_dataWrite;
+wire [18:0] spuram_Adr;
+wire  [3:0] spuram_be;
+wire        spuram_rnw;
+wire        spuram_ena;
+wire [31:0] spuram_dataRead;
+wire        spuram_done;
+
 assign cd_data = sdr_sdram_dout2[31:0];
-assign cd_done = sdram_readack2;
+assign cd_done = 0; //sdram_readack2;
+
+assign spuram_dataRead = sdr_sdram_dout2[31:0];
+assign spuram_done     = sdram_readack2 | sdram_writeack2;
+
 
 sdram sdram2
 (
@@ -804,21 +822,21 @@ sdram sdram2
 	.refreshForce(1'b0),
 	.ram_idle(),
 
-	.ch1_addr(cd_addr),
+	.ch1_addr(spuram_Adr),
 	.ch1_din(),
 	.ch1_dout(sdr_sdram_dout2),
-	.ch1_req(cd_req),
+	.ch1_req(spuram_ena & spuram_rnw),
 	.ch1_rnw(1'b1),
 	.ch1_128(1'b0),
 	.ch1_ready(sdram_readack2),
 	.ch1_reqprocessed(),
 
-	.ch2_addr (ramdownload_wraddr),
-	.ch2_din  (ramdownload_wrdata),
+	.ch2_addr (spuram_Adr),
+	.ch2_din  (spuram_dataWrite),
 	.ch2_dout (),
-	.ch2_req  ((cd_download) ? ramdownload_wr     : 1'b0),
+	.ch2_req  (spuram_ena & ~spuram_rnw),
 	.ch2_rnw  (1'b0),
-   .ch2_be   (4'b1111),
+   .ch2_be   (spuram_be),
 	.ch2_ready(sdram_writeack2),
 
 	.ch3_addr(0),

@@ -203,7 +203,10 @@ begin
    DMA_CD_readEna    <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 3 and toDevice = '0') else '0';
    
    DMA_SPU_readEna   <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 4 and toDevice = '0') else '0';
-   DMA_SPU_writeEna  <= '1' when ((fifoIn_Valid = '1' or fifoIn_Valid_1 = '1') and activeChannel = 4 and toDevice = '1') else '0'; 
+   
+   DMA_SPU_writeEna  <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 4 and toDevice = '1') else 
+                        '1' when ((dmaState = working or dmaState = stopping or dmaState = pausing) and fifoIn_Valid_1 = '1' and activeChannel = 4 and toDevice = '1') else 
+                        '0'; 
    DMA_SPU_write     <= fifoIn_Dout(15 downto 0) when fifoIn_Valid = '1' else fifoIn_Dout(31 downto 16);
 
    readStall <= '1' when (activeChannel = 2 and toDevice = '0' and gpu_dmaRequest = '0') else '0';

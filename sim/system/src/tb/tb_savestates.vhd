@@ -45,7 +45,7 @@ architecture arch of tb_savestates is
       (  7168,   128),    -- MDEC         6 
       (  8192,    16),    -- Memory       7 
       (  9216,    16),    -- Timer        8 
-      ( 10240,   256),    -- Sound        9 
+      ( 10240,   512),    -- Sound        9 
       ( 11264,     2),    -- IRQ          10
       ( 12288,     8),    -- SIO          11
       ( 31744,   256),    -- Scratchpad   12   

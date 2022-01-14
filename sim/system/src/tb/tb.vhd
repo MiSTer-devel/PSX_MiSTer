@@ -145,6 +145,15 @@ architecture arch of etb is
 
    signal cdSize              : unsigned(29 downto 0);
    
+   -- spu
+   signal spuram_dataWrite    : std_logic_vector(31 downto 0);
+   signal spuram_Adr          : std_logic_vector(18 downto 0);
+   signal spuram_be           : std_logic_vector(3 downto 0);
+   signal spuram_rnw          : std_logic;
+   signal spuram_ena          : std_logic;
+   signal spuram_dataRead     : std_logic_vector(31 downto 0);
+   signal spuram_done         : std_logic;
+   
    -- memcard
    signal memcard1_load       : std_logic := '0';
    signal memcard2_load       : std_logic := '0';
@@ -195,17 +204,18 @@ begin
       -- commands 
       pause                 => '0',
       loadExe               => psx_LoadExe(0),
-      fastboot              => '1',
+      fastboot              => '0',
+      FASTMEM               => '1',
       REPRODUCIBLEGPUTIMING => '0',
       REPRODUCIBLEDMATIMING => '0',
       DMABLOCKATONCE        => '0',
       INSTANTSEEK           => '0',
-      FAKESPU               => '0',
       ditherOff             => '0',
       analogPad             => '0',
       fpscountOn            => '0',
       errorOn               => '0',
       noTexture             => '0',
+      SPUon                 => '1',
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
@@ -244,6 +254,14 @@ begin
       cd_hps_ack            => cd_hps_ack,  
       cd_hps_write          => cd_hps_write,
       cd_hps_data           => cd_hps_data, 
+      -- spuram
+      spuram_dataWrite      => spuram_dataWrite, 
+      spuram_Adr            => spuram_Adr,       
+      spuram_be             => spuram_be,        
+      spuram_rnw            => spuram_rnw,       
+      spuram_ena            => spuram_ena,      
+      spuram_dataRead       => spuram_dataRead,  
+      spuram_done           => spuram_done,  
       -- memcard
       memcard1_load         => memcard1_load,      
       memcard2_load         => memcard2_load,      
@@ -268,7 +286,7 @@ begin
       memcard2_dataOut      => memcard2_dataOut,  
       -- video
       videoout_on           => '1',
-      isPal                 => '0',
+      isPal                 => '1',
       pal60                 => '0',
       hblank                => hblank,  
       vblank                => vblank,  
@@ -357,6 +375,31 @@ begin
       done         => ram_done,
       reqprocessed => ram_reqprocessed,
       ram_idle     => ram_idle
+   );
+   
+   ispu_ram : entity work.sdram_model3x 
+   generic map
+   (
+      DOREFRESH     => '1',
+      SCRIPTLOADING => '0'
+   )
+   port map
+   (
+      clk          => clk33,
+      clk3x        => clk100,
+      refresh      => '0',
+      addr(26 downto 19) => "00000000",
+      addr(18 downto  0) =>  spuram_Adr,
+      req          => spuram_ena,
+      ram_128      => '0',
+      rnw          => spuram_rnw,
+      be           => spuram_be,
+      di           => spuram_dataWrite,
+      do           => open,
+      do32         => spuram_dataRead,
+      done         => spuram_done,
+      reqprocessed => open,
+      ram_idle     => open
    );
    
    -- hps emulation

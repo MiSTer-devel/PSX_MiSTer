@@ -21,12 +21,12 @@ entity psx_mister is
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
-      FAKESPU               : in  std_logic;
       ditherOff             : in  std_logic;
       analogPad             : in  std_logic;
       fpscountOn            : in  std_logic;
       errorOn               : in  std_logic;
       noTexture             : in  std_logic;
+      SPUon                 : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -65,6 +65,14 @@ entity psx_mister is
       cd_hps_ack            : in  std_logic;
       cd_hps_write          : in  std_logic;
       cd_hps_data           : in  std_logic_vector(15 downto 0);
+      -- spuram
+      spuram_dataWrite      : out std_logic_vector(31 downto 0);
+      spuram_Adr            : out std_logic_vector(18 downto 0);
+      spuram_be             : out std_logic_vector(3 downto 0);
+      spuram_rnw            : out std_logic;
+      spuram_ena            : out std_logic;
+      spuram_dataRead       : in  std_logic_vector(31 downto 0);
+      spuram_done           : in  std_logic;
       -- memcard
       memcard1_load         : in  std_logic;
       memcard2_load         : in  std_logic;
@@ -172,12 +180,12 @@ begin
       REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING,
       DMABLOCKATONCE        => DMABLOCKATONCE,
       INSTANTSEEK           => INSTANTSEEK,
-      FAKESPU               => FAKESPU,
       ditherOff             => ditherOff,
       analogPad             => analogPad,
       fpscountOn            => fpscountOn,
       errorOn               => errorOn,
       noTexture             => noTexture,
+      SPUon                 => SPUon,
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
@@ -216,6 +224,14 @@ begin
       cd_hps_ack            => cd_hps_ack,
       cd_hps_write          => cd_hps_write,
       cd_hps_data           => cd_hps_data, 
+      -- spuram
+      spuram_dataWrite      => spuram_dataWrite, 
+      spuram_Adr            => spuram_Adr,       
+      spuram_be             => spuram_be,        
+      spuram_rnw            => spuram_rnw,       
+      spuram_ena            => spuram_ena,      
+      spuram_dataRead       => spuram_dataRead,  
+      spuram_done           => spuram_done,        
       --memcard
       memcard1_load         => memcard1_load,       
       memcard2_load         => memcard2_load,       

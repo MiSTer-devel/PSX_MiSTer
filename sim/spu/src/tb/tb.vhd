@@ -13,6 +13,7 @@ end entity;
 architecture arch of etb is
 
    signal clk1x               : std_logic := '1';
+   signal clk3x               : std_logic := '1';
             
    signal reset               : std_logic := '1';
    
@@ -28,8 +29,17 @@ architecture arch of etb is
    signal dma_write           : std_logic := '0';
    signal dma_writedata       : std_logic_vector(15 downto 0);
    
+   --sdram access 
+   signal sdram_dataWrite     : std_logic_vector(31 downto 0);
+   signal sdram_dataRead      : std_logic_vector(31 downto 0);
+   signal sdram_Adr           : std_logic_vector(18 downto 0);
+   signal sdram_be            : std_logic_vector(3 downto 0);
+   signal sdram_rnw           : std_logic;
+   signal sdram_ena           : std_logic;
+   signal sdram_done          : std_logic;     
+   
    -- savestates
-   signal reset_in            : std_logic;
+   signal reset_in            : std_logic := '1';
    signal reset_out           : std_logic := '1';
    signal SS_reset            : std_logic := '0';
    signal SS_DataWrite        : std_logic_vector(31 downto 0) := (others => '0');
@@ -43,6 +53,7 @@ architecture arch of etb is
 begin
 
    clk1x  <= not clk1x  after 15 ns;
+   clk3x  <= not clk3x  after 5 ns;
    
    reset_in  <= '0' after 3000 ns;
    
@@ -64,16 +75,26 @@ begin
       dma_write            => dma_write,     
       dma_writedata        => dma_writedata,
       
+      -- SDRAM interface        
+      sdram_dataWrite      => sdram_dataWrite,
+      sdram_dataRead       => sdram_dataRead, 
+      sdram_Adr            => sdram_Adr,      
+      sdram_be             => sdram_be,      
+      sdram_rnw            => sdram_rnw,      
+      sdram_ena            => sdram_ena,           
+      sdram_done           => sdram_done,
+      
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
-      SS_Adr               => SS_Adr(7 downto 0),
-      SS_wren              => SS_wren(9)
+      SS_Adr               => SS_Adr(8 downto 0),
+      SS_wren              => SS_wren(9),
+      SS_rden              => '0'
    );
    
    itb_savestates : entity work.tb_savestates
    generic map
    (
-      LOADSTATE         => '1',
+      LOADSTATE         => '0',
       FILENAME          => ""
    )
    port map
@@ -87,6 +108,30 @@ begin
       SS_wren           => SS_wren     
    );
    
+   isdram_model : entity work.sdram_model3x 
+   generic map
+   (
+      DOREFRESH     => '1',
+      SCRIPTLOADING => '0'
+   )
+   port map
+   (
+      clk          => clk1x,
+      clk3x        => clk3x,
+      refresh      => '0',
+      addr(26 downto 19) => "00000000",
+      addr(18 downto  0) =>  sdram_Adr,
+      req          => sdram_ena,
+      ram_128      => '0',
+      rnw          => sdram_rnw,
+      be           => sdram_be,
+      di           => sdram_dataWrite,
+      do           => open,
+      do32         => sdram_dataRead,
+      done         => sdram_done,
+      reqprocessed => open,
+      ram_idle     => open
+   );
    
    process
       file infile          : text;

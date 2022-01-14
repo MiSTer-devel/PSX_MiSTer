@@ -25,12 +25,12 @@ entity psx_top is
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
-      FAKESPU               : in  std_logic;
       ditherOff             : in  std_logic;
       analogPad             : in  std_logic;
       fpscountOn            : in  std_logic;
       errorOn               : in  std_logic;
       noTexture             : in  std_logic;
+      SPUon                 : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -69,6 +69,14 @@ entity psx_top is
       cd_hps_ack            : in  std_logic;
       cd_hps_write          : in  std_logic;
       cd_hps_data           : in  std_logic_vector(15 downto 0);
+      -- spuram
+      spuram_dataWrite      : out std_logic_vector(31 downto 0);
+      spuram_Adr            : out std_logic_vector(18 downto 0);
+      spuram_be             : out std_logic_vector(3 downto 0);
+      spuram_rnw            : out std_logic;
+      spuram_ena            : out std_logic;
+      spuram_dataRead       : in  std_logic_vector(31 downto 0);
+      spuram_done           : in  std_logic;
       -- memcard
       memcard1_load         : in  std_logic;
       memcard2_load         : in  std_logic;
@@ -345,8 +353,6 @@ architecture arch of psx_top is
    signal irq_SPU                : std_logic;
    signal irq_LIGHTPEN           : std_logic;
    
-   signal enaSPUirq              : std_logic;
-   
    -- dma
    signal cpuPaused              : std_logic;
    signal dmaOn                  : std_logic;
@@ -510,9 +516,6 @@ architecture arch of psx_top is
    signal debug_firstGTE         : std_logic;
    
 begin 
-
-   sound_out_left   <= (others => '0');
-   sound_out_right  <= (others => '0');
    
    -- reset
    process (clk1x)
@@ -1220,9 +1223,7 @@ begin
       SS_DataRead          => SS_DataRead_MDEC,
       SS_Idle              => SS_Idle_mdec
    );
-   
-   irq_SPU <= irq_VBLANK and enaSPUirq;
-   
+
    ispu : entity work.spu
    port map
    (
@@ -1230,10 +1231,13 @@ begin
       ce                   => ce,        
       reset                => reset_intern,     
       
-      --irqOut               => irq_SPU,
+      SPUon                => SPUon,
+      useSDRAM             => '1',
       
-      FAKESPU              => FAKESPU,
-      enaSPUirq            => enaSPUirq,
+      irqOut               => irq_SPU,
+      
+      sound_out_left       => sound_out_left, 
+      sound_out_right      => sound_out_right,
       
       bus_addr             => bus_spu_addr,     
       bus_dataWrite        => bus_spu_dataWrite,
@@ -1246,10 +1250,18 @@ begin
       dma_readdata         => DMA_SPU_read, 
       dma_write            => DMA_SPU_writeEna, 
       dma_writedata        => DMA_SPU_write,
+          
+      sdram_dataWrite      => spuram_dataWrite,
+      sdram_dataRead       => spuram_dataRead, 
+      sdram_Adr            => spuram_Adr,      
+      sdram_be             => spuram_be,      
+      sdram_rnw            => spuram_rnw,      
+      sdram_ena            => spuram_ena,           
+      sdram_done           => spuram_done,
       
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
-      SS_Adr               => SS_Adr(7 downto 0),  
+      SS_Adr               => SS_Adr(8 downto 0),  
       SS_wren              => SS_wren(9),     
       SS_rden              => SS_rden(9),     
       SS_DataRead          => SS_DataRead_SOUND,

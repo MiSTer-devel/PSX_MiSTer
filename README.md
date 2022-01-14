@@ -54,10 +54,9 @@ GPU    : 80%
 - mask bits not implemented for cpu2vram
 - vram2vram and vram2cpu line wraparound not implemented
 - vram2vram read/modify/write race condition when copying to same line
-- videoout using original, asynchronous timings
+- videoout using original, asynchronous timings not implemented
 
-Memory : 50%
-- SPU RAM not implemented
+Memory : 80%
 - rotate register not done for all busses
 
 IRQ    : 80%
@@ -66,6 +65,7 @@ IRQ    : 80%
 
 PAD    : 70%
 - special controllers(mouse, lightgun) not supported
+- SNAC interface missing
 
 DMA    : 60%
 - DMA chopping not implemented 
@@ -90,4 +90,11 @@ CD     : 50%
 - single track only
 - no audio yet
 
-SPU    : 5%
+SPU    : 30%
+- requires second SDRAM for now
+- Reverb missing
+- Envelope missing
+- IRQ missing
+- Noise missing
+- readback missing
+- capture missing
