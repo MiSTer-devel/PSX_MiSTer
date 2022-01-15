@@ -64,6 +64,12 @@ begin
       ce                   => '1',        
       reset                => reset_out,
       
+      SPUon                => '1',
+      useSDRAM             => '1',
+         
+      cd_left              => x"0000",
+      cd_right             => x"0000",
+      
       bus_addr             => bus_addr,     
       bus_dataWrite        => bus_dataWrite,
       bus_read             => bus_read,     

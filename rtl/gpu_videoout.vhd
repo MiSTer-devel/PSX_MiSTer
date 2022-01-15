@@ -377,7 +377,7 @@ begin
       textstring             => x"4344"
    );
    
-   errortext <= resize(errorCode(3 downto 0), 8) + 16#30#;
+   errortext <= resize(errorCode, 8) + 16#30# when (errorCode < 10) else resize(errorCode, 8) + 16#41#;
    ioverlayError : entity work.gpu_overlay
    generic map
    (

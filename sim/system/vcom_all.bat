@@ -3,6 +3,8 @@ vcom -93 -quiet -work  sim/tb ^
 src/tb/globals.vhd
 
 vcom -93 -quiet -work  sim/mem ^
+../../rtl/dpram.vhd ^
+../../rtl/RamMLAB.vhd ^
 ../../rtl/SyncFifo.vhd ^
 ../../rtl/SyncFifoFallThrough.vhd ^
 ../../rtl/SyncRam.vhd

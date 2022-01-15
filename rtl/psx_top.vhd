@@ -418,6 +418,7 @@ architecture arch of psx_top is
    signal errorMASK              : std_logic;
    signal errorCHOP              : std_logic;
    signal errorGPUFIFO           : std_logic;
+   signal errorSPUTIME           : std_logic;
    
    -- memcard
    signal memcard1_pause         : std_logic;
@@ -635,6 +636,7 @@ begin
                if (errorMASK    = '1') then errorEna  <= '1'; errorCode <= x"7"; end if;
                if (errorCHOP    = '1') then errorEna  <= '1'; errorCode <= x"8"; end if;
                if (errorGPUFIFO = '1') then errorEna  <= '1'; errorCode <= x"9"; end if;
+               if (errorSPUTIME = '1') then errorEna  <= '1'; errorCode <= x"A"; end if;
             end if;
             
             if (errorEna = '0' or errorCode = x"3") then
@@ -1234,7 +1236,12 @@ begin
       SPUon                => SPUon,
       useSDRAM             => '1',
       
+      cd_left              => x"0000",
+      cd_right             => x"0000",
+      
       irqOut               => irq_SPU,
+      
+      sound_timeout        => errorSPUTIME,
       
       sound_out_left       => sound_out_left, 
       sound_out_right      => sound_out_right,

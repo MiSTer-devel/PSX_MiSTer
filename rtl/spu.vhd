@@ -5,9 +5,6 @@ use STD.textio.all;
 
 library mem;
 
-LIBRARY altera_mf;
-USE altera_mf.altera_mf_components.all; 
-
 entity spu is
    port 
    (
@@ -18,7 +15,12 @@ entity spu is
       SPUon                : in  std_logic;
       useSDRAM             : in  std_logic;
       
+      cd_left              : in  signed(15 downto 0);
+      cd_right             : in  signed(15 downto 0);
+      
       irqOut               : out std_logic := '0';
+      
+      sound_timeout        : out std_logic := '0';
       
       sound_out_left       : out std_logic_vector(15 downto 0) := (others => '0');
       sound_out_right      : out std_logic_vector(15 downto 0) := (others => '0');
@@ -250,6 +252,8 @@ architecture arch of spu is
    signal ram_dataRead        : std_logic_vector(15 downto 0);
    signal ram_done            : std_logic;
    
+   signal ram_first           : std_logic := '0';
+   
    -- statemachine
    type tState is
    (
@@ -267,12 +271,21 @@ architecture arch of spu is
       VOICE_CHECKKEY,
       VOICE_END,
       
-      REVERB_START,
-      CAPTURE_START,
+      REVERB_READ1,
+      REVERB_PROCOUT,
+      REVERB_WRITE1,
+      REVERB_READ2,
+      REVERB_PROCIN,
+      REVERB_WRITE2,
+      
+      CAPTURE0,
+      CAPTURE1,
+      CAPTURE2,
+      CAPTURE3,
+      CAPTURE_DONE,
       
       RAM_READ,
-      RAM_WRITE,
-      RAM_WRITEWAIT
+      RAM_WRITE
    );
    signal state : tState := IDLE;
    
@@ -340,8 +353,8 @@ architecture arch of spu is
    signal chanLeft       : signed(17 downto 0);  
    signal chanRight      : signed(17 downto 0);  
    
-   signal soundleft      : signed(23 downto 0);  
-   signal soundright     : signed(23 downto 0);  
+   signal soundleft      : signed(23 downto 0) := (others => '0');  
+   signal soundright     : signed(23 downto 0) := (others => '0');  
     
    -- envelope
    type tenvelopeState is
@@ -352,6 +365,7 @@ architecture arch of spu is
       ENV_DONE
    );
    signal envelopeState      : tenvelopeState := ENV_IDLE;
+   signal envelopeVoice      : std_logic := '0'; 
    signal envelopeRight      : std_logic := '0'; 
    signal envelope_startnext : std_logic := '0'; 
    signal envelopeIndex      : integer range 0 to 47;
@@ -369,6 +383,16 @@ architecture arch of spu is
    signal adsr_ticks    : tadsr_ticks;
    signal adsr_step     : tadsr_steps;
    signal adsr_target   : tadsr_target;
+   
+   -- reverb
+   signal reverb_readcount : integer range 0 to 5;
+
+   -- end processing
+   signal endProcStep    : integer range 0 to 4 := 4;
+   
+   signal soundmulresult : signed(24 downto 0);
+   signal soundmul1      : signed(23 downto 0);
+   signal soundmul2      : signed(15 downto 0);
 
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
@@ -452,28 +476,12 @@ begin
  
    gVOICEREGS1 : for i in 0 to 1 generate
    begin
-      itagramVOICEREGS1 : altdpram
+      itagramVOICEREGS1 : entity mem.RamMLAB
       GENERIC MAP 
       (
-         indata_aclr                         => "OFF",
-         indata_reg                          => "INCLOCK",
-         intended_device_family              => "Cyclone V",
-         lpm_type                            => "altdpram",
-         outdata_aclr                        => "OFF",
-         outdata_reg                         => "UNREGISTERED",
-         ram_block_type                      => "MLAB",
-         rdaddress_aclr                      => "OFF",
-         rdaddress_reg                       => "UNREGISTERED",
-         rdcontrol_aclr                      => "OFF",
-         rdcontrol_reg                       => "UNREGISTERED",
-         read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
-         width                               => 16,
-         widthad                             => 8,
-         width_byteena                       => 1,
-         wraddress_aclr                      => "OFF",
-         wraddress_reg                       => "INCLOCK",
-         wrcontrol_aclr                      => "OFF",
-         wrcontrol_reg                       => "INCLOCK"
+         width         => 16,
+         widthad       => 8,
+         width_byteena => 1
       )
       PORT MAP (
          inclock    => clk1x,
@@ -501,7 +509,7 @@ begin
 -- adpcmSamples
    gram_adpcmSamples: for i in 0 to 3 generate
    begin
-      iram_adpcmSamples: entity work.dpram
+      iram_adpcmSamples: entity mem.dpram
       generic map (addr_width => 8, data_width => 16)
       port map
       (
@@ -576,6 +584,8 @@ begin
          
          ram_request       <= '0';
          
+         sound_timeout     <= '0';
+         
          if (SS_reset = '1') then
             ss_voice_loading <= '1';
             RamVoice_write <= '1';
@@ -596,7 +606,6 @@ begin
       
          if (reset = '1') then
             
-            busy              <= '0';
             state             <= IDLE;
             irqOut            <= '0';
             
@@ -744,10 +753,9 @@ begin
             if (bus_read = '1') then
                bus_dataRead <= (others => '1');
                if (bus_addr < 16#180#) then
-                  bus_dataRead <= RamVoice_dataB(0);
-                  
-                  -- todo : SPU_VOICEVOLUME
-                  
+                  bus_dataRead <= RamVoice_dataB(0);   
+               elsif (bus_addr >= 16#200# and bus_addr < 16#260#) then
+                  bus_dataRead <= voiceVolumes(to_integer(bus_addr(6 downto 1)));
                else
                   case (to_integer(bus_addr)) is
                      when 16#180# => bus_dataRead <= VOLUME_LEFT;
@@ -837,7 +845,16 @@ begin
                   end if;
                
                when ENV_WRITE =>
-                  voiceVolumes(envelopeIndex) <= std_logic_vector(envVolume);
+                  if (envelopeVoice = '1') then
+                     voiceVolumes(envelopeIndex) <= std_logic_vector(envVolume);
+                  else
+                     if (envelopeRight = '1') then
+                        CURVOL_R <= std_logic_vector(envVolume);
+                     else
+                        CURVOL_L <= std_logic_vector(envVolume);
+                     end if;
+                  end if;
+                     
                   if (envelopeIndex < 47) then
                      envelopeIndex  <= envelopeIndex + 1;
                   end if;
@@ -900,6 +917,10 @@ begin
                capturePosition <= capturePosition + 2;
             end if;
             
+            if (sampleticks = 0 and state /= IDLE) then
+               sound_timeout <= '1';
+            end if;
+            
             case (state) is
             
                when IDLE =>
@@ -907,6 +928,7 @@ begin
                      state         <= VOICE_START;
                      index         <= 0;
                      envelopeIndex <= 0;
+                     envelopeVoice <= '1';
                      soundleft     <= (others => '0'); 
                      soundright    <= (others => '0');  
                   end if;
@@ -1208,7 +1230,8 @@ begin
                   -- todo: reverb add
                
                   if (index = 23) then
-                     state <= REVERB_START;
+                     state            <= REVERB_READ1;
+                     reverb_readcount <= 0;
                   else
                      state <= VOICE_START;
                      index <= index + 1;
@@ -1218,47 +1241,119 @@ begin
                
 
                -- REVERB
-               when REVERB_START =>
-                  state <= CAPTURE_START;
+               when REVERB_READ1 =>
+                  state <= REVERB_PROCOUT;
                
+                  envelopeVoice      <= '0';
+                  volumeSetting      <= unsigned(VOLUME_LEFT);
+                  volumeSettingR     <= unsigned(VOLUME_RIGHT);
+                  envelopeState      <= ENV_START;
+                  envelopeRight      <= '0';
+                  envelope_startnext <= '0';
+                  
+               
+               when REVERB_PROCOUT =>
+                  state <= REVERB_WRITE1;
+               
+               when REVERB_WRITE1 =>
+                  state <= REVERB_READ2;
+               
+               when REVERB_READ2 =>
+                  state <= REVERB_PROCIN;
+               
+               when REVERB_PROCIN =>
+                  state <= REVERB_WRITE2;
+               
+               when REVERB_WRITE2 =>
+                  state       <= CAPTURE0;
+                  endProcStep <= 0;
+
                -- CAPTURE
-               when CAPTURE_START =>
-                  sound_out_left  <= std_logic_vector(soundleft(15 downto 0)); -- todo
-                  sound_out_right <= std_logic_vector(soundright(15 downto 0));
+               when CAPTURE0 =>
+                  state <= CAPTURE1;
+                  
+               when CAPTURE1 =>
+                  state <= CAPTURE2;
                
-                  ramcount <= 0;
-                  if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0') then
-                     state <= RAM_READ;
-                  elsif ((CNT(5 downto 4) = "01" or CNT(5 downto 4) = "10") and FifoIn_Empty = '0') then
-                     state <= RAM_WRITE;
-                  else
-                     state <= IDLE;
-                  end if;
+               when CAPTURE2 =>
+                  state <= CAPTURE3;
+               
+               when CAPTURE3 =>
+                  state <= CAPTURE_DONE;
+               
+               when CAPTURE_DONE =>
+                  --if (ram_done = '1') then
+                     ramcount <= 0;
+                     if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0') then
+                        state     <= RAM_READ;
+                        ram_first <= '1';
+                     elsif ((CNT(5 downto 4) = "01" or CNT(5 downto 4) = "10") and FifoIn_Empty = '0') then
+                        state     <= RAM_WRITE;
+                        ram_first <= '1';
+                     else
+                        state <= IDLE;
+                     end if;
+                  --end if;
                
                -- DATA TRANSFER
                when RAM_READ =>
                   state <= IDLE; -- todo!
                
                when RAM_WRITE =>
-                  if (FifoIn_Empty = '1' or ramcount >= 24) then
-                     state <= IDLE;
-                  else
-                     ram_request     <= '1';
-                     ram_rnw         <= '0';
-                     ram_Adr         <= std_logic_vector(ramTransferAddr);
-                     ram_dataWrite   <= FifoIn_Dout;
-                     ramTransferAddr <= ramTransferAddr + 2;
-                     FifoIn_Rd       <= '1';
-                     state           <= RAM_WRITEWAIT; 
-                     ramcount        <= ramcount + 1;
-                  end if;
-            
-               when RAM_WRITEWAIT =>
-                  if (ram_done = '1') then
-                     state <= RAM_WRITE;
+                  if (ram_first = '1' or ram_done = '1') then
+                     ram_first <= '0';
+                     if (FifoIn_Empty = '1' or ramcount >= 24) then
+                        state <= IDLE;
+                     else
+                        ram_request     <= '1';
+                        ram_rnw         <= '0';
+                        ram_Adr         <= std_logic_vector(ramTransferAddr);
+                        ram_dataWrite   <= FifoIn_Dout;
+                        ramTransferAddr <= ramTransferAddr + 2;
+                        FifoIn_Rd       <= '1';
+                        ramcount        <= ramcount + 1;
+                     end if;
                   end if;
             
             end case;
+
+            busy <= '0';
+            if (CNT(5 downto 4) = "10" and FifoIn_Empty = '0') then
+               busy <= '1';
+            end if;
+            if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0') then
+               busy <= '1';
+            end if;
+            
+            -- sound end processing
+            case (endProcStep) is
+               when 0 =>
+                  soundmul1 <= soundleft;
+                  soundmul2 <= signed(CURVOL_L);
+                  
+               when 1 =>
+                  soundmul1 <= soundright;
+                  soundmul2 <= signed(CURVOL_R); 
+                  
+               when 2 =>
+                  if (soundmulresult < -32768) then sound_out_left <= x"8000";
+                  elsif (soundmulresult > 32767) then sound_out_left <= x"7FFF";
+                  else sound_out_left <= std_logic_vector(soundmulresult(15 downto 0));
+                  end if;
+               
+               when 3 =>
+                  if (soundmulresult < -32768) then sound_out_right <= x"8000";
+                  elsif (soundmulresult > 32767) then sound_out_right <= x"7FFF";
+                  else sound_out_right <= std_logic_vector(soundmulresult(15 downto 0));
+                  end if;
+               
+               when others => null;
+            end case;
+            if (endProcStep < 4) then
+               endProcStep <= endProcStep + 1;
+            end if; 
+            
+            soundmulresult <= resize(shift_right(soundmul1 * soundmul2, 15), 25);  
 
          end if; -- ce
          
