@@ -57,6 +57,18 @@ entity spu is
 end entity;
 
 architecture arch of spu is
+
+   function clamp16(value_in: signed) return signed is
+      variable result: signed(15 downto 0);
+   begin
+ 
+      if (value_in < -32768) then result := x"8000";
+      elsif (value_in > 32767) then result := x"7FFF";
+      else result := value_in(15 downto 0);
+      end if;
+      
+      return result;  
+   end;
    
    -- interpolate 
    type tGauss is array(0 to 511) of signed(15 downto 0);
@@ -277,6 +289,7 @@ architecture arch of spu is
       REVERB_READ2,
       REVERB_PROCIN,
       REVERB_WRITE2,
+      REVERB_END,
       
       CAPTURE0,
       CAPTURE1,
@@ -354,7 +367,7 @@ architecture arch of spu is
    signal chanRight      : signed(17 downto 0);  
    
    signal soundleft      : signed(23 downto 0) := (others => '0');  
-   signal soundright     : signed(23 downto 0) := (others => '0');  
+   signal soundright     : signed(23 downto 0) := (others => '0');     
     
    -- envelope
    type tenvelopeState is
@@ -385,14 +398,60 @@ architecture arch of spu is
    signal adsr_target   : tadsr_target;
    
    -- reverb
-   signal reverb_readcount : integer range 0 to 5;
-
-   -- end processing
-   signal endProcStep    : integer range 0 to 4 := 4;
+   signal reverbRight            : std_logic := '0';
+   signal reverbCurrentAddress   : unsigned(17 downto 0);
    
-   signal soundmulresult : signed(24 downto 0);
-   signal soundmul1      : signed(23 downto 0);
-   signal soundmul2      : signed(15 downto 0);
+   signal reverbsumleft          : signed(23 downto 0) := (others => '0');  
+   signal reverbsumright         : signed(23 downto 0) := (others => '0');  
+   signal reverb_sample          : signed(23 downto 0);
+   
+   signal reverb_reqAddr         : unsigned(15 downto 0);
+   signal reverb_reqAddr2        : unsigned(17 downto 0);
+   signal reverbAddAddr          : unsigned(18 downto 0);
+   signal reverb_calcAddr        : unsigned(18 downto 0);
+   
+   signal reverb_count           : integer range 0 to 13;
+   
+   signal REVERB_mSAME           : unsigned(15 downto 0);
+	signal REVERB_mCOMB1          : unsigned(15 downto 0);
+	signal REVERB_mCOMB2          : unsigned(15 downto 0);
+	signal REVERB_dSAME           : unsigned(15 downto 0);
+	signal REVERB_mDIFF           : unsigned(15 downto 0);
+	signal REVERB_mCOMB3          : unsigned(15 downto 0);
+	signal REVERB_mCOMB4          : unsigned(15 downto 0);
+	signal REVERB_dDIFF           : unsigned(15 downto 0);
+	signal REVERB_mAPF1           : unsigned(15 downto 0);
+	signal REVERB_mAPF2           : unsigned(15 downto 0);
+	signal REVERB_vIN             : signed(15 downto 0);
+   
+   signal reverbReadval1         : signed(15 downto 0);
+   signal reverbReadval2         : signed(15 downto 0);
+   signal reverbReadval3         : signed(15 downto 0);
+   signal reverbReadval4         : signed(15 downto 0);
+   signal reverbReadval5         : signed(15 downto 0);
+   signal reverbReadval6         : signed(15 downto 0);
+   
+   signal IIR_INPUT_B            : signed(15 downto 0);
+   signal IIR_A                  : signed(15 downto 0);
+   signal IIR_B                  : signed(15 downto 0);
+   
+   signal reverb_acc             : signed(19 downto 0);
+   signal apf1neg                : signed(15 downto 0);
+   signal apf2neg                : signed(15 downto 0);
+   signal MDA                    : signed(15 downto 0);
+   signal MDB                    : signed(15 downto 0);
+   
+   signal reverbLastLeft         : signed(15 downto 0);
+   signal reverbLastRight        : signed(15 downto 0);
+   
+   -- end processing
+   signal endProcStep            : integer range 0 to 4 := 4;
+   
+   signal soundmulresult14       : signed(25 downto 0);
+   signal soundmulresult14_1     : signed(25 downto 0);
+   signal soundmulresult15       : signed(24 downto 0);
+   signal soundmul1              : signed(23 downto 0);
+   signal soundmul2              : signed(15 downto 0);
 
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
@@ -528,8 +587,11 @@ begin
      
 -- savestates
      
-   ss_out(1)(9 downto 0)    <= std_logic_vector(sampleticks);    
-   ss_out(2)(9 downto 0)    <= std_logic_vector(capturePosition);
+   ss_out(1)( 9 downto 0)   <= std_logic_vector(sampleticks);    
+   ss_out(2)( 9 downto 0)   <= std_logic_vector(capturePosition);
+   ss_out(3)(18 downto 0)   <= std_logic_vector(ramTransferAddr);   
+   ss_out(4)(17 downto 0)   <= std_logic_vector(reverbCurrentAddress);
+   ss_out(4)(31)            <= reverbRight;
       
    ss_out(32)               <= KEYON;          
    ss_out(33)               <= KEYOFF;         
@@ -550,6 +612,42 @@ begin
    ss_out(42)(31 downto 16) <= EXT_VOL_R;	   
    ss_out(43)(15 downto 0)  <= CURVOL_L;	      
    ss_out(43)(31 downto 16) <= CURVOL_R;	      
+   ss_out(44)(15 downto 0)  <= IRQ_ADDR;	      
+   ss_out(44)(31 downto 16) <= REVERB_vLOUT  ;	      
+   ss_out(45)(15 downto 0)  <= REVERB_vROUT  ;	      
+   ss_out(45)(31 downto 16) <= REVERB_mBASE  ;	      
+   ss_out(46)(15 downto 0)  <= REVERB_dAPF1  ;	      
+   ss_out(46)(31 downto 16) <= REVERB_dAPF2  ;	      
+   ss_out(47)(15 downto 0)  <= REVERB_vIIR   ;	      
+   ss_out(47)(31 downto 16) <= REVERB_vCOMB1 ;	      
+   ss_out(48)(15 downto 0)  <= REVERB_vCOMB2 ;	      
+   ss_out(48)(31 downto 16) <= REVERB_vCOMB3 ;	      
+   ss_out(49)(15 downto 0)  <= REVERB_vCOMB4 ;	      
+   ss_out(49)(31 downto 16) <= REVERB_vWALL  ;	      
+   ss_out(50)(15 downto 0)  <= REVERB_vAPF1  ;	      
+   ss_out(50)(31 downto 16) <= REVERB_vAPF2  ;	      
+   ss_out(51)(15 downto 0)  <= REVERB_mLSAME ;	      
+   ss_out(51)(31 downto 16) <= REVERB_mRSAME ;	      
+   ss_out(52)(15 downto 0)  <= REVERB_mLCOMB1;	      
+   ss_out(52)(31 downto 16) <= REVERB_mRCOMB1;	      
+   ss_out(53)(15 downto 0)  <= REVERB_mLCOMB2;	      
+   ss_out(53)(31 downto 16) <= REVERB_mRCOMB2;	      
+   ss_out(54)(15 downto 0)  <= REVERB_dLSAME ;	      
+   ss_out(54)(31 downto 16) <= REVERB_dRSAME ;	      
+   ss_out(55)(15 downto 0)  <= REVERB_mLDIFF ;	      
+   ss_out(55)(31 downto 16) <= REVERB_mRDIFF ;	      
+   ss_out(56)(15 downto 0)  <= REVERB_mLCOMB3;	      
+   ss_out(56)(31 downto 16) <= REVERB_mRCOMB3;	      
+   ss_out(57)(15 downto 0)  <= REVERB_mLCOMB4;	      
+   ss_out(57)(31 downto 16) <= REVERB_mRCOMB4;	      
+   ss_out(58)(15 downto 0)  <= REVERB_dLDIFF ;	      
+   ss_out(58)(31 downto 16) <= REVERB_dRDIFF ;	      
+   ss_out(59)(15 downto 0)  <= REVERB_mLAPF1 ;	      
+   ss_out(59)(31 downto 16) <= REVERB_mRAPF1 ;	      
+   ss_out(60)(15 downto 0)  <= REVERB_mLAPF2 ;	      
+   ss_out(60)(31 downto 16) <= REVERB_mRAPF2 ;	      
+   ss_out(61)(15 downto 0)  <= REVERB_vLIN   ;	      
+   ss_out(61)(31 downto 16) <= REVERB_vRIN   ;	          
 
 -- cpu interface + processing
    process(clk1x)
@@ -568,6 +666,7 @@ begin
       variable interpol2           : signed(30 downto 0);
       variable interpol3           : signed(30 downto 0);
       variable interpol4           : signed(30 downto 0);
+      variable soundmulresult      : signed(39 downto 0);
    begin
       if (rising_edge(clk1x)) then
             
@@ -606,36 +705,79 @@ begin
       
          if (reset = '1') then
             
-            state             <= IDLE;
-            irqOut            <= '0';
-            
-            sound_out_left    <= (others => '0');
-            sound_out_right   <= (others => '0');
-            
-            sampleticks       <= unsigned(ss_in(1)(9 downto 0));
-            capturePosition   <= unsigned(ss_in(2)(9 downto 0));
-            ramTransferAddr   <= unsigned(ss_in(3)(18 downto 0));
-            
-            IRQ9              <= ss_in(40)(22);
-            
-            KEYON             <= ss_in(32);
-            KEYOFF            <= ss_in(33);
-            PITCHMODENA       <= ss_in(34);
-            NOISEMODE         <= ss_in(35);
-            REVERBON          <= ss_in(36);
-            ENDX              <= ss_in(37);
+            state                <= IDLE;
+            irqOut               <= '0';
                
-            VOLUME_LEFT       <= ss_in(38)(15 downto 0);
-            VOLUME_RIGHT      <= ss_in(38)(31 downto 16);
-            TRANSFERADDR      <= ss_in(39)(15 downto 0);
-            CNT		         <= ss_in(39)(31 downto 16);
-            TRANSFER_CNT      <= ss_in(40)(15 downto 0);
-            CDAUDIO_VOL_L     <= ss_in(41)(15 downto 0);
-            CDAUDIO_VOL_R     <= ss_in(41)(31 downto 16);
-            EXT_VOL_L	      <= ss_in(42)(15 downto 0);
-            EXT_VOL_R	      <= ss_in(42)(31 downto 16);
-            CURVOL_L	         <= ss_in(43)(15 downto 0);
-            CURVOL_R	         <= ss_in(43)(31 downto 16);
+            sound_out_left       <= (others => '0');
+            sound_out_right      <= (others => '0');
+            
+            reverbLastLeft       <= (others => '0');
+            reverbLastRight      <= (others => '0');
+               
+            sampleticks          <= unsigned(ss_in(1)(9 downto 0));
+            capturePosition      <= unsigned(ss_in(2)(9 downto 0));
+            ramTransferAddr      <= unsigned(ss_in(3)(18 downto 0));
+            reverbCurrentAddress <= unsigned(ss_in(4)(17 downto 0));
+            reverbRight          <= ss_in(4)(31);
+               
+            IRQ9                 <= ss_in(40)(22);
+               
+            KEYON                <= ss_in(32);
+            KEYOFF               <= ss_in(33);
+            PITCHMODENA          <= ss_in(34);
+            NOISEMODE            <= ss_in(35);
+            REVERBON             <= ss_in(36);
+            ENDX                 <= ss_in(37);
+                  
+            VOLUME_LEFT          <= ss_in(38)(15 downto 0);
+            VOLUME_RIGHT         <= ss_in(38)(31 downto 16);
+            TRANSFERADDR         <= ss_in(39)(15 downto 0);
+            CNT		            <= ss_in(39)(31 downto 16);
+            TRANSFER_CNT         <= ss_in(40)(15 downto 0);
+            CDAUDIO_VOL_L        <= ss_in(41)(15 downto 0);
+            CDAUDIO_VOL_R        <= ss_in(41)(31 downto 16);
+            EXT_VOL_L	         <= ss_in(42)(15 downto 0);
+            EXT_VOL_R	         <= ss_in(42)(31 downto 16);
+            CURVOL_L	            <= ss_in(43)(15 downto 0);
+            CURVOL_R	            <= ss_in(43)(31 downto 16);
+            IRQ_ADDR             <= ss_in(44)(15 downto 0);
+            REVERB_vLOUT         <= ss_in(44)(31 downto 16);
+            REVERB_vROUT         <= ss_in(45)(15 downto 0);
+            REVERB_mBASE         <= ss_in(45)(31 downto 16);
+            REVERB_dAPF1         <= ss_in(46)(15 downto 0);
+            REVERB_dAPF2         <= ss_in(46)(31 downto 16);
+            REVERB_vIIR          <= ss_in(47)(15 downto 0);
+            REVERB_vCOMB1        <= ss_in(47)(15 downto 0);
+            REVERB_vCOMB2        <= ss_in(48)(31 downto 16);
+            REVERB_vCOMB3        <= ss_in(48)(15 downto 0);
+            REVERB_vCOMB4        <= ss_in(49)(31 downto 16);
+            REVERB_vWALL         <= ss_in(49)(15 downto 0);
+            REVERB_vAPF1         <= ss_in(50)(31 downto 16);
+            REVERB_vAPF2         <= ss_in(50)(15 downto 0);
+            REVERB_mLSAME        <= ss_in(51)(31 downto 16);
+            REVERB_mRSAME        <= ss_in(51)(15 downto 0);
+            REVERB_mLCOMB1       <= ss_in(52)(31 downto 16);
+            REVERB_mRCOMB1       <= ss_in(52)(15 downto 0);
+            REVERB_mLCOMB2       <= ss_in(53)(31 downto 16);
+            REVERB_mRCOMB2       <= ss_in(53)(15 downto 0);
+            REVERB_dLSAME        <= ss_in(54)(15 downto 0);
+            REVERB_dRSAME        <= ss_in(54)(31 downto 16);
+            REVERB_mLDIFF        <= ss_in(55)(15 downto 0);
+            REVERB_mRDIFF        <= ss_in(55)(31 downto 16);
+            REVERB_mLCOMB3       <= ss_in(56)(15 downto 0);
+            REVERB_mRCOMB3       <= ss_in(56)(31 downto 16);
+            REVERB_mLCOMB4       <= ss_in(57)(15 downto 0);
+            REVERB_mRCOMB4       <= ss_in(57)(31 downto 16);
+            REVERB_dLDIFF        <= ss_in(58)(15 downto 0);
+            REVERB_dRDIFF        <= ss_in(58)(31 downto 16);
+            REVERB_mLAPF1        <= ss_in(59)(15 downto 0);
+            REVERB_mRAPF1        <= ss_in(59)(31 downto 16);
+            REVERB_mLAPF2        <= ss_in(60)(15 downto 0);
+            REVERB_mRAPF2        <= ss_in(60)(31 downto 16);
+            REVERB_vLIN          <= ss_in(61)(15 downto 0);
+            REVERB_vRIN          <= ss_in(61)(31 downto 16);
+            
+            -- voiceArray
             
             -- todo: review whole savestate regs and internals missing!
 
@@ -710,7 +852,7 @@ begin
                      
                      when 16#184# => REVERB_vLOUT              <= bus_dataWrite;
                      when 16#186# => REVERB_vROUT              <= bus_dataWrite;
-                     when 16#1A2# => REVERB_mBASE              <= bus_dataWrite;
+                     when 16#1A2# => REVERB_mBASE              <= bus_dataWrite; reverbCurrentAddress <= unsigned(bus_dataWrite) & "00";
                      when 16#1C0# => REVERB_dAPF1              <= bus_dataWrite;
                      when 16#1C2# => REVERB_dAPF2              <= bus_dataWrite;
                      when 16#1C4# => REVERB_vIIR               <= bus_dataWrite;
@@ -925,12 +1067,14 @@ begin
             
                when IDLE =>
                   if (sampleticks = 0) then
-                     state         <= VOICE_START;
-                     index         <= 0;
-                     envelopeIndex <= 0;
-                     envelopeVoice <= '1';
-                     soundleft     <= (others => '0'); 
-                     soundright    <= (others => '0');  
+                     state          <= VOICE_START;
+                     index          <= 0;
+                     envelopeIndex  <= 0;
+                     envelopeVoice  <= '1';
+                     soundleft      <= (others => '0'); 
+                     soundright     <= (others => '0');                      
+                     reverbsumleft  <= (others => '0'); 
+                     reverbsumright <= (others => '0');  
                   end if;
                
                -- VOICE
@@ -1227,11 +1371,18 @@ begin
                when VOICE_END =>
                   soundleft  <= soundleft  + resize(chanLeft , 24);
                   soundright <= soundright + resize(chanRight, 24);
-                  -- todo: reverb add
+                  if (REVERBON(index) = '1') then
+                     reverbsumleft  <= reverbsumleft  + resize(chanLeft , 24);
+                     reverbsumright <= reverbsumright + resize(chanRight, 24);
+                  end if;
                
                   if (index = 23) then
-                     state            <= REVERB_READ1;
-                     reverb_readcount <= 0;
+                     if (cnt(7) = '1') then
+                        state <= REVERB_READ1;
+                     else
+                        state <= REVERB_READ2;
+                     end if;
+                     reverb_count <= 0;
                   else
                      state <= VOICE_START;
                      index <= index + 1;
@@ -1242,31 +1393,262 @@ begin
 
                -- REVERB
                when REVERB_READ1 =>
-                  state <= REVERB_PROCOUT;
+                  if (reverb_count = 0 or ram_done = '1') then
+                     reverb_count <= reverb_count + 1;
+                     if (reverb_count < 4) then
+                        ram_request <= '1';
+                        ram_rnw     <= '1';
+                        ram_Adr     <= std_logic_vector(reverb_calcAddr);
+                     end if;
+                     case (reverb_count) is
+                        when 1 => reverbReadval1 <= signed(ram_dataRead); 
+                        when 2 => reverbReadval2 <= signed(ram_dataRead);
+                        when 3 => reverbReadval3 <= signed(ram_dataRead);
+                        when 4 => reverbReadval4 <= signed(ram_dataRead); state <= REVERB_PROCOUT; reverb_count <= 0;
+                        when others => null;                     
+                     end case;
+                  end if;
                
-                  envelopeVoice      <= '0';
-                  volumeSetting      <= unsigned(VOLUME_LEFT);
-                  volumeSettingR     <= unsigned(VOLUME_RIGHT);
-                  envelopeState      <= ENV_START;
-                  envelopeRight      <= '0';
-                  envelope_startnext <= '0';
+                  if (reverb_count = 0) then
+                     envelopeVoice      <= '0';
+                     volumeSetting      <= unsigned(VOLUME_LEFT);
+                     volumeSettingR     <= unsigned(VOLUME_RIGHT);
+                     envelopeState      <= ENV_START;
+                     envelopeRight      <= '0';
+                     envelope_startnext <= '0';
+                  end if;
                   
                
                when REVERB_PROCOUT =>
-                  state <= REVERB_WRITE1;
+                  reverb_count <= reverb_count + 1;
+                  case (reverb_count) is
+                     when 0 => 
+                        -- wallmult = (value1 * PSXRegs.SPU_REVERB_vWALL) >> 14;
+                        soundmul1 <= resize(reverbReadval1, 24); 
+                        soundmul2 <= signed(REVERB_vWALL);  
+                        
+                     when 1 =>
+                        -- volmult = (sample * REVERB_vIN) >> 14;
+                        soundmul1 <= reverb_sample;              
+                        soundmul2 <= signed(REVERB_vIN);  
+                        
+                     when 2 => 
+                        -- wallmult = (value2 * PSXRegs.SPU_REVERB_vWALL) >> 14;     
+                        soundmul1 <= resize(reverbReadval2, 24); 
+                        soundmul2 <= signed(REVERB_vWALL);                     
+                        
+                     when 3 =>
+                        --IIR_INPUT_A = clamp16((wallmult + volmult) >> 1);
+                        -- IIRmultNew = (IIR_INPUT_A * PSXRegs.SPU_REVERB_vIIR) >> 14;                     
+                        soundmul1 <= resize(clamp16(shift_right(soundmulresult14 + soundmulresult14_1, 1)), 24);
+                        soundmul2 <= signed(REVERB_vIIR);
+                     
+                     when 4 =>
+                        --IIR_INPUT_B = clamp16((wallmult + volmult) >> 1);
+                        IIR_INPUT_B <= clamp16(shift_right(soundmulresult14 + soundmulresult14_1, 1));
+                        --IIRMultOld = IIASM(PSXRegs.SPU_REVERB_vIIR, value3) >> 14;
+                        soundmul2 <= reverbReadval3;
+                        if (signed(REVERB_vIIR) = -32768) then
+                           if (reverbReadval3 = -32768) then
+                              soundmul1 <= (others => '0');
+                           else
+                              soundmul1 <= to_signed(-65536, 24);
+                           end if;
+                        else
+                           soundmul1 <= to_signed(32768, 24) - resize(signed(REVERB_vIIR), 24);
+                        end if;
+                        
+                     when 5 =>
+                        -- IIRmultNew = (IIR_INPUT_B * PSXRegs.SPU_REVERB_vIIR) >> 14;#
+                        soundmul1 <= resize(IIR_INPUT_B, 24);
+                        soundmul2 <= signed(REVERB_vIIR);
+                        
+                     when 6 =>
+                        -- IIR_A = clamp16((IIRmultNew + IIRMultOld) >> 1);
+                        IIR_A <= clamp16(shift_right(soundmulresult14 + soundmulresult14_1, 1));
+                        -- IIRMultOld = IIASM(PSXRegs.SPU_REVERB_vIIR, value4) >> 14;
+                        soundmul2 <= reverbReadval4;
+                        if (signed(REVERB_vIIR) = -32768) then
+                           if (reverbReadval4 = -32768) then
+                              soundmul1 <= (others => '0');
+                           else
+                              soundmul1 <= to_signed(-65536, 24);
+                           end if;
+                        else
+                           soundmul1 <= to_signed(32768, 24) - resize(signed(REVERB_vIIR), 24);
+                        end if;
+                        
+                     when 7 => null;
+                     
+                     when 8 => 
+                        -- IIR_B = clamp16((IIRmultNew + IIRMultOld) >> 1);
+                        IIR_B <= clamp16(shift_right(soundmulresult14 + soundmulresult14_1, 1));
+                     
+                        state <= REVERB_WRITE1; 
+                        reverb_count <= 0;
+                     when others => null;                     
+                  end case;
                
                when REVERB_WRITE1 =>
-                  state <= REVERB_READ2;
+                  if (reverb_count = 0 or ram_done = '1') then
+                     reverb_count <= reverb_count + 1;
+                     if (reverb_count < 2) then
+                        ram_request <= '1';
+                        ram_rnw     <= '0';
+                        ram_Adr     <= std_logic_vector(reverb_calcAddr);
+                     end if;
+                     case (reverb_count) is
+                        when 0 => ram_dataWrite <= std_logic_vector(IIR_A); 
+                        when 1 => ram_dataWrite <= std_logic_vector(IIR_B); 
+                        when 2 => state <= REVERB_READ2; reverb_count <= 0;
+                        when others => null;                     
+                     end case;
+                  end if;
                
                when REVERB_READ2 =>
-                  state <= REVERB_PROCIN;
+                  if (reverb_count = 0 or ram_done = '1') then
+                     reverb_count <= reverb_count + 1;
+                     if (reverb_count < 6) then
+                        ram_request <= '1';
+                        ram_rnw     <= '1';
+                        ram_Adr     <= std_logic_vector(reverb_calcAddr);
+                     end if;
+                     case (reverb_count) is
+                        when 1 => reverbReadval1 <= signed(ram_dataRead); 
+                        when 2 => reverbReadval2 <= signed(ram_dataRead);
+                        when 3 => reverbReadval3 <= signed(ram_dataRead);
+                        when 4 => reverbReadval4 <= signed(ram_dataRead);
+                        when 5 => reverbReadval5 <= signed(ram_dataRead);
+                        when 6 => reverbReadval6 <= signed(ram_dataRead); state <= REVERB_PROCIN; reverb_count <= 0;
+                        when others => null;                     
+                     end case;
+                  end if;
                
                when REVERB_PROCIN =>
-                  state <= REVERB_WRITE2;
+                  reverb_count <= reverb_count + 1;
+                  case (reverb_count) is
+                     when 0 => 
+                        -- acc_mul1 = (valueOut1 * PSXRegs.SPU_REVERB_vCOMB1) >> 14;
+                        soundmul1 <= resize(reverbReadval1, 24); 
+                        soundmul2 <= signed(REVERB_vCOMB1);  
+                        
+                     when 1 => 
+                        -- acc_mul2 = (valueOut1 * PSXRegs.SPU_REVERB_vCOMB1) >> 14;
+                        soundmul1 <= resize(reverbReadval2, 24); 
+                        soundmul2 <= signed(REVERB_vCOMB2);  
+                        
+                     when 2 => 
+                        reverb_acc <= resize(soundmulresult14, 20);
+                        -- acc_mul3 = (valueOut1 * PSXRegs.SPU_REVERB_vCOMB1) >> 14;
+                        soundmul1 <= resize(reverbReadval3, 24); 
+                        soundmul2 <= signed(REVERB_vCOMB3);  
+                        
+                     when 3 => 
+                        reverb_acc <= reverb_acc + resize(soundmulresult14, 20);
+                        -- acc_mul4 = (valueOut1 * PSXRegs.SPU_REVERB_vCOMB1) >> 14;
+                        soundmul1 <= resize(reverbReadval4, 24); 
+                        soundmul2 <= signed(REVERB_vCOMB4);  
+
+                     when 4 =>
+                        reverb_acc <= reverb_acc + resize(soundmulresult14, 20);
+                        -- apf1negMul = (valueOut5 * apf1neg) >> 14;
+                        soundmul1 <= resize(reverbReadval5, 24); 
+                        soundmul2 <= signed(apf1neg);  
+                     
+                     when 5 => 
+                        reverb_acc <= reverb_acc + resize(soundmulresult14, 20);
+                     
+                     when 6 =>
+                        -- MDA = clamp16((ACC + apf1negMul) >> 1);
+                        MDA <= clamp16(shift_right(reverb_acc + soundmulresult14, 1));
+                        -- apf2negMul = (valueOut6 * apf2neg) >> 14;
+                        soundmul1 <= resize(reverbReadval6, 24); 
+                        soundmul2 <= signed(apf2neg);  
+                        
+                     when 7 =>
+                        -- apf1posMul = (MDA * PSXRegs.SPU_REVERB_vAPF1) >> 14;
+                        soundmul1 <= resize(MDA, 24); 
+                        soundmul2 <= signed(REVERB_vAPF1);  
+                        
+                     when 8 => null;
+                     
+                     when 9 =>
+                        -- MDB = clamp16(valueOut5 + ((apf1posMul + apf2negMul) >> 1));
+                        MDB <= clamp16(resize(reverbReadval5, 26) + shift_right(soundmulresult14 + soundmulresult14_1, 1));
+
+                     when 10 =>
+                        -- apf2posMul = (MDB * PSXRegs.SPU_REVERB_vAPF2) >> 15;
+                        soundmul1 <= resize(MDB, 24); 
+                        soundmul2 <= signed(REVERB_vAPF2); 
+
+                     when 11 => null;
+
+                     when 12 =>
+                        -- IVB = clamp16(valueOut6 + apf2posMul);
+                        if (reverbRight = '1') then
+                           reverbLastRight <= clamp16(resize(reverbReadval6, 25) + soundmulresult15);
+                        else
+                           reverbLastLeft  <= clamp16(resize(reverbReadval6, 25) + soundmulresult15);
+                        end if;
+                        
+                        reverb_count <= 0;
+                        if (cnt(7) = '1') then
+                           state <= REVERB_WRITE2;
+                        else
+                           state <= REVERB_END;
+                        end if;
+                        
+                     when others => null;                     
+                  end case;
                
                when REVERB_WRITE2 =>
-                  state       <= CAPTURE0;
-                  endProcStep <= 0;
+                  if (reverb_count = 0 or ram_done = '1') then
+                     reverb_count <= reverb_count + 1;
+                     if (reverb_count < 2) then
+                        ram_request <= '1';
+                        ram_rnw     <= '0';
+                        ram_Adr     <= std_logic_vector(reverb_calcAddr);
+                     end if;
+                     case (reverb_count) is
+                        when 0 => ram_dataWrite <= std_logic_vector(MDA); 
+                        when 1 => ram_dataWrite <= std_logic_vector(MDB); 
+                        when 2 => state <= REVERB_END; reverb_count <= 0;
+                        when others => null;                     
+                     end case;
+                  end if;
+                  
+               when REVERB_END =>
+                  reverb_count <= reverb_count + 1;
+                  case (reverb_count) is
+                     when 0 => 
+                        -- left = (reverbLastLeft * PSXRegs.SPU_REVERB_vLOUT) >> 15;
+                        soundmul1 <= resize(reverbLastLeft, 24); 
+                        soundmul2 <= signed(REVERB_vLOUT); 
+                        
+                     when 1 =>
+                        -- right = (reverbLastRight * PSXRegs.SPU_REVERB_vROUT) >> 15;
+                        soundmul1 <= resize(reverbLastRight, 24); 
+                        soundmul2 <= signed(REVERB_vROUT); 
+                        
+                     when 2 =>
+                        soundleft <= soundleft + resize(soundmulresult15, 24);
+                     
+                     when 3 =>
+                        soundright  <= soundright + resize(soundmulresult15, 24);
+                        state       <= CAPTURE0;
+                        endProcStep <= 0;
+                        reverbRight <= not reverbRight;
+                        if (reverbRight = '1') then
+                           if (reverbCurrentAddress = 16#3FFFF#) then
+                              reverbCurrentAddress <= unsigned(REVERB_mBASE) & "00";
+                           else
+                              reverbCurrentAddress <= reverbCurrentAddress + 1;
+                           end if;
+                        end if;
+                     
+                     when others => null; 
+                     
+                  end case;
 
                -- CAPTURE
                when CAPTURE0 =>
@@ -1336,15 +1718,15 @@ begin
                   soundmul2 <= signed(CURVOL_R); 
                   
                when 2 =>
-                  if (soundmulresult < -32768) then sound_out_left <= x"8000";
-                  elsif (soundmulresult > 32767) then sound_out_left <= x"7FFF";
-                  else sound_out_left <= std_logic_vector(soundmulresult(15 downto 0));
+                  if (soundmulresult15 < -32768) then sound_out_left <= x"8000";
+                  elsif (soundmulresult15 > 32767) then sound_out_left <= x"7FFF";
+                  else sound_out_left <= std_logic_vector(soundmulresult15(15 downto 0));
                   end if;
                
                when 3 =>
-                  if (soundmulresult < -32768) then sound_out_right <= x"8000";
-                  elsif (soundmulresult > 32767) then sound_out_right <= x"7FFF";
-                  else sound_out_right <= std_logic_vector(soundmulresult(15 downto 0));
+                  if (soundmulresult15 < -32768) then sound_out_right <= x"8000";
+                  elsif (soundmulresult15 > 32767) then sound_out_right <= x"7FFF";
+                  else sound_out_right <= std_logic_vector(soundmulresult15(15 downto 0));
                   end if;
                
                when others => null;
@@ -1353,7 +1735,11 @@ begin
                endProcStep <= endProcStep + 1;
             end if; 
             
-            soundmulresult <= resize(shift_right(soundmul1 * soundmul2, 15), 25);  
+            soundmulresult := soundmul1 * soundmul2;
+            soundmulresult14 <= resize(shift_right(soundmulresult, 14), 26);  
+            soundmulresult15 <= resize(shift_right(soundmulresult, 15), 25);  
+            
+            soundmulresult14_1 <= soundmulresult14;
 
          end if; -- ce
          
@@ -1393,6 +1779,48 @@ begin
    adsr_rate(ADSR_DECAY  )  <= '0' & adsrSetting(7 downto 4) & "00";
    adsr_rate(ADSR_SUSTAIN)  <= adsrSetting(28 downto 22);
    adsr_rate(ADSR_RELEASE)  <= adsrSetting(20 downto 16) & "00";
+     
+--##############################################################
+--############################### REVERB
+--##############################################################  
+  
+   REVERB_mSAME  <= unsigned(REVERB_mLSAME ) when (reverbRight = '0') else unsigned(REVERB_mRSAME );
+   REVERB_mCOMB1 <= unsigned(REVERB_mLCOMB1) when (reverbRight = '0') else unsigned(REVERB_mRCOMB1);
+   REVERB_mCOMB2 <= unsigned(REVERB_mLCOMB2) when (reverbRight = '0') else unsigned(REVERB_mRCOMB2);
+   REVERB_dSAME  <= unsigned(REVERB_dLSAME ) when (reverbRight = '0') else unsigned(REVERB_dRSAME );
+   REVERB_mDIFF  <= unsigned(REVERB_mLDIFF ) when (reverbRight = '0') else unsigned(REVERB_mRDIFF );
+   REVERB_mCOMB3 <= unsigned(REVERB_mLCOMB3) when (reverbRight = '0') else unsigned(REVERB_mRCOMB3);
+   REVERB_mCOMB4 <= unsigned(REVERB_mLCOMB4) when (reverbRight = '0') else unsigned(REVERB_mRCOMB4);
+   REVERB_dDIFF  <= unsigned(REVERB_dRDIFF ) when (reverbRight = '0') else unsigned(REVERB_dLDIFF );
+   REVERB_mAPF1  <= unsigned(REVERB_mLAPF1 ) when (reverbRight = '0') else unsigned(REVERB_mRAPF1 );
+   REVERB_mAPF2  <= unsigned(REVERB_mLAPF2 ) when (reverbRight = '0') else unsigned(REVERB_mRAPF2 );
+   REVERB_vIN    <=   signed(REVERB_vLIN   ) when (reverbRight = '0') else   signed(REVERB_vRIN   );
+   reverb_sample <= reverbsumleft            when (reverbRight = '0') else reverbsumright;
+   
+   apf1neg <= x"7FFF" when (REVERB_vAPF1 = x"8000") else (to_signed(0, 16) - signed(REVERB_vAPF1));
+   apf2neg <= x"7FFF" when (REVERB_vAPF2 = x"8000") else (to_signed(0, 16) - signed(REVERB_vAPF2));
+   
+   reverb_reqAddr  <= REVERB_dSAME                            when (state = REVERB_READ1  and reverb_count = 0) else
+                      REVERB_dDIFF                            when (state = REVERB_READ1  and reverb_count = 1) else
+                      REVERB_mSAME                            when (state = REVERB_READ1  and reverb_count = 2) else
+                      REVERB_mDIFF                            when (state = REVERB_READ1  and reverb_count = 3) else
+                      REVERB_mSAME                            when (state = REVERB_WRITE1 and reverb_count = 0) else
+                      REVERB_mDIFF                            when (state = REVERB_WRITE1 and reverb_count = 1) else
+                      REVERB_mCOMB1                           when (state = REVERB_READ2  and reverb_count = 0) else
+                      REVERB_mCOMB2                           when (state = REVERB_READ2  and reverb_count = 1) else
+                      REVERB_mCOMB3                           when (state = REVERB_READ2  and reverb_count = 2) else
+                      REVERB_mCOMB4                           when (state = REVERB_READ2  and reverb_count = 3) else
+                      (REVERB_mAPF1 - unsigned(REVERB_dAPF1)) when (state = REVERB_READ2  and reverb_count = 4) else
+                      (REVERB_mAPF2 - unsigned(REVERB_dAPF2)) when (state = REVERB_READ2  and reverb_count = 5) else
+                      REVERB_mAPF1                            when (state = REVERB_WRITE2 and reverb_count = 0) else
+                      REVERB_mAPF2;
+                 
+   reverb_reqAddr2 <= ((reverb_reqAddr & "00") - 1) when (state = REVERB_READ1 and (reverb_count = 2 or reverb_count = 3)) else
+                      (reverb_reqAddr & "00");                    
+                 
+   reverbAddAddr   <= ('0' & reverb_reqAddr2) + ('0' & reverbCurrentAddress);
+   
+   reverb_calcAddr <= resize(reverbAddAddr + (unsigned(REVERB_mBASE) & "00"), 18) & '0' when (reverbAddAddr(18) = '1') else resize(reverbAddAddr, 18) & '0';
    
 --##############################################################
 --############################### RAM IF
@@ -1608,6 +2036,28 @@ begin
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
             end if; 
+            
+            if ((state = REVERB_READ1 or state = REVERB_READ2) and ram_done = '1') then
+               debugout_ptr := debugout_ptr + 1;
+               debugout_buf(debugout_ptr).datatype := 10;
+               debugout_buf(debugout_ptr).addr := unsigned(ram_Adr(15 downto 0));
+               debugout_buf(debugout_ptr).data := unsigned(ram_dataRead);
+            end if;
+            
+            if ((state = REVERB_WRITE1 or state = REVERB_WRITE2) and ram_request = '1') then
+               debugout_ptr := debugout_ptr + 1;
+               debugout_buf(debugout_ptr).datatype := 9;
+               debugout_buf(debugout_ptr).addr := unsigned(ram_Adr(15 downto 0));
+               debugout_buf(debugout_ptr).data := unsigned(ram_dataWrite);
+            end if;            
+            
+            if (state = REVERB_END and reverb_count = 0 and (reverbLastLeft /= 0 or reverbLastRight /= 0)) then
+               debugout_ptr := debugout_ptr + 1;
+               debugout_buf(debugout_ptr).datatype := 11;
+               debugout_buf(debugout_ptr).addr := unsigned(reverbLastLeft);
+               debugout_buf(debugout_ptr).data := unsigned(reverbLastRight);
+            end if;
+            
             
             if (state = VOICE_CHECKEND) then
             

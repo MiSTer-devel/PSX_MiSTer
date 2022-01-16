@@ -69,7 +69,6 @@ PAD    : 70%
 - SNAC interface missing
 
 DMA    : 60%
-- DMA chopping not implemented 
 - DMA write performance only 32bit/2 cycles, should be 32Bit/1 cycle?
 
 Memctrl: register stubs only
@@ -91,9 +90,8 @@ CD     : 50%
 - single track only
 - no audio yet
 
-SPU    : 30%
+SPU    : 50%
 - requires second SDRAM for now
-- Reverb missing
 - Envelope missing
 - IRQ missing
 - Noise missing
