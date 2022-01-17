@@ -96,4 +96,3 @@ SPU    : 50%
 - IRQ missing
 - Noise missing
 - readback missing
-- capture missing
