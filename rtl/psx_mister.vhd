@@ -102,6 +102,7 @@ entity psx_mister is
       pal60                 : in  std_logic;
       hsync                 : out std_logic;
       vsync                 : out std_logic;
+      transparency          : out std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
       DisplayWidth          : out unsigned( 9 downto 0);
@@ -260,6 +261,7 @@ begin
       videoout_on           => videoout_on,
       isPal                 => isPal,
       pal60                 => pal60,
+      transparency          => transparency,
       hsync                 => hsync, 
       vsync                 => vsync, 
       hblank                => hblank,

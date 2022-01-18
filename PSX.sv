@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -258,6 +258,10 @@ parameter CONF_STR = {
    "oA,SPU Reverb,Enabled,Disabled;",
 	"OP,Pause when OSD is open,Off,On;",
 	"-;",
+	"oC,Composite Blend,Off,On;",
+	"oB,Smart Composite Blend,Off,On;",
+	"H2oE,- Transparency Blend,Off,On;",
+	"H2oD,  Debug View,Off,On;",
 	"OM,Dithering,On,Off;",
 	"o9,Deinterlacing,Weave,Bob;",
 	"OS,FPS Overlay,Off,On;",
@@ -306,7 +310,7 @@ parameter CONF_STR = {
 
 wire  [1:0] buttons;
 wire [63:0] status;
-wire [15:0] status_menumask = {SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {~diff_blend, SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -656,6 +660,7 @@ psx
    .videoout_on     (~status[14]),
    .isPal           (status[40]),
    .pal60           (status[15]),
+   .transparency    (transparency),
    .hsync           (hs),
    .vsync           (vs),
    .hblank          (hbl),
@@ -866,27 +871,60 @@ wire       scandoubler = (scale || forced_scandoubler);
 
 wire ce_pix;
 wire [7:0] r,g,b;
+wire hs_b, vs_bl, hb_b, vb_b;
+wire [7:0] r_b, g_b, b_b;
+wire transparency;
+wire diff_blend = status[43];
+wire composite_blend = status[44];
+wire blend_debug = status[45];
+wire transparency_blend = status[46];
 
-//video_mixer #(.LINE_LENGTH(800), .GAMMA(1)) video_mixer
-//(
-//	.*,
-//	.hq2x(scale==1),
-//	.HSync (hs),
-//	.VSync (vs),
-//	.HBlank(hbl),
-//	.VBlank(vbl),
-//	.R(r),
-//	.G(g),
-//	.B(b)
-//);
+cofi_blender blender
+(
+	.clk(clk_2x),
+	.ce_pixel(ce_pix),
+	.force_blend(composite_blend | (transparency_blend & transparency)),
+	.pattern_blend(1'b0),
+	.diff_blend(diff_blend),
+	.hud_filter(1'b0),
+	.debug_view(blend_debug && ~composite_blend),
+	.hblank(hbl),
+	.vblank(vbl),
+	.hsync(hs),
+	.vsync(vs),
+	.red(r),
+	.green(g),
+	.blue(b),
+	.hblank_out(hb_b),
+	.vblank_out(vb_b),
+	.hsync_out(hs_b),
+	.vsync_out(vs_b),
+	.red_out(r_b),
+	.green_out(g_b),
+	.blue_out(b_b)
+);
+
+video_mixer #(.LINE_LENGTH(800), .GAMMA(1)) video_mixer
+(
+	.ce_pix(ce_pix),
+	.freeze_sync(),
+	.hq2x(scale==1),
+	.HSync (hs),
+	.VSync (vs),
+	.HBlank(hbl),
+	.VBlank(vbl),
+	.R(r),
+	.G(g),
+	.B(b)
+);
 
 assign CE_PIXEL = ce_pix;
-assign VGA_R    = r;
-assign VGA_G    = g;
-assign VGA_B    = b;
-assign VGA_VS   = vs;
-assign VGA_HS   = hs;
-assign VGA_DE   = ~(vbl | hbl);
+assign VGA_R    = r_b;
+assign VGA_G    = g_b;
+assign VGA_B    = b_b;
+assign VGA_VS   = vs_b;
+assign VGA_HS   = hs_b;
+assign VGA_DE   = ~(vb_b | hb_b);
 
 wire [1:0] ar = status[33:32];
 video_freak video_freak

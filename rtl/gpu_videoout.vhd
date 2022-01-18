@@ -50,7 +50,8 @@ entity gpu_videoout is
       video_g                 : out std_logic_vector(7 downto 0);
       video_b                 : out std_logic_vector(7 downto 0);
       video_hblank            : out std_logic := '1';
-      video_hsync             : out std_logic := '0'
+      video_hsync             : out std_logic := '0';
+      transparency            : out std_logic := '0'
    );
 end entity;
 
@@ -77,6 +78,7 @@ architecture arch of gpu_videoout is
    signal pixelData_R   : std_logic_vector(7 downto 0);
    signal pixelData_G   : std_logic_vector(7 downto 0);
    signal pixelData_B   : std_logic_vector(7 downto 0);
+   signal pixelData_A   : std_logic := '0';
    
    signal lineDisp      : unsigned(8 downto 0);
    signal clkDiv        : integer range 5 to 12 := 5; 
@@ -238,22 +240,27 @@ begin
                      video_r      <= overlay_error_data( 7 downto 0);
                      video_g      <= overlay_error_data(15 downto 8);
                      video_b      <= overlay_error_data(23 downto 16);
+                     transparency <= '0';
                   elsif (overlay_cd_ena = '1') then
                      video_r      <= overlay_cd_data( 7 downto 0);
                      video_g      <= overlay_cd_data(15 downto 8);
                      video_b      <= overlay_cd_data(23 downto 16);
+                     transparency <= '0';
                   elsif (overlay_fps_ena = '1') then
                      video_r      <= overlay_fps_data( 7 downto 0);
                      video_g      <= overlay_fps_data(15 downto 8);
                      video_b      <= overlay_fps_data(23 downto 16);
+                     transparency <= '0';
                   elsif (GPUSTAT_DisplayDisable = '1') then
                      video_r      <= (others => '0');
                      video_g      <= (others => '0');
                      video_b      <= (others => '0');
+                     transparency <= '0';
                   else
                      video_r      <= pixelData_R;
                      video_g      <= pixelData_G;
                      video_b      <= pixelData_B;
+                     transparency <= pixelData_A;
                   end if;
                else
                   video_hblank <= '1';
@@ -299,20 +306,24 @@ begin
                   pixelData_R <= pixelRead( 4 downto  0) & pixelRead( 4 downto 2);
                   pixelData_G <= pixelRead( 9 downto  5) & pixelRead( 9 downto 7);
                   pixelData_B <= pixelRead(14 downto 10) & pixelRead(14 downto 12);
+                  pixelData_A <= pixelRead(15);
                   
                when READ24_0 =>
                   readstate   <= READ24_16;
                   pixelData_R <= pixelRead( 7 downto  0);
                   pixelData_G <= pixelRead(15 downto  8);
-                 
+                  pixelData_A <= '0';
+                  
                when READ24_8 =>
                   readstate   <= READ24_24;
                   pixelData_R <= pixelRead(15 downto  8);
+                  pixelData_A <= '0';
                   
                when READ24_16 =>
                   readstate   <= IDLE;
                   readstate24 <= READ24_8;
                   pixelData_B <= pixelRead( 7 downto  0);
+                  pixelData_A <= '0';
             
                 when READ24_24 =>
                   readstate   <= IDLE;
@@ -320,6 +331,7 @@ begin
                   readAddr    <= readAddr + 1;
                   pixelData_G <= pixelRead( 7 downto  0);
                   pixelData_B <= pixelRead(15 downto  8);
+                  pixelData_A <= '0';
             
             end case;
          

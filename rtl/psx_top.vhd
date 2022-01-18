@@ -108,6 +108,7 @@ entity psx_top is
       vsync                 : out std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
+      transparency          : out std_logic;
       DisplayWidth          : out unsigned( 9 downto 0);
       DisplayHeight         : out unsigned( 8 downto 0);
       DisplayOffsetX        : out unsigned( 9 downto 0);
@@ -1166,6 +1167,7 @@ begin
       vram_WE              => vram_WE,        
       vram_RD              => vram_RD, 
 
+      transparency         => transparency,
       hsync                => hsync, 
       vsync                => vsync, 
       hblank               => hblank_intern,

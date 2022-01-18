@@ -65,6 +65,7 @@ entity gpu is
       vram_WE              : out std_logic := '0';
       vram_RD              : out std_logic := '0';     
 
+      transparency         : out std_logic := '0';
       hsync                : out std_logic := '0';
       vsync                : out std_logic := '0';
       hblank               : out std_logic := '0';
@@ -1704,7 +1705,8 @@ begin
       video_g                 => video_g, 
       video_b                 => video_b, 
       video_hblank            => hblank,
-      video_hsync             => hsync
+      video_hsync             => hsync,
+      transparency            => transparency
    );
    
 --##############################################################
