@@ -9,6 +9,7 @@ module shadowmask
 	input      [23:0] din,
 	input             hs_in,vs_in,
 	input             de_in,
+	input             brd_in,
 	input             enable,
 
 	output reg [23:0] dout,
@@ -32,10 +33,13 @@ always @(posedge clk) begin
 	reg [3:0] vindex;
 	reg [4:0] hmax2;
 	reg [4:0] vmax2;
-	reg old_hs, old_vs;
+	reg [11:0] pcnt,pde;
+	reg old_hs, old_vs, old_brd;
+	reg next_v;
 
 	old_hs <= hs_in;
 	old_vs <= vs_in;
+	old_brd<= brd_in;
 
 	// hcount and vcount counts pixel rows and columns
 	// hindex and vindex half the value of the counters for double size patterns
@@ -49,13 +53,18 @@ always @(posedge clk) begin
 	hmax2 <= ((mask_rotate ? vmax : hmax) << mask_2x) | mask_2x;
 	vmax2 <= ((mask_rotate ? hmax : vmax) << mask_2x) | mask_2x;
 
-	hcount <= hcount + 1'b1;
-	if (hcount == hmax2) hcount <= 0;
+	pcnt <= pcnt+1'd1;
+	if(old_brd && ~brd_in) pde <= pcnt-4'd3;
 
-	if((old_vs && ~vs_in)) vcount <= 0;
+	hcount <= hcount+1'b1;
+	if(hcount == hmax2 || pde == pcnt) hcount <= 0;
+
+	if(~old_brd && brd_in) next_v <= 1;
+	if(old_vs && ~vs_in) vcount <= 0;
 	if(old_hs && ~hs_in) begin
-		vcount <= vcount + 1'b1;
-		hcount <= 0;
+		vcount <= vcount + next_v;
+		next_v <= 0;
+		pcnt   <= 0;
 		if (vcount == vmax2) vcount <= 0;
 	end
 end

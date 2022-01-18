@@ -14,6 +14,8 @@ architecture arch of etb is
 
    signal clk1x               : std_logic := '1';
    signal clk3x               : std_logic := '1';
+   
+   signal ce                  : std_logic := '0';
             
    signal reset               : std_logic := '1';
    
@@ -57,15 +59,19 @@ begin
    
    reset_in  <= '0' after 3000 ns;
    
+   ce <= '1' when reset_out = '1';
+   
    ispu : entity psx.spu
    port map
    (
       clk1x                => clk1x,
-      ce                   => '1',        
+      ce                   => ce,        
       reset                => reset_out,
       
       SPUon                => '1',
       useSDRAM             => '1',
+      REPRODUCIBLESPUIRQ   => '1',
+      REVERBOFF            => '0',
          
       cd_left              => x"0000",
       cd_right             => x"0000",
@@ -101,7 +107,8 @@ begin
    generic map
    (
       LOADSTATE         => '0',
-      FILENAME          => ""
+      --FILENAME          => "C:\Projekte\psx\FPSXApp\02 - Living Room.sst"
+      FILENAME          => "C:\Projekte\psx\FPSXApp\Metal Gear Solid (Europe) (Disc 1).sst"
    )
    port map
    (
@@ -118,7 +125,9 @@ begin
    generic map
    (
       DOREFRESH     => '1',
-      SCRIPTLOADING => '0'
+      SCRIPTLOADING => '0',
+      INITFILE      => "R:\spu_ram_FPSXA.bin",
+      FILELOADING   => '0'
    )
    port map
    (

@@ -30,7 +30,7 @@ module emu
 	input         RESET,
 
 	//Must be passed to hps_io module
-	inout  [45:0] HPS_BUS,
+	inout  [47:0] HPS_BUS,
 
 	//Base video clock. Usually equals to clk_1x.
 	output        CLK_VIDEO,
@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -255,6 +255,7 @@ parameter CONF_STR = {
 	"OO,Pad Mode,Digital,Analog;",
 	"OG,Fastboot,Off,On;",
    "d1OU,Sound,Enabled,Disabled;",
+   "oA,SPU Reverb,Enabled,Disabled;",
 	"OP,Pause when OSD is open,Off,On;",
 	"-;",
 	"OM,Dithering,On,Off;",
@@ -582,6 +583,7 @@ psx
    .errorOn(~status[29]),
    .noTexture(status[27]),
    .SPUon(~status[30] & SDRAM2_EN),
+   .REVERBOFF(status[42]),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),

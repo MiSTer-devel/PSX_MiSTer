@@ -31,6 +31,7 @@ entity psx_top is
       errorOn               : in  std_logic;
       noTexture             : in  std_logic;
       SPUon                 : in  std_logic;
+      REVERBOFF             : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -484,6 +485,13 @@ architecture arch of psx_top is
    signal ss_ram_BE              : std_logic_vector(7 downto 0) := (others => '0'); 
    signal ss_ram_WE              : std_logic := '0';
    signal ss_ram_RD              : std_logic := '0'; 
+   
+   signal SS_SPURAM_dataWrite    : std_logic_vector(15 downto 0);
+   signal SS_SPURAM_Adr          : std_logic_vector(18 downto 0);
+   signal SS_SPURAM_request      : std_logic;
+   signal SS_SPURAM_rnw          : std_logic;
+   signal SS_SPURAM_dataRead     : std_logic_vector(15 downto 0);
+   signal SS_SPURAM_done         : std_logic;
    
    signal SS_Idle                : std_logic; 
    signal SS_Idle_gpu            : std_logic; 
@@ -1235,6 +1243,8 @@ begin
       
       SPUon                => SPUon,
       useSDRAM             => '1',
+      REPRODUCIBLESPUIRQ   => '1',
+      REVERBOFF            => REVERBOFF,
       
       cd_left              => x"0000",
       cd_right             => x"0000",
@@ -1272,7 +1282,14 @@ begin
       SS_wren              => SS_wren(9),     
       SS_rden              => SS_rden(9),     
       SS_DataRead          => SS_DataRead_SOUND,
-      SS_idle              => SS_idle_spu
+      SS_idle              => SS_idle_spu,
+      
+      SS_RAM_dataWrite     => SS_SPURAM_dataWrite,
+      SS_RAM_Adr           => SS_SPURAM_Adr,      
+      SS_RAM_request       => SS_SPURAM_request,  
+      SS_RAM_rnw           => SS_SPURAM_rnw,      
+      SS_RAM_dataRead      => SS_SPURAM_dataRead, 
+      SS_RAM_done          => SS_SPURAM_done     
    );
    
    iexp2 : entity work.exp2
@@ -1657,7 +1674,14 @@ begin
       ddr3_RD                 => ss_ram_RD,
 
       ram_done                => ram_cpu_done,   
-      ram_data                => ram_dataRead(31 downto 0)
+      ram_data                => ram_dataRead(31 downto 0),
+      
+      SS_SPURAM_dataWrite     => SS_SPURAM_dataWrite,
+      SS_SPURAM_Adr           => SS_SPURAM_Adr,      
+      SS_SPURAM_request       => SS_SPURAM_request,  
+      SS_SPURAM_rnw           => SS_SPURAM_rnw,      
+      SS_SPURAM_dataRead      => SS_SPURAM_dataRead, 
+      SS_SPURAM_done          => SS_SPURAM_done     
    );  
 
    istatemanager : entity work.statemanager

@@ -69,7 +69,14 @@ entity savestates is
       ddr3_RD                 : out std_logic := '0';
       
       ram_done                : in std_logic;
-      ram_data                : in std_logic_vector(31 downto 0)
+      ram_data                : in std_logic_vector(31 downto 0);
+      
+      SS_SPURAM_dataWrite     : out std_logic_vector(15 downto 0) := (others => '0');
+      SS_SPURAM_Adr           : out std_logic_vector(18 downto 0) := (others => '0');
+      SS_SPURAM_request       : out std_logic := '0';
+      SS_SPURAM_rnw           : out std_logic := '0';
+      SS_SPURAM_dataRead      : in  std_logic_vector(15 downto 0);
+      SS_SPURAM_done          : in  std_logic
    );
 end entity;
 
@@ -119,6 +126,8 @@ architecture arch of savestates is
       SAVEMEMORY_WAITREAD,
       SAVEMEMORY_LOAD_VRAM,
       SAVEMEMORY_LOAD_RAM,
+      SAVEMEMORY_LOAD_SPURAM,
+      SAVEMEMORY_WAIT_SPURAM,
       SAVEMEMORY_READ,
       SAVEMEMORY_WRITE,
       SAVESIZEAMOUNT,
@@ -130,6 +139,8 @@ architecture arch of savestates is
       LOADMEMORY_WRITE,
       LOADMEMORY_WRITE_VRAM,
       LOADMEMORY_WRITE_SDRAM,
+      LOADMEMORY_WRITE_SPURAM,
+      LOADMEMORY_WAIT_SPURAM,
       LOADMEMORY_WRITE_NEXT
    );
    signal state : tstate := IDLE;
@@ -154,10 +165,15 @@ architecture arch of savestates is
    signal ddr3_ADDR_save      : std_logic_vector(25 downto 0) := (others => '0');
    signal ddr3_DOUT_saved     : std_logic_vector(63 downto 0);
    signal dwordcounter        : integer range 0 to 1 := 0;
+   signal SPUwordcounter      : integer range 0 to 3 := 0;
    signal SS_DataRead         : std_logic_vector(31 downto 0);
    signal SS_DataRead_2x      : std_logic_vector(31 downto 0);
    signal RAMAddrNext         : unsigned(18 downto 0) := (others => '0');
    signal slowcounter         : integer range 0 to 8 := 0;
+   
+   signal SPURAM_done2X       : std_logic := '0';
+   signal SPURAM_dataRead2x   : std_logic_vector(15 downto 0);
+   signal spu_din             : std_logic_vector(63 downto 0);
    
    signal header_amount       : unsigned(31 downto 0) := to_unsigned(1, 32);
    
@@ -229,8 +245,9 @@ begin
          SS_DataRead_2x <= SS_DataRead;
    
          if (clk2xIndex = '0') then
-            SS_wren_2x <= (others => '0');
-            SS_rden_2x <= (others => '0');
+            SS_wren_2x        <= (others => '0');
+            SS_rden_2x        <= (others => '0');
+            SS_SPURAM_request <= '0';
          end if;
          
          if (reset_out = '1') then
@@ -243,6 +260,12 @@ begin
          
          if (load_done = '1') then
             load_done_2x <= '0';
+         end if;
+         
+         SPURAM_done2X <= '0';
+         if (SS_SPURAM_done = '1') then
+            SPURAM_done2X     <= '1';
+            SPURAM_dataRead2x <= SS_SPURAM_dataRead;
          end if;
          
          if (ddr3_BUSY = '0') then
@@ -338,14 +361,18 @@ begin
                end if;
                
             when SAVEMEMORY_STARTREAD =>
-               if (savetype_counter = 15) then -- vram
+               if (savetype_counter = 14) then -- spuram
+                  state          <= SAVEMEMORY_LOAD_SPURAM;
+                  SPUwordcounter <= 0;
+                  dwordcounter   <= 1;
+               elsif (savetype_counter = 15) then -- vram
                   state          <= SAVEMEMORY_LOAD_VRAM;
                   ddr3_RD        <= '1'; 
                   ddr3_ADDR      <= "0000000" & std_logic_vector(RAMAddrNext);
                   dwordcounter   <= 1;
                   RAMAddrNext    <= RAMAddrNext + 2;
                else
-                  if (savetype_counter = 16) then -- vram
+                  if (savetype_counter = 16) then -- sdram
                      state                     <= SAVEMEMORY_LOAD_RAM;
                   else
                      state                     <= SAVEMEMORY_WAITREAD;
@@ -374,6 +401,24 @@ begin
                   state             <= SAVEMEMORY_WAITREAD;
                   slowcounter       <= 4;
                end if;
+               
+            when SAVEMEMORY_LOAD_SPURAM =>
+               state               <= SAVEMEMORY_WAIT_SPURAM;
+               SS_SPURAM_Adr       <= std_logic_vector(RAMAddrNext(17 downto 0) & '0');
+               SS_SPURAM_request   <= '1';
+               SS_SPURAM_rnw       <= '1';
+               RAMAddrNext         <= RAMAddrNext + 1;
+               
+            when SAVEMEMORY_WAIT_SPURAM =>
+               if (SPURAM_done2X = '1') then
+                  spu_din(SPUwordcounter * 16 + 15 downto SPUwordcounter * 16) <= SPURAM_dataRead2x;
+                  if (SPUwordcounter = 3) then
+                     state       <= SAVEMEMORY_READ;
+                  else
+                     state <= SAVEMEMORY_LOAD_SPURAM;
+                     SPUwordcounter <=  SPUwordcounter + 1;
+                  end if;
+               end if;
             
             when SAVEMEMORY_READ =>
                if (dwordcounter = 0) then
@@ -387,7 +432,10 @@ begin
                   ddr3_BE                <= x"FF";
                   state                  <= SAVEMEMORY_WRITE;
                   dwordcounter           <= 0;
-                  if (savetype_counter = 15) then -- vram
+                  
+                  if (savetype_counter = 14) then -- SPUram
+                     ddr3_DIN <= spu_din;
+                  elsif (savetype_counter = 15) then -- vram
                      ddr3_DIN <= ddr3_DOUT_saved;
                   end if;
                end if;
@@ -483,6 +531,11 @@ begin
                      ddr3_DIN          <= ddr3_DOUT;
                   end if;
                   
+                  if (savetype_counter = 14) then -- spuram
+                     dwordcounter   <= 1;
+                     state          <= LOADMEMORY_WRITE_SPURAM; 
+                     SPUwordcounter <= 0;                
+                  end if;
                   if (savetype_counter = 15) then -- vram
                      dwordcounter <= 1;
                      state        <= LOADMEMORY_WRITE_VRAM;
@@ -514,6 +567,24 @@ begin
             when LOADMEMORY_WRITE_SDRAM =>
                if (sdram_done = '1') then
                   state <= LOADMEMORY_WRITE_NEXT;
+               end if;
+               
+            when LOADMEMORY_WRITE_SPURAM =>
+               state               <= LOADMEMORY_WAIT_SPURAM;
+               SS_SPURAM_dataWrite <= ddr3_DOUT_saved(SPUwordcounter * 16 + 15 downto SPUwordcounter * 16);
+               SS_SPURAM_Adr       <= std_logic_vector(RAMAddrNext(17 downto 0) & '0');
+               SS_SPURAM_request   <= '1';
+               SS_SPURAM_rnw       <= '0';
+               RAMAddrNext         <= RAMAddrNext + 1;
+            
+            when LOADMEMORY_WAIT_SPURAM => 
+               if (SPURAM_done2X = '1') then
+                  if (SPUwordcounter = 3) then
+                     state <= LOADMEMORY_WRITE_NEXT;
+                  else
+                     state <= LOADMEMORY_WRITE_SPURAM;
+                     SPUwordcounter <=  SPUwordcounter + 1;
+                  end if;
                end if;
                
             when LOADMEMORY_WRITE_NEXT =>
