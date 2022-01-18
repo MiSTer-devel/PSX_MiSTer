@@ -52,10 +52,10 @@ begin
 end
 endfunction
 
-reg hblank_back6, hblank_back5, hblank_back4, hblank_back3, hblank_back2, hblank_back1;
-reg vblank_back6, vblank_back5, vblank_back4, vblank_back3, vblank_back2, vblank_back1;
-reg hsync_back6, hsync_back5, hsync_back4, hsync_back3, hsync_back2, hsync_back1;
-reg vsync_back6, vsync_back5, vsync_back4, vsync_back3, vsync_back2, vsync_back1;
+reg hblank_back4, hblank_back3, hblank_back2, hblank_back1;
+reg vblank_back4, vblank_back3, vblank_back2, vblank_back1;
+reg hsync_back4, hsync_back3, hsync_back2, hsync_back1;
+reg vsync_back4, vsync_back3, vsync_back2, vsync_back1;
 reg blend_back5, blend_back4, blend_back3, blend_back2, blend_back1, blend_adaptive;
 
 reg [7:0] red_back5, red_back4, red_back3, red_back2, red_back1;
@@ -78,27 +78,18 @@ always @(posedge clk) if (ce_pixel) begin
         hblank_back2 = hblank_back3;
         hblank_back3 = hblank_back4;
         hblank_back4 = hblank;
-        //hblank_back5;
-        //hblank_back5 = hblank_back6;
-        //hblank_back6 = hblank;
         vblank_back1 = vblank_back2;
         vblank_back2 = vblank_back3;
         vblank_back3 = vblank_back4;
-        vblank_back4 = vblank; // vblank_back5;
-        //vblank_back5 = vblank_back6;
-        //vblank_back6 = vblank;
+        vblank_back4 = vblank;
         hsync_back1 = hsync_back2;
         hsync_back2 = hsync_back3;
         hsync_back3 = hsync_back4;
-        hsync_back4 = hsync; //hsync_back5;
-        //hsync_back5 = hsync_back6;
-        //hsync_back6 = hs;
+        hsync_back4 = hsync;
         vsync_back1 = vsync_back2;
         vsync_back2 = vsync_back3;
         vsync_back3 = vsync_back4;
-        vsync_back4 = vsync; //vsync_back5;
-        //vsync_back5 = vsync_back6;
-        //vsync_back6 = vs;
+        vsync_back4 = vsync;
 
         // get history of colors
         red_back1 = red_back2;
