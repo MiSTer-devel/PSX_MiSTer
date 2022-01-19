@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -269,6 +269,7 @@ parameter CONF_STR = {
 	"OV,Fast Memory,Off,On;",
 	"OJ,RepTimingGPU,Off,On;",
 	"OK,RepTimingDMA,Off,On;",
+	"oB,RepTimingSPUDMA,Off,On;",
 	"OQ,DMAinBLOCKs,Off,On;",
 	"OL,CD Instant Seek,Off,On;",
 	"OF,Force 60Hz PAL,Off,On;",
@@ -584,6 +585,7 @@ psx
    .noTexture(status[27]),
    .SPUon(~status[30] & SDRAM2_EN),
    .REVERBOFF(status[42]),
+   .REPRODUCIBLESPUDMA(status[43]),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),

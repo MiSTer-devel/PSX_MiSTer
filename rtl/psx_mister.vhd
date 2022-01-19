@@ -28,6 +28,7 @@ entity psx_mister is
       noTexture             : in  std_logic;
       SPUon                 : in  std_logic;
       REVERBOFF             : in  std_logic;
+      REPRODUCIBLESPUDMA    : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -188,6 +189,7 @@ begin
       noTexture             => noTexture,
       SPUon                 => SPUon,
       REVERBOFF             => REVERBOFF,
+      REPRODUCIBLESPUDMA    => REPRODUCIBLESPUDMA,
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,

@@ -27,6 +27,8 @@ In Framebuffer mode you can choose to view:
 - normal drawing area without any overscan cutoff
 - full VRAM as 1024x512 pixel image (debug mode)
 
+Analog out is not supported yet. It requires either direct video or seperate build and is very experimental and buggy. Use at your own risks, no bug reports please.
+
 # Error messages
 
 If there is a recognized problem, an overlay is displayed, showing which error has occured.

@@ -15,7 +15,10 @@ entity spu is
       SPUon                : in  std_logic;
       useSDRAM             : in  std_logic;
       REPRODUCIBLESPUIRQ   : in  std_logic;
+      REPRODUCIBLESPUDMA   : in  std_logic;
       REVERBOFF            : in  std_logic;
+      
+      cpuPaused            : in  std_logic;
       
       cd_left              : in  signed(15 downto 0);
       cd_right             : in  signed(15 downto 0);
@@ -478,6 +481,11 @@ architecture arch of spu is
    signal soundmul1              : signed(23 downto 0);
    signal soundmul2              : signed(15 downto 0);
 
+   -- reproducible timing
+   signal writeDMAReady          : std_logic;
+   signal rep_done               : std_logic := '1';
+   signal rep_counter            : integer range 0 to 4095;
+
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
    signal ss_in  : t_ssarray := (others => (others => '0'));
@@ -542,13 +550,15 @@ begin
    FifoOut_Rd   <= dma_read     when (FifoOut_Empty = '0') else '0';
    dma_readdata <= FifoOut_Dout when (FifoOut_Empty = '0') else (others => '0');
    
+   writeDMAReady <= rep_done when (REPRODUCIBLESPUDMA = '1') else FifoIn_Empty;
+   
    STAT(15) <= '0'; -- unused
    STAT(14) <= '0'; -- unused
    STAT(13) <= '0'; -- unused
    STAT(12) <= '0'; -- unused
    STAT(11) <= capturePosition(9); -- Writing to First/Second half of Capture Buffers (0=First, 1=Second)
    STAT(10) <= busy; -- Data Transfer Busy Flag
-   STAT( 9) <= '1' when (CNT(5 downto 4) = "10" and FifoIn_Empty     = '1') else '0'; -- Data Transfer DMA Write Request   -- todo no$ has 9 as read, duckstation 9 as write?
+   STAT( 9) <= '1' when (CNT(5 downto 4) = "10" and writeDMAReady    = '1') else '0'; -- Data Transfer DMA Write Request   -- todo no$ has 9 as read, duckstation 9 as write?
    STAT( 8) <= '1' when (CNT(5 downto 4) = "11" and FifoOut_NearFull = '1') else '0'; -- Data Transfer DMA Read Request    -- todo no$ has 8 as write, duckstation 8 as read?
    STAT( 7) <= STAT(8) or STAT(9); -- Data Transfer DMA Read/Write Request ;seems to be same as SPUCNT.Bit5
    STAT( 6) <= IRQ9;
@@ -579,7 +589,7 @@ begin
    
    RamVoice_addrB(0) <= bus_addr(8 downto 1);
    
-   RamVoice_addrB(1) <= (SS_Adr(7 downto 0) - 64)         when (SS_Adr >= 64 and SS_Adr < 256) else 
+   RamVoice_addrB(1) <= (SS_Adr(7 downto 0) - 64)         when (SS_rden = '1')            else 
                         to_unsigned(((index * 8) + 4), 8) when (state = VOICE_START)      else -- read ADSR Attack / Decay / Sustain / Release
                         to_unsigned(((index * 8) + 5), 8) when (state = VOICE_READHEADER) else -- read ADSR Attack / Decay / Sustain / Release
                         to_unsigned(((index * 8) + 0), 8) when (state = VOICE_EVALHEADER) else -- read Volume Left  
@@ -1877,10 +1887,21 @@ begin
 
          end if; -- ce
          
+         if (rep_counter > 0 and cpuPaused = '0') then
+            rep_counter <= rep_counter - 1;
+            if (rep_counter = 1) then
+               rep_done <= '1';
+            end if;
+         end if;
+         
          if (dma_write = '1') then
             if (FifoIn_Full = '0') then
                FifoIn_Wr  <= '1';
                FifoIn_Din <= dma_writedata;
+            end if;
+            if (REPRODUCIBLESPUDMA = '1') then
+               rep_counter <= rep_counter + 36;
+               rep_done    <= '0';
             end if;
          end if;
          
@@ -2315,6 +2336,10 @@ begin
             
             if (reset = '1') then
                clkCounter <= (others => '0');
+               file_close(outfile);
+               file_open(f_status, outfile, "R:\\debug_sound_sim.txt", write_mode);
+               file_close(outfile);
+               file_open(f_status, outfile, "R:\\debug_sound_sim.txt", append_mode);
             end if;
            
          end loop;

@@ -32,6 +32,7 @@ entity psx_top is
       noTexture             : in  std_logic;
       SPUon                 : in  std_logic;
       REVERBOFF             : in  std_logic;
+      REPRODUCIBLESPUDMA    : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -1244,7 +1245,10 @@ begin
       SPUon                => SPUon,
       useSDRAM             => '1',
       REPRODUCIBLESPUIRQ   => '1',
+      REPRODUCIBLESPUDMA   => REPRODUCIBLESPUDMA,
       REVERBOFF            => REVERBOFF,
+      
+      cpuPaused            => cpuPaused,
       
       cd_left              => x"0000",
       cd_right             => x"0000",

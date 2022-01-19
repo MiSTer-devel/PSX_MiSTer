@@ -639,11 +639,11 @@ begin
                            end if;
                            
                         when 4 =>
+                           REP_target <= REP_target + 2;
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
                               fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(4).D_MADR(20 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_SPU_read & DMA_SPU_read_accu;
-                              REP_target                <= REP_target + 2;
                            end if;
                            
                         when 6 =>

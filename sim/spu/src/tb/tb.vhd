@@ -71,7 +71,10 @@ begin
       SPUon                => '1',
       useSDRAM             => '1',
       REPRODUCIBLESPUIRQ   => '1',
+      REPRODUCIBLESPUDMA   => '0',
       REVERBOFF            => '0',
+      
+      cpuPaused            => '0',
          
       cd_left              => x"0000",
       cd_right             => x"0000",
