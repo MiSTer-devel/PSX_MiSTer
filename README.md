@@ -92,8 +92,6 @@ CD     : 50%
 - single track only
 - no audio yet
 
-SPU    : 60%
+SPU    : 80%
 - requires second SDRAM for now
-- Envelope missing
-- Noise missing
 - readback missing
