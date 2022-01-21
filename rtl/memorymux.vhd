@@ -503,6 +503,7 @@ begin
                                  state        <= SPU_READ_WAIT;
                                  bus_spu_addr <= mem_addressData(9 downto 0);
                                  bus_spu_read <= '1';
+                                 waitcnt      <= 15;
                               else
                                  state   <= SPU_WRITE;
                               end if;
@@ -635,7 +636,11 @@ begin
                   end case;
                   
                when SPU_READ_WAIT =>
-                  state <= SPU_READ;
+                  if (waitcnt > 0) then
+                     waitcnt <= waitcnt - 1;
+                  else
+                     state <= SPU_READ;
+                  end if;
                   
                when SPU_READ =>
                   state        <= SPU_READ_WAIT;

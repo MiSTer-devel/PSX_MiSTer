@@ -271,6 +271,8 @@ architecture arch of spu is
    signal FifoOut_Rd          : std_logic := '0';
    signal FifoOut_Empty       : std_logic;
    
+   signal FifoOut_Cnt         : integer range 0 to 32;
+   
    -- Data transfer
    signal ramTransferAddr     : unsigned(18 downto 0);
    
@@ -291,8 +293,6 @@ architecture arch of spu is
    signal ram_dataRead        : std_logic_vector(15 downto 0);
    signal ram_done            : std_logic;
    
-   signal ram_first           : std_logic := '0';
-   
    -- statemachine
    type tState is
    (
@@ -310,6 +310,10 @@ architecture arch of spu is
       VOICE_CHECKKEY,
       VOICE_END,
       
+      RAM_READ,
+      RAM_WRITE,
+      RAM_WAIT,
+      
       REVERB_READ1,
       REVERB_PROCOUT,
       REVERB_WRITE1,
@@ -321,16 +325,12 @@ architecture arch of spu is
       CAPTURE0,
       CAPTURE1,
       CAPTURE2,
-      CAPTURE3,
-      CAPTURE_DONE,
-      
-      RAM_READ,
-      RAM_WRITE
+      CAPTURE3
    );
    signal state : tState := IDLE;
    
-   signal index : integer range 0 to 23;
-   signal ramcount : integer range 0 to 31;
+   signal index        : integer range 0 to 23;
+   signal voiceCounter : integer range 0 to 31;
    
    constant ADSRPHASE_OFF     : unsigned(2 downto 0) := "000";
    constant ADSRPHASE_ATTACK  : unsigned(2 downto 0) := "001";
@@ -862,6 +862,8 @@ begin
             state                <= IDLE;
             irqOut               <= '0';
             irqSaved             <= '0';
+            
+            FifoOut_Cnt          <= 0;
                
             sound_out_left       <= (others => '0');
             sound_out_right      <= (others => '0');
@@ -1352,6 +1354,10 @@ begin
                sound_timeout <= '1';
             end if;
             
+            if (voiceCounter < 31) then
+               voiceCounter <= voiceCounter + 1;
+            end if;
+            
             case (state) is
             
                when IDLE =>
@@ -1369,6 +1375,8 @@ begin
                -- VOICE
                when VOICE_START =>
                   state         <= VOICE_READHEADER;
+                  voiceCounter  <= 0;
+                  
                   volLeft       <= signed(RamVoiceVolumes_dataB(1));
                   envVolLeft    <= signed(RamVoiceVolumes_dataB(1));
                   chanLeft      <= (others => '0');
@@ -1688,17 +1696,23 @@ begin
                   
                   if (index = 1) then voice_lastVolume1 <= voice_lastVolume; end if;
                   if (index = 3) then voice_lastVolume3 <= voice_lastVolume; end if;
-               
-                  if (index = 23) then
-                     if (cnt(7) = '1' and REVERBOFF = '0') then
-                        state <= REVERB_READ1;
-                     else
-                        state <= REVERB_READ2;
-                     end if;
-                     reverb_count <= 0;
+                  
+                  if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0') then
+                     state           <= RAM_READ;
+                     ram_request     <= '1';
+                     ram_rnw         <= '1';
+                     ram_Adr         <= std_logic_vector(ramTransferAddr);
+                     ramTransferAddr <= ramTransferAddr + 2;
+                  elsif ((CNT(5 downto 4) = "01" or CNT(5 downto 4) = "10") and FifoIn_Empty = '0') then
+                     state           <= RAM_WRITE;
+                     ram_request     <= '1';
+                     ram_rnw         <= '0';
+                     ram_Adr         <= std_logic_vector(ramTransferAddr);
+                     ram_dataWrite   <= FifoIn_Dout;
+                     FifoIn_Rd       <= '1';
+                     ramTransferAddr <= ramTransferAddr + 2;
                   else
-                     state <= VOICE_START;
-                     index <= index + 1;
+                     state <= RAM_WAIT;
                   end if;
                   
                   --voiceArray(index) <= voice;
@@ -1711,6 +1725,35 @@ begin
                   RamVoiceRecord_dataA( 73 downto  68) <= std_logic_vector(voice.adpcmDecodePtr);
                   RamVoiceRecord_dataA( 76 downto  74) <= std_logic_vector(voice.adsrphase);
                   RamVoiceRecord_dataA(100 downto  77) <= std_logic_vector(voice.adsrTicks);
+
+               -- DATA TRANSFER   
+               when RAM_READ =>
+                  if (ram_done = '1') then
+                     state       <= RAM_WAIT;
+                     FifoOut_Din <= ram_dataRead;
+                     FifoOut_Wr  <= '1';
+                     FifoOut_Cnt <= FifoOut_Cnt + 1;
+                  end if;
+               
+               when RAM_WRITE =>
+                  if (ram_done = '1') then
+                     state <= RAM_WAIT;
+                  end if;
+                  
+               when RAM_WAIT =>
+                  if (voiceCounter >= 23) then
+                     if (index = 23) then
+                        if (cnt(7) = '1' and REVERBOFF = '0') then
+                           state <= REVERB_READ1;
+                        else
+                           state <= REVERB_READ2;
+                        end if;
+                        reverb_count <= 0;
+                     else
+                        state <= VOICE_START;
+                        index <= index + 1;
+                     end if;
+                  end if;
 
                -- REVERB
                when REVERB_READ1 =>
@@ -2011,7 +2054,9 @@ begin
                   end if;                  
                
                when CAPTURE3 =>
-                  state <= CAPTURE_DONE;
+                  capturePosition <= capturePosition + 2;
+                  state           <= IDLE;
+               
                   ram_request   <= '1';
                   ram_rnw       <= '0';
                   ram_Adr       <= "0000000" & "11" & std_logic_vector(capturePosition);
@@ -2024,40 +2069,7 @@ begin
                      noiseCnt   <= noiseCnt and (noiseCheck - 1);
                      noiseLevel <= noiseLevel(14 downto 0) & (noiseLevel(15) xor noiseLevel(12) xor noiseLevel(11) xor noiseLevel(10) xor '1');
                   end if;
-               
-               when CAPTURE_DONE =>
-                  capturePosition <= capturePosition + 2;
-                  ramcount        <= 0;
-                  if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0') then
-                     state     <= RAM_READ;
-                     ram_first <= '1';
-                  elsif ((CNT(5 downto 4) = "01" or CNT(5 downto 4) = "10") and FifoIn_Empty = '0') then
-                     state     <= RAM_WRITE;
-                     ram_first <= '1';
-                  else
-                     state <= IDLE;
-                  end if;
-
-               -- DATA TRANSFER
-               when RAM_READ =>
-                  state <= IDLE; -- todo!
-               
-               when RAM_WRITE =>
-                  if (ram_first = '1' or ram_done = '1') then
-                     ram_first <= '0';
-                     if (FifoIn_Empty = '1' or ramcount >= 24) then
-                        state <= IDLE;
-                     else
-                        ram_request     <= '1';
-                        ram_rnw         <= '0';
-                        ram_Adr         <= std_logic_vector(ramTransferAddr);
-                        ram_dataWrite   <= FifoIn_Dout;
-                        ramTransferAddr <= ramTransferAddr + 2;
-                        FifoIn_Rd       <= '1';
-                        ramcount        <= ramcount + 1;
-                     end if;
-                  end if;
-            
+                  
             end case;
 
             busy <= '0';
@@ -2120,6 +2132,17 @@ begin
                rep_counter <= rep_counter + 36;
                rep_done    <= '0';
             end if;
+         end if;
+         
+         if (dma_read = '1' and FifoOut_Cnt > 0) then
+            FifoOut_Cnt <= FifoOut_Cnt - 1;
+            if (state = RAM_READ and ram_done = '1') then
+               FifoOut_Cnt <= FifoOut_Cnt;
+            end if;
+         end if;
+         
+         if (FifoOut_reset = '1') then
+            FifoOut_Cnt <= 0;
          end if;
          
          if (SPUon = '0') then
@@ -2317,6 +2340,8 @@ begin
          variable envdebug_right       : signed(15 downto 0);
          
          variable noiseLevel_1         : unsigned(15 downto 0);
+         
+         variable capture3_1           : std_logic := '0';
 
       begin
    
@@ -2411,7 +2436,7 @@ begin
                debugout_ptr := -1;
             end if;
             
-            if (state = CAPTURE_DONE) then
+            if (capture3_1 = '1') then
                outputNext := 1;
             end if;
             
@@ -2468,20 +2493,25 @@ begin
                debugout_buf(debugout_ptr).data := unsigned(reverbLastRight);
             end if;
             
-            if ((state = CAPTURE1 or state = CAPTURE2 or state = CAPTURE3 or state = CAPTURE_DONE) and ram_dataWrite /= x"0000")  then
+            if ((state = CAPTURE1 or state = CAPTURE2 or state = CAPTURE3 or capture3_1 = '1') and ram_dataWrite /= x"0000")  then
                debugout_ptr := debugout_ptr + 1;
                debugout_buf(debugout_ptr).datatype := 12;
                debugout_buf(debugout_ptr).addr := unsigned(ram_Adr(15 downto 0));
                debugout_buf(debugout_ptr).data := unsigned(ram_dataWrite);
             end if;
                         
-            if (state = CAPTURE_DONE and noiseLevel_1 /= noiseLevel) then
+            if (capture3_1 = '1' and noiseLevel_1 /= noiseLevel) then
                debugout_ptr := debugout_ptr + 1;
                debugout_buf(debugout_ptr).datatype := 14;
                debugout_buf(debugout_ptr).addr := x"0000";
                debugout_buf(debugout_ptr).data := unsigned(noiseLevel);
             end if;
             noiseLevel_1 := noiseLevel;
+            
+            capture3_1 := '0';
+            if (state = CAPTURE3) then
+               capture3_1 := '1';
+            end if;
             
             if (irq_1 = '0' and irqOut = '1') then
                if (REPRODUCIBLESPUIRQ = '1') then
