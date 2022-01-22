@@ -27,7 +27,9 @@ entity psx_mister is
       errorOn               : in  std_logic;
       noTexture             : in  std_logic;
       SPUon                 : in  std_logic;
+      SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
+      REPRODUCIBLESPUDMA    : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -102,7 +104,9 @@ entity psx_mister is
       pal60                 : in  std_logic;
       hsync                 : out std_logic;
       vsync                 : out std_logic;
-      transparency          : out std_logic;
+      true_color            : out std_logic;
+      dither_pattern        : in unsigned(1 downto 0);
+      dither_alpha          : in  std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
       DisplayWidth          : out unsigned( 9 downto 0);
@@ -188,7 +192,9 @@ begin
       errorOn               => errorOn,
       noTexture             => noTexture,
       SPUon                 => SPUon,
+      SPUSDRAM              => SPUSDRAM,
       REVERBOFF             => REVERBOFF,
+      REPRODUCIBLESPUDMA    => REPRODUCIBLESPUDMA,
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
@@ -261,7 +267,9 @@ begin
       videoout_on           => videoout_on,
       isPal                 => isPal,
       pal60                 => pal60,
-      transparency          => transparency,
+      true_color            => true_color,
+      dither_pattern        => dither_pattern,
+      dither_alpha          => dither_alpha,
       hsync                 => hsync, 
       vsync                 => vsync, 
       hblank                => hblank,

@@ -64,8 +64,11 @@ entity gpu is
       vram_BE              : out std_logic_vector(7 downto 0) := (others => '0'); 
       vram_WE              : out std_logic := '0';
       vram_RD              : out std_logic := '0';     
-
-      transparency         : out std_logic := '0';
+      
+      true_color           : out std_logic := '0';
+      dither_pattern       : in unsigned(1 downto 0);
+      dither_alpha         : in std_logic;
+      
       hsync                : out std_logic := '0';
       vsync                : out std_logic := '0';
       hblank               : out std_logic := '0';
@@ -1404,7 +1407,10 @@ begin
       pixelStall           => pixelStall,
       pixelColor           => pipeline_pixelColor,
       pixelAddr            => pipeline_pixelAddr, 
-      pixelWrite           => pipeline_pixelWrite
+      pixelWrite           => pipeline_pixelWrite,
+      
+      dither_alpha         => dither_alpha,
+      dither_pattern       => dither_pattern
    );
    
    gdividers: for i in 0 to 5 generate
@@ -1705,8 +1711,7 @@ begin
       video_g                 => video_g, 
       video_b                 => video_b, 
       video_hblank            => hblank,
-      video_hsync             => hsync,
-      transparency            => transparency
+      video_hsync             => hsync
    );
    
 --##############################################################

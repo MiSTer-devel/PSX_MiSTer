@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -254,14 +254,11 @@ parameter CONF_STR = {
 	"o78,System Type,NTSC-U,NTSC-J,PAL;",
 	"OO,Pad Mode,Digital,Analog;",
 	"OG,Fastboot,Off,On;",
-   "d1OU,Sound,Enabled,Disabled;",
-   "oA,SPU Reverb,Enabled,Disabled;",
+	"d1oC,SPU RAM select,DDR3,SDRAM2;",
+	"OU,Sound,On,Off;",
+	"oA,SPU Reverb,On,Off;",
 	"OP,Pause when OSD is open,Off,On;",
 	"-;",
-	"oC,Composite Blend,Off,On;",
-	"oB,Smart Composite Blend,Off,On;",
-	"H2oE,- Transparency Blend,Off,On;",
-	"H2oD,  Debug View,Off,On;",
 	"OM,Dithering,On,Off;",
 	"o9,Deinterlacing,Weave,Bob;",
 	"OS,FPS Overlay,Off,On;",
@@ -273,6 +270,7 @@ parameter CONF_STR = {
 	"OV,Fast Memory,Off,On;",
 	"OJ,RepTimingGPU,Off,On;",
 	"OK,RepTimingDMA,Off,On;",
+	"oB,RepTimingSPUDMA,Off,On;",
 	"OQ,DMAinBLOCKs,Off,On;",
 	"OL,CD Instant Seek,Off,On;",
 	"OF,Force 60Hz PAL,Off,On;",
@@ -285,7 +283,11 @@ parameter CONF_STR = {
 	"P1O24,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",	
 	"P1O78,Stereo Mix,None,25%,50%,100%;",
 	"P1o23,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
-
+	"P1-;",
+	"P1oDE,Dithering Filter,Off,On,Strong,Composite;",
+	"P1oF,Dither Alpha,On,Off;",
+	"P1oGH,Dithering Pattern,Original,Rotated,Symmetric,Genesis;",
+	"P1oI,Blend True Color Modes,Off,On;",
 	"- ;",
 	"R0,Reset;",
 	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Rewind,Savestates;",
@@ -310,7 +312,7 @@ parameter CONF_STR = {
 
 wire  [1:0] buttons;
 wire [63:0] status;
-wire [15:0] status_menumask = {~diff_blend, SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -586,8 +588,10 @@ psx
    .fpscountOn(status[28]),
    .errorOn(~status[29]),
    .noTexture(status[27]),
-   .SPUon(~status[30] & SDRAM2_EN),
+   .SPUon(~status[30]),
+   .SPUSDRAM(status[44] & SDRAM2_EN),
    .REVERBOFF(status[42]),
+   .REPRODUCIBLESPUDMA(status[43]),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),
@@ -660,7 +664,9 @@ psx
    .videoout_on     (~status[14]),
    .isPal           (status[40]),
    .pal60           (status[15]),
-   .transparency    (transparency),
+   .true_color      (true_color),
+   .dither_alpha    (~status[47]),
+   .dither_pattern  (status[49:48]),
    .hsync           (hs),
    .vsync           (vs),
    .hblank          (hbl),
@@ -871,23 +877,17 @@ wire       scandoubler = (scale || forced_scandoubler);
 
 wire ce_pix;
 wire [7:0] r,g,b;
-wire hs_b, vs_bl, hb_b, vb_b;
+wire hs_b, vs_b, hb_b, vb_b;
 wire [7:0] r_b, g_b, b_b;
-wire transparency;
-wire diff_blend = status[43];
-wire composite_blend = status[44];
-wire blend_debug = status[45];
-wire transparency_blend = status[46];
+wire true_color;
 
 cofi_blender blender
 (
 	.clk(clk_2x),
 	.ce_pixel(ce_pix),
-	.force_blend(composite_blend | (transparency_blend & transparency)),
-	.pattern_blend(1'b0),
-	.diff_blend(diff_blend),
-	.hud_filter(1'b0),
-	.debug_view(blend_debug && ~composite_blend),
+	.force_blend(&status[46:45]),
+	.diff_blend((status[50] || ~true_color) && |status[46:45]),
+	.reduced(status[45]),
 	.hblank(hbl),
 	.vblank(vbl),
 	.hsync(hs),
@@ -904,19 +904,18 @@ cofi_blender blender
 	.blue_out(b_b)
 );
 
-video_mixer #(.LINE_LENGTH(800), .GAMMA(1)) video_mixer
-(
-	.ce_pix(ce_pix),
-	.freeze_sync(),
-	.hq2x(scale==1),
-	.HSync (hs),
-	.VSync (vs),
-	.HBlank(hbl),
-	.VBlank(vbl),
-	.R(r),
-	.G(g),
-	.B(b)
-);
+//video_mixer #(.LINE_LENGTH(800), .GAMMA(1)) video_mixer
+//(
+//	.*,
+//	.hq2x(scale==1),
+//	.HSync (hs),
+//	.VSync (vs),
+//	.HBlank(hbl),
+//	.VBlank(vbl),
+//	.R(r),
+//	.G(g),
+//	.B(b)
+//);
 
 assign CE_PIXEL = ce_pix;
 assign VGA_R    = r_b;

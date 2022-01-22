@@ -31,7 +31,9 @@ entity psx_top is
       errorOn               : in  std_logic;
       noTexture             : in  std_logic;
       SPUon                 : in  std_logic;
+      SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
+      REPRODUCIBLESPUDMA    : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -108,7 +110,9 @@ entity psx_top is
       vsync                 : out std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
-      transparency          : out std_logic;
+      true_color            : out std_logic;
+      dither_pattern        : in  unsigned( 1 downto 0);
+      dither_alpha          : in  std_logic;
       DisplayWidth          : out unsigned( 9 downto 0);
       DisplayHeight         : out unsigned( 8 downto 0);
       DisplayOffsetX        : out unsigned( 9 downto 0);
@@ -186,6 +190,7 @@ architecture arch of psx_top is
    signal memDDR3card2_acknext   : std_logic := '0';
    signal memHPScard1_acknext    : std_logic := '0';
    signal memHPScard2_acknext    : std_logic := '0';
+   signal memSPU_acknext         : std_logic := '0';
    
    signal arbiter_BURSTCNT       : std_logic_vector(7 downto 0) := (others => '0'); 
    signal arbiter_ADDR           : std_logic_vector(27 downto 0) := (others => '0');                       
@@ -211,6 +216,15 @@ architecture arch of psx_top is
    signal memDDR3card2_BE        : std_logic_vector(7 downto 0) := (others => '0'); 
    signal memDDR3card2_WE        : std_logic := '0';
    signal memDDR3card2_RD        : std_logic := '0';
+   
+   signal memSPU_request         : std_logic;
+   signal memSPU_ack             : std_logic := '0';
+   signal memSPU_BURSTCNT        : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memSPU_ADDR            : std_logic_vector(19 downto 0) := (others => '0');                       
+   signal memSPU_DIN             : std_logic_vector(63 downto 0) := (others => '0');
+   signal memSPU_BE              : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memSPU_WE              : std_logic := '0';
+   signal memSPU_RD              : std_logic := '0';
 
    -- Busses
    --signal bus_exp1_addr          : unsigned(22 downto 0); 
@@ -667,6 +681,7 @@ begin
          memDDR3card2_ack    <= '0';         
          memHPScard1_ack     <= '0';
          memHPScard2_ack     <= '0';
+         memSPU_ack          <= '0';
       
          if (reset_intern = '1') then
             arbiter_active    <= '0';
@@ -677,6 +692,7 @@ begin
             memDDR3card2_acknext  <= '0';            
             memHPScard1_acknext   <= '0';
             memHPScard2_acknext   <= '0';
+            memSPU_acknext        <= '0';
          else
          
             case (ddr3state) is
@@ -686,7 +702,8 @@ begin
                   memDDR3card2_acknext  <= '0';                  
                   memHPScard1_acknext   <= '0';
                   memHPScard2_acknext   <= '0';
-                  if (memDDR3card1_request = '1' or memDDR3card2_request = '1' or memHPScard1_request = '1' or memHPScard2_request = '1') then
+                  memSPU_acknext        <= '0';
+                  if (memDDR3card1_request = '1' or memDDR3card2_request = '1' or memHPScard1_request = '1' or memHPScard2_request = '1' or memSPU_request = '1') then
                      vram_pause <= '1';
                      ddr3state  <= WAITGPUPAUSED;
                   end if;
@@ -727,6 +744,14 @@ begin
                         arbiter_BE           <= memHPScard2_BE;      
                         arbiter_WE           <= memHPScard2_WE;      
                         arbiter_RD           <= memHPScard2_RD;
+                     elsif (memSPU_request = '1') then
+                        memSPU_acknext       <= '1';
+                        arbiter_BURSTCNT     <= memSPU_BURSTCNT;
+                        arbiter_ADDR         <= x"03" & memSPU_ADDR;    
+                        arbiter_DIN          <= memSPU_DIN;     
+                        arbiter_BE           <= memSPU_BE;      
+                        arbiter_WE           <= memSPU_WE;      
+                        arbiter_RD           <= memSPU_RD;
                      end if;
                   end if;
                
@@ -739,6 +764,7 @@ begin
                      if (memDDR3card2_acknext = '1') then memDDR3card2_ack <= '1'; end if;                    
                      if (memHPScard1_acknext  = '1') then memHPScard1_ack <= '1';  end if;
                      if (memHPScard2_acknext  = '1') then memHPScard2_ack <= '1';  end if;
+                     if (memSPU_acknext       = '1') then memSPU_ack <= '1';       end if;
                   end if;
                
                when WAITDONE =>
@@ -746,7 +772,8 @@ begin
                       (memDDR3card1_request and memDDR3card1_acknext) = '0' and 
                       (memDDR3card2_request and memDDR3card2_acknext) = '0' and 
                       (memHPScard1_request  and memHPScard1_acknext ) = '0' and 
-                      (memHPScard2_request  and memHPScard2_acknext ) = '0' 
+                      (memHPScard2_request  and memHPScard2_acknext ) = '0' and
+                      (memSPU_request       and memSPU_acknext      ) = '0'
                      ) then
                      ddr3state      <= ARBITERIDLE;
                      arbiter_active <= '0';
@@ -1167,7 +1194,9 @@ begin
       vram_WE              => vram_WE,        
       vram_RD              => vram_RD, 
 
-      transparency         => transparency,
+      true_color           => true_color,
+      dither_pattern       => dither_pattern,
+      dither_alpha         => dither_alpha,
       hsync                => hsync, 
       vsync                => vsync, 
       hblank               => hblank_intern,
@@ -1239,14 +1268,19 @@ begin
    ispu : entity work.spu
    port map
    (
-      clk1x                => clk1x,     
+      clk1x                => clk1x,   
+      clk2x                => clk2x,    
+      clk2xIndex           => clk2xIndex,      
       ce                   => ce,        
       reset                => reset_intern,     
       
       SPUon                => SPUon,
-      useSDRAM             => '1',
+      useSDRAM             => SPUSDRAM,
       REPRODUCIBLESPUIRQ   => '1',
+      REPRODUCIBLESPUDMA   => REPRODUCIBLESPUDMA,
       REVERBOFF            => REVERBOFF,
+      
+      cpuPaused            => cpuPaused,
       
       cd_left              => x"0000",
       cd_right             => x"0000",
@@ -1277,6 +1311,17 @@ begin
       sdram_rnw            => spuram_rnw,      
       sdram_ena            => spuram_ena,           
       sdram_done           => spuram_done,
+      
+      mem_request          => memSPU_request,  
+      mem_BURSTCNT         => memSPU_BURSTCNT, 
+      mem_ADDR             => memSPU_ADDR,     
+      mem_DIN              => memSPU_DIN,      
+      mem_BE               => memSPU_BE,       
+      mem_WE               => memSPU_WE,       
+      mem_RD               => memSPU_RD,       
+      mem_ack              => memSPU_ack,      
+      mem_DOUT             => ddr3_DOUT,      
+      mem_DOUT_READY       => ddr3_DOUT_READY,
       
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,

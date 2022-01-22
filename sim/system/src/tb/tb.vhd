@@ -206,8 +206,8 @@ begin
       loadExe               => psx_LoadExe(0),
       fastboot              => '0',
       FASTMEM               => '1',
-      REPRODUCIBLEGPUTIMING => '1',
-      REPRODUCIBLEDMATIMING => '1',
+      REPRODUCIBLEGPUTIMING => '0',
+      REPRODUCIBLEDMATIMING => '0',
       DMABLOCKATONCE        => '0',
       INSTANTSEEK           => '0',
       ditherOff             => '0',
@@ -216,7 +216,9 @@ begin
       errorOn               => '0',
       noTexture             => '0',
       SPUon                 => '1',
+      SPUSDRAM              => '0',
       REVERBOFF             => '0',
+      REPRODUCIBLESPUDMA    => '0',
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
@@ -384,7 +386,7 @@ begin
       DOREFRESH     => '1',
       SCRIPTLOADING => '0',
       INITFILE      => "R:\spu_ram_FPSXA.bin",
-      FILELOADING   => '1'
+      FILELOADING   => '0'
    )
    port map
    (

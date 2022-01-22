@@ -54,7 +54,10 @@ entity gpu_pixelpipeline is
       pixelStall           : in  std_logic;
       pixelColor           : out std_logic_vector(15 downto 0);
       pixelAddr            : out unsigned(19 downto 0);
-      pixelWrite           : out std_logic
+      pixelWrite           : out std_logic;
+      
+      dither_alpha         : in  std_logic;
+      dither_pattern       : in  unsigned(1 downto 0)
    );
 end entity;
 
@@ -63,12 +66,33 @@ architecture arch of gpu_pixelpipeline is
    type tDitherMatrix is array(0 to 3, 0 to 3) of integer range -4 to 4;
    constant	DITHERMATRIX : tDitherMatrix := 
    (
-		(-4, +0, -3, +1),
-		(+2, -2, +3, -1),
-		(-3, +1, -4, +0),
-		(+3, -1, +2, -2)
-	);
-   
+        (-4, +0, -3, +1),
+        (+2, -2, +3, -1),
+        (-3, +1, -4, +0),
+        (+3, -1, +2, -2)
+    );
+   constant	DITHERMATRIX_ROTATED : tDitherMatrix := 
+   (
+        (-4, +2, -3, +3),
+        (+0, -2, +1, -1),
+        (-3, +3, -4, +2),
+        (+1, -1, +0, -2)
+    );
+   constant	DITHERMATRIX_SYMMETRIC : tDitherMatrix := 
+   (
+        (-2, +0, -3, +3),
+        (+2, -4, +1, -1),
+        (-3, +3, -2, +0),
+        (+1, -1, +2, -4)
+    );
+   constant	DITHERMATRIX_GENESIS : tDitherMatrix := 
+   (
+        (-4, +2, -3, +3),
+        (-1, +0, -2, +1),
+        (-3, +3, -4, +2),
+        (-2, +1, -1, +0)
+    );
+
    signal drawMode            : unsigned(13 downto 0) := (others => '0');
    signal DrawPixelsMask      : std_logic := '0';
    signal SetMask             : std_logic := '0';
@@ -539,7 +563,12 @@ begin
                stage2_cb          <= stage1_cb; 
                stage2_texdata     <= texdata_raw;
                stage2_oldPixel    <= stage1_oldPixel;
-               stage2_ditherAdd   <= DITHERMATRIX(to_integer(stage1_y(1 downto 0)), to_integer(stage1_x(1 downto 0)));
+               case (dither_pattern) is
+                   when "00" => stage2_ditherAdd   <= DITHERMATRIX(to_integer(stage1_y(1 downto 0)), to_integer(stage1_x(1 downto 0)));
+                   when "01" => stage2_ditherAdd   <= DITHERMATRIX_ROTATED(to_integer(stage1_y(1 downto 0)), to_integer(stage1_x(1 downto 0)));
+                   when "10" => stage2_ditherAdd   <= DITHERMATRIX_SYMMETRIC(to_integer(stage1_y(1 downto 0)), to_integer(stage1_x(1 downto 0)));
+                   when "11" => stage2_ditherAdd   <= DITHERMATRIX_GENESIS(to_integer(stage1_y(1 downto 0)), to_integer(stage1_x(1 downto 0)));
+               end case;
                
                -- stage 3 - apply blending or raw color
                stage3_valid       <= stage2_valid; 
@@ -561,7 +590,7 @@ begin
                      colorTr := unsigned(texdata_palette( 4 downto  0)) * stage2_cr;
                      colorTg := unsigned(texdata_palette( 9 downto  5)) * stage2_cg;
                      colorTb := unsigned(texdata_palette(14 downto 10)) * stage2_cb;
-                     if (stage2_dithering = '1') then
+                     if (stage2_dithering = '1' and (dither_alpha = '1' or stage3_transparent = '0')) then
                         colorDr := (to_integer(colorTr) / 16) + stage2_ditherAdd;
                         colorDg := (to_integer(colorTg) / 16) + stage2_ditherAdd;
                         colorDb := (to_integer(colorTb) / 16) + stage2_ditherAdd;
