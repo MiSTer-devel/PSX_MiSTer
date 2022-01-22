@@ -13,7 +13,12 @@ end entity;
 architecture arch of etb is
 
    signal clk1x               : std_logic := '1';
+   signal clk2x               : std_logic := '1';
    signal clk3x               : std_logic := '1';
+   
+   signal clk1xToggle         : std_logic := '0';
+   signal clk1xToggle2X       : std_logic := '0';
+   signal clk2xIndex          : std_logic := '0';
    
    signal ce                  : std_logic := '0';
             
@@ -40,6 +45,39 @@ architecture arch of etb is
    signal sdram_ena           : std_logic;
    signal sdram_done          : std_logic;     
    
+   -- ddrram
+   signal memSPU_request      : std_logic;
+   signal memSPU_ack          : std_logic := '0';
+   signal memSPU_BURSTCNT     : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memSPU_ADDR         : std_logic_vector(19 downto 0) := (others => '0');                       
+   signal memSPU_DIN          : std_logic_vector(63 downto 0) := (others => '0');
+   signal memSPU_BE           : std_logic_vector(7 downto 0) := (others => '0'); 
+   signal memSPU_WE           : std_logic := '0';
+   signal memSPU_RD           : std_logic := '0';
+   
+   signal DDRAM_CLK           : std_logic;
+   signal DDRAM_BUSY          : std_logic;
+   signal DDRAM_BURSTCNT      : std_logic_vector(7 downto 0);
+   signal DDRAM_ADDR          : std_logic_vector(28 downto 0);
+   signal DDRAM_DOUT          : std_logic_vector(63 downto 0);
+   signal DDRAM_DOUT_READY    : std_logic;
+   signal DDRAM_RD            : std_logic;
+   signal DDRAM_DIN           : std_logic_vector(63 downto 0);
+   signal DDRAM_BE            : std_logic_vector(7 downto 0);
+   signal DDRAM_WE            : std_logic;
+   
+   -- ddr3 arbiter
+   type tddr3State is
+   (
+      ARBITERIDLE,
+      WAITGPUPAUSED,
+      REQUEST,
+      WAITDONE
+   );
+   signal ddr3state              : tddr3State := ARBITERIDLE;
+   
+   signal memSPU_acknext         : std_logic := '0';
+   
    -- savestates
    signal reset_in            : std_logic := '1';
    signal reset_out           : std_logic := '1';
@@ -55,21 +93,43 @@ architecture arch of etb is
 begin
 
    clk1x  <= not clk1x  after 15 ns;
+   clk2x  <= not clk2x  after 7500 ps;
    clk3x  <= not clk3x  after 5 ns;
    
    reset_in  <= '0' after 3000 ns;
    
    ce <= '1' when reset_out = '1';
    
+   -- clock index
+   process (clk1x)
+   begin
+      if rising_edge(clk1x) then
+         clk1xToggle <= not clk1xToggle;
+      end if;
+   end process;
+   
+   process (clk2x)
+   begin
+      if rising_edge(clk2x) then
+         clk1xToggle2x <= clk1xToggle;
+         clk2xIndex    <= '0';
+         if (clk1xToggle2x = clk1xToggle) then
+            clk2xIndex <= '1';
+         end if;
+      end if;
+   end process;
+   
    ispu : entity psx.spu
    port map
    (
       clk1x                => clk1x,
+      clk2x                => clk2x,
+      clk2xIndex           => clk2xIndex,
       ce                   => ce,        
       reset                => reset_out,
       
       SPUon                => '1',
-      useSDRAM             => '1',
+      useSDRAM             => '0',
       REPRODUCIBLESPUIRQ   => '1',
       REPRODUCIBLESPUDMA   => '0',
       REVERBOFF            => '0',
@@ -98,6 +158,18 @@ begin
       sdram_rnw            => sdram_rnw,      
       sdram_ena            => sdram_ena,           
       sdram_done           => sdram_done,
+      
+      -- ddr3 interface
+      mem_request          => memSPU_request,  
+      mem_BURSTCNT         => memSPU_BURSTCNT, 
+      mem_ADDR             => memSPU_ADDR,     
+      mem_DIN              => memSPU_DIN,      
+      mem_BE               => memSPU_BE,       
+      mem_WE               => memSPU_WE,       
+      mem_RD               => memSPU_RD,       
+      mem_ack              => memSPU_ack,      
+      mem_DOUT             => DDRAM_DOUT,      
+      mem_DOUT_READY       => DDRAM_DOUT_READY,
       
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
@@ -150,6 +222,72 @@ begin
       reqprocessed => open,
       ram_idle     => open
    );
+   
+   iddrram_model : entity work.ddrram_model
+   generic map
+   (
+      SLOWTIMING => 0
+   )
+   port map
+   (
+      DDRAM_CLK        => clk2x,      
+      DDRAM_BUSY       => DDRAM_BUSY,      
+      DDRAM_BURSTCNT   => DDRAM_BURSTCNT,  
+      DDRAM_ADDR       => DDRAM_ADDR,      
+      DDRAM_DOUT       => DDRAM_DOUT,      
+      DDRAM_DOUT_READY => DDRAM_DOUT_READY,
+      DDRAM_RD         => DDRAM_RD,        
+      DDRAM_DIN        => DDRAM_DIN,       
+      DDRAM_BE         => DDRAM_BE,        
+      DDRAM_WE         => DDRAM_WE        
+   );
+   
+   -- DDR3 arbiter
+   process (clk2x)
+   begin
+      if rising_edge(clk2x) then
+      
+         memSPU_ack          <= '0';
+      
+         if (reset_out = '1') then
+            ddr3state <= ARBITERIDLE;
+         else
+         
+            case (ddr3state) is
+            
+               when ARBITERIDLE =>
+                  if (memSPU_request = '1') then
+                     ddr3state  <= WAITGPUPAUSED;
+                  end if;
+                  
+               when WAITGPUPAUSED =>
+                  ddr3state      <= REQUEST; 
+                  if (memSPU_request = '1') then
+                     DDRAM_BURSTCNT     <= memSPU_BURSTCNT;
+                     DDRAM_ADDR         <= "0011" & x"03" & memSPU_ADDR(19 downto 3);    
+                     DDRAM_DIN          <= memSPU_DIN;     
+                     DDRAM_BE           <= memSPU_BE;      
+                     DDRAM_WE           <= memSPU_WE;      
+                     DDRAM_RD           <= memSPU_RD;
+                  end if;
+               
+               when REQUEST =>
+                  if (DDRAM_BUSY = '0') then
+                     ddr3state  <= WAITDONE; 
+                     DDRAM_WE   <= '0';     
+                     DDRAM_RD   <= '0';
+                     memSPU_ack <= '1';
+                  end if;
+               
+               when WAITDONE =>
+                  if (memSPU_request = '0') then
+                     ddr3state      <= ARBITERIDLE;
+                  end if;
+               
+            end case;
+         end if;
+      end if;
+   end process;
    
    process
       file infile          : text;

@@ -27,6 +27,7 @@ entity psx_mister is
       errorOn               : in  std_logic;
       noTexture             : in  std_logic;
       SPUon                 : in  std_logic;
+      SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
       REPRODUCIBLESPUDMA    : in  std_logic;
       -- RAM/BIOS interface      
@@ -188,6 +189,7 @@ begin
       errorOn               => errorOn,
       noTexture             => noTexture,
       SPUon                 => SPUon,
+      SPUSDRAM              => SPUSDRAM,
       REVERBOFF             => REVERBOFF,
       REPRODUCIBLESPUDMA    => REPRODUCIBLESPUDMA,
       -- RAM/BIOS interface        

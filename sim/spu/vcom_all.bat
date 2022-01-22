@@ -18,6 +18,7 @@ vcom -93 -quiet -work sim/mem ^
 
 vcom -quiet -work sim/tb ^
 ../system/src/tb/sdram_model.vhd ^
+../system/src/tb/ddrram_model.vhd ^
 ../system/src/tb/tb_savestates.vhd ^
 ../system/src/tb/sdram_model3x.vhd ^
 src/tb/tb.vhd

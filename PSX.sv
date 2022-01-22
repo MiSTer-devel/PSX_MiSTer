@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -254,8 +254,9 @@ parameter CONF_STR = {
 	"o78,System Type,NTSC-U,NTSC-J,PAL;",
 	"OO,Pad Mode,Digital,Analog;",
 	"OG,Fastboot,Off,On;",
-   "d1OU,Sound,Enabled,Disabled;",
-   "oA,SPU Reverb,Enabled,Disabled;",
+	"d1oC,SPU RAM select,DDR3,SDRAM2;",
+	"OU,Sound,On,Off;",
+	"oA,SPU Reverb,On,Off;",
 	"OP,Pause when OSD is open,Off,On;",
 	"-;",
 	"OM,Dithering,On,Off;",
@@ -583,7 +584,8 @@ psx
    .fpscountOn(status[28]),
    .errorOn(~status[29]),
    .noTexture(status[27]),
-   .SPUon(~status[30] & SDRAM2_EN),
+   .SPUon(~status[30]),
+   .SPUSDRAM(status[44] & SDRAM2_EN),
    .REVERBOFF(status[42]),
    .REPRODUCIBLESPUDMA(status[43]),
    // RAM/BIOS interface      
