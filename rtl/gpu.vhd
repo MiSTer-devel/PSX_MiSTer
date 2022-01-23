@@ -29,6 +29,9 @@ entity gpu is
       errorEna             : in  std_logic;
       errorCode            : in  unsigned(3 downto 0);
       
+      debug_lateSamples    : in  unsigned(15 downto 0);
+      debug_lateTicks      : in  unsigned(15 downto 0);
+      
       errorLINE            : out std_logic;
       errorRECT            : out std_logic;
       errorPOLY            : out std_logic;
@@ -352,7 +355,7 @@ architecture arch of gpu is
    signal VRAMIdle                  : std_logic;
    signal reqVRAMIdle               : std_logic;
    signal reqVRAMDone               : std_logic;
-   signal vram_pauseCnt             : integer range 0 to 7;
+   signal vram_pauseCnt             : integer range 0 to 3;
    
    signal reqVRAMEnable             : std_logic;
    signal reqVRAMXPos               : unsigned(9 downto 0);
@@ -1554,7 +1557,7 @@ begin
          
          vram_paused <= '0';
          if (VRAMIdle = '1' and vram_pause = '1' and vram_WE = '0') then
-            if (vram_pauseCnt = 7) then
+            if (vram_pauseCnt = 3) then
                vram_paused <= '1';
             else
                vram_pauseCnt <= vram_pauseCnt + 1;
@@ -1669,6 +1672,9 @@ begin
          
       fpscountOn              => fpscountOn,
       fpscountBCD             => fpscountBCD,
+      
+      debug_lateSamples       => debug_lateSamples,
+      debug_lateTicks         => debug_lateTicks, 
          
       cdSlow                  => cdSlow,      
                               

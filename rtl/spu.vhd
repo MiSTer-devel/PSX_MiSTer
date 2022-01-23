@@ -65,6 +65,10 @@ entity spu is
       mem_DOUT             : in  std_logic_vector(63 downto 0);
       mem_DOUT_READY       : in  std_logic;
       
+      -- debug
+      debug_lateSamples    : out unsigned(15 downto 0);
+      debug_lateTicks      : out unsigned(15 downto 0);
+      
       -- savestates
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
@@ -879,9 +883,15 @@ begin
                RamVoiceRecord_dataA <= (others => '0');
                RamVoiceRecord_addrA <= RamVoice_addrA(4 downto 0);
             end if;
+            adpcm_ram_address_a    <= RamVoice_addrA;
+            adpcm_ram_data_a       <= (others => (others => '0'));
+            adpcm_ram_wren_a       <= "1111";
          end if;
       
          if (reset = '1') then
+         
+            debug_lateSamples    <= (others => '0');
+            debug_lateTicks      <= (others => '0');
             
             state                <= IDLE;
             irqOut               <= '0';
@@ -1377,16 +1387,21 @@ begin
             
             if (sampleticks = 0 and state /= IDLE) then
                if (stashedSamples < 15) then
-                  stashedSamples <= stashedSamples + 1;
+                  stashedSamples    <= stashedSamples + 1;
+                  debug_lateSamples <= debug_lateSamples + 1;
                else
                   sound_timeout <= '1';
                end if;
             end if;
             
+            if (stashedSamples > 0) then
+               debug_lateTicks <= debug_lateTicks + 1;
+            end if;
+            
             if (voiceCounter < 31) then
                voiceCounter <= voiceCounter + 1;
             end if;
-            
+
             case (state) is
             
                when IDLE =>
@@ -1399,7 +1414,7 @@ begin
                      soundright     <= (others => '0');                      
                      reverbsumleft  <= (others => '0'); 
                      reverbsumright <= (others => '0'); 
-                     if (stashedSamples > 0) then
+                     if (stashedSamples > 0 and sampleticks /= 0) then
                         stashedSamples <= stashedSamples - 1;
                      end if;
                   end if;
@@ -2697,6 +2712,7 @@ begin
                file_open(f_status, outfile, "R:\\debug_sound_sim.txt", write_mode);
                file_close(outfile);
                file_open(f_status, outfile, "R:\\debug_sound_sim.txt", append_mode);
+               debugout_ptr := -1;
             end if;
            
          end loop;

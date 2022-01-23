@@ -287,8 +287,6 @@ begin
                               fetch_count          <= x"01";
                               fetch_target         <= "10" & to_unsigned(ram_ReverbIndex, 4) & "000";
                               cache_addr_b         <= "10" & to_unsigned(ram_ReverbIndex, 4) & "000" & unsigned(ram_Adr(2 downto 1));
-                              cache_transfer_start <= ram_Adr64;
-                              cache_transfer_valid <= '1';
                               
                            else
                               report "should never happen" severity failure; 
