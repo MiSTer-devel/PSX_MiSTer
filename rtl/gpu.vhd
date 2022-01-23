@@ -70,7 +70,7 @@ entity gpu is
       
       true_color           : out std_logic := '0';
       dither_pattern       : in unsigned(1 downto 0);
-      dither_alpha         : in std_logic;
+      alpha_dither_fix     : in std_logic;
       
       hsync                : out std_logic := '0';
       vsync                : out std_logic := '0';
@@ -1412,7 +1412,7 @@ begin
       pixelAddr            => pipeline_pixelAddr, 
       pixelWrite           => pipeline_pixelWrite,
       
-      dither_alpha         => dither_alpha,
+      alpha_dither_fix     => alpha_dither_fix,
       dither_pattern       => dither_pattern
    );
    

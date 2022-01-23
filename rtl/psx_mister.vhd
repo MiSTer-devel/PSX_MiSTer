@@ -106,7 +106,7 @@ entity psx_mister is
       vsync                 : out std_logic;
       true_color            : out std_logic;
       dither_pattern        : in unsigned(1 downto 0);
-      dither_alpha          : in  std_logic;
+      alpha_dither_fix      : in  std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
       DisplayWidth          : out unsigned( 9 downto 0);
@@ -269,7 +269,7 @@ begin
       pal60                 => pal60,
       true_color            => true_color,
       dither_pattern        => dither_pattern,
-      dither_alpha          => dither_alpha,
+      alpha_dither_fix      => alpha_dither_fix,
       hsync                 => hsync, 
       vsync                 => vsync, 
       hblank                => hblank,

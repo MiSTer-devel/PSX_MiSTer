@@ -70,7 +70,7 @@ PAD    : 70%
 - special controllers(mouse, lightgun) not supported
 - SNAC interface missing
 
-DMA    : 60%
+DMA    : 80%
 - DMA write performance only 32bit/2 cycles, should be 32Bit/1 cycle?
 
 Memctrl: register stubs only
@@ -92,6 +92,5 @@ CD     : 50%
 - single track only
 - no audio yet
 
-SPU    : 80%
-- requires second SDRAM for now
-- readback missing
+SPU    : 90%
+- DDR3 version can be improved

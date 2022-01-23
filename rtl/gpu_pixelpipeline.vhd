@@ -56,7 +56,7 @@ entity gpu_pixelpipeline is
       pixelAddr            : out unsigned(19 downto 0);
       pixelWrite           : out std_logic;
       
-      dither_alpha         : in  std_logic;
+      alpha_dither_fix     : in  std_logic;
       dither_pattern       : in  unsigned(1 downto 0)
    );
 end entity;
@@ -215,6 +215,7 @@ architecture arch of gpu_pixelpipeline is
    
    signal stage3_valid        : std_logic := '0';
    signal stage3_transparent  : std_logic := '0';
+   signal stage3_dithering    : std_logic := '0';
    signal stage3_alphacheck   : std_logic := '0';
    signal stage3_alphabit     : std_logic := '0';
    signal stage3_x            : unsigned(9 downto 0) := (others => '0');
@@ -222,6 +223,10 @@ architecture arch of gpu_pixelpipeline is
    signal stage3_cr           : unsigned(4 downto 0) := (others => '0');
    signal stage3_cg           : unsigned(4 downto 0) := (others => '0');
    signal stage3_cb           : unsigned(4 downto 0) := (others => '0');
+   signal stage3_dr           : unsigned(4 downto 0) := (others => '0');
+   signal stage3_dg           : unsigned(4 downto 0) := (others => '0');
+   signal stage3_db           : unsigned(4 downto 0) := (others => '0');
+   
    signal stage3_oldPixel     : std_logic_vector(15 downto 0) := (others => '0');
    
    signal stage4_valid        : std_logic := '0';
@@ -366,6 +371,11 @@ begin
       variable colorDr   : integer range -4 to 511;
       variable colorDg   : integer range -4 to 511;
       variable colorDb   : integer range -4 to 511;
+
+      variable colorDAr   : integer range -4 to 511;
+      variable colorDAg   : integer range -4 to 511;
+      variable colorDAb   : integer range -4 to 511;
+
       variable colorBGr  : unsigned(4 downto 0);
       variable colorBGg  : unsigned(4 downto 0);
       variable colorBGb  : unsigned(4 downto 0);
@@ -573,6 +583,7 @@ begin
                -- stage 3 - apply blending or raw color
                stage3_valid       <= stage2_valid; 
                stage3_transparent <= stage2_transparent;
+               stage3_dithering   <= stage2_dithering;
                stage3_x           <= stage2_x;          
                stage3_y           <= stage2_y;
                stage3_oldPixel    <= stage2_oldPixel;               
@@ -590,13 +601,21 @@ begin
                      colorTr := unsigned(texdata_palette( 4 downto  0)) * stage2_cr;
                      colorTg := unsigned(texdata_palette( 9 downto  5)) * stage2_cg;
                      colorTb := unsigned(texdata_palette(14 downto 10)) * stage2_cb;
-                     if (stage2_dithering = '1' and (dither_alpha = '1' or stage3_transparent = '0')) then
+                     if (stage2_dithering = '1' and stage3_transparent = '0') then
                         colorDr := (to_integer(colorTr) / 16) + stage2_ditherAdd;
                         colorDg := (to_integer(colorTg) / 16) + stage2_ditherAdd;
                         colorDb := (to_integer(colorTb) / 16) + stage2_ditherAdd;
                         if (colorDr < 0) then stage3_cr <= (others => '0'); elsif (colorDr > 255) then stage3_cr <= (others => '1'); else stage3_cr <= to_unsigned(colorDr / 8, 5); end if;
                         if (colorDg < 0) then stage3_cg <= (others => '0'); elsif (colorDg > 255) then stage3_cg <= (others => '1'); else stage3_cg <= to_unsigned(colorDg / 8, 5); end if;
                         if (colorDb < 0) then stage3_cb <= (others => '0'); elsif (colorDb > 255) then stage3_cb <= (others => '1'); else stage3_cb <= to_unsigned(colorDb / 8, 5); end if;
+                        if (alpha_dither_fix = '1') then
+                           colorDAr := (to_integer(colorTr) / 16) - stage2_ditherAdd - 1;
+                           colorDAg := (to_integer(colorTg) / 16) - stage2_ditherAdd - 1;
+                           colorDAb := (to_integer(colorTb) / 16) - stage2_ditherAdd - 1;
+                           if (colorDAr < 0) then stage3_dr <= (others => '0'); elsif (colorDAr > 255) then stage3_dr <= (others => '1'); else stage3_dr <= to_unsigned(colorDAr / 8, 5); end if;
+                           if (colorDAg < 0) then stage3_dg <= (others => '0'); elsif (colorDAg > 255) then stage3_dg <= (others => '1'); else stage3_dg <= to_unsigned(colorDAg / 8, 5); end if;
+                           if (colorDAb < 0) then stage3_db <= (others => '0'); elsif (colorDAb > 255) then stage3_db <= (others => '1'); else stage3_db <= to_unsigned(colorDAb / 8, 5); end if;
+                        end if;
                      else
                         if (colorTr(12 downto 7) > 31) then stage3_cr <= (others => '1'); else stage3_cr <= colorTr(11 downto 7); end if;
                         if (colorTg(12 downto 7) > 31) then stage3_cg <= (others => '1'); else stage3_cg <= colorTg(11 downto 7); end if;
@@ -611,6 +630,14 @@ begin
                      if (colorDr < 0) then stage3_cr <= (others => '0'); elsif (colorDr > 255) then stage3_cr <= (others => '1'); else stage3_cr <= to_unsigned(colorDr / 8, 5); end if;
                      if (colorDg < 0) then stage3_cg <= (others => '0'); elsif (colorDg > 255) then stage3_cg <= (others => '1'); else stage3_cg <= to_unsigned(colorDg / 8, 5); end if;
                      if (colorDb < 0) then stage3_cb <= (others => '0'); elsif (colorDb > 255) then stage3_cb <= (others => '1'); else stage3_cb <= to_unsigned(colorDb / 8, 5); end if;
+                     if (alpha_dither_fix = '1') then
+                        colorDAr := to_integer(stage2_cr) - stage2_ditherAdd - 1;
+                        colorDAg := to_integer(stage2_cg) - stage2_ditherAdd - 1;
+                        colorDAb := to_integer(stage2_cb) - stage2_ditherAdd - 1;
+                        if (colorDAr < 0) then stage3_dr <= (others => '0'); elsif (colorDAr > 255) then stage3_dr <= (others => '1'); else stage3_dr <= to_unsigned(colorDAr / 8, 5); end if;
+                        if (colorDAg < 0) then stage3_dg <= (others => '0'); elsif (colorDAg > 255) then stage3_dg <= (others => '1'); else stage3_dg <= to_unsigned(colorDAg / 8, 5); end if;
+                        if (colorDAb < 0) then stage3_db <= (others => '0'); elsif (colorDAb > 255) then stage3_db <= (others => '1'); else stage3_db <= to_unsigned(colorDAb / 8, 5); end if;
+                     end if;
                   else
                      stage3_cr         <= stage2_cr(7 downto 3);
                      stage3_cg         <= stage2_cg(7 downto 3);
@@ -635,25 +662,41 @@ begin
                   
                   case (drawMode(6 downto 5)) is
                      when "00" => --  B/2+F/2
-                        colorMixr := to_integer(colorBGr(4 downto 1)) + to_integer(stage3_cr(4 downto 1));
-                        colorMixg := to_integer(colorBGg(4 downto 1)) + to_integer(stage3_cg(4 downto 1));
-                        colorMixb := to_integer(colorBGb(4 downto 1)) + to_integer(stage3_cb(4 downto 1));
+                        if (alpha_dither_fix = '1' and stage3_dithering = '1') then
+                           colorMixr := to_integer(colorBGr(4 downto 1)) + to_integer(stage3_dr(4 downto 1));
+                           colorMixg := to_integer(colorBGg(4 downto 1)) + to_integer(stage3_dg(4 downto 1));
+                           colorMixb := to_integer(colorBGb(4 downto 1)) + to_integer(stage3_db(4 downto 1));
+                        else
+                           colorMixr := to_integer(colorBGr(4 downto 1)) + to_integer(stage3_cr(4 downto 1));
+                           colorMixg := to_integer(colorBGg(4 downto 1)) + to_integer(stage3_cg(4 downto 1));
+                           colorMixb := to_integer(colorBGb(4 downto 1)) + to_integer(stage3_cb(4 downto 1));
+                        end if;
                         
                      when "01" => --  B+F
-                        colorMixr := to_integer(colorBGr) + to_integer(stage3_cr);
-                        colorMixg := to_integer(colorBGg) + to_integer(stage3_cg);
-                        colorMixb := to_integer(colorBGb) + to_integer(stage3_cb);
-                        
+                        if (alpha_dither_fix = '1' and stage3_dithering = '1') then
+                           colorMixr := to_integer(colorBGr) + to_integer(stage3_dr);
+                           colorMixg := to_integer(colorBGg) + to_integer(stage3_dg);
+                           colorMixb := to_integer(colorBGb) + to_integer(stage3_db);
+                        else
+                           colorMixr := to_integer(colorBGr) + to_integer(stage3_cr);
+                           colorMixg := to_integer(colorBGg) + to_integer(stage3_cg);
+                           colorMixb := to_integer(colorBGb) + to_integer(stage3_cb);
+                        end if;
                      when "10" => -- B-F
                         colorMixr := to_integer(colorBGr) - to_integer(stage3_cr);
                         colorMixg := to_integer(colorBGg) - to_integer(stage3_cg);
                         colorMixb := to_integer(colorBGb) - to_integer(stage3_cb);
                         
                      when "11" => -- B+F/4
-                        colorMixr := to_integer(colorBGr) + to_integer(stage3_cr(4 downto 2));
-                        colorMixg := to_integer(colorBGg) + to_integer(stage3_cg(4 downto 2));
-                        colorMixb := to_integer(colorBGb) + to_integer(stage3_cb(4 downto 2));
-                  
+                        if (alpha_dither_fix = '1' and stage3_dithering = '1') then
+                           colorMixr := to_integer(colorBGr) + to_integer(stage3_dr(4 downto 2));
+                           colorMixg := to_integer(colorBGg) + to_integer(stage3_dg(4 downto 2));
+                           colorMixb := to_integer(colorBGb) + to_integer(stage3_db(4 downto 2));
+                        else
+                           colorMixr := to_integer(colorBGr) + to_integer(stage3_cr(4 downto 2));
+                           colorMixg := to_integer(colorBGg) + to_integer(stage3_cg(4 downto 2));
+                           colorMixb := to_integer(colorBGb) + to_integer(stage3_cb(4 downto 2));
+                        end if;
                      when others => null;
                   end case;
                   

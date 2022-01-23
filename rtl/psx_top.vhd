@@ -112,7 +112,7 @@ entity psx_top is
       vblank                : out std_logic;
       true_color            : out std_logic;
       dither_pattern        : in  unsigned( 1 downto 0);
-      dither_alpha          : in  std_logic;
+      alpha_dither_fix      : in  std_logic;
       DisplayWidth          : out unsigned( 9 downto 0);
       DisplayHeight         : out unsigned( 8 downto 0);
       DisplayOffsetX        : out unsigned( 9 downto 0);
@@ -1202,7 +1202,7 @@ begin
 
       true_color           => true_color,
       dither_pattern       => dither_pattern,
-      dither_alpha         => dither_alpha,
+      alpha_dither_fix     => alpha_dither_fix,
       hsync                => hsync, 
       vsync                => vsync, 
       hblank               => hblank_intern,

@@ -285,8 +285,8 @@ parameter CONF_STR = {
 	"P1o23,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"P1-;",
 	"P1oDE,Dithering Filter,Off,On,Strong,Composite;",
-	"P1oF,Dither Alpha,On,Off;",
-	"P1oGH,Dithering Pattern,Original,Rotated,Symmetric,Genesis;",
+	"P1oF,Alpha-Blending Fix,Off,On;",
+	"P1oGH,Dithering Pattern, Original,Rotated,Symmetric,Genesis;",
 	"P1oI,Blend True Color Modes,Off,On;",
 	"- ;",
 	"R0,Reset;",
@@ -665,7 +665,7 @@ psx
    .isPal           (status[40]),
    .pal60           (status[15]),
    .true_color      (true_color),
-   .dither_alpha    (~status[47]),
+   .alpha_dither_fix (status[47]),
    .dither_pattern  (status[49:48]),
    .hsync           (hs),
    .vsync           (vs),
@@ -880,13 +880,14 @@ wire [7:0] r,g,b;
 wire hs_b, vs_b, hb_b, vb_b;
 wire [7:0] r_b, g_b, b_b;
 wire true_color;
+wire blend_true_color = status[50] || ~true_color;
 
 cofi_blender blender
 (
 	.clk(clk_2x),
 	.ce_pixel(ce_pix),
-	.force_blend(&status[46:45]),
-	.diff_blend((status[50] || ~true_color) && |status[46:45]),
+	.force_blend(blend_true_color && &status[46:45]),
+	.diff_blend(blend_true_color && |status[46:45]),
 	.reduced(status[45]),
 	.hblank(hbl),
 	.vblank(vbl),
