@@ -601,7 +601,7 @@ begin
                      colorTr := unsigned(texdata_palette( 4 downto  0)) * stage2_cr;
                      colorTg := unsigned(texdata_palette( 9 downto  5)) * stage2_cg;
                      colorTb := unsigned(texdata_palette(14 downto 10)) * stage2_cb;
-                     if (stage2_dithering = '1' and stage3_transparent = '0') then
+                     if (stage2_dithering = '1') then
                         colorDr := (to_integer(colorTr) / 16) + stage2_ditherAdd;
                         colorDg := (to_integer(colorTg) / 16) + stage2_ditherAdd;
                         colorDb := (to_integer(colorTb) / 16) + stage2_ditherAdd;
