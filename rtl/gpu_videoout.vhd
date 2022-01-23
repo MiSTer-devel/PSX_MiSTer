@@ -14,7 +14,10 @@ entity gpu_videoout is
       videoout_on             : in  std_logic;
          
       fpscountOn              : in  std_logic;
-      fpscountBCD             : in  unsigned(7 downto 0);      
+      fpscountBCD             : in  unsigned(7 downto 0);     
+
+      debug_lateSamples       : in  unsigned(15 downto 0);
+      debug_lateTicks         : in  unsigned(15 downto 0);      
          
       cdSlow                  : in  std_logic;
          
@@ -114,6 +117,14 @@ architecture arch of gpu_videoout is
    signal errortext           : unsigned(7 downto 0);
    signal overlay_error_data  : std_logic_vector(23 downto 0);
    signal overlay_error_ena   : std_logic;
+   
+   signal debugtext1          : unsigned(31 downto 0);
+   signal debugtext1_data     : std_logic_vector(23 downto 0);
+   signal debugtext1_ena      : std_logic;   
+   
+   signal debugtext2          : unsigned(31 downto 0);
+   signal debugtext2_data     : std_logic_vector(23 downto 0);
+   signal debugtext2_ena      : std_logic;
    
 begin 
 
@@ -251,6 +262,16 @@ begin
                      video_g      <= overlay_fps_data(15 downto 8);
                      video_b      <= overlay_fps_data(23 downto 16);
                      true_color   <= '1';
+                  --elsif (debugtext1_ena = '1') then                              
+                  --   video_r      <= debugtext1_data( 7 downto 0);
+                  --   video_g      <= debugtext1_data(15 downto 8);
+                  --   video_b      <= debugtext1_data(23 downto 16);
+                  --   true_color   <= '1';
+                  --elsif (debugtext2_ena = '1') then                              
+                  --   video_r      <= debugtext2_data( 7 downto 0);
+                  --   video_g      <= debugtext2_data(15 downto 8);
+                  --   video_b      <= debugtext2_data(23 downto 16);
+                  --   true_color   <= '1';
                   elsif (GPUSTAT_DisplayDisable = '1') then
                      video_r      <= (others => '0');
                      video_g      <= (others => '0');
@@ -410,6 +431,58 @@ begin
       o_pixel_out_data       => overlay_error_data,
       o_pixel_out_ena        => overlay_error_ena,
       textstring             => x"45" & errortext
+   );   
+   
+   debugtext1( 7 downto  0) <= resize(debug_lateSamples( 3 downto  0), 8) + 16#30# when (debug_lateSamples( 3 downto  0) < 10) else resize(debug_lateSamples( 3 downto  0), 8) + 16#37#;
+   debugtext1(15 downto  8) <= resize(debug_lateSamples( 7 downto  4), 8) + 16#30# when (debug_lateSamples( 7 downto  4) < 10) else resize(debug_lateSamples( 7 downto  4), 8) + 16#37#;
+   debugtext1(23 downto 16) <= resize(debug_lateSamples(11 downto  8), 8) + 16#30# when (debug_lateSamples(11 downto  8) < 10) else resize(debug_lateSamples(11 downto  8), 8) + 16#37#;
+   debugtext1(31 downto 24) <= resize(debug_lateSamples(15 downto 12), 8) + 16#30# when (debug_lateSamples(15 downto 12) < 10) else resize(debug_lateSamples(15 downto 12), 8) + 16#37#;
+   idebugtext1 : entity work.gpu_overlay
+   generic map
+   (
+      COLS                   => 4,
+      BACKGROUNDON           => '1',
+      RGB_BACK               => x"FFFFFF",
+      RGB_FRONT              => x"0000FF",
+      OFFSETX                => 4,
+      OFFSETY                => 64
+   )
+   port map
+   (
+      clk                    => clk2x,
+      ce                     => video_ce,
+      ena                    => fpscountOn,                    
+      i_pixel_out_x          => xpos,
+      i_pixel_out_y          => to_integer(lineDisp),
+      o_pixel_out_data       => debugtext1_data,
+      o_pixel_out_ena        => debugtext1_ena,
+      textstring             => debugtext1
+   );
+   
+   debugtext2( 7 downto  0) <= resize(debug_lateTicks( 3 downto  0), 8) + 16#30# when (debug_lateTicks( 3 downto  0) < 10) else resize(debug_lateTicks( 3 downto  0), 8) + 16#37#;
+   debugtext2(15 downto  8) <= resize(debug_lateTicks( 7 downto  4), 8) + 16#30# when (debug_lateTicks( 7 downto  4) < 10) else resize(debug_lateTicks( 7 downto  4), 8) + 16#37#;
+   debugtext2(23 downto 16) <= resize(debug_lateTicks(11 downto  8), 8) + 16#30# when (debug_lateTicks(11 downto  8) < 10) else resize(debug_lateTicks(11 downto  8), 8) + 16#37#;
+   debugtext2(31 downto 24) <= resize(debug_lateTicks(15 downto 12), 8) + 16#30# when (debug_lateTicks(15 downto 12) < 10) else resize(debug_lateTicks(15 downto 12), 8) + 16#37#;
+   idebugtext2 : entity work.gpu_overlay
+   generic map
+   (
+      COLS                   => 4,
+      BACKGROUNDON           => '1',
+      RGB_BACK               => x"FFFFFF",
+      RGB_FRONT              => x"0000FF",
+      OFFSETX                => 4,
+      OFFSETY                => 84
+   )
+   port map
+   (
+      clk                    => clk2x,
+      ce                     => video_ce,
+      ena                    => fpscountOn,                    
+      i_pixel_out_x          => xpos,
+      i_pixel_out_y          => to_integer(lineDisp),
+      o_pixel_out_data       => debugtext2_data,
+      o_pixel_out_ena        => debugtext2_ena,
+      textstring             => debugtext2
    );
 
 

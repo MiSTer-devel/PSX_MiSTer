@@ -436,6 +436,9 @@ architecture arch of psx_top is
    signal errorGPUFIFO           : std_logic;
    signal errorSPUTIME           : std_logic;
    
+   signal debug_lateSamples      : unsigned(15 downto 0);
+   signal debug_lateTicks        : unsigned(15 downto 0);
+   
    -- memcard
    signal memcard1_pause         : std_logic;
    signal memcard2_pause         : std_logic;
@@ -1158,6 +1161,9 @@ begin
       errorEna             => errorEna, 
       errorCode            => errorCode,
       
+      debug_lateSamples    => debug_lateSamples,
+      debug_lateTicks      => debug_lateTicks, 
+      
       errorLINE            => errorLINE,
       errorRECT            => errorRECT,
       errorPOLY            => errorPOLY,
@@ -1322,6 +1328,9 @@ begin
       mem_ack              => memSPU_ack,      
       mem_DOUT             => ddr3_DOUT,      
       mem_DOUT_READY       => ddr3_DOUT_READY,
+            
+      debug_lateSamples    => debug_lateSamples,
+      debug_lateTicks      => debug_lateTicks,  
       
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
@@ -1684,6 +1693,8 @@ begin
       system_paused           => pausing,
       savestate_pause         => savestate_pause,
       ddr3_savestate          => ddr3_savestate,
+      
+      useSPUSDRAM             => SPUSDRAM,
       
       SS_DataWrite            => SS_DataWrite,   
       SS_Adr                  => SS_Adr,         

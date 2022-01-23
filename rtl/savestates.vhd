@@ -32,6 +32,8 @@ entity savestates is
       system_paused           : in  std_logic;
       savestate_pause         : out std_logic := '0';
       ddr3_savestate          : out std_logic := '0';
+      
+      useSPUSDRAM             : in  std_logic;
             
       SS_DataWrite            : out std_logic_vector(31 downto 0) := (others => '0');
       SS_Adr                  : out unsigned(18 downto 0) := (others => '0');
@@ -362,9 +364,17 @@ begin
                
             when SAVEMEMORY_STARTREAD =>
                if (savetype_counter = 14) then -- spuram
-                  state          <= SAVEMEMORY_LOAD_SPURAM;
-                  SPUwordcounter <= 0;
-                  dwordcounter   <= 1;
+                  if (useSPUSDRAM = '1') then
+                     state          <= SAVEMEMORY_LOAD_SPURAM;
+                     SPUwordcounter <= 0;
+                     dwordcounter   <= 1;
+                  else
+                     state          <= SAVEMEMORY_LOAD_VRAM;
+                     ddr3_RD        <= '1'; 
+                     ddr3_ADDR      <= "00000011" & std_logic_vector(RAMAddrNext(17 downto 0));
+                     dwordcounter   <= 1;
+                     RAMAddrNext    <= RAMAddrNext + 2;
+                  end if;
                elsif (savetype_counter = 15) then -- vram
                   state          <= SAVEMEMORY_LOAD_VRAM;
                   ddr3_RD        <= '1'; 
@@ -434,7 +444,11 @@ begin
                   dwordcounter           <= 0;
                   
                   if (savetype_counter = 14) then -- SPUram
-                     ddr3_DIN <= spu_din;
+                     if (useSPUSDRAM = '1') then
+                        ddr3_DIN <= spu_din;
+                     else
+                        ddr3_DIN <= ddr3_DOUT_saved;
+                     end if;
                   elsif (savetype_counter = 15) then -- vram
                      ddr3_DIN <= ddr3_DOUT_saved;
                   end if;
@@ -532,9 +546,19 @@ begin
                   end if;
                   
                   if (savetype_counter = 14) then -- spuram
-                     dwordcounter   <= 1;
-                     state          <= LOADMEMORY_WRITE_SPURAM; 
-                     SPUwordcounter <= 0;                
+                     if (useSPUSDRAM = '1') then
+                        dwordcounter   <= 1;
+                        state          <= LOADMEMORY_WRITE_SPURAM; 
+                        SPUwordcounter <= 0;
+                     else
+                        dwordcounter <= 1;
+                        state        <= LOADMEMORY_WRITE_VRAM;
+                        ddr3_WE      <= '1';
+                        ddr3_BE      <= x"FF";    
+                        
+                        ddr3_ADDR    <= "00000011" & std_logic_vector(RAMAddrNext(17 downto 0));
+                        RAMAddrNext  <= RAMAddrNext + 2;
+                     end if;
                   end if;
                   if (savetype_counter = 15) then -- vram
                      dwordcounter <= 1;
