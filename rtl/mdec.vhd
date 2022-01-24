@@ -45,6 +45,7 @@ architecture arch of mdec is
    signal FifoIn_Dout         : std_logic_vector(31 downto 0);
    signal FifoIn_Rd           : std_logic;
    signal FifoIn_Empty        : std_logic;
+   signal FifoIn_Reset        : std_logic;
   
    type treceiveState is
    (
@@ -198,6 +199,7 @@ architecture arch of mdec is
    signal FifoOut_Dout        : std_logic_vector(31 downto 0);
    signal FifoOut_Rd          : std_logic;
    signal FifoOut_Empty       : std_logic;
+   signal FifoOut_Reset       : std_logic;
       
    type toutputState is 
    (  
@@ -254,6 +256,8 @@ architecture arch of mdec is
    signal RamSSdataB          : std_logic_vector(31 downto 0); 
                               
    signal ram_SSrden          : std_logic;
+   
+   signal ss_timeout          : unsigned(23 downto 0);
 
 begin 
 
@@ -270,7 +274,7 @@ begin
    port map
    ( 
       clk      => clk1x,     
-      reset    => reset,   
+      reset    => FifoIn_Reset,   
                 
       Din      => FifoIn_Din,     
       Wr       => FifoIn_Wr,      
@@ -304,6 +308,9 @@ begin
          RamSSwrite        <= '0';
          calcNextRL        <= '0';
          currentBlockDone  <= '0';
+         
+         FifoIn_Reset      <= '0';
+         FifoOut_Reset     <= '0';
       
          if (reset = '1') then
          
@@ -311,6 +318,11 @@ begin
             fifoSecondAvail <= '0';
             currentBlock    <= (others => '0');
             currentCoeff    <= to_unsigned(64, 7);
+                     
+            FifoIn_Reset    <= '1';
+            FifoOut_Reset   <= '1';
+            
+            wordsRemain     <= (others => '0');
             
             MDECCONTROL     <= ss_in(1)(31 downto 29);
             rec_bit15       <= ss_in(0)(23);          
@@ -337,6 +349,20 @@ begin
             end if;
          
          elsif (ce = '1') then
+         
+            MDECCONTROL(2) <= '0';
+            if (MDECCONTROL(2) = '1') then
+               receiveState    <= RECEIVE_IDLE;
+               fifoSecondAvail <= '0';
+               currentBlock    <= (others => '0');
+               currentCoeff    <= to_unsigned(64, 7);
+               FifoIn_Reset    <= '1';
+               FifoOut_Reset   <= '1';
+               wordsRemain     <= (others => '0');
+               rec_bit15       <= '0';
+               rec_signed      <= '0';
+               rec_depth       <= "00";
+            end if;
          
             if (bus_write = '1' and bus_addr = x"4") then
                MDECCONTROL <= bus_dataWrite(31 downto 29);
@@ -1043,7 +1069,7 @@ begin
    port map
    ( 
       clk      => clk2x,     
-      reset    => reset,   
+      reset    => FifoOut_Reset,   
                 
       Din      => FifoOut_Din,     
       Wr       => FifoOut_Wr,      
@@ -1116,7 +1142,14 @@ begin
          
          SS_Idle <= '0';
          if (FifoIn_Empty = '1' and FifoOut_Empty = '1' and receiveState = RECEIVE_IDLE and idctState = IDCT_IDLE and colorState = COLOR_IDLE and outputState = OUTPUT_IDLE) then
-            SS_Idle <= '1';
+            SS_Idle    <= '1';
+            ss_timeout <= (others => '0');
+         end if;
+         
+         if (ss_timeout(23) = '1') then
+            SS_Idle    <= '1';
+         else
+            ss_timeout <= ss_timeout + 1;
          end if;
          
          ram_SSrden <= '0';

@@ -86,7 +86,6 @@ GTE    : 80%
 
 MDEC   : 90%
 - timing slightly too fast (4996/5376)
-- writing to MDECControl -> should reset
  
 CD     : 50%
 - single track only
