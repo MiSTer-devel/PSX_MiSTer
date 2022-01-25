@@ -39,13 +39,14 @@ end entity;
 
 architecture arch of mdec is
   
+   signal reset_intern        : std_logic := '0';
+  
    signal FifoIn_Din          : std_logic_vector(31 downto 0) := (others => '0');
    signal FifoIn_Wr           : std_logic; 
    signal FifoIn_NearFull     : std_logic;
    signal FifoIn_Dout         : std_logic_vector(31 downto 0);
    signal FifoIn_Rd           : std_logic;
    signal FifoIn_Empty        : std_logic;
-   signal FifoIn_Reset        : std_logic;
   
    type treceiveState is
    (
@@ -199,7 +200,6 @@ architecture arch of mdec is
    signal FifoOut_Dout        : std_logic_vector(31 downto 0);
    signal FifoOut_Rd          : std_logic;
    signal FifoOut_Empty       : std_logic;
-   signal FifoOut_Reset       : std_logic;
       
    type toutputState is 
    (  
@@ -274,7 +274,7 @@ begin
    port map
    ( 
       clk      => clk1x,     
-      reset    => FifoIn_Reset,   
+      reset    => reset_intern,   
                 
       Din      => FifoIn_Din,     
       Wr       => FifoIn_Wr,      
@@ -304,23 +304,21 @@ begin
    begin
       if rising_edge(clk1x) then
       
+         reset_intern      <= '0';
+      
          RamYUVwrite       <= '0';
          RamSSwrite        <= '0';
          calcNextRL        <= '0';
          currentBlockDone  <= '0';
-         
-         FifoIn_Reset      <= '0';
-         FifoOut_Reset     <= '0';
       
          if (reset = '1') then
+         
+            reset_intern    <= '1';
          
             receiveState    <= RECEIVE_IDLE;
             fifoSecondAvail <= '0';
             currentBlock    <= (others => '0');
             currentCoeff    <= to_unsigned(64, 7);
-                     
-            FifoIn_Reset    <= '1';
-            FifoOut_Reset   <= '1';
             
             wordsRemain     <= (others => '0');
             
@@ -352,12 +350,12 @@ begin
          
             MDECCONTROL(2) <= '0';
             if (MDECCONTROL(2) = '1') then
+               reset_intern    <= '1';
+               
                receiveState    <= RECEIVE_IDLE;
                fifoSecondAvail <= '0';
                currentBlock    <= (others => '0');
                currentCoeff    <= to_unsigned(64, 7);
-               FifoIn_Reset    <= '1';
-               FifoOut_Reset   <= '1';
                wordsRemain     <= (others => '0');
                rec_bit15       <= '0';
                rec_signed      <= '0';
@@ -581,6 +579,10 @@ begin
                     
          end if;
          
+         if (reset_intern = '1') then
+            FifoRL_Wr <= '0';
+         end if;
+         
       end if;
    end process;
    
@@ -594,7 +596,7 @@ begin
    port map
    ( 
       clk      => clk2x,     
-      reset    => reset,   
+      reset    => reset_intern,   
                 
       Din      => FifoRL_Din,     
       Wr       => (FifoRL_Wr and clk2xIndex),      
@@ -618,7 +620,7 @@ begin
          idct_done      <= '0';
          idct_calc0_ena <= '0';
       
-         if (reset = '1') then
+         if (reset_intern = '1') then
          
             idctState    <= IDCT_IDLE;
          
@@ -795,7 +797,7 @@ begin
          color_write <= '0';
          color_done  <= '0';
 
-         if (reset = '1') then
+         if (reset_intern = '1') then
          
             colorState    <= COLOR_IDLE;
          
@@ -940,7 +942,7 @@ begin
             fifoOut_done    <= '0';
          end if;
 
-         if (reset = '1') then
+         if (reset_intern = '1') then
          
             outputState    <= OUTPUT_IDLE;
             colormapState  <= COLORMAP_IDLE;
@@ -1069,7 +1071,7 @@ begin
    port map
    ( 
       clk      => clk2x,     
-      reset    => FifoOut_Reset,   
+      reset    => reset_intern,   
                 
       Din      => FifoOut_Din,     
       Wr       => FifoOut_Wr,      
