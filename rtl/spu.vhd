@@ -22,6 +22,7 @@ entity spu is
       
       cpuPaused            : in  std_logic;
       
+      spu_tick             : out std_logic := '0';
       cd_left              : in  signed(15 downto 0);
       cd_right             : in  signed(15 downto 0);
       
@@ -521,6 +522,11 @@ architecture arch of spu is
    signal noiseCnt               : unsigned(31 downto 0);
    signal noiseCheck             : unsigned(31 downto 0);
 
+   -- cd processing
+   signal cdProcStep             : integer range 0 to 4 := 4;
+   signal cd_next_left           : signed(16 downto 0);
+   signal cd_next_right          : signed(16 downto 0);
+
    -- end processing
    signal endProcStep            : integer range 0 to 4 := 4;
    
@@ -905,6 +911,9 @@ begin
             
             reverbLastLeft       <= (others => '0');
             reverbLastRight      <= (others => '0');
+            
+            cd_next_left         <= (others => '0');
+            cd_next_right        <= (others => '0');
                
             sampleticks          <= (others => '0'); --unsigned(ss_in(1)(9 downto 0));
             capturePosition      <= unsigned(ss_in(2)(9 downto 0));
@@ -1372,10 +1381,12 @@ begin
             adsr_target(ADSR_RELEASE) <= (others => '0');
             
             -- processing
+            spu_tick <= '0';
             if (sampleticks < 767) then
                sampleticks <= sampleticks + 1;
             else
-               sampleticks     <= (others => '0');
+               sampleticks <= (others => '0');
+               spu_tick    <= '1';
                if (irqSaved = '1') then
                   irqSaved <= '0';
                   IRQ9     <= '1';
@@ -1410,10 +1421,22 @@ begin
                      index          <= 0;
                      envelopeIndex  <= 0;
                      envelopeVoice  <= '1';
-                     soundleft      <= (others => '0'); 
-                     soundright     <= (others => '0');                      
-                     reverbsumleft  <= (others => '0'); 
-                     reverbsumright <= (others => '0'); 
+                     
+                     soundleft      <= (others => '0');
+                     soundright     <= (others => '0');
+                     reverbsumleft  <= (others => '0');
+                     reverbsumright <= (others => '0');
+                     
+                     cdProcStep     <= 0;
+                     if (cnt(0) = '1') then
+                        soundleft      <= resize(cd_next_left, 24);
+                        soundright     <= resize(cd_next_right,24);
+                        if (cnt(2) = '1') then
+                           reverbsumleft  <= resize(cd_next_left, 24);
+                           reverbsumright <= resize(cd_next_right,24);
+                        end if;
+                     end if;
+                     
                      if (stashedSamples > 0 and sampleticks /= 0) then
                         stashedSamples <= stashedSamples - 1;
                      end if;
@@ -2160,6 +2183,28 @@ begin
             if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0') then
                busy <= '1';
             end if;
+            
+            -- cd sound processing
+            case (cdProcStep) is
+               when 0 =>
+                  soundmul1 <= resize(cd_left, 24);
+                  soundmul2 <= signed(CDAUDIO_VOL_L);
+                  
+               when 1 =>
+                  soundmul1 <= resize(cd_right, 24);
+                  soundmul2 <= signed(CDAUDIO_VOL_R); 
+                  
+               when 2 =>
+                  cd_next_left <= resize(soundmulresult15, 17);
+               
+               when 3 =>
+                  cd_next_right <= resize(soundmulresult15, 17);
+               
+               when others => null;
+            end case;
+            if (cdProcStep < 4) then
+               cdProcStep <= cdProcStep + 1;
+            end if; 
             
             -- sound end processing
             case (endProcStep) is

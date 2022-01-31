@@ -401,6 +401,11 @@ architecture arch of psx_top is
    signal DMA_SPU_write          : std_logic_vector(15 downto 0);
    signal DMA_SPU_read           : std_logic_vector(15 downto 0);
    
+   -- SPU
+   signal spu_tick               : std_logic;
+   signal cd_left                : signed(15 downto 0);
+   signal cd_right               : signed(15 downto 0);
+   
    -- cpu
    signal ce_intern              : std_logic := '0';
    signal ce_cpu                 : std_logic := '0';
@@ -1100,6 +1105,10 @@ begin
       error                => errorCD,
           
       irqOut               => irq_CDROM,
+      
+      spu_tick             => spu_tick,
+      cd_left              => cd_left,
+      cd_right             => cd_right,
                             
       bus_addr             => bus_cd_addr,     
       bus_dataWrite        => bus_cd_dataWrite,
@@ -1282,8 +1291,9 @@ begin
       
       cpuPaused            => cpuPaused,
       
-      cd_left              => x"0000",
-      cd_right             => x"0000",
+      spu_tick             => spu_tick,
+      cd_left              => cd_left,
+      cd_right             => cd_right,
       
       irqOut               => irq_SPU,
       

@@ -24,6 +24,10 @@ entity cd_top is
       
       irqOut               : out std_logic := '0';
       
+      spu_tick             : in  std_logic;
+      cd_left              : out signed(15 downto 0);
+      cd_right             : out signed(15 downto 0);
+      
       bus_addr             : in  unsigned(3 downto 0); 
       bus_dataWrite        : in  std_logic_vector(7 downto 0);
       bus_read             : in  std_logic;
@@ -117,6 +121,8 @@ architecture arch of cd_top is
    signal startMotorCMD             : std_logic := '0';
    signal softReset                 : std_logic := '0';
    signal ackPendingIRQNext         : std_logic := '0';
+   signal cmdResetXa                : std_logic := '0';
+   signal muted                     : std_logic;
          
    signal setLocActive              : std_logic := '0';
    signal setLocReadStep            : integer range 0 to 5;
@@ -130,6 +136,10 @@ architecture arch of cd_top is
    signal setFilterReadStep         : integer range 0 to 3;
    signal XaFilterFile              : std_logic_vector(7 downto 0);
    signal XaFilterChannel           : std_logic_vector(7 downto 0);
+   
+   signal XaCurrentFile             : std_logic_vector(7 downto 0);
+   signal XaCurrentChannel          : std_logic_vector(7 downto 0);
+   signal XaCurrentSet              : std_logic;
       
    signal seekOnDiskCmd             : std_logic := '0';
    signal setMode                   : std_logic := '0';
@@ -204,7 +214,7 @@ architecture arch of cd_top is
    signal trackNumberBCD            : unsigned(7 downto 0) := x"00";
    
    signal copyData                  : std_logic := '0';  
-   signal seekOK                    : std_logic := '1';  -- todo
+   signal seekOK                    : std_logic := '1';
    signal startReading              : std_logic := '0';  
    signal startPlaying              : std_logic := '0';  
    signal processDataSector         : std_logic := '0';  
@@ -261,7 +271,9 @@ architecture arch of cd_top is
       SPROC_READSUBHEADER,
       SPROC_START,
       SPROC_FIRST,
-      SPROC_DATA
+      SPROC_DATA,
+      SPROC_XA_FIRST,
+      SPROC_XA
    );
    signal sectorProcessState        : tsectorProcess := SPROC_IDLE;
    
@@ -287,6 +299,16 @@ architecture arch of cd_top is
    signal subdata                   : tsubdata;
    signal nextSubdata               : tsubdata;
    
+   signal XA_addr                   : integer range 0 to 587;
+   signal XA_data                   : std_logic_vector(31 downto 0);
+   signal XA_write                  : std_logic := '0';
+   signal XA_start                  : std_logic := '0';
+   signal XA_reset                  : std_logic := '0';
+   signal XA_EOF                    : std_logic := '0';
+   signal xa_muted                  : std_logic;
+   signal cdxa_left                 : signed(15 downto 0);
+   signal cdxa_right                : signed(15 downto 0);
+   
    -- copy data
    type tCopyState is
 	(
@@ -304,6 +326,22 @@ architecture arch of cd_top is
    
    signal copySectorPointer         : unsigned(2 downto 0) := (others => '0');
    signal ackRead_data              : std_logic := '0';
+      
+   -- cd audio volume
+   signal cdvol_next00              : std_logic_vector(7 downto 0);
+   signal cdvol_next01              : std_logic_vector(7 downto 0);
+   signal cdvol_next10              : std_logic_vector(7 downto 0);
+   signal cdvol_next11              : std_logic_vector(7 downto 0);
+   signal cdvol_00                  : std_logic_vector(7 downto 0);
+   signal cdvol_01                  : std_logic_vector(7 downto 0);
+   signal cdvol_10                  : std_logic_vector(7 downto 0);
+   signal cdvol_11                  : std_logic_vector(7 downto 0);
+   
+   signal cd_volume_step            : integer range 0 to 7;
+   signal soundmulresult            : signed(16 downto 0);
+   signal soundmul1                 : signed(15 downto 0);
+   signal soundmul2                 : unsigned(7 downto 0);
+   signal soundsum                  : signed(17 downto 0);
       
    -- size calculation
    signal lbaCount                  : integer range 0 to 524287; 
@@ -369,6 +407,15 @@ begin
    ss_out(21)(20 downto 16) <= CDROM_IRQFLAG;
    ss_out(13)(24)           <= pendingDriveIRQ;
    ss_out(13)(23 downto 16) <= nextCmd;
+   ss_out(22)(17)           <= xa_muted;
+   ss_out(23)( 7 downto  0) <= cdvol_next00;
+   ss_out(23)(15 downto  8) <= cdvol_next01;
+   ss_out(23)(23 downto 16) <= cdvol_next10;
+   ss_out(23)(31 downto 24) <= cdvol_next11;
+   ss_out(24)( 7 downto  0) <= cdvol_00;    
+   ss_out(24)(15 downto  8) <= cdvol_01;    
+   ss_out(24)(23 downto 16) <= cdvol_10;    
+   ss_out(24)(31 downto 24) <= cdvol_11;    
    
    -- cpu interface
    process(clk1x)
@@ -387,6 +434,16 @@ begin
             CDROM_IRQFLAG   <= ss_in(21)(20 downto 16); -- (others => '0');
             pendingDriveIRQ <= ss_in(13)(24); -- '0';
             nextCmd         <= ss_in(13)(23 downto 16); -- '0';
+            xa_muted        <= ss_in(22)(17); -- '0';
+            
+            cdvol_next00    <= ss_in(23)( 7 downto  0);
+            cdvol_next01    <= ss_in(23)(15 downto  8);
+            cdvol_next10    <= ss_in(23)(23 downto 16);
+            cdvol_next11    <= ss_in(23)(31 downto 24);
+            cdvol_00        <= ss_in(24)( 7 downto  0);
+            cdvol_01        <= ss_in(24)(15 downto  8);
+            cdvol_10        <= ss_in(24)(23 downto 16);
+            cdvol_11        <= ss_in(24)(31 downto 24);
             
          elsif (ce = '1') then
          
@@ -397,7 +454,7 @@ begin
             copyData          <= '0';
             cmd_unpause       <= '0';
          
-            CDROM_STATUS(2) <= '0';                      -- ADPBUSY XA-ADPCM fifo empty  (0=Empty) ;set when playing XA-ADPCM sound
+            CDROM_STATUS(2) <= '0';                      -- ADPBUSY XA-ADPCM fifo empty  (0=Empty) ;set when playing XA-ADPCM sound -> not used in duckstation
             CDROM_STATUS(3) <= FifoParam_Empty;          -- PRMEMPT Parameter fifo empty (1=Empty) ;triggered before writing 1st byte
             CDROM_STATUS(4) <= not FifoParam_NearFull;   -- PRMWRDY Parameter fifo full  (0=Full)  ;triggered after writing 16 bytes
             CDROM_STATUS(5) <= not FifoResponse_Empty;   -- RSLRRDY Response fifo empty  (0=Empty) ;triggered after reading LAST byte
@@ -461,16 +518,23 @@ begin
                      when "10" =>
                         case (bus_addr) is
                            when x"1" => -- sound map coding info write -> do nothing
-                           when x"2" => -- todo audio volume
-                           when x"3" => -- todo audio volume
+                           when x"2" => cdvol_next00 <= bus_dataWrite;
+                           when x"3" => cdvol_next01 <= bus_dataWrite;
                            when others => null;
                         end case;
                         
                      when "11" =>
                         case (bus_addr) is
-                           when x"1" => -- todo audio volume
-                           when x"2" => -- todo audio volume
-                           when x"3" => -- todo apply audio volume
+                           when x"1" => cdvol_next11 <= bus_dataWrite;
+                           when x"2" => cdvol_next10 <= bus_dataWrite;
+                           when x"3" => 
+                              if (bus_dataWrite(5) = '1') then
+                                 cdvol_00 <= cdvol_next00;
+                                 cdvol_01 <= cdvol_next01;
+                                 cdvol_10 <= cdvol_next10;
+                                 cdvol_11 <= cdvol_next11;
+                              end if;
+                              xa_muted <= bus_dataWrite(0);
                            when others => null;
                         end case;
                      when others => null;
@@ -567,6 +631,10 @@ begin
                   irqOut <= '1';
                end if;
             end if; 
+            
+            if (softReset = '1') then
+               FifoData_reset <= '1';
+            end if;
 
          end if; -- ce
       end if;
@@ -601,6 +669,7 @@ begin
    ss_out(18)(2)             <= working;      
    ss_out( 0)(31 downto  0)  <= std_logic_vector(to_unsigned(workDelay, 32));    
    ss_out(14)(15 downto  8)  <= workCommand;  
+   ss_out(18)(7)             <= muted;  
    ss_out(18)(3)             <= setLocActive; 
    ss_out(14)(23 downto 16)  <= std_logic_vector(setLocMinute); 
    ss_out(14)(31 downto 24)  <= std_logic_vector(setLocSecond); 
@@ -621,6 +690,8 @@ begin
          FifoParam_reset         <= '0';
          
          error                   <= '0';
+         
+         cmdResetXa              <= '0';
       
          if (reset = '1') then
             
@@ -634,6 +705,8 @@ begin
             workDelay               <= to_integer(unsigned(ss_in(0)(31 downto 0))); -- 0
             workCommand             <= ss_in(14)(15 downto 8);
                
+            muted                   <= ss_in(18)(7); -- '0'
+            
             setLocActive            <= ss_in(18)(3); -- '0'
             setLocMinute            <= unsigned(ss_in(14)(23 downto 16));
             setLocSecond            <= unsigned(ss_in(14)(31 downto 24));
@@ -822,6 +895,7 @@ begin
                         working     <= '1';
                         workDelay   <= 7000 - 2;
                         workCommand <= nextCmd;
+                        cmdResetXa  <= '1';
                         if (driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
                            if (modeReg(7) = '1') then
                               workDelay  <= 2000000 - 2;
@@ -855,12 +929,12 @@ begin
                         end if;
                      
                      when x"0B" => -- mute
-                        --todo muted = true;
+                        muted       <= '1';
                         cmdAck      <= '1';
                         cmdPending  <= '0';
                         
                      when x"0C" => -- demute
-                        --todo muted = false;
+                        muted       <= '0';
                         cmdAck      <= '1';
                         cmdPending  <= '0';
                         
@@ -940,6 +1014,7 @@ begin
                         cmdPending            <= '0';
                         seekOnDiskCmd         <= '1';
                         setLocActive          <= '0';
+                        cmdResetXa            <= '1';
                         
                      when x"17" | x"18" => -- SetClock/GetClock
                         cmdPending <= '0';
@@ -1305,8 +1380,6 @@ begin
       Empty    => FifoResponse_Empty   
    );
    
-   seekOK <= '1'; -- todo
-   
    ss_out(18)(4)            <= driveBusy;           
    ss_out(15)(27 downto 24) <= std_logic_vector(to_unsigned(tdrivestate'POS(driveState), 4));  
    ss_out( 4)(26 downto  0) <= std_logic_vector(to_unsigned(driveDelay, 27));           
@@ -1420,6 +1493,38 @@ begin
                elsif (sectorFetchState = SFETCH_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
                   handleDrive <= '1';
                   driveBusy   <= '0';
+                  
+                  -- completeSeek
+                  if (driveState = DRIVE_SEEKIMPLICIT or driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL) then
+                     
+                     seekOK <= '1';
+                     
+                     for i in 0 to 11 loop
+                        subdata(i) <= nextSubdata(i);
+                     end loop;
+                     
+                     -- todo: check subdata against current frame/second/minute?
+                     
+                     if (nextSubdata(0)(6) = '1') then --isData
+                        if (driveState = DRIVE_SEEKLOGICAL) then
+                           -- todo: copy header + subheader from sectorBuffer
+                           -- todo: check header against frame/second/minute
+                           lastSectorHeaderValid <= '1';
+                        end if;
+                     else
+                        if (driveState = DRIVE_SEEKLOGICAL) then
+                           seekOK <= modeReg(0); -- cdda
+                        end if;
+                     end if;
+                     if (unsigned(nextSubdata(1)) = LEAD_OUT_TRACK_NUMBER) then
+                        seekOK <= '0';
+                     end if;
+                      
+                     currentLBA   <= lastReadSector;
+                     -- todo: physical lba position?
+                      
+                  end if;
+                  
                end if;
             end if;
             
@@ -1619,7 +1724,6 @@ begin
                driveState         <= DRIVE_PLAYING;
                writeSectorPointer <= (others => '0');
                readSectorPointer  <= (others => '0');
-               -- todo: ResetAudioDecoder
             end if;
             
             if (cmdStop = '1') then
@@ -1679,9 +1783,6 @@ begin
       end if;
    end process;
    
-   
-   -- todo : seekOK
-   
    iramSectorBuffer: entity work.dpram
    generic map 
    ( 
@@ -1734,6 +1835,10 @@ begin
    ss_out(6)(19 downto 0)  <= std_logic_vector(to_unsigned(lastReadSector, 20));
    ss_out(11)(19 downto 0) <= std_logic_vector(to_unsigned(positionInIndex, 20));
    
+   ss_out(22)( 7 downto 0) <= XaCurrentFile;
+   ss_out(22)(15 downto 8) <= XaCurrentChannel;
+   ss_out(22)(16)          <= XaCurrentSet;
+   
    gSSnextsubdata: for i in 0 to 11 generate
    begin
       ss_out(i + 64)(7 downto 0) <= nextSubdata(i);
@@ -1765,6 +1870,9 @@ begin
          else
             cdSlow <= '0';
          end if;
+         
+         XA_write <= '0';
+         XA_start <= '0'; 
 
          if (reset = '1') then
          
@@ -1777,6 +1885,10 @@ begin
             header               <= ss_in(19);
             subheader            <= ss_in(20);
             lastReadSector       <= to_integer(unsigned(ss_in(6)(19 downto 0))); -- 0
+            
+            XaCurrentFile        <= ss_in(22)( 7 downto 0);
+            XaCurrentChannel     <= ss_in(22)(15 downto 8);
+            XaCurrentSet         <= ss_in(22)(16);
             
             if (to_integer(unsigned(ss_in(11)(19 downto 0))) <= 524287) then
                positionInIndex   <= to_integer(unsigned(ss_in(11)(19 downto 0))); -- 0
@@ -2007,8 +2119,8 @@ begin
                      if (header(31 downto 24) = x"02") then
                         if (sectorBuffer_DataB(22) = '1') then -- realtime
                            if (sectorBuffer_DataB(18) = '1') then -- audio
-                              -- todo : ProcessXAADPCMSector
-                              sectorProcessState   <= SPROC_IDLE;
+                              procReadAddr         <= 0;
+                              sectorProcessState   <= SPROC_XA_FIRST;
                            end if;
                         end if;
                      end if;
@@ -2046,6 +2158,38 @@ begin
                   if (procCount = (procSize - 1)) then
                      sectorProcessState  <= SPROC_IDLE;
                   end if;
+                  
+               when SPROC_XA_FIRST =>
+                  sectorProcessState <= SPROC_XA;
+                  procReadAddr       <= procReadAddr + 1;
+                  if (modeReg(3) = '1' and ((XaFilterChannel /= subheader(15 downto 8)) or XaFilterFile /= subheader(7 downto 0))) then
+                     sectorProcessState <= SPROC_IDLE;
+                  else
+                     if (XaCurrentSet = '0') then
+                        if (subheader(15 downto 8) = x"FF" and (modeReg(3) = '1' or XaFilterChannel /= x"FF")) then
+                           sectorProcessState <= SPROC_IDLE;   
+                        else
+                           XaCurrentFile    <= subheader(7 downto 0);
+                           XaCurrentChannel <= subheader(15 downto 8);
+                           XaCurrentSet     <= '1';   
+                        end if;
+                     elsif (XaCurrentSet = '1' and ((XaCurrentChannel /= subheader(15 downto 8)) or XaCurrentFile /= subheader(7 downto 0))) then
+                        sectorProcessState <= SPROC_IDLE;
+                     end if;
+                  end if;
+                  
+               when SPROC_XA =>
+                  procCount    <= procCount + 1;
+                  if (procReadAddr < 587) then
+                     procReadAddr <= procReadAddr + 1;
+                  end if;
+                  if (procCount = 587) then
+                     sectorProcessState  <= SPROC_IDLE;
+                     XA_start            <= '1';
+                  end if;
+                  XA_write <= '1';
+                  XA_data  <= sectorBuffer_DataB;
+                  XA_addr  <= procCount;
                   
             end case;
             
@@ -2103,8 +2247,102 @@ begin
                   end if;
                  
             end case;
-   
+
          end if;
+         
+         if (XA_eof = '1') then
+            XaCurrentFile    <= (others => '0');
+            XaCurrentChannel <= (others => '0');
+            XaCurrentSet     <= '0';         
+         end if;
+         
+      end if;
+   end process;
+   
+   XA_reset <= reset or softReset or startReading or startPlaying or cmdResetXa;
+   
+   icd_xa : entity work.cd_xa
+   port map
+   (
+      clk1x                => clk1x,    
+      ce                   => ce,       
+      reset                => reset,
+
+      spu_tick             => spu_tick,
+                                       
+      XA_addr              => XA_addr,  
+      XA_data              => XA_data,  
+      XA_write             => XA_write, 
+      XA_start             => XA_start,
+      XA_reset             => XA_reset,
+      
+      XA_eof               => XA_eof,
+      
+      cdxa_left            => cdxa_left, 
+      cdxa_right           => cdxa_right
+   );
+   
+   -- cd volume
+   process(clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+         
+         if (spu_tick = '1') then
+            cd_volume_step <= 0;
+         end if;
+      
+         case (cd_volume_step) is
+            when 0 =>
+               if (modeReg(6) = '1' and xa_muted = '0' and muted = '0') then
+                  soundmul1 <= cdxa_left;
+               else
+                  soundmul1 <= (others => '0');
+               end if;
+               soundmul2 <= unsigned(cdvol_00);
+               
+            when 1 =>
+               soundmul2 <= unsigned(cdvol_01);
+
+            when 2 =>
+               if (modeReg(6) = '1' and xa_muted = '0' and muted = '0') then
+                  soundmul1 <= cdxa_right;
+               else
+                  soundmul1 <= (others => '0');
+               end if;
+               soundmul2 <= unsigned(cdvol_10);
+               
+               soundsum <= resize(soundmulresult, 18);
+               
+            when 3 =>
+               soundmul2 <= unsigned(cdvol_11); 
+               
+               soundsum <= soundsum + resize(soundmulresult, 18);
+            
+            when 4 =>
+               if (soundsum < -32768) then cd_left <= x"8000";
+               elsif (soundsum > 32767) then cd_left <= x"7FFF";
+               else cd_left <= soundsum(15 downto 0);
+               end if;
+            
+               soundsum <= resize(soundmulresult, 18);
+            
+            when 5 =>
+               soundsum <= soundsum + resize(soundmulresult, 18);
+               
+            when 6 =>
+               if (soundsum < -32768) then cd_right <= x"8000";
+               elsif (soundsum > 32767) then cd_right <= x"7FFF";
+               else cd_right <= soundsum(15 downto 0);
+               end if;
+            
+            when others => null;
+         end case;
+         if (cd_volume_step < 7) then
+            cd_volume_step <= cd_volume_step + 1;
+         end if; 
+         
+         soundmulresult <= resize(shift_right(soundmul1 * signed('0' & soundmul2), 7), 17);  
+      
       end if;
    end process;
    
@@ -2217,17 +2455,16 @@ begin
    -- synthesis translate_off
 
    goutput : if 1 = 1 generate
-   signal outputCnt : unsigned(31 downto 0) := (others => '0'); 
+   signal outputCnt  : unsigned(31 downto 0) := (others => '0'); 
+   signal clkCounter : unsigned(31 downto 0);
    
    begin
       process
-         constant WRITETIME            : std_logic := '1';
+         constant WRITETIME            : std_logic := '0';
          
          file outfile                  : text;
          variable f_status             : FILE_OPEN_STATUS;
          variable line_out             : line;
-            
-         variable clkCounter           : unsigned(31 downto 0);
             
          variable bus_read_1           : std_logic;
          variable bus_addr_1           : unsigned(3 downto 0);
@@ -2250,10 +2487,6 @@ begin
          while (true) loop
             
             wait until rising_edge(clk1x);
-            
-            if (reset = '1') then
-               clkCounter := (others => '0');
-            end if;
             
             if (FifoResponse_reset = '1') then fifoResponseSize := (others => '0'); end if;
             if (FifoResponse_Wr = '1') then fifoResponseSize := fifoResponseSize + 1; end if;
@@ -2376,8 +2609,9 @@ begin
                write(line_out, string'("CPUWRITE: ")); 
                if (WRITETIME = '1') then
                   write(line_out, to_hstring(clkCounter));
+                  write(line_out, string'(" ")); 
                end if;
-               write(line_out, string'(" 0")); 
+               write(line_out, string'("0")); 
                write(line_out, to_hstring(bus_addr));
                write(line_out, string'(" 000000")); 
                write(line_out, to_hstring(bus_dataWrite));
@@ -2389,8 +2623,9 @@ begin
                write(line_out, string'("CPUREAD: "));
                if (WRITETIME = '1') then
                   write(line_out, to_hstring(clkCounter - 1));
+                  write(line_out, string'(" ")); 
                end if;
-               write(line_out, string'(" 0")); 
+               write(line_out, string'("0")); 
                write(line_out, to_hstring(bus_addr_1));
                write(line_out, string'(" 000000")); 
                write(line_out, to_hstring(bus_dataRead));
@@ -2401,7 +2636,11 @@ begin
             bus_addr_1 := bus_addr;
             
             outputCnt <= newoutputCnt;
-            clkCounter := clkCounter + 1;
+            clkCounter <= clkCounter + 1;
+            
+            if (reset = '1') then
+               clkCounter <= x"00000001";
+            end if;
            
          end loop;
          
