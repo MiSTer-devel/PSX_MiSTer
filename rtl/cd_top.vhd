@@ -1398,6 +1398,8 @@ begin
       ss_out(i + 76)(7 downto 0) <= subdata(i);
    end generate;
    
+   seekOK <= '1';
+   
    -- drive
    process(clk1x)
    begin
@@ -1497,7 +1499,7 @@ begin
                   -- completeSeek
                   if (driveState = DRIVE_SEEKIMPLICIT or driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL) then
                      
-                     seekOK <= '1';
+                     --seekOK <= '1';
                      
                      for i in 0 to 11 loop
                         subdata(i) <= nextSubdata(i);
@@ -1513,12 +1515,12 @@ begin
                         end if;
                      else
                         if (driveState = DRIVE_SEEKLOGICAL) then
-                           seekOK <= modeReg(0); -- cdda
+                           --seekOK <= modeReg(0); -- cdda
                         end if;
                      end if;
-                     if (unsigned(nextSubdata(1)) = LEAD_OUT_TRACK_NUMBER) then
-                        seekOK <= '0';
-                     end if;
+                     --if (unsigned(nextSubdata(1)) = LEAD_OUT_TRACK_NUMBER) then
+                     --   seekOK <= '0';
+                     --end if;
                       
                      currentLBA   <= lastReadSector;
                      -- todo: physical lba position?
