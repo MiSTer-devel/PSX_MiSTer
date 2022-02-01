@@ -689,8 +689,6 @@ begin
          FifoParam_Rd            <= '0';
          FifoParam_reset         <= '0';
          
-         error                   <= '0';
-         
          cmdResetXa              <= '0';
       
          if (reset = '1') then
@@ -1398,8 +1396,6 @@ begin
       ss_out(i + 76)(7 downto 0) <= subdata(i);
    end generate;
    
-   seekOK <= '1';
-   
    -- drive
    process(clk1x)
    begin
@@ -1411,6 +1407,8 @@ begin
             startMotorReset        <= '0'; 
             startMotor             <= '0';
          end if;
+         
+         error  <= '0';
 
          if (reset = '1') then
             
@@ -1499,7 +1497,7 @@ begin
                   -- completeSeek
                   if (driveState = DRIVE_SEEKIMPLICIT or driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL) then
                      
-                     --seekOK <= '1';
+                     seekOK <= '1';
                      
                      for i in 0 to 11 loop
                         subdata(i) <= nextSubdata(i);
@@ -1515,12 +1513,12 @@ begin
                         end if;
                      else
                         if (driveState = DRIVE_SEEKLOGICAL) then
-                           --seekOK <= modeReg(0); -- cdda
+                           seekOK <= modeReg(0); -- cdda
                         end if;
                      end if;
-                     --if (unsigned(nextSubdata(1)) = LEAD_OUT_TRACK_NUMBER) then
-                     --   seekOK <= '0';
-                     --end if;
+                     if (unsigned(nextSubdata(1)) = LEAD_OUT_TRACK_NUMBER) then
+                        seekOK <= '0';
+                     end if;
                       
                      currentLBA   <= lastReadSector;
                      -- todo: physical lba position?
@@ -1550,6 +1548,7 @@ begin
                            ackDrive <= '1';
                         end if;
                      else
+                        error                     <= '1';
                         lastSectorHeaderValid     <= '0';
                         errorResponseDrive_new    <= '1';
                         errorResponseDrive_error  <= x"04";
@@ -1936,7 +1935,6 @@ begin
             
                when SFETCH_IDLE =>
                   if (readOnDisk = '1' and ce = '1') then
-                     readSubchannel <= '1';
                      lastReadSector   <= readLBA;
                      if (readLBA >= startLBA) then
                         positionInIndex <= readLBA - startLBA;
@@ -1973,6 +1971,7 @@ begin
                   else
                      trackNumberBCD <= x"01"; -- todo
                   end if;
+                  readSubchannel <= '1';
                
                when SFETCH_DATA =>
                   if (cd_done = '1') then
@@ -2303,19 +2302,29 @@ begin
                soundmul2 <= unsigned(cdvol_00);
                
             when 1 =>
-               soundmul2 <= unsigned(cdvol_01);
-
-            when 2 =>
                if (modeReg(6) = '1' and xa_muted = '0' and muted = '0') then
                   soundmul1 <= cdxa_right;
                else
                   soundmul1 <= (others => '0');
                end if;
                soundmul2 <= unsigned(cdvol_10);
+
+            when 2 =>
+               if (modeReg(6) = '1' and xa_muted = '0' and muted = '0') then
+                  soundmul1 <= cdxa_left;
+               else
+                  soundmul1 <= (others => '0');
+               end if;
+               soundmul2 <= unsigned(cdvol_01);
                
                soundsum <= resize(soundmulresult, 18);
                
             when 3 =>
+               if (modeReg(6) = '1' and xa_muted = '0' and muted = '0') then
+                  soundmul1 <= cdxa_right;
+               else
+                  soundmul1 <= (others => '0');
+               end if;
                soundmul2 <= unsigned(cdvol_11); 
                
                soundsum <= soundsum + resize(soundmulresult, 18);

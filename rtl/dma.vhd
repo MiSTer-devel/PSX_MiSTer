@@ -127,6 +127,8 @@ architecture arch of dma is
          
    signal chopsize            : unsigned(7 downto 0);
    signal chopwaittime        : unsigned(7 downto 0);
+   
+   signal dmaEndWait          : unsigned(3 downto 0) := (others => '0');
          
    signal autoread            : std_logic := '0';
    signal firstword           : std_logic := '0';
@@ -416,7 +418,11 @@ begin
                end if;
             end loop;
             
-            if (triggerNew = '1') then
+            if (dmaEndWait(3) = '0') then
+               dmaEndWait <= dmaEndWait + 1;
+            end if;
+            
+            if (triggerNew = '1' and dmaEndWait(3) = '1') then
                dmaArray(triggerchannel).requestsPending <= '0';
                dmaArray(triggerchannel).timeupPending   <= '0';
                dmaArray(triggerchannel).D_CHCR(28)      <= '0';
@@ -721,8 +727,9 @@ begin
                when STOPPING =>
                   if (fifoOut_Done = '1' and fifoOut_Wr = '0' and requestOnFly = 0) then
                      if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
-                        dmaState <= OFF;
-                        isOn     <= '0';
+                        dmaState   <= OFF;
+                        isOn       <= '0';
+                        dmaEndWait <= (others => '0');
                         dmaArray(activeChannel).D_CHCR(24) <= '0';
                         dmaArray(activeChannel).channelOn  <= '0';
                         if (DICR(16 + activeChannel) = '1') then
@@ -737,8 +744,9 @@ begin
                when PAUSING =>
                   if (fifoOut_Done = '1' and fifoOut_Wr = '0' and requestOnFly = 0) then
                      if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
-                        dmaState <= OFF;
-                        isOn     <= '0';
+                        dmaState   <= OFF;
+                        isOn       <= '0';
+                        dmaEndWait <= (others => '0');
                      end if;
                   end if;
             
