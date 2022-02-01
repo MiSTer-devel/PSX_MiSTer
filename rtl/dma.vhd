@@ -163,6 +163,7 @@ architecture arch of dma is
    signal fifoOut_Done        : std_logic;
       
    signal ramwrite_pending    : std_logic;
+   signal fifoOut_Wr_1        : std_logic;
       
    -- REPRODUCIBLEDMATIMING   
    signal REP_counter         : integer;
@@ -843,7 +844,8 @@ begin
                ramwrite_pending <= '1';
             end if; 
             
-            if (fifoOut_Wr = '1') then
+            fifoOut_Wr_1 <= fifoOut_Wr;
+            if (fifoOut_Wr = '1' or fifoOut_Wr_1 = '1') then
                fifoOut_Done <= '0';
             elsif (ram_done = '1' and fifoOut_Empty = '1') then
                fifoOut_Done <= '1';
