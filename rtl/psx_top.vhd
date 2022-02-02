@@ -144,6 +144,12 @@ entity psx_top is
       Analog1YP2            : in  signed(7 downto 0);
       Analog2XP2            : in  signed(7 downto 0);
       Analog2YP2            : in  signed(7 downto 0);              
+      MouseEvent            : in  std_logic;
+      MouseLeft             : in  std_logic;
+      MouseRight            : in  std_logic;
+      MouseX                : in  signed(8 downto 0);
+      MouseY                : in  signed(8 downto 0);
+
       -- sound                            
       sound_out_left        : out std_logic_vector(15 downto 0) := (others => '0');
       sound_out_right       : out std_logic_vector(15 downto 0) := (others => '0');
@@ -874,6 +880,11 @@ begin
       Analog1YP2           => Analog1YP2,
       Analog2XP2           => Analog2XP2,
       Analog2YP2           => Analog2YP2,
+      MouseEvent           => MouseEvent,
+      MouseLeft            => MouseLeft,
+      MouseRight           => MouseRight,
+      MouseX               => MouseX,
+      MouseY               => MouseY,
       
       mem1_request         => memDDR3card1_request,   
       mem1_BURSTCNT        => memDDR3card1_BURSTCNT,  

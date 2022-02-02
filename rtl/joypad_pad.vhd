@@ -10,6 +10,7 @@ entity joypad_pad is
       reset                : in  std_logic;
       
       analogPad            : in  std_logic;
+      mouse                : in  std_logic := '0';
       
       selected             : in  std_logic;
       actionNext           : in  std_logic := '0';
@@ -44,7 +45,12 @@ entity joypad_pad is
       Analog1X             : in  signed(7 downto 0);
       Analog1Y             : in  signed(7 downto 0);
       Analog2X             : in  signed(7 downto 0);
-      Analog2Y             : in  signed(7 downto 0)
+      Analog2Y             : in  signed(7 downto 0);
+      MouseEvent           : in  std_logic;
+      MouseLeft            : in  std_logic;
+      MouseRight           : in  std_logic;
+      MouseX               : in  signed(8 downto 0);
+      MouseY               : in  signed(8 downto 0)
    );
 end entity;
 
@@ -57,6 +63,10 @@ architecture arch of joypad_pad is
       ID,
       BUTTONLSB,
       BUTTONMSB,
+      MOUSEBUTTONSLSB,
+      MOUSEBUTTONSMSB,
+      MOUSEAXISX,
+      MOUSEAXISY,
       ANALOGRIGHTX,
       ANALOGRIGHTY,
       ANALOGLEFTX,
@@ -66,11 +76,28 @@ architecture arch of joypad_pad is
    
    signal analogPadSave   : std_logic := '0';
    signal rumbleOnFirst   : std_logic := '0';
+   signal mouseSave       : std_logic := '0';
+
+   signal prevMouseEvent  : std_logic := '0';
+
+   signal mouseAccX       : signed(9 downto 0) := (others => '0');
+   signal mouseAccY       : signed(9 downto 0) := (others => '0');
+
+   signal mouseOutX          : signed(7 downto 0) := (others => '0');
+   signal mouseOutY          : signed(7 downto 0) := (others => '0');
   
 begin 
 
   
    process (clk1x)
+
+   variable mouseIncX     : signed(9 downto 0) := (others => '0');
+   variable mouseIncY     : signed(9 downto 0) := (others => '0');
+   variable newMouseAccX  : signed(9 downto 0) := (others => '0');
+   variable newMouseAccY  : signed(9 downto 0) := (others => '0');
+   variable newMouseAccClippedX  : signed(9 downto 0) := (others => '0');
+   variable newMouseAccClippedY  : signed(9 downto 0) := (others => '0');
+
    begin
       if rising_edge(clk1x) then
       
@@ -84,6 +111,8 @@ begin
             controllerState <= IDLE;
             isActive        <= '0';
             rumbleOn        <= '0';
+            mouseAccX       <= (others => '0');
+            mouseAccY       <= (others => '0');
 
          elsif (ce = '1') then
          
@@ -91,6 +120,37 @@ begin
                isActive        <= '0';
                controllerState <= IDLE;
             end if;
+
+            prevMouseEvent  <= MouseEvent;
+            if (prevMouseEvent /= MouseEvent) then
+                mouseIncX := resize(MouseX, mouseIncX'length);
+                mouseIncX := resize(MouseY, mouseIncX'length);
+            else
+                mouseIncX := to_signed(0, mouseIncX'length);
+                mouseIncY := to_signed(0, mouseIncY'length);
+            end if;
+
+            newMouseAccX := mouseAccX + mouseIncX;
+            newMouseAccY := mouseAccY + mouseIncY;
+
+            if (newMouseAccX >= 255) then
+                newMouseAccClippedX := to_signed(255, newMouseAccClippedX'length);
+            elsif (newMouseAccX <= -256) then
+                newMouseAccClippedX := to_signed(-256, newMouseAccClippedX'length);
+            else
+                newMouseAccClippedX := newMouseAccX;
+            end if;
+
+            if (newMouseAccY >= 255) then
+                newMouseAccClippedY := to_signed(255, newMouseAccClippedY'length);
+            elsif (newMouseAccY <= -256) then
+                newMouseAccClippedY := to_signed(-256, newMouseAccClippedY'length);
+            else
+                newMouseAccClippedY := newMouseAccY;
+            end if;
+
+            mouseAccX <= newMouseAccClippedX;
+            mouseAccY <= newMouseAccClippedY;
          
             if (actionNext = '1' and transmitting = '1') then
                if (selected = '1') then
@@ -102,6 +162,7 @@ begin
                         analogPadSave   <= analogPad;
                         receiveValid    <= '1';
                         receiveBuffer   <= x"FF";
+
                      end if;
                   elsif (isActive = '1') then
                      case (controllerState) is
@@ -111,13 +172,36 @@ begin
                               isActive        <= '1';
                               ack             <= '1';
                               analogPadSave   <= analogPad;
+                              mouseSave       <= mouse;
                               receiveValid    <= '1';
                               receiveBuffer   <= x"FF";
+
+                              if (mouseAccX >= 255) then
+                                  mouseOutX <= to_signed(255, mouseOutX'length);
+                              elsif (mouseAccX <= -256) then
+                                  mouseOutX <= to_signed(-256, mouseOutX'length);
+                              else
+                                  mouseOutX <= resize(mouseAccX, mouseOutX'length);
+                              end if;
+
+                              if (mouseAccY >= 255) then
+                                  mouseOutY <= to_signed(255, mouseOutY'length);
+                              elsif (mouseAccY <= -256) then
+                                  mouseOutY <= to_signed(-256, mouseOutY'length);
+                              else
+                                  mouseOutY <= resize(mouseAccY, mouseOutY'length);
+                              end if;
+
+                              mouseAccX       <= mouseIncX;
+                              mouseAccY       <= mouseIncY;
+
                            end if;
                            
                         when READY => 
                            if (transmitValue = x"42") then
-                              if (analogPadSave = '1') then
+                              if (mouseSave = '1') then
+                                 receiveBuffer   <= x"12";
+                              elsif (analogPadSave = '1') then
                                  receiveBuffer   <= x"73";
                               else
                                  receiveBuffer   <= x"41";
@@ -129,10 +213,45 @@ begin
                            
                         when ID => 
                            receiveBuffer   <= x"5A";
-                           controllerState <= BUTTONLSB;
+                           if (mouseSave = '1') then
+                               controllerState <= MOUSEBUTTONSLSB;
+                           else
+                               controllerState <= BUTTONLSB;
+                           end if;
                            ack             <= '1';
                            receiveValid    <= '1';
                            
+                        when MOUSEBUTTONSLSB =>
+                           controllerState  <= MOUSEBUTTONSMSB;
+                           receiveBuffer   <= x"FF";
+                           ack              <= '1';
+                           receiveValid    <= '1';
+
+                        when MOUSEBUTTONSMSB =>
+                           receiveBuffer(0) <= '0';
+                           receiveBuffer(1) <= '0';
+                           receiveBuffer(2) <= not MouseRight;
+                           receiveBuffer(3) <= not MouseLeft;
+                           receiveBuffer(4) <= '1';
+                           receiveBuffer(5) <= '1';
+                           receiveBuffer(6) <= '1';
+                           receiveBuffer(7) <= '1';
+                           controllerState <= MOUSEAXISX;
+                           ack              <= '1';
+                           receiveValid    <= '1';
+
+                        when MOUSEAXISX =>
+                           receiveBuffer   <= std_logic_vector(mouseOutX);
+                           receiveValid    <= '1';
+                           controllerState <= MOUSEAXISY;
+                           ack             <= '1';
+
+                        when MOUSEAXISY =>
+                           receiveBuffer   <= std_logic_vector(mouseOutY);
+                           receiveValid    <= '1';
+                           controllerState <= IDLE;
+                           ack             <= '1';
+
                         when BUTTONLSB => 
                            receiveBuffer(0) <= not KeySelect;
                            receiveBuffer(1) <= not KeyL3;
