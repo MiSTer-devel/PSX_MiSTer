@@ -804,6 +804,10 @@ begin
                      FifoResponse_reset <= '1';
                   end if;
                   
+                  if (nextCmd /= x"02" and nextCmd /= x"0D") then
+                     FifoParam_reset <= '1';
+                  end if;
+                  
                   case (nextCmd) is
                      when x"00" => -- Sync
                         errorResponseCmd_new    <= '1';
@@ -958,7 +962,6 @@ begin
                         cmdPending        <= '0';
                         
                      when x"0E" => -- setmode
-                        FifoParam_Rd <= '1';
                         setMode      <= '1';
                         newMode      <= FifoParam_Dout;
                         cmdAck       <= '1';
@@ -992,7 +995,6 @@ begin
                         
                      when x"12" => -- SetSession
                         cmdPending     <= '0';
-                        FifoParam_Rd   <= '1';
                         if (hasCD = '0' or driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
                            errorResponseCmd_new    <= '1';
                            errorResponseCmd_error  <= x"01";
@@ -1008,7 +1010,6 @@ begin
                         cmdPending     <= '0';
                         
                      when x"14" => -- GetTD
-                        FifoParam_Rd <= '1';
                         cmdPending   <= '0';
                         if (hasCD = '0') then
                            errorResponseCmd_new    <= '1';
@@ -1037,7 +1038,6 @@ begin
                         errorResponseCmd_reason <= x"40";
                         
                      when x"19" => -- test
-                        FifoParam_Rd   <= '1';
                         cmdPending     <= '0';
                         if (FifoParam_Dout = x"04" or FifoParam_Dout = x"05" or FifoParam_Dout = x"20" or FifoParam_Dout = x"22") then
                            cmdIRQ <= '1';
@@ -1175,8 +1175,8 @@ begin
                      setLocSecond <= unsigned(FifoParam_Dout(7 downto 4)) * 10 + unsigned(FifoParam_Dout(3 downto 0));
                      FifoParam_Rd <= '1';
                   when 1 => 
-                     setLocFrame  <= unsigned(FifoParam_Dout(7 downto 4)) * 10 + unsigned(FifoParam_Dout(3 downto 0));
-                     FifoParam_Rd <= '1';
+                     setLocFrame     <= unsigned(FifoParam_Dout(7 downto 4)) * 10 + unsigned(FifoParam_Dout(3 downto 0));
+                     FifoParam_reset <= '1';
                   when others => null;
                end case;
             end if;
@@ -1190,7 +1190,7 @@ begin
                      FifoParam_Rd <= '1';
                   when 1 => 
                      XaFilterChannel <= FifoParam_Dout;
-                     FifoParam_Rd <= '1';
+                     FifoParam_reset <= '1';
                   when others => null;
                end case;
             end if;
@@ -1589,9 +1589,9 @@ begin
                         -- todo: if dataSector
                            processDataSector     <= '1';
                            lastSectorHeaderValid <= '1';
+                           internalStatus(5)     <= '1'; -- reading
                            if ((modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
                               writeSectorPointer    <= writeSectorPointer + 1;
-                              internalStatus(5)     <= '1'; -- reading
                               ackRead               <= '1';
                               pause_cmd             <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
                            end if;
