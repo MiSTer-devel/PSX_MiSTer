@@ -348,6 +348,8 @@ wire [15:0] joystick_analog_r0;
 wire [15:0] joystick_analog_l1;
 wire [15:0] joystick_analog_r1;
 
+wire [24:0] mouse;
+
 wire [32:0] RTC_time;
 
 wire [63:0] status_in = cart_download ? {status[63:39],ss_slot,status[36:17],1'b0,status[15:0]} : {status[63:39],ss_slot,status[36:0]};
@@ -400,7 +402,8 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
    .joystick_l_analog_0(joystick_analog_l0),
    .joystick_r_analog_0(joystick_analog_r0),  
    .joystick_l_analog_1(joystick_analog_l1),
-   .joystick_r_analog_1(joystick_analog_r1)
+   .joystick_r_analog_1(joystick_analog_r1),
+   .ps2_mouse(mouse)
 );
 
 assign joy = joy_unmod[16] ? 16'b0 : joy_unmod;
@@ -700,6 +703,11 @@ psx
    .Analog1YP2(joystick_analog_l1[15:8]),       
    .Analog2XP2(joystick_analog_r1[7:0]),           
    .Analog2YP2(joystick_analog_r1[15:8]),           
+   .MouseEvent(mouse[24]),
+   .MouseLeft(mouse[0]),
+   .MouseRight(mouse[1]),
+   .MouseX({mouse[4],mouse[15:8]}),
+   .MouseY({mouse[5],mouse[23:16]}),
    //sound       
 	.sound_out_left(AUDIO_L),
 	.sound_out_right(AUDIO_R),
