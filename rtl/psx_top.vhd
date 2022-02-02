@@ -110,6 +110,9 @@ entity psx_top is
       vsync                 : out std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
+      true_color            : out std_logic;
+      dither_pattern        : in  unsigned( 1 downto 0);
+      alpha_dither_fix      : in  std_logic;
       DisplayWidth          : out unsigned( 9 downto 0);
       DisplayHeight         : out unsigned( 8 downto 0);
       DisplayOffsetX        : out unsigned( 9 downto 0);
@@ -1223,6 +1226,9 @@ begin
       vram_WE              => vram_WE,        
       vram_RD              => vram_RD, 
 
+      true_color           => true_color,
+      dither_pattern       => dither_pattern,
+      alpha_dither_fix     => alpha_dither_fix,
       hsync                => hsync, 
       vsync                => vsync, 
       hblank               => hblank_intern,

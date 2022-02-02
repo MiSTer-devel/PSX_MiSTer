@@ -104,6 +104,9 @@ entity psx_mister is
       pal60                 : in  std_logic;
       hsync                 : out std_logic;
       vsync                 : out std_logic;
+      true_color            : out std_logic;
+      dither_pattern        : in unsigned(1 downto 0);
+      alpha_dither_fix      : in  std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
       DisplayWidth          : out unsigned( 9 downto 0);
@@ -264,6 +267,9 @@ begin
       videoout_on           => videoout_on,
       isPal                 => isPal,
       pal60                 => pal60,
+      true_color            => true_color,
+      dither_pattern        => dither_pattern,
+      alpha_dither_fix      => alpha_dither_fix,
       hsync                 => hsync, 
       vsync                 => vsync, 
       hblank                => hblank,

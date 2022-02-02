@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -269,7 +269,11 @@ parameter CONF_STR = {
 	"P1O24,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",	
 	"P1O78,Stereo Mix,None,25%,50%,100%;",
 	"P1o23,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
-	"P1oD,Dithering Filter,Off,On;",
+	"P1-;",
+	"P1oDE,Dithering Filter,Off,On,Strong,Composite;",
+	"P1oF,Alpha-Blending Fix,Off,On;",
+	"P1oGH,Dithering Pattern, Original,Rotated,Symmetric,Genesis;",
+	"P1oI,Blend True Color Modes,Off,On;",
 
    "P2,Debug;",
 	"P2-;",
@@ -663,6 +667,9 @@ psx
    .videoout_on     (~status[14]),
    .isPal           (status[40]),
    .pal60           (status[15]),
+   .true_color      (true_color),
+   .alpha_dither_fix (status[47]),
+   .dither_pattern  (status[49:48]),
    .hsync           (hs),
    .vsync           (vs),
    .hblank          (hbl),
@@ -875,14 +882,16 @@ wire ce_pix;
 wire [7:0] r,g,b;
 wire hs_b, vs_b, hb_b, vb_b;
 wire [7:0] r_b, g_b, b_b;
+wire true_color;
+wire blend_true_color = status[50] || ~true_color;
 
 cofi_blender blender
 (
 	.clk(clk_2x),
 	.ce_pixel(ce_pix),
-	.force_blend(1'b0),
-	.diff_blend(status[45]),
-	.reduced(1'b1),
+	.force_blend(blend_true_color && &status[46:45]),
+	.diff_blend(blend_true_color && |status[46:45]),
+	.reduced(status[45]),
 	.hblank(hbl),
 	.vblank(vbl),
 	.hsync(hs),
