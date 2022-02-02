@@ -91,7 +91,7 @@ architecture arch of cd_top is
    signal cmd_unpause               : std_logic := '0';
    signal nextCmd                   : std_logic_vector(7 downto 0);
    
-   signal pendingDriveIRQ           : std_logic := '0';
+   signal pendingDriveIRQ           : std_logic_vector(4 downto 0);
    signal pendingDriveResponse      : std_logic_vector(7 downto 0);
    signal ackPendingIRQ             : std_logic := '0';
    signal ackRead_valid             : std_logic := '0';
@@ -405,7 +405,7 @@ begin
    ss_out(21)( 7 downto  0) <= CDROM_STATUS;
    ss_out(21)(12 downto  8) <= CDROM_IRQENA;
    ss_out(21)(20 downto 16) <= CDROM_IRQFLAG;
-   ss_out(13)(24)           <= pendingDriveIRQ;
+   ss_out(13)(28 downto 24) <= pendingDriveIRQ;
    ss_out(13)(23 downto 16) <= nextCmd;
    ss_out(22)(17)           <= xa_muted;
    ss_out(23)( 7 downto  0) <= cdvol_next00;
@@ -432,7 +432,7 @@ begin
             CDROM_STATUS    <= ss_in(21)(7 downto 0); -- x"18";
             CDROM_IRQENA    <= ss_in(21)(12 downto 8); -- (others => '0');
             CDROM_IRQFLAG   <= ss_in(21)(20 downto 16); -- (others => '0');
-            pendingDriveIRQ <= ss_in(13)(24); -- '0';
+            pendingDriveIRQ <= ss_in(13)(28 downto 24); -- (others => '0');
             nextCmd         <= ss_in(13)(23 downto 16); -- '0';
             xa_muted        <= ss_in(22)(17); -- '0';
             
@@ -499,8 +499,7 @@ begin
                               newFlags := CDROM_IRQFLAG and (not bus_dataWrite(4 downto 0));
                               CDROM_IRQFLAG <= newFlags;
                               if (newFlags = "00000") then
-                                 if (pendingDriveIRQ = '1') then
-                                    pendingDriveIRQ <= '0';
+                                 if (pendingDriveIRQ /= "00000") then
                                     ackPendingIRQ   <= '1';
                                  else
                                     if (cmd_delay > 0) then
@@ -583,24 +582,34 @@ begin
             end if;            
             
             if (driveAck = '1' or ackDrive = '1' or (getIDAck = '1' and hasCD = '1')) then
-               CDROM_IRQFLAG <= "00010";
-               if (CDROM_IRQENA(1) = '1') then
-                  irqOut <= '1';
+               if (CDROM_IRQFLAG /= "00000") then
+                  pendingDriveIRQ      <= "00010";
+                  pendingDriveResponse <= internalStatus;
+               else
+                  CDROM_IRQFLAG <= "00010";
+                  if (CDROM_IRQENA(1) = '1') then
+                     irqOut <= '1';
+                  end if;
                end if;
             end if;           
 
             if (ackDriveEnd = '1') then
-               CDROM_IRQFLAG <= "00100";
-               if (CDROM_IRQENA(2) = '1') then
-                  irqOut <= '1';
+               if (CDROM_IRQFLAG /= "00000") then
+                  pendingDriveIRQ      <= "00100";
+                  pendingDriveResponse <= internalStatus;
+               else
+                  CDROM_IRQFLAG <= "00100";
+                  if (CDROM_IRQENA(2) = '1') then
+                     irqOut <= '1';
+                  end if;
                end if;
             end if;
             
             if (ackRead = '1' or ackRead_data = '1') then
-               if (CDROM_IRQFLAG = "00001") then -- irq still pending, sector missed
+               if (CDROM_IRQFLAG = "00001") then -- irq for sector still pending, sector missed
                   -- todo: nothing can be done?
                elsif (CDROM_IRQFLAG /= "00000") then
-                  pendingDriveIRQ      <= '1';
+                  pendingDriveIRQ      <= "00001";
                   pendingDriveResponse <= internalStatus;
                else
                   CDROM_IRQFLAG <= "00001";
@@ -612,13 +621,14 @@ begin
             end if;
             
             if (ackPendingIRQNext = '1') then
-               CDROM_IRQFLAG <= "00001";
-               if (CDROM_IRQENA(0) = '1') then
+               CDROM_IRQFLAG   <= pendingDriveIRQ;
+               pendingDriveIRQ <= (others => '0');
+               if ((CDROM_IRQENA and pendingDriveIRQ) /= "00000") then
                   irqOut <= '1';
                end if;
             end if;
             
-            if (getIDAck = '1' and hasCD = '0') then
+            if (getIDAck = '1' and hasCD = '0') then -- todo: async with large fifo not implemented!
                CDROM_IRQFLAG <= "00101";
                if (CDROM_IRQENA(0) = '1' or CDROM_IRQENA(2) = '1') then
                   irqOut <= '1';
@@ -1180,8 +1190,10 @@ begin
             
             -- responses
             if (cmdAck = '1' or driveAck = '1' or ackDrive = '1' or ackRead_valid = '1' or ackDriveEnd = '1') then
-               FifoResponse_Din <= internalStatus;
-               FifoResponse_Wr  <= '1';
+               if (CDROM_IRQFLAG /= "00000") then
+                  FifoResponse_Din <= internalStatus;
+                  FifoResponse_Wr  <= '1';
+               end if;
             end if;
                       
             if (errorResponseCmd_new = '1') then
@@ -1548,7 +1560,6 @@ begin
                            ackDrive <= '1';
                         end if;
                      else
-                        error                     <= '1';
                         lastSectorHeaderValid     <= '0';
                         errorResponseDrive_new    <= '1';
                         errorResponseDrive_error  <= x"04";

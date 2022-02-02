@@ -22,6 +22,7 @@ entity gpu is
       pal60                : in  std_logic;
       fpscountOn           : in  std_logic;
       noTexture            : in  std_logic;
+      debugmodeOn          : in  std_logic;
       
       cdSlow               : in  std_logic;
       
@@ -1669,6 +1670,8 @@ begin
       reset                   => reset,
             
       videoout_on             => videoout_on,
+         
+      debugmodeOn             => debugmodeOn,
          
       fpscountOn              => fpscountOn,
       fpscountBCD             => fpscountBCD,

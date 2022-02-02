@@ -441,6 +441,8 @@ architecture arch of psx_top is
    signal debug_lateSamples      : unsigned(15 downto 0);
    signal debug_lateTicks        : unsigned(15 downto 0);
    
+   signal debugmodeOn            : std_logic;
+   
    -- memcard
    signal memcard1_pause         : std_logic;
    signal memcard2_pause         : std_logic;
@@ -674,6 +676,20 @@ begin
             end if;
             
          end if;
+         
+         debugmodeOn <= '0';
+         if (FASTMEM               = '1') then debugmodeOn <= '1'; end if;
+         if (REPRODUCIBLEGPUTIMING = '1') then debugmodeOn <= '1'; end if;
+         if (REPRODUCIBLEDMATIMING = '1') then debugmodeOn <= '1'; end if;
+         if (DMABLOCKATONCE        = '1') then debugmodeOn <= '1'; end if;
+         if (INSTANTSEEK           = '1') then debugmodeOn <= '1'; end if;
+         if (noTexture             = '1') then debugmodeOn <= '1'; end if;
+         if (SPUon                 = '0') then debugmodeOn <= '1'; end if;
+         if (REVERBOFF             = '1') then debugmodeOn <= '1'; end if;
+         if (REPRODUCIBLESPUDMA    = '1') then debugmodeOn <= '1'; end if;
+         if (videoout_on           = '0') then debugmodeOn <= '1'; end if;
+         if (pal60                 = '1') then debugmodeOn <= '1'; end if;
+         
       end if;
    end process;
    
@@ -1160,6 +1176,7 @@ begin
       pal60                => pal60,
       fpscountOn           => fpscountOn,
       noTexture            => noTexture,
+      debugmodeOn          => debugmodeOn,
       
       cdSlow               => cdSlow,
       

@@ -87,9 +87,9 @@ GTE    : 80%
 MDEC   : 90%
 - timing slightly too fast (4996/5376)
  
-CD     : 50%
+CD     : 60%
 - single track only
-- no audio yet
+- no Direct Audio
 
 SPU    : 90%
 - DDR3 version can be improved

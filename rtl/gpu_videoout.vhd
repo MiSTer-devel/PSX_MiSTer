@@ -13,6 +13,8 @@ entity gpu_videoout is
          
       videoout_on             : in  std_logic;
          
+      debugmodeOn             : in  std_logic;
+      
       fpscountOn              : in  std_logic;
       fpscountBCD             : in  unsigned(7 downto 0);     
 
@@ -122,7 +124,11 @@ architecture arch of gpu_videoout is
    
    signal debugtext2          : unsigned(31 downto 0);
    signal debugtext2_data     : std_logic_vector(23 downto 0);
-   signal debugtext2_ena      : std_logic;
+   signal debugtext2_ena      : std_logic;   
+   
+   signal debugtextDbg        : unsigned(23 downto 0);
+   signal debugtextDbg_data   : std_logic_vector(23 downto 0);
+   signal debugtextDbg_ena    : std_logic;
    
 begin 
 
@@ -264,7 +270,11 @@ begin
                   --elsif (debugtext2_ena = '1') then                              
                   --   video_r      <= debugtext2_data( 7 downto 0);
                   --   video_g      <= debugtext2_data(15 downto 8);
-                  --   video_b      <= debugtext2_data(23 downto 16);
+                  --   video_b      <= debugtext2_data(23 downto 16);                  
+                  elsif (debugtextDbg_ena = '1') then                              
+                     video_r      <= debugtextDbg_data( 7 downto 0);
+                     video_g      <= debugtextDbg_data(15 downto 8);
+                     video_b      <= debugtextDbg_data(23 downto 16);
                   elsif (GPUSTAT_DisplayDisable = '1') then
                      video_r      <= (others => '0');
                      video_g      <= (others => '0');
@@ -469,6 +479,28 @@ begin
       o_pixel_out_data       => debugtext2_data,
       o_pixel_out_ena        => debugtext2_ena,
       textstring             => debugtext2
+   );
+   
+   idebugtext_dbg : entity work.gpu_overlay
+   generic map
+   (
+      COLS                   => 3,
+      BACKGROUNDON           => '1',
+      RGB_BACK               => x"FFFFFF",
+      RGB_FRONT              => x"0000FF",
+      OFFSETX                => 30,
+      OFFSETY                => 4
+   )
+   port map
+   (
+      clk                    => clk2x,
+      ce                     => video_ce,
+      ena                    => debugmodeOn,                    
+      i_pixel_out_x          => xpos,
+      i_pixel_out_y          => to_integer(lineDisp),
+      o_pixel_out_data       => debugtextDbg_data,
+      o_pixel_out_ena        => debugtextDbg_ena,
+      textstring             => x"444247"
    );
 
 
