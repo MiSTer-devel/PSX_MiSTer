@@ -628,13 +628,13 @@ begin
                end if;
             end if;
             
-            if (getIDAck = '1' and hasCD = '0') then -- todo: async with large fifo not implemented!
+            if (getIDAck = '1' and hasCD = '0') then -- no async here, working will halt in case irq is still pending
                CDROM_IRQFLAG <= "00101";
                if (CDROM_IRQENA(0) = '1' or CDROM_IRQENA(2) = '1') then
                   irqOut <= '1';
                end if;
             end if;
-            if (getIDAck = '1' and hasCD = '1') then -- todo: async with large fifo not implemented!
+            if (getIDAck = '1' and hasCD = '1') then -- no async here, working will halt in case irq is still pending
                CDROM_IRQFLAG <= "00010";
                if (CDROM_IRQENA(1) = '1') then
                   irqOut <= '1';
@@ -1118,30 +1118,31 @@ begin
                   workDelay <= workDelay - 1;
                   if (workCommand = x"1A") then -- GetID
                      -- todo: do region check here...but why?
-                     if (workDelay = 9) then FifoResponse_reset <= '1'; end if; 
-                     if (workDelay = 8) then 
+                     if (workDelay = 10) then FifoResponse_reset <= '1'; end if; 
+                     if (workDelay = 9) then 
                         FifoResponse_Wr <= '1'; 
                         FifoResponse_Din <= internalStatus; 
                         if (hasCD = '0') then FifoResponse_Din(3) <= '1'; end if; 
                         if (hasCD = '1') then FifoResponse_Din(1) <= '1'; end if; 
                      end if;
-                     if (workDelay = 7) then
+                     if (workDelay = 8) then
                         FifoResponse_Wr <= '1'; 
                         FifoResponse_Din <= x"00";
                         if (hasCD = '0') then FifoResponse_Din(6) <= '1'; end if; 
                      end if;
-                     if (workDelay = 6) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"20"; end if; -- ? 
-                     if (workDelay = 5) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"00"; end if; -- ? 
-                     if (workDelay = 4) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('S')), 8)); end if;
-                     if (workDelay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('C')), 8)); end if; 
-                     if (workDelay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if; 
+                     if (workDelay = 7) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"20"; end if; -- ? 
+                     if (workDelay = 6) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"00"; end if; -- ? 
+                     if (workDelay = 5) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('S')), 8)); end if;
+                     if (workDelay = 4) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('C')), 8)); end if; 
+                     if (workDelay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if; 
                      if (region = "00") then -- ntsc-u
-                        if (workDelay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('A')), 8)); end if; 
+                        if (workDelay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('A')), 8)); end if; 
                      elsif (region = "01") then -- ntsc-j
-                        if (workDelay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('I')), 8)); end if; 
+                        if (workDelay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('I')), 8)); end if; 
                      elsif (region = "10") then -- pal
-                        if (workDelay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if; 
+                        if (workDelay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if; 
                      end if;
+                     if (workDelay = 1 and CDROM_IRQFLAG /= "00000") then workDelay <= 1; end if; 
                   end if;
                else
                   working <= '0';
