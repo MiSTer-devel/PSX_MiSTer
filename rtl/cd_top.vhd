@@ -580,8 +580,8 @@ begin
                   irqOut <= '1';
                end if;
             end if;            
-            
-            if (driveAck = '1' or ackDrive = '1' or (getIDAck = '1' and hasCD = '1')) then
+
+            if (driveAck = '1' or ackDrive = '1') then
                if (CDROM_IRQFLAG /= "00000") then
                   pendingDriveIRQ      <= "00010";
                   pendingDriveResponse <= internalStatus;
@@ -591,7 +591,7 @@ begin
                      irqOut <= '1';
                   end if;
                end if;
-            end if;           
+            end if;             
 
             if (ackDriveEnd = '1') then
                if (CDROM_IRQFLAG /= "00000") then
@@ -634,6 +634,12 @@ begin
                   irqOut <= '1';
                end if;
             end if;
+            if (getIDAck = '1' and hasCD = '1') then -- todo: async with large fifo not implemented!
+               CDROM_IRQFLAG <= "00010";
+               if (CDROM_IRQENA(1) = '1') then
+                  irqOut <= '1';
+               end if;
+            end if;   
                
             if (errorResponseNext_new = '1') then
                CDROM_IRQFLAG <= "00101";
@@ -1189,7 +1195,12 @@ begin
             end if;
             
             -- responses
-            if (cmdAck = '1' or driveAck = '1' or ackDrive = '1' or ackRead_valid = '1' or ackDriveEnd = '1') then
+            if (cmdAck = '1' or ackRead_valid = '1') then
+               FifoResponse_Din <= internalStatus;
+               FifoResponse_Wr  <= '1';
+            end if;
+            
+            if (driveAck = '1' or ackDrive = '1' or ackDriveEnd = '1') then
                if (CDROM_IRQFLAG /= "00000") then
                   FifoResponse_Din <= internalStatus;
                   FifoResponse_Wr  <= '1';
