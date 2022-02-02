@@ -14,8 +14,6 @@ architecture arch of etb is
 
    signal clk1x               : std_logic := '1';
    signal clk2x               : std_logic := '1';
-            
-   signal reset               : std_logic := '1';
    
    signal clk1xToggle         : std_logic := '0';
    signal clk1xToggle2X       : std_logic := '0';
@@ -33,6 +31,14 @@ architecture arch of etb is
    signal dma_read            : std_logic;
    signal dma_readdata        : std_logic_vector(31 downto 0);
    
+   -- savestates
+   signal reset_in            : std_logic := '1';
+   signal reset_out           : std_logic := '1';
+   signal SS_reset            : std_logic := '0';
+   signal SS_DataWrite        : std_logic_vector(31 downto 0) := (others => '0');
+   signal SS_Adr              : unsigned(18 downto 0) := (others => '0');
+   signal SS_wren             : std_logic_vector(16 downto 0) := (others => '0');
+   
    -- testbench
    signal cmdCount            : integer := 0;
    signal clkCount            : integer := 0;
@@ -42,7 +48,7 @@ begin
    clk1x  <= not clk1x  after 15 ns;
    clk2x  <= not clk2x  after 7500 ps;
    
-   reset  <= '0' after 3000 ns;
+   reset_in  <= '0' after 3000 ns;
    
    -- clock index
    process (clk1x)
@@ -70,7 +76,7 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => '1',        
-      reset                => reset,     
+      reset                => reset_out,     
       
       bus_addr             => bus_addr,     
       bus_dataWrite        => bus_dataWrite,
@@ -81,7 +87,32 @@ begin
       dma_write            => dma_write,    
       dma_writedata        => dma_writedata,
       dma_read             => dma_read,     
-      dma_readdata         => dma_readdata 
+      dma_readdata         => dma_readdata,
+      
+      SS_reset             => SS_reset,
+      SS_DataWrite         => SS_DataWrite,
+      SS_Adr               => SS_Adr(6 downto 0),
+      SS_wren              => SS_wren(6),
+      SS_rden              => '0',
+      SS_DataRead          => open,
+      SS_Idle              => open
+   );
+   
+   itb_savestates : entity work.tb_savestates
+   generic map
+   (
+      LOADSTATE         => '0',
+      FILENAME          => ""
+   )
+   port map
+   (
+      clk               => clk1x,         
+      reset_in          => reset_in,    
+      reset_out         => reset_out,   
+      SS_reset          => SS_reset,    
+      SS_DataWrite      => SS_DataWrite,
+      SS_Adr            => SS_Adr,      
+      SS_wren           => SS_wren     
    );
    
    process
@@ -95,7 +126,8 @@ begin
       variable space       : character;
    begin
       
-      wait until reset = '0';
+      wait until reset_out = '1';
+      wait until reset_out = '0';
          
       file_open(f_status, infile, "R:\mdec_test_fpsxa.txt", read_mode);
       

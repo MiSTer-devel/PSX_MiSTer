@@ -364,16 +364,16 @@ begin
                
             when SAVEMEMORY_STARTREAD =>
                if (savetype_counter = 14) then -- spuram
-                  if (useSPUSDRAM = '1') then
+                  if (useSPUSDRAM = '1' or count <= 1024 or count > 16#1C000#) then
                      state          <= SAVEMEMORY_LOAD_SPURAM;
                      SPUwordcounter <= 0;
                      dwordcounter   <= 1;
                   else
                      state          <= SAVEMEMORY_LOAD_VRAM;
                      ddr3_RD        <= '1'; 
-                     ddr3_ADDR      <= "00000011" & std_logic_vector(RAMAddrNext(17 downto 0));
+                     ddr3_ADDR      <= "000000110" & std_logic_vector(RAMAddrNext(17 downto 1));
                      dwordcounter   <= 1;
-                     RAMAddrNext    <= RAMAddrNext + 2;
+                     RAMAddrNext    <= RAMAddrNext + 4;
                   end if;
                elsif (savetype_counter = 15) then -- vram
                   state          <= SAVEMEMORY_LOAD_VRAM;
@@ -444,7 +444,7 @@ begin
                   dwordcounter           <= 0;
                   
                   if (savetype_counter = 14) then -- SPUram
-                     if (useSPUSDRAM = '1') then
+                     if (useSPUSDRAM = '1' or count <= 1024 or count > 16#1C000#) then
                         ddr3_DIN <= spu_din;
                      else
                         ddr3_DIN <= ddr3_DOUT_saved;
@@ -515,7 +515,9 @@ begin
                end if;
             
             when LOADMEMORY_NEXT =>
-               if ((FASTSIM = '0' and ((exeMode = '0' and savetype_counter < SAVETYPESCOUNT) or (exeMode = '1' and savetype_counter < 16))) or (FASTSIM = '1' and savetype_counter < 14)) then
+               if ((FASTSIM = '0' and ((exeMode = '0' and savetype_counter < SAVETYPESCOUNT) or (exeMode = '1' and savetype_counter < 16))) or 
+                   (FASTSIM = '1' and savetype_counter < 14 and resetMode = '1') or 
+                   (FASTSIM = '1' and savetype_counter < 15 and resetMode = '0')) then
                   ddr3_ADDR      <= std_logic_vector(to_unsigned(savestate_address + savetypes(savetype_counter).offset, 26));
                   ddr3_RD        <= not resetMode;
                   state          <= LOADMEMORY_READ;
@@ -546,7 +548,7 @@ begin
                   end if;
                   
                   if (savetype_counter = 14) then -- spuram
-                     if (useSPUSDRAM = '1') then
+                     if (useSPUSDRAM = '1' or count <= 1024 or count > 16#1C000#) then
                         dwordcounter   <= 1;
                         state          <= LOADMEMORY_WRITE_SPURAM; 
                         SPUwordcounter <= 0;
@@ -556,8 +558,8 @@ begin
                         ddr3_WE      <= '1';
                         ddr3_BE      <= x"FF";    
                         
-                        ddr3_ADDR    <= "00000011" & std_logic_vector(RAMAddrNext(17 downto 0));
-                        RAMAddrNext  <= RAMAddrNext + 2;
+                        ddr3_ADDR    <= "000000110" & std_logic_vector(RAMAddrNext(17 downto 1));
+                        RAMAddrNext  <= RAMAddrNext + 4;
                      end if;
                   end if;
                   if (savetype_counter = 15) then -- vram
@@ -605,6 +607,11 @@ begin
                if (SPURAM_done2X = '1') then
                   if (SPUwordcounter = 3) then
                      state <= LOADMEMORY_WRITE_NEXT;
+                     if (FASTSIM = '1' and count = 1024) then
+                        count          <= count + 16#1C000# - 1024;
+                        RAMAddrNext    <= RAMAddrNext + (16#38000# - 2048);
+                        ddr3_ADDR_save <= std_logic_vector(unsigned(ddr3_ADDR_save) + 16#1C000# - 1024);
+                     end if;
                   else
                      state <= LOADMEMORY_WRITE_SPURAM;
                      SPUwordcounter <=  SPUwordcounter + 1;

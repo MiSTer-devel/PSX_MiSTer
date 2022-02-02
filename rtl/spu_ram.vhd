@@ -63,6 +63,10 @@ architecture arch of spu_ram is
    signal ram_isCapture        : std_logic;
    signal captureram_we        : std_logic;
    signal captureram_readdata  : std_logic_vector(15 downto 0);
+   
+   signal ram_ReverbSpace      : std_logic;
+   signal reverbram_we         : std_logic;
+   signal reverbram_readdata   : std_logic_vector(15 downto 0);
       
    signal ram_processed        : std_logic := '0';
       
@@ -70,33 +74,36 @@ architecture arch of spu_ram is
    signal ram_Adr64_m1         : unsigned(15 downto 0);  
     
    -- cache
-   signal cache_addr_a         : unsigned(8 downto 0) := (others => '0');
+   signal cache_addr_a         : unsigned(7 downto 0) := (others => '0');
    signal cache_wren_a         : std_logic;
    
-   signal cache_addr_b         : unsigned(10 downto 0) := (others => '0');
+   signal cache_addr_b         : unsigned(9 downto 0) := (others => '0');
    signal cache_data_b         : std_logic_vector(15 downto 0);
    
    signal cache_transfer_valid : std_logic := '0';
-   signal cache_transfer_start : unsigned(15 downto 0);
+   signal cache_transfer_start : unsigned(15 downto 0) := (others => '0');
       
-   signal cache_voice_valid    : std_logic_vector(23 downto 0);
+   signal cache_voice_valid    : std_logic_vector(23 downto 0) := (others => '0');
+   signal cache_voice_hit      : std_logic_vector(23 downto 0);
    type t_cache_voice_starts is array(0 to 23) of unsigned(15 downto 0);
-   signal cache_voice_starts   : t_cache_voice_starts;
+   signal cache_voice_starts   : t_cache_voice_starts := (others => (others => '0'));
    signal cache_voice_start    : unsigned(15 downto 0);
+   signal cache_invalidate     : std_logic;
       
    -- statemachine
    type tState is
    (
       IDLE,
+      CHECK_CACHE,
       WAITWRITE,
       WAITTRANSFER
    );
    signal state : tState := IDLE;
    
    signal fetch_request             : std_logic := '0';
-   signal fetch_addr                : std_logic_vector(15 downto 0);
-   signal fetch_count               : std_logic_vector(7 downto 0);
-   signal fetch_target              : unsigned(8 downto 0);
+   signal fetch_addr                : std_logic_vector(15 downto 0) := (others => '0');
+   signal fetch_count               : std_logic_vector(7 downto 0) := (others => '0');
+   signal fetch_target              : unsigned(7 downto 0) := (others => '0');
       
    -- write fifo
    signal fifoOut_reset             : std_logic; 
@@ -129,10 +136,11 @@ architecture arch of spu_ram is
    signal fetch_request_1  : std_logic := '0'; 
    signal triggerRead      : std_logic := '0'; 
    signal fetch_done       : std_logic := '0';
-   signal readCount        : unsigned(7 downto 0);
+   signal readCount        : unsigned(7 downto 0) := (others => '0');
       
 begin 
 
+-- capture ram
    ram_isCapture <= '1' when (ram_Adr(18 downto 12) = "0000000") else '0';
 
    captureram_we <= '1' when (ram_request = '1' and ram_rnw = '0' and ram_isCapture = '1') else '0';
@@ -152,22 +160,44 @@ begin
       data_b      => x"0000",
       wren_b      => '0',
       q_b         => open
+   );   
+   
+-- reverb ram  64kbyte -> should cover most use cases, fallback is direct memory access
+   ram_ReverbSpace <= '1' when (ram_Adr(18 downto 16) = "111") else '0';
+
+   reverbram_we <= '1' when (ram_request = '1' and ram_rnw = '0' and ram_ReverbSpace = '1') else '0';
+
+   iram_reverb: entity mem.dpram
+   generic map (addr_width => 15, data_width => 16)
+   port map
+   (
+      clock_a     => clk1x,
+      address_a   => ram_Adr(15 downto 1),
+      data_a      => ram_dataWrite,
+      wren_a      => reverbram_we,
+      q_a         => reverbram_readdata,
+      
+      clock_b     => clk1x,
+      address_b   => (14 downto 0 => '0'),
+      data_b      => x"0000",
+      wren_b      => '0',
+      q_b         => open
    );
    
    -- cache layout
    -- 8 QWords = 32 Words per Line
    -- 24 lines for voices -> 0..23
-   -- 10 Lines for Reverb -> 32..41
-   -- 1 Line for Transfer -> 48
-   -- 35 lines -> rounded up to 64
-   -- 64 * 8 QWords = 512 QWords, 2048 Words
+   -- 1 Line for Transfer -> 24
+   -- 1 Line for Reverb -> 25
+   -- 25 lines -> rounded up to 32
+   -- 32 * 8 QWords = 256 QWords, 1024 Words
    
    icache: entity work.dpram_dif
    generic map 
    ( 
-      addr_width_a  => 9,
+      addr_width_a  => 8,
       data_width_a  => 64,
-      addr_width_b  => 11,
+      addr_width_b  => 10,
       data_width_b  => 16
    )
    port map
@@ -191,11 +221,12 @@ begin
    sdram_Adr       <= ram_Adr;
    sdram_be        <= "0011";
    sdram_rnw       <= ram_rnw;
-   sdram_ena       <= '0'         when (ram_isCapture = '1') else
+   sdram_ena       <= '0'         when (ram_isCapture = '1' or ram_ReverbSpace = '1') else
                       ram_request when (useSDRAM = '1') else 
                       '0'; 
 
    ram_dataRead    <= captureram_readdata         when (ram_isCapture = '1') else
+                      reverbram_readdata          when (ram_ReverbSpace = '1') else
                       (others => '0')             when (SPUon = '0')    else
                       sdram_dataRead(15 downto 0) when (useSDRAM = '1') else 
                       cache_data_b; 
@@ -209,16 +240,17 @@ begin
    ram_Adr64    <= unsigned(ram_Adr(18 downto 3));
    ram_Adr64_m1 <= unsigned(ram_Adr(18 downto 3)) - 1;
    
-   
-   cache_voice_start <= cache_voice_starts(ram_VoiceIndex);
-   
    process(clk1x)
    begin
       if (rising_edge(clk1x)) then
             
-         ram_processed <= '0';
-         fifoOut_reset <= '0';
-         fetch_request <= '0';
+         fifoOut_reset     <= '0';
+         fetch_request     <= '0';
+         
+         ram_processed     <= '0';
+         cache_invalidate  <= '0';
+         
+         cache_voice_start <= cache_voice_starts(ram_VoiceIndex);
             
          if (reset = '1') then
             
@@ -228,7 +260,7 @@ begin
             
          else
          
-            if (ram_request = '1' and ram_isCapture = '1') then
+            if (ram_request = '1' and (ram_isCapture = '1' or ram_ReverbSpace = '1')) then
                ram_processed <= '1';
             end if;
             
@@ -236,11 +268,11 @@ begin
                case (state) is
                   
                   when IDLE =>
-                     if (ram_request = '1' and ram_isCapture = '0') then
+                     if (ram_request = '1' and ram_isCapture = '0' and ram_ReverbSpace = '0') then
                   
                         if (ram_rnw = '0') then
                            cache_transfer_valid <= '0';
-                           -- cache_voice_valid    <= (others => '0'); too slow, need to see if invalidating is really required. There should be no writes to currently played samples
+                           cache_invalidate     <= '1';
                            if (fifoOut_NearFull = '1') then
                               state <= WAITWRITE;
                            else
@@ -253,14 +285,14 @@ begin
                            if (ram_isTransfer = '1') then
                               if (cache_transfer_valid = '1' and ram_Adr64 >= cache_transfer_start and ram_Adr64 <= (cache_transfer_start + 7)) then
                                  ram_processed        <= '1';
-                                 cache_addr_b         <= "110000" & resize(ram_Adr64 - cache_transfer_start, 3) & unsigned(ram_Adr(2 downto 1));
+                                 cache_addr_b         <= to_unsigned(24, 5) & resize(ram_Adr64 - cache_transfer_start, 3) & unsigned(ram_Adr(2 downto 1));
                               else
                                  state                <= WAITTRANSFER;
                                  fetch_request        <= '1';
                                  fetch_addr           <= ram_Adr(18 downto 3);
                                  fetch_count          <= x"08";
-                                 fetch_target         <= "110000" & "000";
-                                 cache_addr_b         <= "110000" & "000" & unsigned(ram_Adr(2 downto 1));
+                                 fetch_target         <= to_unsigned(24, 5) & "000";
+                                 cache_addr_b         <= to_unsigned(24, 5) & "000" & unsigned(ram_Adr(2 downto 1));
                                  cache_transfer_start <= ram_Adr64;
                                  cache_transfer_valid <= '1';
                               end if;
@@ -268,16 +300,9 @@ begin
                            elsif (ram_isVoice = '1') then
                               if (cache_voice_valid(ram_VoiceIndex) = '1' and ram_Adr64 >= cache_voice_start and ram_Adr64 <= (cache_voice_start + 7)) then
                                  ram_processed        <= '1';
-                                 cache_addr_b         <= "0" & to_unsigned(ram_VoiceIndex, 5) & resize(ram_Adr64 - cache_voice_start, 3) & unsigned(ram_Adr(2 downto 1));
+                                 cache_addr_b         <= to_unsigned(ram_VoiceIndex, 5) & resize(ram_Adr64 - cache_voice_start, 3) & unsigned(ram_Adr(2 downto 1));
                               else
-                                 state                <= WAITTRANSFER;
-                                 fetch_request        <= '1';
-                                 fetch_addr           <= std_logic_vector(ram_Adr64_m1);
-                                 fetch_count          <= x"08";
-                                 fetch_target         <= "0" & to_unsigned(ram_VoiceIndex, 5) & "000";
-                                 cache_addr_b         <= "0" & to_unsigned(ram_VoiceIndex, 5) & "001" & unsigned(ram_Adr(2 downto 1));
-                                 cache_voice_starts(ram_VoiceIndex) <= ram_Adr64_m1;
-                                 cache_voice_valid(ram_VoiceIndex)  <= '1';
+                                 state                <= CHECK_CACHE;
                               end if;
                               
                            elsif (ram_isReverb = '1') then
@@ -285,8 +310,8 @@ begin
                               fetch_request        <= '1';
                               fetch_addr           <= ram_Adr(18 downto 3);
                               fetch_count          <= x"01";
-                              fetch_target         <= "10" & to_unsigned(ram_ReverbIndex, 4) & "000";
-                              cache_addr_b         <= "10" & to_unsigned(ram_ReverbIndex, 4) & "000" & unsigned(ram_Adr(2 downto 1));
+                              fetch_target         <= to_unsigned(25, 5) & "000";
+                              cache_addr_b         <= to_unsigned(25, 5) & "000" & unsigned(ram_Adr(2 downto 1));
                               
                            else
                               report "should never happen" severity failure; 
@@ -294,6 +319,27 @@ begin
                         end if;
                         
                      end if;
+                     
+                  when CHECK_CACHE =>
+                     if (unsigned(cache_voice_hit) > 0) then
+                        state         <= IDLE;
+                        ram_processed <= '1';
+                        for i in 0 to 23 loop
+                           if (cache_voice_hit(i) = '1') then
+                              cache_addr_b  <= to_unsigned(i, 5) & resize(ram_Adr64 - cache_voice_starts(i), 3) & unsigned(ram_Adr(2 downto 1));
+                           end if;
+                        end loop;
+                     else
+                        state                <= WAITTRANSFER;
+                        fetch_request        <= '1';
+                        fetch_addr           <= std_logic_vector(ram_Adr64_m1);
+                        fetch_count          <= x"08";
+                        fetch_target         <= to_unsigned(ram_VoiceIndex, 5) & "000";
+                        cache_addr_b         <= to_unsigned(ram_VoiceIndex, 5) & "001" & unsigned(ram_Adr(2 downto 1));
+                        cache_voice_starts(ram_VoiceIndex) <= ram_Adr64_m1;
+                        cache_voice_valid(ram_VoiceIndex)  <= '1';
+                     end if;
+                     
                      
                   when WAITWRITE =>
                      if (fifoOut_NearFull = '1') then
@@ -309,6 +355,17 @@ begin
                end case;
             end if;
             
+         end if;
+         
+         cache_voice_hit <= (others => '0');
+         for i in 0 to 23 loop
+            if (ram_Adr64 >= cache_voice_starts(i) and ram_Adr64 <= (cache_voice_starts(i) + 7)) then
+               cache_voice_hit(i) <= cache_voice_valid(i);
+            end if;
+         end loop;
+         
+         if (cache_invalidate = '1') then
+            cache_voice_valid <= cache_voice_valid and (not cache_voice_hit);
          end if;
          
       end if;
@@ -328,7 +385,7 @@ begin
             
          elsif (clk2xIndex = '1') then
          
-            if (useSDRAM = '0' and ram_request = '1' and ram_rnw = '0' and ram_isCapture = '0') then
+            if (useSDRAM = '0' and ram_request = '1' and ram_rnw = '0' and ram_isCapture = '0' and ram_ReverbSpace = '0') then
             
                sample64timeout <= 40;
             

@@ -8,5 +8,6 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/mdec.vhd
 
 vcom -quiet -work sim/tb ^
+../system/src/tb/tb_savestates.vhd ^
 src/tb/tb.vhd
 

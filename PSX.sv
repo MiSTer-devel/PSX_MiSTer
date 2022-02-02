@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -255,8 +255,6 @@ parameter CONF_STR = {
 	"OO,Pad Mode,Digital,Analog;",
 	"OG,Fastboot,Off,On;",
 	"d1oC,SPU RAM select,DDR3,SDRAM2;",
-	"OU,Sound,On,Off;",
-	"oA,SPU Reverb,On,Off;",
 	"OP,Pause when OSD is open,Off,On;",
 	"-;",
 	"OM,Dithering,On,Off;",
@@ -264,18 +262,6 @@ parameter CONF_STR = {
 	"OS,FPS Overlay,Off,On;",
 	"OT,Error Overlay,On,Off;",
 	"-;",
-	"OE,DDR3 Framebuffer,Off,On;",
-	"OA,DDR3 FB Color,16,24;",
-	"OB,VRAMViewer,Off,On;",
-	"OV,Fast Memory,Off,On;",
-	"OJ,RepTimingGPU,Off,On;",
-	"OK,RepTimingDMA,Off,On;",
-	"oB,RepTimingSPUDMA,Off,On;",
-	"OQ,DMAinBLOCKs,Off,On;",
-	"OL,CD Instant Seek,Off,On;",
-	"OF,Force 60Hz PAL,Off,On;",
-	"OR,Textures,On,Off;",
-	"- ;",
 
 	"P1,Video & Audio;",
 	"P1-;",
@@ -283,11 +269,24 @@ parameter CONF_STR = {
 	"P1O24,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",	
 	"P1O78,Stereo Mix,None,25%,50%,100%;",
 	"P1o23,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
-	"P1-;",
-	"P1oDE,Dithering Filter,Off,On,Strong,Composite;",
-	"P1oF,Alpha-Blending Fix,Off,On;",
-	"P1oGH,Dithering Pattern, Original,Rotated,Symmetric,Genesis;",
-	"P1oI,Blend True Color Modes,Off,On;",
+	"P1oD,Dithering Filter,Off,On;",
+
+   "P2,Debug;",
+	"P2-;",
+	"P2OE,DDR3 Framebuffer,Off,On;",
+	"P2OA,DDR3 FB Color,16,24;",
+	"P2OB,VRAMViewer,Off,On;",
+	"P2OU,Sound,On,Off;",
+	"P2oA,SPU Reverb,On,Off;",
+	"P2OV,Fast Memory,Off,On;",
+	"P2OJ,RepTimingGPU,Off,On;",
+	"P2OK,RepTimingDMA,Off,On;",
+	"P2oB,RepTimingSPUDMA,Off,On;",
+	"P2OQ,DMAinBLOCKs,Off,On;",
+	"P2OL,CD Instant Seek,Off,On;",
+	"P2OF,Force 60Hz PAL,Off,On;",
+	"P2OR,Textures,On,Off;",
+
 	"- ;",
 	"R0,Reset;",
 	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Rewind,Savestates;",
@@ -664,9 +663,6 @@ psx
    .videoout_on     (~status[14]),
    .isPal           (status[40]),
    .pal60           (status[15]),
-   .true_color      (true_color),
-   .alpha_dither_fix (status[47]),
-   .dither_pattern  (status[49:48]),
    .hsync           (hs),
    .vsync           (vs),
    .hblank          (hbl),
@@ -879,16 +875,14 @@ wire ce_pix;
 wire [7:0] r,g,b;
 wire hs_b, vs_b, hb_b, vb_b;
 wire [7:0] r_b, g_b, b_b;
-wire true_color;
-wire blend_true_color = status[50] || ~true_color;
 
 cofi_blender blender
 (
 	.clk(clk_2x),
 	.ce_pixel(ce_pix),
-	.force_blend(blend_true_color && &status[46:45]),
-	.diff_blend(blend_true_color && |status[46:45]),
-	.reduced(status[45]),
+	.force_blend(1'b0),
+	.diff_blend(status[45]),
+	.reduced(1'b1),
 	.hblank(hbl),
 	.vblank(vbl),
 	.hsync(hs),

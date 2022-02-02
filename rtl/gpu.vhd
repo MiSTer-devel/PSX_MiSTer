@@ -22,6 +22,7 @@ entity gpu is
       pal60                : in  std_logic;
       fpscountOn           : in  std_logic;
       noTexture            : in  std_logic;
+      debugmodeOn          : in  std_logic;
       
       cdSlow               : in  std_logic;
       
@@ -67,11 +68,7 @@ entity gpu is
       vram_BE              : out std_logic_vector(7 downto 0) := (others => '0'); 
       vram_WE              : out std_logic := '0';
       vram_RD              : out std_logic := '0';     
-      
-      true_color           : out std_logic := '0';
-      dither_pattern       : in unsigned(1 downto 0);
-      alpha_dither_fix     : in std_logic;
-      
+
       hsync                : out std_logic := '0';
       vsync                : out std_logic := '0';
       hblank               : out std_logic := '0';
@@ -1410,10 +1407,7 @@ begin
       pixelStall           => pixelStall,
       pixelColor           => pipeline_pixelColor,
       pixelAddr            => pipeline_pixelAddr, 
-      pixelWrite           => pipeline_pixelWrite,
-      
-      alpha_dither_fix     => alpha_dither_fix,
-      dither_pattern       => dither_pattern
+      pixelWrite           => pipeline_pixelWrite
    );
    
    gdividers: for i in 0 to 5 generate
@@ -1676,6 +1670,8 @@ begin
       reset                   => reset,
             
       videoout_on             => videoout_on,
+         
+      debugmodeOn             => debugmodeOn,
          
       fpscountOn              => fpscountOn,
       fpscountBCD             => fpscountBCD,

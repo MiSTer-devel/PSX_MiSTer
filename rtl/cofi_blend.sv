@@ -67,7 +67,7 @@ end
 endfunction
 
 reg [2:0] hblank_shift, vblank_shift, hsync_shift, vsync_shift;
-reg [5:0] lblend_shift, rblend_shift;
+reg [6:0] lblend_shift, rblend_shift;
 reg [47:0] red_shift, green_shift, blue_shift;
 
 assign hblank_out = hblank_shift[1];
@@ -83,8 +83,8 @@ always @(posedge clk) if (ce_pixel) begin
     red_shift = {red_shift[39:0], red};
     green_shift = {green_shift[39:0], green};
     blue_shift = {blue_shift[39:0], blue};
-    lblend_shift = {lblend_shift[4:0], force_blend};
-    rblend_shift = {rblend_shift[4:0], force_blend};
+    lblend_shift = {lblend_shift[5:0], force_blend};
+    rblend_shift = {rblend_shift[5:0], force_blend};
 
     //level difference filter
     if (diff_blend

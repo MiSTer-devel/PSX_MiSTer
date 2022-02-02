@@ -39,6 +39,8 @@ end entity;
 
 architecture arch of mdec is
   
+   signal reset_intern        : std_logic := '0';
+  
    signal FifoIn_Din          : std_logic_vector(31 downto 0) := (others => '0');
    signal FifoIn_Wr           : std_logic; 
    signal FifoIn_NearFull     : std_logic;
@@ -254,6 +256,8 @@ architecture arch of mdec is
    signal RamSSdataB          : std_logic_vector(31 downto 0); 
                               
    signal ram_SSrden          : std_logic;
+   
+   signal ss_timeout          : unsigned(23 downto 0);
 
 begin 
 
@@ -270,7 +274,7 @@ begin
    port map
    ( 
       clk      => clk1x,     
-      reset    => reset,   
+      reset    => reset_intern,   
                 
       Din      => FifoIn_Din,     
       Wr       => FifoIn_Wr,      
@@ -300,6 +304,8 @@ begin
    begin
       if rising_edge(clk1x) then
       
+         reset_intern      <= '0';
+      
          RamYUVwrite       <= '0';
          RamSSwrite        <= '0';
          calcNextRL        <= '0';
@@ -307,10 +313,14 @@ begin
       
          if (reset = '1') then
          
+            reset_intern    <= '1';
+         
             receiveState    <= RECEIVE_IDLE;
             fifoSecondAvail <= '0';
             currentBlock    <= (others => '0');
             currentCoeff    <= to_unsigned(64, 7);
+            
+            wordsRemain     <= (others => '0');
             
             MDECCONTROL     <= ss_in(1)(31 downto 29);
             rec_bit15       <= ss_in(0)(23);          
@@ -337,6 +347,20 @@ begin
             end if;
          
          elsif (ce = '1') then
+         
+            MDECCONTROL(2) <= '0';
+            if (MDECCONTROL(2) = '1') then
+               reset_intern    <= '1';
+               
+               receiveState    <= RECEIVE_IDLE;
+               fifoSecondAvail <= '0';
+               currentBlock    <= (others => '0');
+               currentCoeff    <= to_unsigned(64, 7);
+               wordsRemain     <= (others => '0');
+               rec_bit15       <= '0';
+               rec_signed      <= '0';
+               rec_depth       <= "00";
+            end if;
          
             if (bus_write = '1' and bus_addr = x"4") then
                MDECCONTROL <= bus_dataWrite(31 downto 29);
@@ -555,6 +579,10 @@ begin
                     
          end if;
          
+         if (reset_intern = '1') then
+            FifoRL_Wr <= '0';
+         end if;
+         
       end if;
    end process;
    
@@ -568,7 +596,7 @@ begin
    port map
    ( 
       clk      => clk2x,     
-      reset    => reset,   
+      reset    => reset_intern,   
                 
       Din      => FifoRL_Din,     
       Wr       => (FifoRL_Wr and clk2xIndex),      
@@ -592,7 +620,7 @@ begin
          idct_done      <= '0';
          idct_calc0_ena <= '0';
       
-         if (reset = '1') then
+         if (reset_intern = '1') then
          
             idctState    <= IDCT_IDLE;
          
@@ -769,7 +797,7 @@ begin
          color_write <= '0';
          color_done  <= '0';
 
-         if (reset = '1') then
+         if (reset_intern = '1') then
          
             colorState    <= COLOR_IDLE;
          
@@ -914,7 +942,7 @@ begin
             fifoOut_done    <= '0';
          end if;
 
-         if (reset = '1') then
+         if (reset_intern = '1') then
          
             outputState    <= OUTPUT_IDLE;
             colormapState  <= COLORMAP_IDLE;
@@ -1043,7 +1071,7 @@ begin
    port map
    ( 
       clk      => clk2x,     
-      reset    => reset,   
+      reset    => reset_intern,   
                 
       Din      => FifoOut_Din,     
       Wr       => FifoOut_Wr,      
@@ -1116,7 +1144,14 @@ begin
          
          SS_Idle <= '0';
          if (FifoIn_Empty = '1' and FifoOut_Empty = '1' and receiveState = RECEIVE_IDLE and idctState = IDCT_IDLE and colorState = COLOR_IDLE and outputState = OUTPUT_IDLE) then
-            SS_Idle <= '1';
+            SS_Idle    <= '1';
+            ss_timeout <= (others => '0');
+         end if;
+         
+         if (ss_timeout(23) = '1') then
+            SS_Idle    <= '1';
+         else
+            ss_timeout <= ss_timeout + 1;
          end if;
          
          ram_SSrden <= '0';

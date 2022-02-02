@@ -110,9 +110,6 @@ entity psx_top is
       vsync                 : out std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
-      true_color            : out std_logic;
-      dither_pattern        : in  unsigned( 1 downto 0);
-      alpha_dither_fix      : in  std_logic;
       DisplayWidth          : out unsigned( 9 downto 0);
       DisplayHeight         : out unsigned( 8 downto 0);
       DisplayOffsetX        : out unsigned( 9 downto 0);
@@ -404,6 +401,11 @@ architecture arch of psx_top is
    signal DMA_SPU_write          : std_logic_vector(15 downto 0);
    signal DMA_SPU_read           : std_logic_vector(15 downto 0);
    
+   -- SPU
+   signal spu_tick               : std_logic;
+   signal cd_left                : signed(15 downto 0);
+   signal cd_right               : signed(15 downto 0);
+   
    -- cpu
    signal ce_intern              : std_logic := '0';
    signal ce_cpu                 : std_logic := '0';
@@ -438,6 +440,8 @@ architecture arch of psx_top is
    
    signal debug_lateSamples      : unsigned(15 downto 0);
    signal debug_lateTicks        : unsigned(15 downto 0);
+   
+   signal debugmodeOn            : std_logic;
    
    -- memcard
    signal memcard1_pause         : std_logic;
@@ -672,6 +676,20 @@ begin
             end if;
             
          end if;
+         
+         debugmodeOn <= '0';
+         if (FASTMEM               = '1') then debugmodeOn <= '1'; end if;
+         if (REPRODUCIBLEGPUTIMING = '1') then debugmodeOn <= '1'; end if;
+         if (REPRODUCIBLEDMATIMING = '1') then debugmodeOn <= '1'; end if;
+         if (DMABLOCKATONCE        = '1') then debugmodeOn <= '1'; end if;
+         if (INSTANTSEEK           = '1') then debugmodeOn <= '1'; end if;
+         if (noTexture             = '1') then debugmodeOn <= '1'; end if;
+         if (SPUon                 = '0') then debugmodeOn <= '1'; end if;
+         if (REVERBOFF             = '1') then debugmodeOn <= '1'; end if;
+         if (REPRODUCIBLESPUDMA    = '1') then debugmodeOn <= '1'; end if;
+         if (videoout_on           = '0') then debugmodeOn <= '1'; end if;
+         if (pal60                 = '1') then debugmodeOn <= '1'; end if;
+         
       end if;
    end process;
    
@@ -1103,6 +1121,10 @@ begin
       error                => errorCD,
           
       irqOut               => irq_CDROM,
+      
+      spu_tick             => spu_tick,
+      cd_left              => cd_left,
+      cd_right             => cd_right,
                             
       bus_addr             => bus_cd_addr,     
       bus_dataWrite        => bus_cd_dataWrite,
@@ -1154,6 +1176,7 @@ begin
       pal60                => pal60,
       fpscountOn           => fpscountOn,
       noTexture            => noTexture,
+      debugmodeOn          => debugmodeOn,
       
       cdSlow               => cdSlow,
       
@@ -1200,9 +1223,6 @@ begin
       vram_WE              => vram_WE,        
       vram_RD              => vram_RD, 
 
-      true_color           => true_color,
-      dither_pattern       => dither_pattern,
-      alpha_dither_fix     => alpha_dither_fix,
       hsync                => hsync, 
       vsync                => vsync, 
       hblank               => hblank_intern,
@@ -1288,8 +1308,9 @@ begin
       
       cpuPaused            => cpuPaused,
       
-      cd_left              => x"0000",
-      cd_right             => x"0000",
+      spu_tick             => spu_tick,
+      cd_left              => cd_left,
+      cd_right             => cd_right,
       
       irqOut               => irq_SPU,
       

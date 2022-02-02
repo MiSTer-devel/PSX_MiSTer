@@ -33,11 +33,14 @@ architecture arch of etb is
    
    signal cd_hps_req          : std_logic := '0';
    signal cd_hps_lba          : std_logic_vector(31 downto 0);
-   signal cd_hps_ack          : std_logic;
-   signal cd_hps_write        : std_logic;
+   signal cd_hps_ack          : std_logic := '0';
+   signal cd_hps_write        : std_logic := '0';
    signal cd_hps_data         : std_logic_vector(15 downto 0);
    
    signal cdSize              : unsigned(29 downto 0);
+   
+   signal sampleticks         : unsigned(9 downto 0) := (others => '0');
+   signal spu_tick            : std_logic := '0';
    
    -- hps emulation
    type filetype is file of integer;
@@ -73,8 +76,11 @@ begin
       hasCD                => '1',
       cdSize               => cdSize,
       fastCD               => '0',
+      region               => "10",
       
       fullyIdle            => fullyIdle,
+      
+      spu_tick             => spu_tick,
       
       bus_addr             => bus_addr,     
       bus_dataWrite        => bus_dataWrite,
@@ -121,6 +127,20 @@ begin
       SS_wren           => SS_wren     
    );
    
+   -- spu speed
+   process
+   begin
+      wait until rising_edge(clk1x);
+      
+      spu_tick <= '0';
+      
+      if (sampleticks < 767) then
+         sampleticks <= sampleticks + 1;
+      else
+         sampleticks    <= (others => '0');
+         spu_tick       <= '1';
+      end if;
+   end process;
    
    -- hps emulation
    process
