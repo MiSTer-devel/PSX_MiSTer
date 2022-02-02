@@ -405,6 +405,7 @@ begin
       reset                => reset,    
        
       analogPad            => analogPad,
+      mouse                => '1', -- for testing
 
       selected             => selectedPad2,
       actionNext           => actionNextPad,
