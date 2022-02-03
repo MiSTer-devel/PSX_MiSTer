@@ -287,8 +287,8 @@ begin
                else
                   video_hblank <= '1';
                   if (video_hblank = '0') then
-                     hsync_start <= (nextHCount / 2) + (26 * clkDiv);
-                     hsync_end   <= (nextHCount / 2) + (2 * clkDiv);
+                     hsync_start <= (nextHCount / 2) + (26 * clkDiv) - (8 * clkDiv);
+                     hsync_end   <= (nextHCount / 2) + (2 * clkDiv) - (8 * clkDiv);
                   end if;
                end if;
             end if;
