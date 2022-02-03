@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -252,7 +252,10 @@ parameter CONF_STR = {
 	"RI,Restore state (F1);",
 	"-;",
 	"o78,System Type,NTSC-U,NTSC-J,PAL;",
-	"OO,Pad Mode,Digital,Analog;",
+   "-;",
+	"oDF,Pad1,Digital,Analog,Mouse,Off;",
+	"oGI,Pad2,Digital,Analog,Mouse,Off;",
+   "-;",
 	"OG,Fastboot,Off,On;",
 	"d1oC,SPU RAM select,DDR3,SDRAM2;",
 	"OP,Pause when OSD is open,Off,On;",
@@ -567,6 +570,21 @@ savestate_ui savestate_ui
 );
 defparam savestate_ui.INFO_TIMEOUT_BITS = 27;
 
+////////////////////////////  PAD  ///////////////////////////////////
+
+// 000 -> digital
+// 000 -> analog
+// 000 -> mouse
+// 011 -> off
+// 100..111 -> reserved
+
+wire PadPortEnable1 = (status[47:45] != 3'b011);
+wire PadPortAnalog1 = (status[47:45] == 3'b001);
+wire PadPortMouse1  = (status[47:45] == 3'b010);
+wire PadPortEnable2 = (status[50:48] != 3'b011);
+wire PadPortAnalog2 = (status[50:48] == 3'b001);
+wire PadPortMouse2  = (status[50:48] == 3'b010);
+
 ////////////////////////////  SYSTEM  ///////////////////////////////////
 
 psx_mister
@@ -585,7 +603,6 @@ psx
    .DMABLOCKATONCE(status[26]),
    .INSTANTSEEK(status[21]),
    .ditherOff(status[22]),
-   .analogPad(status[24]),
    .fpscountOn(status[28]),
    .errorOn(~status[29]),
    .noTexture(status[27]),
@@ -679,6 +696,12 @@ psx
    .video_g         (g),
    .video_b         (b),
    //Keys
+   .PadPortEnable1 (PadPortEnable1),
+   .PadPortAnalog1 (PadPortAnalog1),
+   .PadPortMouse1  (PadPortMouse1 ),
+   .PadPortEnable2 (PadPortEnable2),
+   .PadPortAnalog2 (PadPortAnalog2),
+   .PadPortMouse2  (PadPortMouse2 ),
    .KeyTriangle({joy2[4], joy[4] }),    
    .KeyCircle  ({joy2[5] ,joy[5] }),       
    .KeyCross   ({joy2[6] ,joy[6] }),       

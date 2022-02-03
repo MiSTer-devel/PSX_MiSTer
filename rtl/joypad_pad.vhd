@@ -9,8 +9,9 @@ entity joypad_pad is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      PortEnabled          : in  std_logic;
       analogPad            : in  std_logic;
-      isMouse              : in  std_logic := '0';
+      isMouse              : in  std_logic;
       
       selected             : in  std_logic;
       actionNext           : in  std_logic := '0';
@@ -124,7 +125,7 @@ begin
             prevMouseEvent  <= MouseEvent;
             if (prevMouseEvent /= MouseEvent) then
                 mouseIncX := resize(MouseX, mouseIncX'length);
-                mouseIncX := resize(MouseY, mouseIncX'length);
+                mouseIncY := resize(-MouseY, mouseIncX'length);
             else
                 mouseIncX := to_signed(0, mouseIncX'length);
                 mouseIncY := to_signed(0, mouseIncY'length);
@@ -153,13 +154,14 @@ begin
             mouseAccY <= newMouseAccClippedY;
          
             if (actionNext = '1' and transmitting = '1') then
-               if (selected = '1') then
+               if (selected = '1' and PortEnabled = '1') then
                   if (isActive = '0' and slotIdle = '1') then
                      if (controllerState = IDLE and transmitValue = x"01") then
                         controllerState <= READY;
                         isActive        <= '1';
                         ack             <= '1'; 
                         analogPadSave   <= analogPad;
+                        mouseSave       <= isMouse;
                         receiveValid    <= '1';
                         receiveBuffer   <= x"FF";
 
@@ -175,26 +177,6 @@ begin
                               mouseSave       <= isMouse;
                               receiveValid    <= '1';
                               receiveBuffer   <= x"FF";
-
-                              if (mouseAccX >= 127) then
-                                  mouseOutX <= to_signed(127, mouseOutX'length);
-                              elsif (mouseAccX <= -128) then
-                                  mouseOutX <= to_signed(-128, mouseOutX'length);
-                              else
-                                  mouseOutX <= resize(mouseAccX, mouseOutX'length);
-                              end if;
-
-                              if (mouseAccY >= 127) then
-                                  mouseOutY <= to_signed(127, mouseOutY'length);
-                              elsif (mouseAccY <= -128) then
-                                  mouseOutY <= to_signed(-128, mouseOutY'length);
-                              else
-                                  mouseOutY <= resize(mouseAccY, mouseOutY'length);
-                              end if;
-
-                              mouseAccX <= mouseIncX;
-                              mouseAccY <= mouseIncY;
-
                            end if;
                            
                         when READY => 
@@ -226,6 +208,26 @@ begin
                            receiveBuffer   <= x"FF";
                            ack             <= '1';
                            receiveValid    <= '1';
+                           
+                           if (mouseAccX >= 127) then
+                               mouseOutX <= to_signed(127, mouseOutX'length);
+                           elsif (mouseAccX <= -128) then
+                               mouseOutX <= to_signed(-128, mouseOutX'length);
+                           else
+                               mouseOutX <= resize(mouseAccX, mouseOutX'length);
+                           end if;
+
+                           if (mouseAccY >= 127) then
+                               mouseOutY <= to_signed(127, mouseOutY'length);
+                           elsif (mouseAccY <= -128) then
+                               mouseOutY <= to_signed(-128, mouseOutY'length);
+                           else
+                               mouseOutY <= resize(mouseAccY, mouseOutY'length);
+                           end if;
+
+                           mouseAccX <= mouseIncX;
+                           mouseAccY <= mouseIncY;
+                           
 
                         when MOUSEBUTTONSMSB =>
                            receiveBuffer(0) <= '0';

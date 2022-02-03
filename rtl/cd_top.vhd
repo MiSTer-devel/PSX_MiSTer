@@ -1202,7 +1202,7 @@ begin
             end if;
             
             if (driveAck = '1' or ackDrive = '1' or ackDriveEnd = '1') then
-               if (CDROM_IRQFLAG /= "00000") then
+               if (CDROM_IRQFLAG = "00000") then
                   FifoResponse_Din <= internalStatus;
                   FifoResponse_Wr  <= '1';
                end if;
@@ -2271,6 +2271,14 @@ begin
                   end if;
                  
             end case;
+            
+            -- if data fifo is reset while copy is still ongoing, stop copy immidiatly so fifo stays empty
+            if (FifoData_reset = '1' and copyState /= COPY_IDLE) then
+               copyState   <= COPY_IDLE;
+               FifoData_Wr <= '0';
+               sectorBufferSizes(to_integer(copySectorPointer)) <= 0;
+               -- todo: should this set additional irq for missed sector?
+            end if;
 
          end if;
          

@@ -129,6 +129,12 @@ architecture arch of etb is
    signal Analog2XP2          : signed(7 downto 0) := (others => '0');
    signal Analog2YP2          : signed(7 downto 0) := (others => '0'); 
    
+   signal MouseEvent          : std_logic := '0';
+   signal MouseLeft           : std_logic := '0';
+   signal MouseRight          : std_logic := '0';
+   signal MouseX              : signed(8 downto 0) := to_signed(2, 9);
+   signal MouseY              : signed(8 downto 0) := to_signed(-1,9);
+   
    --cd
    type filetype is file of integer;
    type t_cddata is array(0 to (2**28)-1) of integer;
@@ -183,6 +189,8 @@ begin
    clk66  <= not clk66  after 7500 ps;
    clk100 <= not clk100 after 5 ns;
    
+   MouseEvent <= not MouseEvent after 5 ms;
+   
    reset  <= not psx_on(0);
    
    -- registers
@@ -205,13 +213,12 @@ begin
       pause                 => '0',
       loadExe               => psx_LoadExe(0),
       fastboot              => '0',
-      FASTMEM               => '1',
+      FASTMEM               => '0',
       REPRODUCIBLEGPUTIMING => '0',
       REPRODUCIBLEDMATIMING => '0',
       DMABLOCKATONCE        => '0',
       INSTANTSEEK           => '0',
       ditherOff             => '0',
-      analogPad             => '0',
       fpscountOn            => '0',
       errorOn               => '0',
       noTexture             => '0',
@@ -299,6 +306,12 @@ begin
       video_g               => video_g,    
       video_b               => video_b,   
       -- Keys - all active high
+      PadPortEnable1        => '1',
+      PadPortAnalog1        => '0',
+      PadPortMouse1         => '1',
+      PadPortEnable2        => '1',
+      PadPortAnalog2        => '0',
+      PadPortMouse2         => '0', 
       KeyTriangle           => KeyTriangle,           
       KeyCircle             => KeyCircle,           
       KeyCross              => KeyCross,           
@@ -323,6 +336,11 @@ begin
       Analog1YP2            => Analog1YP2,
       Analog2XP2            => Analog2XP2,
       Analog2YP2            => Analog2YP2, 
+      MouseEvent            => MouseEvent,
+      MouseLeft             => MouseLeft,
+      MouseRight            => MouseRight,
+      MouseX                => MouseX,
+      MouseY                => MouseY,
       -- sound              => -- sound       
       sound_out_left        => sound_out_left, 
       sound_out_right       => sound_out_right,
@@ -358,7 +376,7 @@ begin
    isdram_model : entity tb.sdram_model3x 
    generic map
    (
-      DOREFRESH     => '0',
+      DOREFRESH     => '1',
       SCRIPTLOADING => '1'
    )
    port map

@@ -26,7 +26,6 @@ entity psx_top is
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       ditherOff             : in  std_logic;
-      analogPad             : in  std_logic;
       fpscountOn            : in  std_logic;
       errorOn               : in  std_logic;
       noTexture             : in  std_logic;
@@ -120,6 +119,12 @@ entity psx_top is
       video_g               : out std_logic_vector(7 downto 0);
       video_b               : out std_logic_vector(7 downto 0);
       -- Keys - all active high   
+      PadPortEnable1        : in  std_logic;
+      PadPortAnalog1        : in  std_logic;
+      PadPortMouse1         : in  std_logic;
+      PadPortEnable2        : in  std_logic;
+      PadPortAnalog2        : in  std_logic;
+      PadPortMouse2         : in  std_logic;
       KeyTriangle           : in  std_logic_vector(1 downto 0); 
       KeyCircle             : in  std_logic_vector(1 downto 0); 
       KeyCross              : in  std_logic_vector(1 downto 0); 
@@ -849,7 +854,12 @@ begin
       ce                   => ce,   
       reset                => reset_intern,
       
-      analogPad            => analogPad,
+      PadPortEnable1       => PadPortEnable1,
+      PadPortAnalog1       => PadPortAnalog1,
+      PadPortMouse1        => PadPortMouse1,
+      PadPortEnable2       => PadPortEnable2,
+      PadPortAnalog2       => PadPortAnalog2,
+      PadPortMouse2        => PadPortMouse2, 
       
       memcard1_available   => memcard1_available,
       memcard2_available   => memcard2_available,

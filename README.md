@@ -66,8 +66,7 @@ IRQ    : 80%
 - irq_SIO missing        
 - irq_LIGHTPEN missing
 
-PAD    : 70%
-- special controllers(mouse, lightgun) not supported
+PAD    : 80%
 - SNAC interface missing
 
 DMA    : 80%
