@@ -46,6 +46,11 @@ entity joypad is
       Analog1YP2           : in  signed(7 downto 0);
       Analog2XP2           : in  signed(7 downto 0);
       Analog2YP2           : in  signed(7 downto 0);   
+      MouseEvent           : in  std_logic;
+      MouseLeft            : in  std_logic;
+      MouseRight           : in  std_logic;
+      MouseX               : in  signed(8 downto 0);
+      MouseY               : in  signed(8 downto 0);
 
       mem1_request         : out std_logic;
       mem1_BURSTCNT        : out std_logic_vector(7 downto 0) := (others => '0'); 
@@ -384,7 +389,12 @@ begin
       Analog1X             => Analog1XP1,   
       Analog1Y             => Analog1YP1,   
       Analog2X             => Analog2XP1,   
-      Analog2Y             => Analog2YP1
+      Analog2Y             => Analog2YP1,
+      MouseEvent           => MouseEvent,
+      MouseLeft            => MouseLeft,
+      MouseRight           => MouseRight,
+      MouseX               => MouseX,
+      MouseY               => MouseY
    );
    
    ijoypad_pad2 : entity work.joypad_pad
@@ -429,7 +439,12 @@ begin
       Analog1X             => Analog1XP2,   
       Analog1Y             => Analog1YP2,   
       Analog2X             => Analog2XP2,   
-      Analog2Y             => Analog2YP2
+      Analog2Y             => Analog2YP2,
+      MouseEvent           => MouseEvent,
+      MouseLeft            => MouseLeft,
+      MouseRight           => MouseRight,
+      MouseX               => MouseX,
+      MouseY               => MouseY
    );
    
    ijoypad_mem1 : entity work.joypad_mem
