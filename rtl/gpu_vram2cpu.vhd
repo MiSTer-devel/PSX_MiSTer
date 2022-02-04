@@ -1,6 +1,7 @@
 library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all; 
+use STD.textio.all;
 
 library mem;
 
@@ -213,6 +214,41 @@ begin
       end if;
    end process; 
 
+   -- synthesis translate_off
+
+   goutput : if 1 = 1 generate
+   signal outputCnt  : unsigned(23 downto 0) := (others => '0'); 
+   
+   begin
+      process
+         file outfile                  : text;
+         variable f_status             : FILE_OPEN_STATUS;
+         variable line_out             : line;
+      begin
+   
+         file_open(f_status, outfile, "R:\\debug_vram2cpu_sim.txt", write_mode);
+         file_close(outfile);
+         file_open(f_status, outfile, "R:\\debug_vram2cpu_sim.txt", append_mode);
+         
+         while (true) loop
+            
+            wait until rising_edge(clk2x);
+            
+            if (Fifo_Rd = '1') then
+               write(line_out, to_hstring(outputCnt));
+               write(line_out, string'(" ")); 
+               write(line_out, to_hstring(Fifo_Dout));
+               writeline(outfile, line_out);
+               outputCnt <= outputCnt + 1;
+            end if; 
+            
+         end loop;
+         
+      end process;
+   
+   end generate goutput;
+   
+   -- synthesis translate_on
 
 end architecture;
 

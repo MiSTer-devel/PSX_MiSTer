@@ -128,7 +128,7 @@ architecture arch of cd_top is
    signal setLocReadStep            : integer range 0 to 5;
    signal setLocMinute              : unsigned(7 downto 0);
    signal setLocSecond              : unsigned(7 downto 0);
-   signal setLocFrame               : unsigned(7 downto 0);
+   signal setLocFrame               : unsigned(7 downto 0);         
    
    signal session                   : std_logic_vector(7 downto 0);
    signal fastForwardRate           : signed(7 downto 0);
@@ -246,6 +246,7 @@ architecture arch of cd_top is
    signal fetchDelay                : integer range 0 to 15;
       
    signal slow_timeout              : integer range 0 to 16777215 := 0;
+   signal slow_block                : std_logic := '0';
       
    -- read subchannel
    type treadSubchannelState is
@@ -836,9 +837,19 @@ begin
                            errorResponseCmd_reason <= x"80";
                         else
                            -- todo: missing checks
+                           
+                           -- byte track = 0;
+                           -- if (!fifoParam.empty())  track = fifoParam.front(); fifoParam.pop_front();
+                           
                            cmdAck          <= '1';
-                           play            <= '1';
                            fastForwardRate <= (others => '0');
+                           
+                           if ((setLocActive = '0' or seekLBA = lastReadSector) and (driveState = DRIVE_READING or ((driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) and readAfterSeek = '1'))) then
+                              setLocActive <= '0';
+                           else
+                              play         <= '1';
+                           end if;
+                           
                         end if;
                         
                      when x"04" => -- forward
@@ -1070,7 +1081,12 @@ begin
                         else
                            -- todo: missing checks
                            cmdAck <= '1';
-                           readSN <= '1';
+                           
+                           if ((setLocActive = '0' or seekLBA = lastReadSector) and (driveState = DRIVE_READING or ((driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) and readAfterSeek = '1'))) then
+                              setLocActive <= '0';
+                           else
+                              readSN <= '1';
+                           end if;
                         end if;
                         
                      when x"1C" => -- Init
@@ -1659,41 +1675,29 @@ begin
             end if;
             
             if (readSN = '1') then
-               -- todo !
-               --if ((!setLocActive || seekLBA == lastReadSector) && (driveState == DRIVESTATE::READING || ((driveState == DRIVESTATE::SEEKLOGICAL || driveState == DRIVESTATE::SEEKPHYSICAL || driveState == DRIVESTATE::SEEKIMPLICIT) && readAfterSeek)))
-               --{
-               --   setLocActive = false;
-               --}
-               --else
-                  if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
-                     -- todo: updatePositionWhileSeeking();
-                  end if;
-                  if (setLocActive = '1') then
-                     seekOnDiskDrive   <= '1';
-                     readAfterSeek     <= '1';
-                     playAfterSeek     <= '0';
-                  else
-                     startReading <= '1';
-                  end if;
+               if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                  -- todo: updatePositionWhileSeeking();
+               end if;
+               if (setLocActive = '1') then
+                  seekOnDiskDrive   <= '1';
+                  readAfterSeek     <= '1';
+                  playAfterSeek     <= '0';
+               else
+                  startReading <= '1';
+               end if;
             end if;
             
             if (play = '1') then
-               -- todo !
-               --if ((!setLocActive || seekLBA == lastReadSector) && (driveState == DRIVESTATE::READING || ((driveState == DRIVESTATE::SEEKLOGICAL || driveState == DRIVESTATE::SEEKPHYSICAL || driveState == DRIVESTATE::SEEKIMPLICIT) && readAfterSeek)))
-               --{
-               --   setLocActive = false;
-               --}
-               --else
-                  if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
-                     -- todo: updatePositionWhileSeeking();
-                  end if;
-                  if (setLocActive = '1') then
-                     seekOnDiskDrive   <= '1';
-                     readAfterSeek     <= '0';
-                     playAfterSeek     <= '1';
-                  else
-                     startPlaying <= '1';
-                  end if;
+               if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                  -- todo: updatePositionWhileSeeking();
+               end if;
+               if (setLocActive = '1') then
+                  seekOnDiskDrive   <= '1';
+                  readAfterSeek     <= '0';
+                  playAfterSeek     <= '1';
+               else
+                  startPlaying <= '1';
+               end if;
             end if;
             
             if (setSession = '1') then
@@ -1886,7 +1890,13 @@ begin
          sectorBuffer_wrenA  <= '0';
          sectorBuffers_wrenA <= '0';
          
-         if ((sectorFetchState /= SFETCH_IDLE or sectorProcessState/= SPROC_IDLE or copyState /= COPY_IDLE) and driveDelay = 0) then
+         if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+            slow_block <= '1';
+         elsif (handleDrive = '1' and (driveState = DRIVE_READING or driveState = DRIVE_PLAYING)) then
+            slow_block <= '0';
+         end if;
+         
+         if ((sectorFetchState /= SFETCH_IDLE) and driveDelay = 0 and slow_block = '0') then
             cdSlow       <= '1';
             slow_timeout <= 16777215;
          elsif (slow_timeout > 0) then
@@ -2502,7 +2512,7 @@ begin
    
    begin
       process
-         constant WRITETIME            : std_logic := '0';
+         constant WRITETIME            : std_logic := '1';
          
          file outfile                  : text;
          variable f_status             : FILE_OPEN_STATUS;
@@ -2681,7 +2691,7 @@ begin
             clkCounter <= clkCounter + 1;
             
             if (reset = '1') then
-               clkCounter <= x"00000001";
+               clkCounter <= x"00000000";
             end if;
            
          end loop;

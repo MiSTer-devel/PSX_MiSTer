@@ -363,7 +363,7 @@ architecture arch of gpu is
    signal reqVRAMYPos               : unsigned(8 downto 0);
    signal reqVRAMSize               : unsigned(10 downto 0);
    signal reqVRAMremain             : unsigned(7 downto 0);
-   signal reqVRAMnext               : unsigned(6 downto 0);
+   signal reqVRAMnext               : unsigned(7 downto 0);
    signal reqVRAMaddr               : unsigned(7 downto 0) := (others => '0');
    signal reqVRAMStore              : std_logic;        
    
@@ -1595,7 +1595,7 @@ begin
                         if (reqVRAMSizeRounded > 512) then
                            vram_BURSTCNT <= x"80";
                            reqVRAMremain <= x"80" - 1;
-                           reqVRAMnext   <= reqVRAMSizeRounded(8 downto 2);
+                           reqVRAMnext   <= resize((reqVRAMSizeRounded - 512) / 4, 8);
                         else
                            vram_BURSTCNT <= std_logic_vector(reqVRAMSizeRounded(9 downto 2));
                            reqVRAMremain <= reqVRAMSizeRounded(9 downto 2) - 1;
@@ -1619,9 +1619,9 @@ begin
                         if (reqVRAMnext > 0) then
                            vram_ADDR(10) <= '1';
                            vram_RD       <= '1';
-                           vram_BURSTCNT <= '0' & std_logic_vector(reqVRAMnext);
+                           vram_BURSTCNT <= std_logic_vector(reqVRAMnext);
                            reqVRAMnext   <= (others => '0');
-                           reqVRAMremain <= '0' & (reqVRAMnext - 1);
+                           reqVRAMremain <= (reqVRAMnext - 1);
                         else
                            vramState   <= IDLE;
                            reqVRAMDone <= '1';
