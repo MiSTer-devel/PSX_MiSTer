@@ -7,7 +7,7 @@ SDRAM of any size is required.
 ## Features
 * Savestates
 * Memory Card file loading (.MCD)
-* CUE+BIN and ISO format support
+* CUE+BIN format support
 * Instant CD-ROM Seek (disables simulation of motor delay)
 * Fast Boot
 * Dithering On/Off Toggle
