@@ -183,7 +183,7 @@ assign AUDIO_MIX = status[8:7];
 assign LED_USER  = cart_download;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
-assign BUTTONS   = 0;
+assign BUTTONS   = osd_btn;
 assign VGA_SCALER= 0;
 
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
@@ -525,6 +525,22 @@ always @(posedge clk_1x) begin
          sd_mounted3 <= 0;
       end
    end
+
+   reg osd_btn = 0;
+
+   integer timeout = 0;
+	reg     last_rst = 0;
+
+	if (RESET) last_rst = 0;
+	if (status[0]) last_rst = 1;
+
+	if (last_rst & ~status[0]) begin
+		osd_btn <= 0;
+		if(timeout < 24000000) begin
+			timeout <= timeout + 1;
+			osd_btn <= 1;
+		end
+	end
    
    old_load   <= bk_load;
 	old_save   <= bk_save;
