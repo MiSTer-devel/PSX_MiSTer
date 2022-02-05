@@ -1,26 +1,29 @@
 # [Playstation](https://en.wikipedia.org/wiki/PlayStation_(console)) for [MiSTer Platform](https://github.com/MiSTer-devel/Main_MiSTer/wiki)
+by [Robert Peip](https://github.com/RobertPeip/)
 
+## Hardware Requirements
+SDRAM of any size is required.
 
-# HW Requirements/Features
-SDRam of any size is required.
+## Features
+* Savestates
+* Memory Card file loading (.MCD)
+* CUE+BIN format support
+* Instant CD-ROM Seek (disables simulation of motor delay)
+* Fast Boot
+* Dithering On/Off Toggle
+* Bob or Weave Deinterlacing
 
-# Bios
-Rename to boot.rom
+## Bios
+Rename your playstation bios file (e.g. `scph-1001.bin`/`ps-22a.bin` ) to `boot.rom` and place it in the `./games/PSX/` folder.
 
-You can also place a cd_bios.rom in the same directory as the CD or 1 directory above, to have it uses together with that CD.
+You can also place a cd_bios.rom in the same directory as the CD or 1 directory above, to have it uses together with that CD. This can be used for games that depend on the BIOS region(US,EU,JP).
 
-This can be used for games that depend on the BIOS region(US,EU,J).
+## Memory Card
+One card can be mounted for each controller slot. Cards are in raw .mcd format. An empty formatted .mcd file is available for [download here](https://github.com/MiSTer-devel/PSX_MiSTer/raw/main/memcard/empty.mcd).
 
-# Memory Card
-One card can be mounted for each controller slot.
+You need to save them either manually in the OSD or turn on autosave. Saving or loading a card will pause the core for a short time.
 
-Cards are in raw .mcd format. An empty example card can be found in the memcard folder.
-
-You need to save them either manually in OSD or activate autosave. 
-
-Saving or loading a card will pause the core for a short time.
-
-# Video output
+## Video output
 Core uses either normal output or direct framebuffer mode.
 
 In Framebuffer mode you can choose to view:
@@ -29,7 +32,7 @@ In Framebuffer mode you can choose to view:
 
 Analog out is not supported yet. It requires either direct video or seperate build and is very experimental and buggy. Use at your own risks, no bug reports please.
 
-# Error messages
+## Error messages
 
 If there is a recognized problem, an overlay is displayed, showing which error has occured.
 You can hide these messages with an OSD option, by default they are on.
@@ -42,7 +45,11 @@ List of Errors:
 - E9     - GPU FIFO overflow
 - EA     - SPU timeout
 
-# Status
+## Debug Options
+
+The debug menu is intended for use by developers only. They don't really serve any purpose for regular users so it's best to leave them at their default setting as a lot of undesirable behavior could occur.
+
+## Status
 
 Work in progress, don't report any bugs!
 
