@@ -622,7 +622,6 @@ psx
    .ram_128(sdram_128), 
    .ram_done(sdram_ack),
    .ram_reqprocessed(sdram_reqprocessed),
-   .ram_idle(ram_idle),
    // vram/ddr3
    .DDRAM_BUSY      (DDRAM_BUSY      ),
    .DDRAM_BURSTCNT  (DDRAM_BURSTCNT  ),
@@ -767,7 +766,6 @@ wire         sdram_writeack;
 wire         sdram_writeack2;
 wire         sdram_rnw;
 wire         sdram_128;
-wire         ram_idle;
 
 assign sdram_ack = sdram_readack | sdram_writeack;
 
@@ -791,7 +789,7 @@ sdram sdram
 	.clk_base(clk_1x),
 	
 	.refreshForce(sdr_refresh),
-	.ram_idle(ram_idle),
+	.ram_idle(),
 
 	.ch1_addr(sdram_addr),
 	.ch1_din(),

@@ -315,8 +315,7 @@ architecture arch of cd_top is
 	(
 		COPY_IDLE,
 		COPY_FIRST,
-		COPY_DATA,
-      COPY_CHECKPTR
+		COPY_DATA
 	);
    signal copyState                 : tCopyState := COPY_IDLE;
 
@@ -1950,6 +1949,11 @@ begin
                sectorBuffers_addrA <= std_logic_vector(to_unsigned(to_integer(SS_Adr - 2048), 13));
                sectorBuffers_DataA <= SS_DataWrite;
                sectorBuffers_wrenA <= '1';
+               -- synthesis translate_off
+               if ((to_integer(SS_Adr) mod 2048) < 588) then
+                  sectorBuffers(((to_integer(SS_Adr) - 2048) / 1024))(to_integer(SS_Adr) mod 2048) <= SS_DataWrite;
+               end if;
+               -- synthesis translate_on
             end if;
             
             if (SS_Adr = 1024) then headerIsData <= '1'; headerDataSector <= '1'; headerDataCheck <= '1'; end if;
@@ -2235,7 +2239,9 @@ begin
                      copyState         <= COPY_FIRST;
                      copyCount         <= 0;
                      copyReadAddr      <= 0;
+                     copyByteCnt       <= 0;
                      copySectorPointer <= readSectorPointer;
+                     sectorBufferSizes(to_integer(readSectorPointer)) <= 0;
                      if (sectorBufferSizes(to_integer(readSectorPointer)) = 0) then
                         copySize <= RAW_SECTOR_OUTPUT_SIZE / 4;
                      else
@@ -2245,6 +2251,9 @@ begin
                
                when COPY_FIRST =>
                   copyState     <= COPY_DATA;
+                   if (sectorBufferSizes(to_integer(writeSectorPointer)) /= 0) then -- additional irq for missed sector
+                     ackRead_data <= '1';
+                  end if;
                
                when COPY_DATA =>
                   FifoData_Wr  <= '1';
@@ -2267,18 +2276,10 @@ begin
                         FifoData_Din <= sectorBuffers_DataB(31 downto 24); 
                         copyCount    <= copyCount + 1;
                         if (copyCount = (copySize - 1)) then
-                           copyState  <= COPY_CHECKPTR;
-                           sectorBufferSizes(to_integer(copySectorPointer)) <= 0;
+                           copyState  <= COPY_IDLE;
                         end if;
                      when others => null;
                   end case;
-                
-               when COPY_CHECKPTR =>
-                  copyState <= COPY_IDLE;
-                  if (sectorBufferSizes(to_integer(writeSectorPointer)) /= 0) then
-                     -- additional irq for missed sector
-                     ackRead_data <= '1';
-                  end if;
                  
             end case;
             
@@ -2286,8 +2287,6 @@ begin
             if (FifoData_reset = '1' and copyState /= COPY_IDLE) then
                copyState   <= COPY_IDLE;
                FifoData_Wr <= '0';
-               sectorBufferSizes(to_integer(copySectorPointer)) <= 0;
-               -- todo: should this set additional irq for missed sector?
             end if;
 
          end if;

@@ -30,7 +30,6 @@ entity dma is
       ram_128              : out std_logic := '0';
       ram_done             : in  std_logic;
       ram_reqprocessed     : in  std_logic;
-      ram_idle             : in  std_logic;
       
       gpu_dmaRequest       : in  std_logic;
       DMA_GPU_waiting      : out std_logic := '0';
@@ -128,7 +127,7 @@ architecture arch of dma is
    signal chopsize            : unsigned(7 downto 0);
    signal chopwaittime        : unsigned(7 downto 0);
    
-   signal dmaEndWait          : unsigned(3 downto 0) := (others => '0');
+   signal dmaEndWait          : unsigned(2 downto 0) := (others => '0');
          
    signal autoread            : std_logic := '0';
    signal firstword           : std_logic := '0';
@@ -419,11 +418,11 @@ begin
                end if;
             end loop;
             
-            if (dmaEndWait(3) = '0') then
+            if (dmaEndWait(2) = '0') then
                dmaEndWait <= dmaEndWait + 1;
             end if;
             
-            if (triggerNew = '1' and dmaEndWait(3) = '1') then
+            if (triggerNew = '1' and dmaEndWait(2) = '1') then
                dmaArray(triggerchannel).requestsPending <= '0';
                dmaArray(triggerchannel).timeupPending   <= '0';
                dmaArray(triggerchannel).D_CHCR(28)      <= '0';
@@ -601,9 +600,9 @@ begin
                            dmaState  <= WAITING;
                            autoread  <= '0';
                         else
-                           dmaState <= PAUSING;
-                           paused   <= '1';
-                           autoread <= '0';
+                           dmaState    <= PAUSING;
+                           paused      <= '1';
+                           autoread    <= '0';
                         end if;
                      end if;
                   end if;  
@@ -726,7 +725,7 @@ begin
                   end if;
                
                when STOPPING =>
-                  if (fifoOut_Done = '1' and fifoOut_Wr = '0' and requestOnFly = 0) then
+                  if (fifoOut_Done = '1' and fifoOut_Wr = '0' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
                      if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
@@ -743,7 +742,7 @@ begin
                   end if;
                
                when PAUSING =>
-                  if (fifoOut_Done = '1' and fifoOut_Wr = '0' and requestOnFly = 0) then
+                  if (fifoOut_Done = '1' and fifoOut_Wr = '0' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
                      if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
@@ -808,13 +807,17 @@ begin
             end if;
             
             if (ram_reqprocessed = '1' and autoread = '1') then
-               ram_ena         <= '1';
-               requestOnFlyNew := requestOnFlyNew + 1;
-               requestedDwords <= requestedDwords + 4;
-               if (directionNeg = '1') then
-                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
+               if (ram_done = '1' and toDevice = '1' and firstword = '1' and dmaArray(activeChannel).D_CHCR(10 downto 9) = "10" and ram_dataRead(31 downto 24) = x"00") then
+                  autoread <= '0'; -- stop third read for empty linked list
                else
-                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") + 16); 
+                  ram_ena         <= '1';
+                  requestOnFlyNew := requestOnFlyNew + 1;
+                  requestedDwords <= requestedDwords + 4;
+                  if (directionNeg = '1') then
+                     ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
+                  else
+                     ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") + 16); 
+                  end if;
                end if;
             end if;
             

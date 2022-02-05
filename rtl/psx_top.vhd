@@ -45,7 +45,6 @@ entity psx_top is
       ram_128               : out std_logic;
       ram_done              : in  std_logic;
       ram_reqprocessed      : in  std_logic;
-      ram_idle              : in  std_logic;
       -- vram/savestate interface
       ddr3_BUSY             : in  std_logic;                    
       ddr3_DOUT             : in  std_logic_vector(63 downto 0);
@@ -1024,7 +1023,6 @@ begin
       ram_128              => ram_dma_128,      
       ram_done             => ram_dma_done, 
       ram_reqprocessed     => ram_reqprocessed,
-      ram_idle             => ram_idle,
       
       gpu_dmaRequest       => gpu_dmaRequest,  
       DMA_GPU_waiting      => DMA_GPU_waiting,
