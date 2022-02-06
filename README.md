@@ -32,6 +32,13 @@ In Framebuffer mode you can choose to view:
 
 Analog out is not supported yet. It requires either direct video or seperate build and is very experimental and buggy. Use at your own risks, no bug reports please.
 
+## Libcrypt
+
+Some games are secured with Libcrypt and will not work if it's not circumvented.
+
+You can provide a .sbi file to do that.
+If there is a .sbi file next to a .cue with the same name, it is loaded automatically when mounting the CD image.
+
 ## Error messages
 
 If there is a recognized problem, an overlay is displayed, showing which error has occured.

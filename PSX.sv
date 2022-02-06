@@ -418,12 +418,13 @@ assign sd_wr[1] = 0;
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
-reg bios_download, cart_download, cd_download;
+reg bios_download, cart_download, cd_download, sbi_download;
 always @(posedge clk_1x) begin
 	//code_download <= ioctl_download & &ioctl_index;
 	bios_download <= ioctl_download & (ioctl_index == 0);
 	cart_download <= ioctl_download & (ioctl_index == 1);
 	cd_download   <= ioctl_download & (ioctl_index[5:0] == 2);
+	sbi_download  <= ioctl_download & (ioctl_index == 250);
 end
 
 reg cart_loaded = 0;
@@ -465,6 +466,8 @@ reg old_save_a = 0;
 
 wire bk_save_a = OSD_STATUS & bk_autosave;
 
+reg [15:0] libcryptKey;
+
 always @(posedge clk_1x) begin
 	ramdownload_wr <= 0;
 	if(cart_download | bios_download | cd_download) begin
@@ -493,12 +496,16 @@ always @(posedge clk_1x) begin
       cd_hps_on <= 0;
       hasCD     <= 1;
    end
+   
+   if (sbi_download && ioctl_wr) begin
+      libcryptKey <= ioctl_dout;
+   end
      
    if (img_mounted[1]) begin
       if (img_size > 0) begin
-         cd_Size   <= img_size[29:0];
-         cd_hps_on <= 1;
-         hasCD     <= 1;
+         cd_Size     <= img_size[29:0];
+         cd_hps_on   <= 1;
+         hasCD       <= 1;
       end else begin
          hasCD     <= 0;
       end
@@ -636,6 +643,7 @@ psx
    .region          (status[40:39]),
    .hasCD           (hasCD),
    .fastCD          (0),
+   .libcryptKey     (libcryptKey),
    .cd_Size         (cd_Size),
    .cd_req          (cd_req),
    .cd_addr         (cd_addr),

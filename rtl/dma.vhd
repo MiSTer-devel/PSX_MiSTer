@@ -848,9 +848,9 @@ begin
             end if; 
             
             fifoOut_Wr_1 <= fifoOut_Wr;
-            if (fifoOut_Wr = '1' or fifoOut_Wr_1 = '1') then
+            if (fifoOut_Wr = '1' or fifoOut_Wr_1 = '1' ) then
                fifoOut_Done <= '0';
-            elsif (ram_done = '1' and fifoOut_Empty = '1') then
+            elsif (ram_done = '1' and fifoOut_Empty = '1' and fifoOut_Rd = '0' and ram_ena = '0') then
                fifoOut_Done <= '1';
             end if;
             

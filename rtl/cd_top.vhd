@@ -17,6 +17,7 @@ entity cd_top is
       cdSize               : in  unsigned(29 downto 0);
       fastCD               : in  std_logic;
       region               : in  std_logic_vector(1 downto 0);
+      libcryptKey          : in  std_logic_vector(15 downto 0);
       
       fullyIdle            : out std_logic;
       cdSlow               : out std_logic := '0';
@@ -165,8 +166,6 @@ architecture arch of cd_top is
    signal FifoResponse_Dout         : std_logic_vector(7 downto 0);
    signal FifoResponse_Rd           : std_logic := '0';
    signal FifoResponse_Empty        : std_logic;
-   
-   signal libcryptKey               : std_logic_vector(15 downto 0) := x"0000";
     
    -- drive
    type tdrivestate is
@@ -2011,24 +2010,24 @@ begin
                      trackNumberBCD <= x"01"; -- todo
                   end if;
                   readSubchannel <= '1';
-
+                  
                   if (
-                      (libcryptKey(15) = '1' and (readLBA = 14105 or readLBA = 14110)) or
-                      (libcryptKey(14) = '1' and (readLBA = 14231 or readLBA = 14236)) or
-                      (libcryptKey(13) = '1' and (readLBA = 14485 or readLBA = 14490)) or
-                      (libcryptKey(12) = '1' and (readLBA = 14579 or readLBA = 14584)) or
-                      (libcryptKey(11) = '1' and (readLBA = 14649 or readLBA = 14654)) or
-                      (libcryptKey(10) = '1' and (readLBA = 14899 or readLBA = 14904)) or
-                      (libcryptKey(9)  = '1' and (readLBA = 15056 or readLBA = 15061)) or
-                      (libcryptKey(8)  = '1' and (readLBA = 15130 or readLBA = 15135)) or
-                      (libcryptKey(7)  = '1' and (readLBA = 15242 or readLBA = 15247)) or
-                      (libcryptKey(6)  = '1' and (readLBA = 15312 or readLBA = 15317)) or
-                      (libcryptKey(5)  = '1' and (readLBA = 15378 or readLBA = 15383)) or
-                      (libcryptKey(4)  = '1' and (readLBA = 15628 or readLBA = 15633)) or
-                      (libcryptKey(3)  = '1' and (readLBA = 15919 or readLBA = 15924)) or
-                      (libcryptKey(2)  = '1' and (readLBA = 16031 or readLBA = 16036)) or
-                      (libcryptKey(1)  = '1' and (readLBA = 16101 or readLBA = 16106)) or
-                      (libcryptKey(0)  = '1' and (readLBA = 16167 or readLBA = 16172))
+                      (libcryptKey(15) = '1' and (lastReadSector = 14105 or lastReadSector = 14110)) or
+                      (libcryptKey(14) = '1' and (lastReadSector = 14231 or lastReadSector = 14236)) or
+                      (libcryptKey(13) = '1' and (lastReadSector = 14485 or lastReadSector = 14490)) or
+                      (libcryptKey(12) = '1' and (lastReadSector = 14579 or lastReadSector = 14584)) or
+                      (libcryptKey(11) = '1' and (lastReadSector = 14649 or lastReadSector = 14654)) or
+                      (libcryptKey(10) = '1' and (lastReadSector = 14899 or lastReadSector = 14904)) or
+                      (libcryptKey(9)  = '1' and (lastReadSector = 15056 or lastReadSector = 15061)) or
+                      (libcryptKey(8)  = '1' and (lastReadSector = 15130 or lastReadSector = 15135)) or
+                      (libcryptKey(7)  = '1' and (lastReadSector = 15242 or lastReadSector = 15247)) or
+                      (libcryptKey(6)  = '1' and (lastReadSector = 15312 or lastReadSector = 15317)) or
+                      (libcryptKey(5)  = '1' and (lastReadSector = 15378 or lastReadSector = 15383)) or
+                      (libcryptKey(4)  = '1' and (lastReadSector = 15628 or lastReadSector = 15633)) or
+                      (libcryptKey(3)  = '1' and (lastReadSector = 15919 or lastReadSector = 15924)) or
+                      (libcryptKey(2)  = '1' and (lastReadSector = 16031 or lastReadSector = 16036)) or
+                      (libcryptKey(1)  = '1' and (lastReadSector = 16101 or lastReadSector = 16106)) or
+                      (libcryptKey(0)  = '1' and (lastReadSector = 16167 or lastReadSector = 16172))
                   ) then
                       readSubchannel <= '0';
                   end if;

@@ -55,6 +55,7 @@ entity psx_mister is
       region                : in  std_logic_vector(1 downto 0);
       hasCD                 : in  std_logic;
       fastCD                : in  std_logic;
+      libcryptKey           : in  std_logic_vector(15 downto 0);
       cd_Size               : in  unsigned(29 downto 0);
       cd_req                : out std_logic := '0';
       cd_addr               : out std_logic_vector(26 downto 0) := (others => '0');
@@ -228,6 +229,7 @@ begin
       region                => region,
       hasCD                 => hasCD,
       fastCD                => fastCD,
+      libcryptKey           => libcryptKey,
       cd_Size               => cd_Size,
       cd_req                => cd_req, 
       cd_addr               => cd_addr,
