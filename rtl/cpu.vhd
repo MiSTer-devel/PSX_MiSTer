@@ -154,7 +154,7 @@ architecture arch of cpu is
    signal PCold2                       : unsigned(31 downto 0) := (others => '0');
    signal PCold3                       : unsigned(31 downto 0) := (others => '0');
    signal PCold4                       : unsigned(31 downto 0) := (others => '0');
-         
+   
    signal value1                       : unsigned(31 downto 0) := (others => '0');
    signal value2                       : unsigned(31 downto 0) := (others => '0');
                
@@ -196,6 +196,7 @@ architecture arch of cpu is
    signal PCnext                       : unsigned(31 downto 0) := (others => '0');
    signal opcodeNext                   : unsigned(31 downto 0) := (others => '0');
    signal fetchReadyNext               : std_logic := '0';
+   signal fetchReadyNow                : std_logic := '0';
    signal cacheHitNext                 : std_logic := '0';
    signal cacheUpdateNext              : std_logic := '0';
    signal blockIRQNext                 : std_logic := '0';
@@ -624,6 +625,7 @@ begin
       request         := '0';
       PCnext          <= PC;
       fetchReadyNext  <= fetchReady;
+      fetchReadyNow   <= '0';
       stallNew1       <= stall1;
       opcodeNext      <= opcode0;
       cacheUpdateNext <= '0';
@@ -703,6 +705,7 @@ begin
                   stallNew1      <= '0';
                   PCnext         <= PC + 4;
                   fetchReadyNext <= '1';
+                  fetchReadyNow  <= '1';
                   opcodeNext <= unsigned(mem_dataRead);
                
                when others => report "should never happen" severity failure; 
@@ -763,20 +766,20 @@ begin
       
          if (reset = '1') then
          
-            tagValid      <= (others => '0');
-         
-            stall1        <= '0';
-            PC            <= unsigned(ss_in(0)); -- x"BFC00000";
-                        
-            blockIRQ      <= '0'; -- todo: busy for savestate?
-            blockirqCnt   <= 0;
-            fetchReady    <= ss_in(25)(0);
-            opcode0       <= unsigned(ss_in(14));
-            PCold0        <= unsigned(ss_in(19));
+            tagValid       <= (others => '0');
+                           
+            stall1         <= '0';
+            PC             <= unsigned(ss_in(0)); -- x"BFC00000";
+                           
+            blockIRQ       <= '0'; -- todo: busy for savestate?
+            blockirqCnt    <= 0;
+            fetchReady     <= ss_in(25)(0);
+            opcode0        <= unsigned(ss_in(14));
+            PCold0         <= unsigned(ss_in(19));
             
-            cacheHit      <= '0';
-            cacheUpdate   <= '0';
-            cacheHitLast  <= '0';
+            cacheHit       <= '0';
+            cacheUpdate    <= '0';
+            cacheHitLast   <= '0';
          
          elsif (ce = '1') then
             
@@ -802,9 +805,9 @@ begin
                cacheHitLast <= '0';
             end if;
             
-            if (fetchReadyNext = '1') then
-               opcode0 <= opcodeNext; 
-               PCold0  <= PC;
+            if (fetchReadyNow = '1') then
+               opcode0        <= opcodeNext; 
+               PCold0         <= PC;
             end if;
             
             if (cacheHitNext = '1') then
