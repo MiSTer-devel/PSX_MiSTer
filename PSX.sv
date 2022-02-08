@@ -239,8 +239,8 @@ parameter CONF_STR = {
 	"F1,EXE,Load Exe;",
 	//"h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
-	"SC2,MCD,Mount Memory Card 1;",
-	"SC3,MCD,Mount Memory Card 2;",
+	"S2,SAV,Mount Memory Card 1;",
+	"SC3,SAV,Mount Memory Card 2;",
 	"D0RC,Reload Memory Cards;",
 	"D0RD,Save Memory Cards;",
 	"D0ON,Autosave,Off,On;",
@@ -259,8 +259,6 @@ parameter CONF_STR = {
 	"d1oC,SPU RAM select,DDR3,SDRAM2;",
 	"OP,Pause when OSD is open,Off,On;",
 	"-;",
-	"OM,Dithering,On,Off;",
-	"o9,Deinterlacing,Weave,Bob;",
 	"OS,FPS Overlay,Off,On;",
 	"OT,Error Overlay,On,Off;",
 	"-;",
@@ -268,9 +266,11 @@ parameter CONF_STR = {
 	"P1,Video & Audio;",
 	"P1-;",
 	"P1o01,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
-	"P1O24,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",	
-	"P1O78,Stereo Mix,None,25%,50%,100%;",
 	"P1o23,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
+	"P1OM,Dithering,On,Off;",
+	"P1o9,Deinterlacing,Weave,Bob;",
+	"P1-;",
+	"P1O78,Stereo Mix,None,25%,50%,100%;",
 
    "P2,Debug;",
 	"P2-;",
@@ -915,11 +915,7 @@ assign CLK_VIDEO = clk_2x;
 wire hs, vs, hbl, vbl, video_interlace;
 
 assign VGA_F1 = status[14] ? 1'b0 : (video_interlace & ~status[41]);
-assign VGA_SL = sl[1:0];
-
-wire [2:0] scale = status[4:2];
-wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
-wire       scandoubler = (scale || forced_scandoubler);
+assign VGA_SL = 0;
 
 wire ce_pix;
 wire [7:0] r,g,b;
