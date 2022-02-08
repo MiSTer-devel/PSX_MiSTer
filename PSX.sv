@@ -30,9 +30,9 @@ module emu
 	input         RESET,
 
 	//Must be passed to hps_io module
-	inout  [47:0] HPS_BUS,
+	inout  [48:0] HPS_BUS,
 
-	//Base video clock. Usually equals to clk_1x.
+	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
 
 	//Multiple resolutions are supported using different CE_PIXEL rates.
@@ -59,7 +59,7 @@ module emu
    output        HDMI_FREEZE,
 
 `ifdef MISTER_FB
-	// Use framebuffer in DDRAM (MISTER_FB=1 in qsf)
+	// Use framebuffer in DDRAM
 	// FB_FORMAT:
 	//    [2:0] : 011=8bpp(palette) 100=16bpp 101=24bpp 110=32bpp
 	//    [3]   : 0=16bits 565 1=16bits 1555
@@ -76,6 +76,7 @@ module emu
 	input         FB_LL,
 	output        FB_FORCE_BLANK,
 
+`ifdef MISTER_FB_PALETTE
 	// Palette control for 8bit modes.
 	// Ignored for other video modes.
 	output        FB_PAL_CLK,
@@ -83,6 +84,7 @@ module emu
 	output [23:0] FB_PAL_DOUT,
 	input  [23:0] FB_PAL_DIN,
 	output        FB_PAL_WR,
+`endif
 `endif
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
@@ -142,6 +144,7 @@ module emu
 
 `ifdef MISTER_DUAL_SDRAM
 	//Secondary SDRAM
+	//Set all output SDRAM_* signals to Z ASAP if SDRAM2_EN is 0
 	input         SDRAM2_EN,
 	output        SDRAM2_CLK,
 	output [12:0] SDRAM2_A,
@@ -200,10 +203,6 @@ assign FB_WIDTH   = status[11] ? 12'd1024 : DisplayWidth;
 assign FB_HEIGHT  = status[11] ? 12'd512  : DisplayHeight;
 assign FB_STRIDE  = 14'd2048;
 assign FB_FORCE_BLANK = 0;
-assign FB_PAL_CLK = 0;
-assign FB_PAL_ADDR= 0;
-assign FB_PAL_DOUT= 0;
-assign FB_PAL_WR  = 0;
 
 
 ///////////////////////  CLOCK/RESET  ///////////////////////////////////
@@ -847,6 +846,7 @@ assign cd_done = 0; //sdram_readack2;
 assign spuram_dataRead = sdr_sdram_dout2[31:0];
 assign spuram_done     = sdram_readack2 | sdram_writeack2;
 
+`ifdef MISTER_DUAL_SDRAM
 
 sdram sdram2
 (
@@ -894,6 +894,17 @@ sdram sdram2
 	.ch3_rnw(1'b1),
 	.ch3_ready()
 );
+
+`else
+
+wire SDRAM2_EN = 0;
+
+assign sdr_sdram_dout2 = '0;
+assign sdram_readack2 = '0;
+assign sdram_writeack2 = '0;
+
+`endif
+
 
 assign DDRAM_CLK = clk_2x;
 
