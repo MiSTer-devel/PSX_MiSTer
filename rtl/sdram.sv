@@ -373,12 +373,11 @@ always @(posedge clk) begin
       end
    end
 	else begin
-		SDRAM_A <= 0;
-		SDRAM_BA <= 0;
-		command <= 0;
-		chip <= 0;
+		SDRAM_A <= 'Z;
+		SDRAM_BA <= 'Z;
+		command <= 'Z;
+		chip <= 'Z;
 	end   
-   
 end
 
 altddio_out
@@ -400,7 +399,7 @@ sdramclk_ddr
 	.dataout(SDRAM_CLK),
 	.aclr(1'b0),
 	.aset(1'b0),
-	.oe(1'b1),
+	.oe(SDRAM_EN),
 	.outclocken(1'b1),
 	.sclr(1'b0),
 	.sset(1'b0)
