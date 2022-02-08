@@ -14,6 +14,7 @@ entity cd_top is
       
       INSTANTSEEK          : in  std_logic;
       hasCD                : in  std_logic;
+      LIDopen              : in  std_logic;
       cdSize               : in  unsigned(29 downto 0);
       fastCD               : in  std_logic;
       region               : in  std_logic_vector(1 downto 0);
@@ -1777,7 +1778,9 @@ begin
                end if;
             end if;
             
-            if (shell_close = '1') then
+            if (LIDopen = '1') then
+               internalStatus(4) <= '1';
+            elsif (shell_close = '1') then
                internalStatus(4) <= '0';
             end if;
             

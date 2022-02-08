@@ -74,9 +74,11 @@ begin
 
       INSTANTSEEK          => '1',
       hasCD                => '1',
+      LIDopen              => '0',
       cdSize               => cdSize,
       fastCD               => '0',
       region               => "10",
+      libcryptKey          => x"0000",
       
       fullyIdle            => fullyIdle,
       
@@ -114,7 +116,8 @@ begin
    generic map
    (
       LOADSTATE         => '0',
-      --FILENAME          => ""
+      FILENAME          => "C:\Users\FPGADev\Desktop\savestates_psxcore\Suikoden II (USA)_1.ss"
+      --FILENAME          => "C:\Projekte\psx\FPSXApp\Suikoden II (USA)_1.ss"
    )
    port map
    (
@@ -187,7 +190,8 @@ begin
       
       if (cdLoaded = '0') then
       
-         file_open(f_status, infile, "x.bin", read_mode);
+         --file_open(f_status, infile, "C:\Projekte\psx\Croc - Legend of the Gobbos (Europe) (Demo).bin", read_mode);
+         file_open(f_status, infile, "C:\\Projekte\\psx\\Um Jammer Lammy (USA).bin", read_mode);
          
          targetpos := 0;
          

@@ -231,7 +231,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -286,6 +286,8 @@ parameter CONF_STR = {
 	"P2oB,RepTimingSPUDMA,Off,On;",
 	"P2OQ,DMAinBLOCKs,Off,On;",
 	"P2OL,CD Instant Seek,Off,On;",
+	"P2oJ,CD Lid,Closed,Open;",
+	"P2oK,CD Inserted,Yes,No;",
 	"P2OF,Force 60Hz PAL,Off,On;",
 	"P2OR,Textures,On,Off;",
 
@@ -641,7 +643,8 @@ psx
    .DDRAM_WE        (DDRAM_WE        ),
    // cd
    .region          (status[40:39]),
-   .hasCD           (hasCD),
+   .hasCD           (hasCD && ~status[52]),
+   .LIDopen         (status[51]),
    .fastCD          (0),
    .libcryptKey     (libcryptKey),
    .cd_Size         (cd_Size),

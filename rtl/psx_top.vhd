@@ -59,6 +59,7 @@ entity psx_top is
       region                : in  std_logic_vector(1 downto 0);
       hasCD                 : in  std_logic;
       fastCD                : in  std_logic;
+      LIDopen               : in  std_logic;
       libcryptKey           : in  std_logic_vector(15 downto 0);
       cd_Size               : in  unsigned(29 downto 0);
       cd_req                : out std_logic := '0';
@@ -1135,6 +1136,7 @@ begin
       INSTANTSEEK          => INSTANTSEEK,
       hasCD                => hasCD,
       fastCD               => fastCD,
+      LIDopen              => LIDopen,
       region               => region,
       libcryptKey          => libcryptKey,
       
