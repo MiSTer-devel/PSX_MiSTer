@@ -1782,6 +1782,9 @@ begin
                internalStatus(4) <= '1';
             elsif (shell_close = '1') then
                internalStatus(4) <= '0';
+               if (internalStatus(4) = '1') then
+                  internalStatus(1) <= '1'; -- motor on
+               end if;
             end if;
             
             if (ackRead_valid = '1' or ackPendingIRQ = '1') then
