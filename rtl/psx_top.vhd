@@ -177,7 +177,21 @@ entity psx_top is
       savestate_number      : in  integer range 0 to 3;
       state_loaded          : out std_logic;
       rewind_on             : in  std_logic;
-      rewind_active         : in  std_logic
+      rewind_active         : in  std_logic;
+      -- cheats
+      cheat_clear           : in  std_logic;
+      cheats_enabled        : in  std_logic;
+      cheat_on              : in  std_logic;
+      cheat_in              : in  std_logic_vector(127 downto 0);
+      cheats_active         : out std_logic := '0';
+
+      Cheats_BusAddr        : buffer std_logic_vector(20 downto 0);
+      Cheats_BusRnW         : out    std_logic;
+      Cheats_BusByteEnable  : out    std_logic_vector(3 downto 0);
+      Cheats_BusWriteData   : out    std_logic_vector(31 downto 0);
+      Cheats_Bus_ena        : out    std_logic := '0';
+      Cheats_BusReadData    : in     std_logic_vector(31 downto 0);
+      Cheats_BusDone        : in     std_logic
    );
 end entity;
 
@@ -952,6 +966,34 @@ begin
       SS_idle              => SS_idle_pad
    );
    
+   icheats : entity work.cheats
+   port map
+   (
+      clk1x          => clk1x,
+      ce             => ce,
+      reset          => reset_intern,
+
+      dmaOn => dmaOn,
+
+      cheat_clear    => cheat_clear,
+      cheats_enabled => cheats_enabled,
+      cheat_on       => cheat_on,
+      cheat_in       => cheat_in,
+      cheats_active  => cheats_active,
+
+      vsync          => IRQ_VBlank,
+
+      --bus_ena_in     => mem_bus_ena,
+
+      BusAddr        => Cheats_BusAddr,
+      BusRnW         => Cheats_BusRnW,
+      BusByteEnable  => Cheats_BusByteEnable,
+      BusWriteData   => Cheats_BusWriteData,
+      Bus_ena        => Cheats_Bus_ena,
+      BusReadData    => Cheats_BusReadData,
+      BusDone        => Cheats_BusDone
+   );
+
    isio : entity work.sio
    port map
    (

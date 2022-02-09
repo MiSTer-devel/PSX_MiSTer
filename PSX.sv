@@ -241,6 +241,9 @@ parameter CONF_STR = {
 	"-;",
 	"oJ,CD Lid,Closed,Open;",
 	"-;",
+	"C,Cheats;",
+	"O6,Cheats Enabled,Yes,No;",
+	"-;",
 	"SC2,SAVMCD,Mount Memory Card 1;",
 	"SC3,SAVMCD,Mount Memory Card 2;",
 	"-;",
@@ -429,14 +432,14 @@ assign sd_wr[1] = 0;
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
-reg bios_download, cart_download, cd_download, sbi_download, cdinfo_download;
+reg bios_download, cart_download, cd_download, sbi_download, cdinfo_download, code_download;
 always @(posedge clk_1x) begin
-	//code_download <= ioctl_download & &ioctl_index;
 	bios_download    <= ioctl_download & (ioctl_index == 0);
 	cart_download    <= ioctl_download & (ioctl_index == 1);
 	cd_download      <= ioctl_download & (ioctl_index[5:0] == 2);
 	sbi_download     <= ioctl_download & (ioctl_index == 250);
 	cdinfo_download  <= ioctl_download & (ioctl_index == 251);
+	code_download    <= ioctl_download & (ioctl_index == 255);
 end
 
 reg cart_loaded = 0;
@@ -784,7 +787,21 @@ psx
    .savestate_number      (ss_slot),
    .state_loaded          (),
    .rewind_on             (0), //(status[27]),
-   .rewind_active         (0)  //(status[27] & joy[15])
+   .rewind_active         (0), //(status[27] & joy[15]),
+   //cheats
+   .cheat_clear(gg_reset),
+   .cheats_enabled(~status[6]),
+   .cheat_on(gg_valid),
+   .cheat_in(gg_code),
+   .cheats_active(gg_active),
+
+   .Cheats_BusAddr(cheats_addr),
+   .Cheats_BusRnW(cheats_rnw),
+   .Cheats_BusByteEnable(cheats_be),
+   .Cheats_BusWriteData(cheats_dout),
+   .Cheats_Bus_ena(cheats_ena),
+   .Cheats_BusReadData(cheats_din),
+   .Cheats_BusDone(cheats_done)
 );
 
 ////////////////////////////  MEMORY  ///////////////////////////////////
@@ -810,6 +827,13 @@ wire         sdram_writeack;
 wire         sdram_writeack2;
 wire         sdram_rnw;
 wire         sdram_128;
+
+wire [20:0] cheats_addr;
+wire cheats_rnw;
+wire [31:0] cheats_dout;
+wire cheats_ena;
+wire [31:0] cheats_din;
+wire cheats_done;
 
 assign sdram_ack = sdram_readack | sdram_writeack;
 
@@ -853,12 +877,13 @@ sdram sdram
    .ch2_be   ((cart_download | bios_download) ? 4'b1111            : sdram_be),
 	.ch2_ready(sdram_writeack),
 
-	.ch3_addr(0),
-	.ch3_din(),
-	.ch3_dout(),
-	.ch3_req(1'b0),
-	.ch3_rnw(1'b1),
-	.ch3_ready()
+	.ch3_addr(cheats_addr),
+	.ch3_din(cheats_dout),
+	.ch3_dout(cheats_din),
+	.ch3_req(cheats_ena),
+	.ch3_rnw(cheats_rnw),
+	.ch3_be(cheats_be),
+	.ch3_ready(cheats_done)
 );
 
 wire        cd_req;
@@ -996,35 +1021,35 @@ video_freak video_freak
 //  127:96          95:64         63:32         31:0
 // Integer values are in BIG endian byte order, so it up to the loader
 // or generator of the code to re-arrange them correctly.
-//reg [127:0] gg_code;
-//reg gg_valid;
-//reg gg_reset;
-//reg ioctl_download_1;
-//wire gg_active;
-//always_ff @(posedge clk_1x) begin
-//
-//   gg_reset <= 0;
-//   ioctl_download_1 <= ioctl_download;
-//	if (ioctl_download && ~ioctl_download_1 && ioctl_index == 255) begin
-//      gg_reset <= 1;
-//   end
-//
-//   gg_valid <= 0;
-//	if (code_download & ioctl_wr) begin
-//		case (ioctl_addr[3:0])
-//			0:  gg_code[111:96]  <= ioctl_dout; // Flags Bottom Word
-//			2:  gg_code[127:112] <= ioctl_dout; // Flags Top Word
-//			4:  gg_code[79:64]   <= ioctl_dout; // Address Bottom Word
-//			6:  gg_code[95:80]   <= ioctl_dout; // Address Top Word
-//			8:  gg_code[47:32]   <= ioctl_dout; // Compare Bottom Word
-//			10: gg_code[63:48]   <= ioctl_dout; // Compare top Word
-//			12: gg_code[15:0]    <= ioctl_dout; // Replace Bottom Word
-//			14: begin
-//				gg_code[31:16]    <= ioctl_dout; // Replace Top Word
-//				gg_valid          <= 1;          // Clock it in
-//			end
-//		endcase
-//	end
-//end
+reg [127:0] gg_code;
+reg gg_valid;
+reg gg_reset;
+reg code_download_1;
+wire gg_active;
+always_ff @(posedge clk_1x) begin
+
+   gg_reset <= 0;
+   code_download_1 <= code_download;
+	if (code_download && ~code_download_1) begin
+      gg_reset <= 1;
+   end
+
+   gg_valid <= 0;
+	if (code_download & ioctl_wr) begin
+		case (ioctl_addr[3:0])
+			0:  gg_code[111:96]  <= ioctl_dout; // Flags Bottom Word
+			2:  gg_code[127:112] <= ioctl_dout; // Flags Top Word
+			4:  gg_code[79:64]   <= ioctl_dout; // Address Bottom Word
+			6:  gg_code[95:80]   <= ioctl_dout; // Address Top Word
+			8:  gg_code[47:32]   <= ioctl_dout; // Compare Bottom Word
+			10: gg_code[63:48]   <= ioctl_dout; // Compare top Word
+			12: gg_code[15:0]    <= ioctl_dout; // Replace Bottom Word
+			14: begin
+				gg_code[31:16]    <= ioctl_dout; // Replace Top Word
+				gg_valid          <= 1;          // Clock it in
+			end
+		endcase
+	end
+end
 
 endmodule

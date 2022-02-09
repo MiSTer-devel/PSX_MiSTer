@@ -6,13 +6,13 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;     
 
 library MEM;
-use work.pProc_bus_gba.all;
 
-entity gba_cheats is
+entity cheats is
    port 
    (
-      clk100         : in     std_logic;  
-      gb_on          : in     std_logic;
+      clk1x          : in     std_logic;
+      ce             : in     std_logic;
+      reset          : in     std_logic;
       
       cheat_clear    : in     std_logic;
       cheats_enabled : in     std_logic;
@@ -21,13 +21,11 @@ entity gba_cheats is
       cheats_active  : out    std_logic := '0';
       
       vsync          : in     std_logic;
+      dmaOn          : in     std_logic;
       
-      bus_ena_in     : in     std_logic;
-      sleep_cheats   : out    std_logic := '0';
-      
-      BusAddr        : buffer std_logic_vector(27 downto 0);
+      BusAddr        : buffer std_logic_vector(20 downto 0);
       BusRnW         : out    std_logic;
-      BusACC         : out    std_logic_vector(1 downto 0);
+      BusByteEnable  : out    std_logic_vector(3 downto 0);
       BusWriteData   : out    std_logic_vector(31 downto 0);
       Bus_ena        : out    std_logic := '0';
       BusReadData    : in     std_logic_vector(31 downto 0);
@@ -35,10 +33,9 @@ entity gba_cheats is
    );
 end entity;
 
-architecture arch of gba_cheats is
+architecture arch of cheats is
 
    constant CHEATCOUNT  : integer := 32;
-   constant SETTLECOUNT : integer := 100;
    
    constant OPTYPE_ALWAYS     : std_logic_vector(3 downto 0) := x"0";
    constant OPTYPE_EQUALS     : std_logic_vector(3 downto 0) := x"1";
@@ -61,7 +58,7 @@ architecture arch of gba_cheats is
       FIFO_WAIT,
       FIFO_LOADMEM,
       FIFO_CHECKMEM,
-      WAIT_GBAIDLE,
+      WAIT_DMAIDLE,
       LOAD_CHEAT,
       NEXT_CHEAT,
       SKIPTEST,
@@ -93,8 +90,6 @@ architecture arch of gba_cheats is
    signal skip_next  : std_logic := '0';
    signal oldvalue   : std_logic_vector(31 downto 0);
    
-   signal settle     : integer range 0 to SETTLECOUNT := 0;
-   
    
 begin 
 
@@ -107,7 +102,7 @@ begin
    )
    port map
    ( 
-      clk      => clk100,
+      clk      => clk1x,
       reset    => '0',
                
       Din      => cheat_in_1,  
@@ -119,11 +114,9 @@ begin
       Empty    => fifo_Empty
    );
 
-   BusACC <= ACCESS_32BIT;
-
-   process (clk100)
+   process (clk1x)
    begin
-      if rising_edge(clk100) then
+      if rising_edge(clk1x) then
    
          fifo_Rd <= '0';
          Bus_ena <= '0';
@@ -136,7 +129,7 @@ begin
             cheat_valid <= '1';
          end if;
    
-         if (gb_on = '0') then
+         if (reset = '1') then
             
             state      <= RESET_CLEAR;
             cheatindex <= 0;
@@ -146,16 +139,13 @@ begin
             case state is
             
                when IDLE =>
-                  sleep_cheats <= '0';
                   if (cheat_clear = '1') then
                      state      <= RESET_CLEAR;
                      cheatindex <= 0;
                   elsif (cheats_enabled = '1' and vsync = '1') then
-                     state        <= WAIT_GBAIDLE;
-                     settle       <= 0;
+                     state        <= WAIT_DMAIDLE;
                      cheatindex   <= 0;
                      skip_next    <= '0';
-                     sleep_cheats <= '1';
                   elsif (fifo_Empty = '0') then
                      state       <= FIFO_WAIT;
                      fifo_Rd     <= '1';
@@ -202,12 +192,8 @@ begin
                -- // apply cheats
                -- ///////////////////////////////
                
-               when WAIT_GBAIDLE =>
-                  if (bus_ena_in = '1') then
-                     settle <= 0;
-                  elsif (settle < SETTLECOUNT) then
-                     settle <= settle + 1;
-                  else
+               when WAIT_DMAIDLE =>
+                  if (dmaOn = '0') then
                      state <= LOAD_CHEAT;
                   end if;
                      
@@ -232,8 +218,9 @@ begin
                   else
                      state   <= WAIT_READ;
                      Bus_ena <= '1';
-                     BusAddr <= cheatdata(91 downto 64);
+                     BusAddr <= cheatdata(84 downto 64);
                      BusRnW  <= '1';
+                     BusByteEnable <= cheatdata(BYTEMASK_BIT_3 downto BYTEMASK_BIT_0);
                   end if;
                   
                when WAIT_READ =>
@@ -247,6 +234,7 @@ begin
                      state <= WAIT_WRITE;
                      Bus_ena      <= '1';
                      BusRnW       <= '0';
+                     BusByteEnable <= cheatdata(BYTEMASK_BIT_3 downto BYTEMASK_BIT_0);
                      BusWriteData <= oldvalue;
                      if (cheatdata(BYTEMASK_BIT_0) = '1') then BusWriteData( 7 downto  0) <= cheatdata( 7 downto  0); end if;
                      if (cheatdata(BYTEMASK_BIT_1) = '1') then BusWriteData(15 downto  8) <= cheatdata(15 downto  8); end if;
