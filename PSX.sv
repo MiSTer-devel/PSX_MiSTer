@@ -183,7 +183,7 @@ assign USER_OUT = '1;
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = status[8:7];
 
-assign LED_USER  = cart_download;
+assign LED_USER  = cart_download | bk_pending;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign BUTTONS   = 0;
@@ -357,6 +357,8 @@ wire [24:0] mouse;
 wire [32:0] RTC_time;
 
 wire [63:0] status_in = cart_download ? {status[63:39],ss_slot,status[36:17],1'b0,status[15:0]} : {status[63:39],ss_slot,status[36:0]};
+
+wire bk_pending;
 
 hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
 (
@@ -669,6 +671,7 @@ psx
    .spuram_dataRead (spuram_dataRead ),
    .spuram_done     (spuram_done     ),
    // memcard
+   .memcard_changed (bk_pending),
    .memcard1_load   (memcard1_load),
    .memcard2_load   (memcard2_load),
    .memcard_save    (memcard_save),

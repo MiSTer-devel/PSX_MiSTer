@@ -77,6 +77,7 @@ entity psx_mister is
       spuram_dataRead       : in  std_logic_vector(31 downto 0);
       spuram_done           : in  std_logic;
       -- memcard
+      memcard_changed       : out std_logic;
       memcard1_load         : in  std_logic;
       memcard2_load         : in  std_logic;
       memcard_save          : in  std_logic;
@@ -254,6 +255,7 @@ begin
       spuram_dataRead       => spuram_dataRead,  
       spuram_done           => spuram_done,        
       --memcard
+      memcard_changed       => memcard_changed,
       memcard1_load         => memcard1_load,       
       memcard2_load         => memcard2_load,       
       memcard_save          => memcard_save,       

@@ -18,6 +18,8 @@ entity memcard is
       mounted              : in  std_logic;
       anyChange            : in  std_logic;
       
+      changePending        : out std_logic;
+      
       mem_request          : out std_logic := '0';
       mem_BURSTCNT         : out std_logic_vector(7 downto 0) := (others => '0'); 
       mem_ADDR             : out std_logic_vector(19 downto 0) := (others => '0');                       
@@ -79,6 +81,8 @@ architecture arch of memcard is
    signal mem_DataOutA  : std_logic_vector(63 downto 0);
 
 begin 
+
+   changePending <= anyChangeBuf;
   
    process (clk2x)
    begin
@@ -109,9 +113,10 @@ begin
             case (state) is
                when IDLE => 
                   if (loadLatched = '1' and mounted = '1') then
-                     state       <= LOAD_WAITPAUSED;
-                     pause       <= '1';
-                     loadLatched <= '0';
+                     state        <= LOAD_WAITPAUSED;
+                     pause        <= '1';
+                     loadLatched  <= '0';
+                     anyChangeBuf <= '0';
                   elsif (saveLatched = '1') then
                      if (anyChangeBuf = '1') then
                         state        <= SAVE_WAITPAUSED;
