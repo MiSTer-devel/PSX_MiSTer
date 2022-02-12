@@ -316,7 +316,11 @@ always@(posedge clk_sys) begin : uio_block
 				'h0X17,
 				'h0X18: begin sd_ack <= disk[VD:0]; sdn_ack <= io_din[11:8]; end
 				  'h29: io_dout <= {4'hA, stflg};
+`ifdef MISTER_DISABLE_ADAPTIVE
 				  'h2B: io_dout <= {HPS_BUS[48:46],4'b0010};
+`else
+				  'h2B: io_dout <= {HPS_BUS[48:46],4'b0011};
+`endif
 				  'h2F: io_dout <= 1;
 				  'h32: io_dout <= gamma_bus[21];
 				  'h36: begin io_dout <= info_n; info_n <= 0; end
