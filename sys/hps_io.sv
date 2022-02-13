@@ -111,7 +111,8 @@ module hps_io #(parameter CONF_STR, CONF_STR_BRAM=1, PS2DIV=0, WIDE=0, VDNUM=1, 
 	output reg [26:0] ioctl_addr,         // in WIDE mode address will be incremented by 2
 	output reg [DW:0] ioctl_dout,
 	output reg        ioctl_upload = 0,   // signal indicating an active upload
-	input             ioctl_upload_req,
+	input             ioctl_upload_req,   // request to save (must be supported on HPS side for specific core)
+	input       [7:0] ioctl_upload_index,
 	input      [DW:0] ioctl_din,
 	output reg        ioctl_rd,
 	output reg [31:0] ioctl_file_ext,
@@ -325,7 +326,7 @@ always@(posedge clk_sys) begin : uio_block
 				  'h32: io_dout <= gamma_bus[21];
 				  'h36: begin io_dout <= info_n; info_n <= 0; end
 				  'h39: io_dout <= 1;
-				  'h3C: if(upload_req) begin io_dout <= 1; upload_req <= 0; end
+				  'h3C: if(upload_req) begin io_dout <= {ioctl_upload_index, 8'd1}; upload_req <= 0; end
 				  'h3E: io_dout <= 1; // shadow mask
 			endcase
 
