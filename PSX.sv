@@ -230,7 +230,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXX
+// X XXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXX          X
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -239,8 +239,10 @@ parameter CONF_STR = {
 	"F1,EXE,Load Exe;",
 	//"h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
-	"S2,SAVMCD,Mount Memory Card 1;",
+	"SC2,SAVMCD,Mount Memory Card 1;",
 	"SC3,SAVMCD,Mount Memory Card 2;",
+	"-;",
+	"oV,Automount Memory Card 1,Yes,No;",
 	"D0RC,Reload Memory Cards;",
 	"D0RD,Save Memory Cards;",
 	"D0ON,Autosave,Off,On;",
