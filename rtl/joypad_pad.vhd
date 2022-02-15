@@ -13,6 +13,7 @@ entity joypad_pad is
       analogPad            : in  std_logic;
       isMouse              : in  std_logic;
       isGunCon             : in  std_logic;
+      isNeGcon             : in  std_logic;
       
       selected             : in  std_logic;
       actionNext           : in  std_logic := '0';
@@ -78,7 +79,12 @@ architecture arch of joypad_pad is
       ANALOGRIGHTX,
       ANALOGRIGHTY,
       ANALOGLEFTX,
-      ANALOGLEFTY
+      ANALOGLEFTY,
+      NEGCONBUTTONMSB,
+      NEGCONSTEERING,
+      NEGCONANALOGI,
+      NEGCONANALOGII,
+      NEGCONANALOGL
    );
    signal controllerState : tcontrollerState := IDLE;
    
@@ -86,6 +92,7 @@ architecture arch of joypad_pad is
    signal rumbleOnFirst   : std_logic := '0';
    signal mouseSave       : std_logic := '0';
    signal gunConSave      : std_logic := '0';
+   signal neGconSave      : std_logic := '0';
 
    signal prevMouseEvent  : std_logic := '0';
 
@@ -173,6 +180,7 @@ begin
                         analogPadSave   <= analogPad;
                         mouseSave       <= isMouse;
                         gunConSave      <= isGunCon;
+                        neGconSave      <= isNeGcon;
                         receiveValid    <= '1';
                         receiveBuffer   <= x"FF";
 
@@ -187,6 +195,7 @@ begin
                               analogPadSave   <= analogPad;
                               mouseSave       <= isMouse;
                               gunConSave      <= isGunCon;
+                              neGconSave      <= isNeGcon;
                               receiveValid    <= '1';
                               receiveBuffer   <= x"FF";
                            end if;
@@ -197,6 +206,8 @@ begin
                                  receiveBuffer   <= x"12";
                               elsif (gunConSave = '1') then
                                  receiveBuffer   <= x"63";
+                              elsif (neGconSave = '1') then
+                                 receiveBuffer   <= x"23";
                               elsif (analogPadSave = '1') then
                                  receiveBuffer   <= x"73";
                               else
@@ -346,7 +357,11 @@ begin
                            receiveBuffer(5) <= not KeyRight;
                            receiveBuffer(6) <= not KeyDown;
                            receiveBuffer(7) <= not KeyLeft;
-                           controllerState  <= BUTTONMSB;
+                           if (neGconSave = '1') then
+                              controllerState  <= NEGCONBUTTONMSB;
+                           else
+                              controllerState  <= BUTTONMSB;
+                           end if;
                            ack              <= '1';
                            receiveValid     <= '1';
                            rumbleOnFirst    <= '0';
@@ -398,7 +413,72 @@ begin
                            receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog1Y) + 128, 8));
                            receiveValid    <= '1';
                            controllerState <= IDLE;
-                           
+
+                        when NEGCONBUTTONMSB =>
+                           -- 0 0 0 R1 B A 0 0
+                           receiveBuffer(0) <= '1'; -- NeGcon does not report
+                           receiveBuffer(1) <= '1'; -- NeGcon does not report
+                           receiveBuffer(2) <= '1'; -- NeGcon does not report
+                           receiveBuffer(3) <= not KeyR1;
+                           receiveBuffer(4) <= not KeyTriangle;
+                           receiveBuffer(5) <= not KeyCircle;
+                           receiveBuffer(6) <= '1'; -- NeGcon does not report
+                           receiveBuffer(7) <= '1'; -- NeGcon does not report
+                           receiveValid     <= '1';
+                           controllerState <= NEGCONSTEERING;
+                           ack <= '1';
+
+                        when NEGCONSTEERING =>
+                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog1X) + 128, 8));
+                           receiveValid    <= '1';
+                           controllerState <= NEGCONANALOGI;
+                           ack             <= '1';
+
+                        when NEGCONANALOGI =>
+                           if ( to_integer(Analog2Y) < 0) then
+                              -- Buttons are right stick up
+                              receiveBuffer   <= std_logic_vector(shift_left(to_unsigned(1-to_integer(Analog2Y),8),1)); -- -128-0 -> 0->255
+                           elsif (KeyCross = '1') then
+                              -- Buttons are Buttons and full throttle
+                              receiveBuffer   <= "11111111";
+                           elsif (KeyR2 = '1') then
+                              -- Prep for Analog Trigger
+                              receiveBuffer   <= "11111111";
+                           else
+                              receiveBuffer   <= "00000000";
+                           end if;
+                           receiveValid    <= '1';
+                           controllerState <= NEGCONANALOGII;
+                           ack             <= '1';
+
+                        when NEGCONANALOGII =>
+                           if ( to_integer(Analog2Y) > 0) then
+                              -- Buttons are right stick down
+                              receiveBuffer   <= std_logic_vector(shift_left(to_unsigned(to_integer(Analog2Y),8),1));-- 0-127 -> 0->255
+                           elsif (KeySquare = '1') then
+                              -- Buttons are Buttons and full throttle
+                              receiveBuffer   <= "11111111";
+                           elsif (KeyL2 = '1') then
+                              -- Prep for Analog Trigger
+                              receiveBuffer   <= "11111111";
+                           else
+                              receiveBuffer   <= "00000000";
+                           end if;
+                           receiveValid    <= '1';
+                           controllerState <= NEGCONANALOGL;
+                           ack             <= '1';
+
+                        when NEGCONANALOGL =>
+                           -- Ran out of analog buttons
+                           -- if (KeyL2 = '1') then
+                           if (KeyL1 = '1') then
+                              receiveBuffer   <= "11111111";
+                           else
+                              receiveBuffer   <= "00000000";
+                           end if;
+                           receiveValid    <= '1';
+                           controllerState <= IDLE;
+
                      end case;
                   end if;
                end if; -- joy select
