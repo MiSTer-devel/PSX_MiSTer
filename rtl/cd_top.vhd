@@ -12,8 +12,10 @@ entity cd_top is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      multitrack           : in  std_logic;
       INSTANTSEEK          : in  std_logic;
       hasCD                : in  std_logic;
+      newCD                : in  std_logic;
       LIDopen              : in  std_logic;
       cdSize               : in  unsigned(29 downto 0);
       fastCD               : in  std_logic;
@@ -51,6 +53,10 @@ entity cd_top is
       cd_hps_write         : in  std_logic;
       cd_hps_data          : in  std_logic_vector(15 downto 0);
          
+      trackinfo_data       : in std_logic_vector(31 downto 0);
+      trackinfo_addr       : in std_logic_vector(8 downto 0);
+      trackinfo_write      : in std_logic;
+         
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(13 downto 0);
@@ -67,11 +73,11 @@ architecture arch of cd_top is
    constant SECTOR_SYNC_SIZE        : integer := 12;
    constant RAW_SECTOR_OUTPUT_SIZE  : integer := RAW_SECTOR_SIZE - SECTOR_SYNC_SIZE;
    constant DATA_SECTOR_SIZE        : integer := 2048;
+   constant PREGAPSIZE              : integer := 150;
    
    constant FRAMES_PER_SECOND       : integer := 75;
    constant FRAMES_PER_MINUTE       : integer := 75 * 60;
-   constant LEAD_OUT_TRACK_NUMBER   : unsigned(7 downto 0) := x"AA";
-   constant startLBA                : integer := 150; -- todo: is this really constant?
+   constant LEAD_OUT_TRACK_NUMBER   : std_logic_vector(7 downto 0) := x"AA";
    
    constant READSPEED1X             : integer := 44100 * 16#300# / 75;
    constant READSPEED2X             : integer := 44100 * 16#300# / 150;
@@ -142,12 +148,16 @@ architecture arch of cd_top is
    signal XaCurrentFile             : std_logic_vector(7 downto 0);
    signal XaCurrentChannel          : std_logic_vector(7 downto 0);
    signal XaCurrentSet              : std_logic;
+   
+   signal lastreportCDDA            : std_logic_vector(4 downto 0);
+   signal CDDA_outcnt               : integer range 0 to 8;
       
    signal seekOnDiskCmd             : std_logic := '0';
    signal setMode                   : std_logic := '0';
    signal newMode                   : std_logic_vector(7 downto 0);
    signal readSN                    : std_logic := '0';
    signal play                      : std_logic := '0';
+   signal playTrack                 : std_logic := '0';
    signal setSession                : std_logic := '0';
    signal cmdStartMotor             : std_logic := '0';
    signal cmdStop                   : std_logic := '0';
@@ -184,6 +194,7 @@ architecture arch of cd_top is
    signal driveState                : tdrivestate := DRIVE_IDLE;
          
    signal internalStatus            : std_logic_vector(7 downto 0);
+   signal internalStatus_1          : std_logic_vector(7 downto 0);
    signal modeReg                   : std_logic_vector(7 downto 0);
          
    signal driveBusy                 : std_logic;
@@ -196,11 +207,14 @@ architecture arch of cd_top is
    signal ackDrive                  : std_logic := '0';
    signal ackDriveEnd               : std_logic := '0';
    signal seekOnDiskDrive           : std_logic := '0';
+   signal seekOnDiskPlay            : std_logic := '0';
    signal ackRead                   : std_logic := '0';
    signal pause_cmd                 : std_logic := '0';
          
    signal currentLBA                : integer range 0 to 524287;        
-   signal seekLBA                   : integer range 0 to 524287;       
+   signal seekLBA                   : integer range 0 to 524287; 
+   signal playLBA                   : integer range 0 to 524287; 
+   signal currentTrackBCD           : std_logic_vector(7 downto 0);
    
    signal readAfterSeek             : std_logic := '0';
    signal playAfterSeek             : std_logic := '0';
@@ -214,12 +228,16 @@ architecture arch of cd_top is
    signal readOnDisk                : std_logic := '0';   
    signal readLBA                   : integer range 0 to 524287; 
    signal trackNumberBCD            : unsigned(7 downto 0) := x"00";
+   signal trackNumber               : std_logic_vector(6 downto 0);
    
    signal copyData                  : std_logic := '0';  
    signal seekOK                    : std_logic := '1';
    signal startReading              : std_logic := '0';  
    signal startPlaying              : std_logic := '0';  
    signal processDataSector         : std_logic := '0';  
+   signal processCDDASector         : std_logic := '0';  
+   signal processSeekHeader         : std_logic := '0';  
+   signal clearSectorBuffers        : std_logic := '0';  
    signal writeSectorPointer        : unsigned(2 downto 0) := (others => '0');
    signal readSectorPointer         : unsigned(2 downto 0) := (others => '0');
    
@@ -242,13 +260,16 @@ architecture arch of cd_top is
    signal sectorBuffer_addrB        : std_logic_vector(9 downto 0);
    signal sectorBuffer_DataB        : std_logic_vector(31 downto 0);
       
-   signal positionInIndex           : integer range 0 to 524287; 
+   signal positionInIndex           : integer range -524288 to 524287; 
    signal lastReadSector            : integer range 0 to 524287; 
    signal fetchCount                : integer range 0 to 588;
    signal fetchDelay                : integer range 0 to 15;
       
    signal slow_timeout              : integer range 0 to 16777215 := 0;
    signal slow_block                : std_logic := '0';
+   
+   signal peakvolumeL               : signed(15 downto 0);
+   signal peakvolumeR               : signed(15 downto 0);
       
    -- read subchannel
    type treadSubchannelState is
@@ -270,13 +291,17 @@ architecture arch of cd_top is
    type tsectorProcess is
    (
       SPROC_IDLE,
+      SPROC_SEEKREADHEADER,
+      SPROC_SEEKREADSUBHEADER,
       SPROC_READHEADER,
       SPROC_READSUBHEADER,
       SPROC_START,
       SPROC_FIRST,
       SPROC_DATA,
       SPROC_XA_FIRST,
-      SPROC_XA
+      SPROC_XA,
+      SPROC_CDDAFIRST,
+      SPROC_CDDA
    );
    signal sectorProcessState        : tsectorProcess := SPROC_IDLE;
    
@@ -309,8 +334,11 @@ architecture arch of cd_top is
    signal XA_reset                  : std_logic := '0';
    signal XA_EOF                    : std_logic := '0';
    signal xa_muted                  : std_logic;
-   signal cdxa_left                 : signed(15 downto 0);
-   signal cdxa_right                : signed(15 downto 0);
+   signal cdaudio_left              : signed(15 downto 0);
+   signal cdaudio_right             : signed(15 downto 0);
+   
+   signal CDDA_write                : std_logic;
+   signal CDDA_data                 : std_logic_vector(31 downto 0);
    
    -- copy data
    type tCopyState is
@@ -345,6 +373,36 @@ architecture arch of cd_top is
    signal soundmul2                 : unsigned(7 downto 0);
    signal soundsum                  : signed(17 downto 0);
       
+   -- track infos
+   --signal totalLBAs                 : integer range 0 to 524287; 
+   --signal trackcount                : std_logic_vector(7 downto 0);
+   signal trackcountBCD             : std_logic_vector(7 downto 0);
+   signal totalSecondsBCD           : std_logic_vector(7 downto 0);
+   signal totalMinutesBCD           : std_logic_vector(7 downto 0);
+   
+   signal trackInfo_addrA           : std_logic_vector(6 downto 0) := (others => '0');
+   signal trackInfo_DataA           : std_logic_vector(54 downto 0) := (others => '0');
+   signal trackInfo_DataOutA        : std_logic_vector(54 downto 0) := (others => '0');
+   signal trackInfo_wrenA           : std_logic;
+   signal trackInfo_addrB           : std_logic_vector(6 downto 0) := (others => '0');
+   signal trackInfo_DataOutB        : std_logic_vector(54 downto 0);
+      
+   signal startLBA                  : integer range 0 to 524287;
+   signal endLBA                    : integer range 0 to 524287;
+   signal minutesBCD                : std_logic_vector(7 downto 0);
+   signal secondsBCD                : std_logic_vector(7 downto 0);
+   signal isAudio                   : std_logic;
+   
+   signal isAudioCD                 : std_logic;
+      
+   type ttrackSearchState is
+	(
+		TRACKSEARCH_IDLE,
+		TRACKSEARCH_READ,
+      TRACKSEARCH_CHECK
+	);
+   signal trackSearchState          : ttrackSearchState := TRACKSEARCH_IDLE;
+      
    -- size calculation
    signal lbaCount                  : integer range 0 to 524287; 
    signal cdSize_work               : unsigned(29 downto 0);
@@ -352,7 +410,8 @@ architecture arch of cd_top is
    signal cd_SecondsHigh            : unsigned(3 downto 0); 
    signal cd_SecondsLow             : unsigned(3 downto 0); 
    signal cd_MinutesHigh            : unsigned(3 downto 0); 
-   signal cd_MinutesLow             : unsigned(3 downto 0); 
+   signal cd_MinutesLow             : unsigned(3 downto 0);
+   signal writeSingletrack          : std_logic := '0';
       
    -- savestates
    type t_ssarray is array(0 to 127) of std_logic_vector(31 downto 0);
@@ -438,14 +497,14 @@ begin
             nextCmd         <= ss_in(13)(23 downto 16); -- '0';
             xa_muted        <= ss_in(22)(17); -- '0';
             
-            cdvol_next00    <= ss_in(23)( 7 downto  0);
-            cdvol_next01    <= ss_in(23)(15 downto  8);
-            cdvol_next10    <= ss_in(23)(23 downto 16);
-            cdvol_next11    <= ss_in(23)(31 downto 24);
-            cdvol_00        <= ss_in(24)( 7 downto  0);
-            cdvol_01        <= ss_in(24)(15 downto  8);
-            cdvol_10        <= ss_in(24)(23 downto 16);
-            cdvol_11        <= ss_in(24)(31 downto 24);
+            cdvol_next00    <= ss_in(23)( 7 downto  0); -- x"80"
+            cdvol_next01    <= ss_in(23)(15 downto  8); -- x"00"
+            cdvol_next10    <= ss_in(23)(23 downto 16); -- x"00"
+            cdvol_next11    <= ss_in(23)(31 downto 24); -- x"80"
+            cdvol_00        <= ss_in(24)( 7 downto  0); -- x"80"
+            cdvol_01        <= ss_in(24)(15 downto  8); -- x"00"
+            cdvol_10        <= ss_in(24)(23 downto 16); -- x"00"
+            cdvol_11        <= ss_in(24)(31 downto 24); -- x"80"
             
          elsif (ce = '1') then
          
@@ -598,7 +657,7 @@ begin
             if (ackDriveEnd = '1') then
                if (CDROM_IRQFLAG /= "00000") then
                   pendingDriveIRQ      <= "00100";
-                  pendingDriveResponse <= internalStatus;
+                  pendingDriveResponse <= internalStatus_1;
                else
                   CDROM_IRQFLAG <= "00100";
                   if (CDROM_IRQENA(2) = '1') then
@@ -630,13 +689,13 @@ begin
                end if;
             end if;
             
-            if (getIDAck = '1' and hasCD = '0') then -- no async here, working will halt in case irq is still pending
+            if (getIDAck = '1' and (hasCD = '0' or isAudioCD = '1')) then -- no async here, working will halt in case irq is still pending
                CDROM_IRQFLAG <= "00101";
                if (CDROM_IRQENA(0) = '1' or CDROM_IRQENA(2) = '1') then
                   irqOut <= '1';
                end if;
             end if;
-            if (getIDAck = '1' and hasCD = '1') then -- no async here, working will halt in case irq is still pending
+            if (getIDAck = '1' and (hasCD = '1' and isAudioCD = '0')) then -- no async here, working will halt in case irq is still pending
                CDROM_IRQFLAG <= "00010";
                if (CDROM_IRQENA(1) = '1') then
                   irqOut <= '1';
@@ -649,6 +708,15 @@ begin
                   irqOut <= '1';
                end if;
             end if; 
+            
+            if (processCDDASector = '1' and driveState = DRIVE_PLAYING and modeReg(2) = '1' and lastreportCDDA /= '0' & nextSubdata(9)(7 downto 4)) then
+               if (CDROM_IRQFLAG = "00000") then
+                  CDROM_IRQFLAG <= "00001";
+                  if (CDROM_IRQENA(0) = '1') then
+                     irqOut <= '1';
+                  end if;
+               end if;
+            end if;
             
             if (softReset = '1') then
                FifoData_reset <= '1';
@@ -696,6 +764,7 @@ begin
    ss_out(15)(23 downto 16)  <= std_logic_vector(fastForwardRate); 
    ss_out(16)(23 downto 16)  <= XaFilterFile;
    ss_out(16)(31 downto 24)  <= XaFilterChannel;
+   ss_out(25)(20 downto 16)  <= lastreportCDDA;
    
    -- command processing
    process(clk1x)
@@ -733,6 +802,9 @@ begin
             
             XaFilterFile            <= ss_in(16)(23 downto 16);
             XaFilterChannel         <= ss_in(16)(31 downto 24);
+            
+            lastreportCDDA          <= ss_in(25)(20 downto 16); -- x"1F";
+            CDDA_outcnt             <= 0;
             
          elsif (ce = '1') then
          
@@ -837,18 +909,26 @@ begin
                            errorResponseCmd_error  <= x"01";
                            errorResponseCmd_reason <= x"80";
                         else
-                           -- todo: missing checks
+                        
+                           playTrack <= '0';
+                           if (FifoParam_Empty = '0') then
+                              playLBA   <= to_integer(unsigned(trackInfo_DataOutA(18 downto 0))) + PREGAPSIZE;
+                              playTrack <= '1';
+                           end if;
                            
-                           -- byte track = 0;
-                           -- if (!fifoParam.empty())  track = fifoParam.front(); fifoParam.pop_front();
+                           --playLBA   <= to_integer(unsigned(trackInfo_DataOutA(18 downto 0))) + PREGAPSIZE; -- debug test!
+                           --playTrack <= '1'; -- debug test!
                            
                            cmdAck          <= '1';
                            fastForwardRate <= (others => '0');
                            
-                           if ((setLocActive = '0' or seekLBA = lastReadSector) and (driveState = DRIVE_READING or ((driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) and readAfterSeek = '1'))) then
-                              setLocActive <= '0';
+                           --fastForwardRate <= to_signed(-4, 8); -- debug test!
+                           
+                           if ((FifoParam_Empty = '1' or FifoParam_Dout = x"00") and (setLocActive = '0' or seekLBA = lastReadSector) and (driveState = DRIVE_PLAYING or ((driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) and playAfterSeek = '1'))) then
+                              fastForwardRate <= (others => '0');
                            else
-                              play         <= '1';
+                              play           <= '1';
+                              lastreportCDDA <= (others => '1');
                            end if;
                            
                         end if;
@@ -1018,8 +1098,14 @@ begin
                         end if;
                         
                      when x"13" => -- GetTN
-                        cmdIRQ         <= '1';
                         cmdPending     <= '0';
+                        if (hasCD = '0') then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"80";
+                        else
+                           cmdIRQ         <= '1';
+                        end if;
                         
                      when x"14" => -- GetTD
                         cmdPending   <= '0';
@@ -1027,7 +1113,7 @@ begin
                            errorResponseCmd_new    <= '1';
                            errorResponseCmd_error  <= x"01";
                            errorResponseCmd_reason <= x"80";
-                        elsif (unsigned(FifoParam_Dout) > 1) then -- todo: gettrackCount, currently fake there is only 1 track
+                        elsif (unsigned(FifoParam_Dout) > unsigned(trackcountBCD)) then
                            errorResponseCmd_new    <= '1';
                            errorResponseCmd_error  <= x"01";
                            errorResponseCmd_reason <= x"10";
@@ -1139,13 +1225,15 @@ begin
                      if (workDelay = 9) then 
                         FifoResponse_Wr <= '1'; 
                         FifoResponse_Din <= internalStatus; 
-                        if (hasCD = '0') then FifoResponse_Din(3) <= '1'; end if; 
-                        if (hasCD = '1') then FifoResponse_Din(1) <= '1'; end if; 
+                        if (hasCD = '0')     then FifoResponse_Din(3) <= '1'; end if; 
+                        if (hasCD = '1')     then FifoResponse_Din(1) <= '1'; end if; -- from start motor
+                        if (isAudioCD = '1') then FifoResponse_Din(3) <= '1'; end if; 
                      end if;
                      if (workDelay = 8) then
                         FifoResponse_Wr <= '1'; 
                         FifoResponse_Din <= x"00";
-                        if (hasCD = '0') then FifoResponse_Din(6) <= '1'; end if; 
+                        if (hasCD = '0')     then FifoResponse_Din(6) <= '1'; end if; 
+                        if (isAudioCD = '1') then FifoResponse_Din(7) <= '1'; FifoResponse_Din(4) <= '1'; end if; 
                      end if;
                      if (workDelay = 7) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"20"; end if; -- ? 
                      if (workDelay = 6) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"00"; end if; -- ? 
@@ -1220,7 +1308,11 @@ begin
             
             if (driveAck = '1' or ackDrive = '1' or ackDriveEnd = '1') then
                if (CDROM_IRQFLAG = "00000") then
-                  FifoResponse_Din <= internalStatus;
+                  if (ackDriveEnd = '1') then
+                     FifoResponse_Din <= internalStatus_1;
+                  else
+                     FifoResponse_Din <= internalStatus;
+                  end if;
                   FifoResponse_Wr  <= '1';
                end if;
             end if;
@@ -1268,14 +1360,14 @@ begin
                if (cmd_delay = 9 and FifoResponse_empty = '0') then 
                   FifoResponse_reset <= '1'; 
                end if;
-               if (cmd_delay = 8)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header( 7 downto  0); end if;
-               if (cmd_delay = 7)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(15 downto  8); end if;
-               if (cmd_delay = 6)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(23 downto 16); end if;
-               if (cmd_delay = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(31 downto 24); end if;
-               if (cmd_delay = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader( 7 downto  0); end if;
-               if (cmd_delay = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(15 downto  8); end if;
-               if (cmd_delay = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(23 downto 16); end if;
-               if (cmd_delay = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(31 downto 24); end if;
+               if (cmd_delay = 8 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header( 7 downto  0); end if;
+               if (cmd_delay = 7 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(15 downto  8); end if;
+               if (cmd_delay = 6 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(23 downto 16); end if;
+               if (cmd_delay = 5 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(31 downto 24); end if;
+               if (cmd_delay = 4 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader( 7 downto  0); end if;
+               if (cmd_delay = 3 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(15 downto  8); end if;
+               if (cmd_delay = 2 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(23 downto 16); end if;
+               if (cmd_delay = 1 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(31 downto 24); end if;
             end if;
             
             -- long GetLocP response
@@ -1283,14 +1375,14 @@ begin
                if (cmd_delay = 9 and FifoResponse_empty = '0') then 
                   FifoResponse_reset <= '1'; 
                end if;
-               if (cmd_delay = 8)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(1); end if;
-               if (cmd_delay = 7)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(2); end if;
-               if (cmd_delay = 6)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(3); end if;
-               if (cmd_delay = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(4); end if;
-               if (cmd_delay = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(5); end if;
-               if (cmd_delay = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(7); end if;
-               if (cmd_delay = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(8); end if;
-               if (cmd_delay = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(9); end if;
+               if (cmd_delay = 8 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(1); end if;
+               if (cmd_delay = 7 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(2); end if;
+               if (cmd_delay = 6 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(3); end if;
+               if (cmd_delay = 5 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(4); end if;
+               if (cmd_delay = 4 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(5); end if;
+               if (cmd_delay = 3 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(7); end if;
+               if (cmd_delay = 2 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(8); end if;
+               if (cmd_delay = 1 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subdata(9); end if;
             end if;
             
             -- long GetTN response
@@ -1298,29 +1390,26 @@ begin
                if (cmd_delay = 4 and FifoResponse_empty = '0') then 
                   FifoResponse_reset <= '1'; 
                end if;
-               if (cmd_delay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
-               if (cmd_delay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"01"; end if; -- todo:  first track number
-               if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"01"; end if; -- todo:  last track number
+               if (cmd_delay = 3 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
+               if (cmd_delay = 2 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"01"; end if; -- todo:  first track number always 1?
+               if (cmd_delay = 1 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= trackcountBCD; end if;
             end if;
             
             -- long GetTD response
-            -- track 0 -> total size of CD
-            if (nextCmd = x"14" and hasCD = '1' and FifoParam_Dout = x"00") then
+            
+            if (nextCmd = x"14") then
                if (cmd_delay = 4 and FifoResponse_empty = '0') then 
                   FifoResponse_reset <= '1'; 
                end if;
-               if (cmd_delay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
-               if (cmd_delay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(cd_MinutesHigh & cd_MinutesLow); end if;
-               if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(cd_SecondsHigh & cd_SecondsLow); end if;
-            end if;
-            -- track 1
-            if (nextCmd = x"14" and hasCD = '1' and FifoParam_Dout = x"01") then
-               if (cmd_delay = 4 and FifoResponse_empty = '0') then 
-                  FifoResponse_reset <= '1'; 
+               if (FifoParam_Dout = x"00" ) then -- track 0 -> total size of CD
+                  if (cmd_delay = 3 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
+                  if (cmd_delay = 2 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= totalMinutesBCD; end if;
+                  if (cmd_delay = 1 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= totalSecondsBCD; end if;
+               elsif (FifoParam_Dout <= trackcountBCD) then
+                  if (cmd_delay = 3 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
+                  if (cmd_delay = 2 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= minutesBCD; end if;
+                  if (cmd_delay = 1 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= secondsBCD; end if;
                end if;
-               if (cmd_delay = 3) then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
-               if (cmd_delay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"00"; end if; -- todo:  get position on track
-               if (cmd_delay = 1) then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"02"; end if;
             end if;
 
             -- long test response
@@ -1380,6 +1469,38 @@ begin
                end case;
             end if;
             
+            -- CDDA reporting
+            if (processCDDASector = '1' and driveState = DRIVE_PLAYING and modeReg(2) = '1' and lastreportCDDA /= '0' & nextSubdata(9)(7 downto 4)) then
+               lastreportCDDA     <= '0' & nextSubdata(9)(7 downto 4);
+               if (CDROM_IRQFLAG = "00000") then -- todo: async fifo instead of ignore?
+                  CDDA_outcnt        <= 8;
+                  FifoResponse_reset <= '1';
+               end if;
+            end if;
+            
+            if (CDDA_outcnt > 0) then
+               CDDA_outcnt <= CDDA_outcnt - 1;
+               if (CDDA_outcnt = 8)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
+               if (CDDA_outcnt = 7)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= nextSubdata(1); end if;
+               if (CDDA_outcnt = 6)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= nextSubdata(2); end if;
+               if (nextSubdata(9)(4) = '1') then
+                  if (CDDA_outcnt = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= nextSubdata(3); end if;
+                  if (CDDA_outcnt = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= x"80" or nextSubdata(4); end if;
+                  if (CDDA_outcnt = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= nextSubdata(5); end if;
+               else
+                  if (CDDA_outcnt = 5)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= nextSubdata(7); end if;
+                  if (CDDA_outcnt = 4)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= nextSubdata(8); end if;
+                  if (CDDA_outcnt = 3)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= nextSubdata(9); end if;
+               end if;
+               if (nextSubdata(8)(0) = '1') then
+                  if (CDDA_outcnt = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(peakvolumeR(7 downto 0)); end if;
+                  if (CDDA_outcnt = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= '1' & std_logic_vector(peakvolumeR(14 downto 8)); end if;
+               else
+                  if (CDDA_outcnt = 2)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(peakvolumeL(7 downto 0)); end if;
+                  if (CDDA_outcnt = 1)  then FifoResponse_Wr <= '1'; FifoResponse_Din <= '0' & std_logic_vector(peakvolumeL(14 downto 8)); end if;
+               end if;
+            end if;
+            
             if (softReset = '1') then
                FifoParam_reset <= '1';
             end if;
@@ -1431,6 +1552,7 @@ begin
    ss_out(18)(8)            <= lastSectorHeaderValid;
    ss_out(16)( 2 downto  0) <= std_logic_vector(writeSectorPointer);   
    ss_out(16)(10 downto  8) <= std_logic_vector(readSectorPointer);    
+   ss_out(25)( 7 downto  0) <= currentTrackBCD;    
    
    gSSsubdata: for i in 0 to 11 generate
    begin
@@ -1439,6 +1561,7 @@ begin
    
    -- drive
    process(clk1x)
+      variable skipreading : std_logic;
    begin
       if (rising_edge(clk1x)) then
 
@@ -1470,6 +1593,8 @@ begin
             
             writeSectorPointer      <= unsigned(ss_in(16)( 2 downto 0)); -- 0
             readSectorPointer       <= unsigned(ss_in(16)(10 downto 8)); -- 0
+            
+            currentTrackBCD         <= ss_in(25)( 7 downto 0); -- 0
             
             for i in 0 to 11 loop
                subdata(i) <= ss_in(i + 76)(7 downto 0);
@@ -1519,14 +1644,20 @@ begin
             ackDrive                <= '0';
             ackDriveEnd             <= '0';
             seekOnDiskDrive         <= '0';
+            seekOnDiskPlay          <= '0';
             errorResponseDrive_new  <= '0';
             startReading            <= '0';
             startPlaying            <= '0';
             ackRead                 <= '0';
             pause_cmd               <= '0';
             processDataSector       <= '0';
+            processCDDASector       <= '0';
+            processSeekHeader       <= '0';
+            clearSectorBuffers      <= '0';
          
             startMotor   <= '0'; 
+            
+            internalStatus_1 <= internalStatus;
          
             if (driveBusy = '1') then
                if (driveDelay > 0) then
@@ -1548,8 +1679,7 @@ begin
                      
                      if (nextSubdata(0)(6) = '1') then --isData
                         if (driveState = DRIVE_SEEKLOGICAL) then
-                           -- todo: copy header + subheader from sectorBuffer
-                           -- todo: check header against frame/second/minute
+                           processSeekHeader     <= '1';
                            lastSectorHeaderValid <= '1';
                         end if;
                      else
@@ -1557,7 +1687,7 @@ begin
                            seekOK <= modeReg(0); -- cdda
                         end if;
                      end if;
-                     if (unsigned(nextSubdata(1)) = LEAD_OUT_TRACK_NUMBER) then
+                     if (nextSubdata(1) = LEAD_OUT_TRACK_NUMBER) then
                         seekOK <= '0';
                      end if;
                       
@@ -1597,31 +1727,53 @@ begin
                      
                      
                   when DRIVE_READING | DRIVE_PLAYING =>
-                     if (trackNumberBCD = LEAD_OUT_TRACK_NUMBER) then
+                     if (nextSubdata(1) = LEAD_OUT_TRACK_NUMBER) then
                         internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                         internalStatus(1)          <= '0'; -- motor off
                         driveState   <= DRIVE_IDLE;
                         ackDriveEnd  <= '1';
                      else
-                        -- todo: if dataSector
-                           processDataSector     <= '1';
-                           lastSectorHeaderValid <= '1';
-                           internalStatus(5)     <= '1'; -- reading
-                           if ((modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
-                              writeSectorPointer    <= writeSectorPointer + 1;
-                              ackRead               <= '1';
-                              pause_cmd             <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
+                        skipreading := '0';
+                        if (isAudio = '1') then
+                           if (currentTrackBCD = x"00") then -- auto find track number from subheader
+                              currentTrackBCD <= nextSubdata(1);
+                           elsif (nextSubdata(1) /= currentTrackBCD and modeReg(1) = '1') then --auto pause when track switches
+                              skipreading := '1';
+                              ackDriveEnd <= '1';
+                              internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+                              driveState   <= DRIVE_IDLE;
                            end if;
-                        --endif
-                        driveDelay   <= driveDelayNext;
-                        driveBusy    <= '1';
-                        currentLBA   <= lastReadSector;
-                        -- todo: physical lba position?
-                        for i in 0 to 11 loop
-                           subdata(i) <= nextSubdata(i);
-                        end loop;
-                        readOnDisk   <= '1';
-                        readLBA      <= lastReadSector + 1;
+                        end if;   
+                        
+                        if (skipreading = '0') then
+                           readLBA      <= lastReadSector + 1;
+                           if (isAudio = '0' and driveState = DRIVE_READING) then
+                              processDataSector     <= '1';
+                              lastSectorHeaderValid <= '1';
+                              internalStatus(5)     <= '1'; -- reading
+                              if ((modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
+                                 writeSectorPointer    <= writeSectorPointer + 1;
+                                 ackRead               <= '1';
+                                 pause_cmd             <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
+                              end if;
+                           elsif (isAudio = '1' and (driveState = DRIVE_PLAYING or (driveState = DRIVE_READING and modeReg(0) = '1'))) then
+                              processCDDASector <= '1';
+                              if (fastForwardRate /= 0) then
+                                 readLBA <= lastReadSector + to_integer(fastForwardRate);
+                              end if;
+                           end if;
+                           
+                           driveDelay   <= driveDelayNext;
+                           driveBusy    <= '1';
+                           currentLBA   <= lastReadSector;
+                           -- todo: physical lba position?
+                           if (isAudio = '0') then
+                              for i in 0 to 11 loop
+                                 subdata(i) <= nextSubdata(i);
+                              end loop;
+                           end if;
+                           readOnDisk   <= '1';
+                        end if;
                      end if;
                      
                   when DRIVE_SPEEDCHANGEORTOCREAD =>
@@ -1648,9 +1800,14 @@ begin
                end case;
             end if;
             
-            if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1') then
-               seekLBA               <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
-               readLBA               <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
+            if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1' or seekOnDiskPlay = '1') then
+               if (seekOnDiskPlay = '1') then
+                  seekLBA <= playLBA;
+                  readLBA <= playLBA;
+               else
+                  seekLBA <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
+                  readLBA <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
+               end if;
                readOnDisk            <= '1';
                if (seekOnDiskCmd = '1') then
                   readAfterSeek         <= '0';
@@ -1692,7 +1849,11 @@ begin
                if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
                   -- todo: updatePositionWhileSeeking();
                end if;
-               if (setLocActive = '1') then
+               if (playTrack = '1') then
+                  seekOnDiskPlay   <= '1';
+                  readAfterSeek     <= '0';
+                  playAfterSeek     <= '1';
+               elsif (setLocActive = '1') then
                   seekOnDiskDrive   <= '1';
                   readAfterSeek     <= '0';
                   playAfterSeek     <= '1';
@@ -1709,50 +1870,56 @@ begin
             end if;
             
             if (startReading = '1') then
+               clearSectorBuffers <= '1';
                --todo: check for setLocActive needed when coming from readSN?
                --todo: check for seekstate required? should never end here when still in seek?
                internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                internalStatus(1)          <= '1'; -- motor on
                if (fastCD = '1') then
-                  driveDelay         <= 9999 - 1;
-                  driveDelayNext     <= 9999 - 1;
+                  driveDelay         <= 9999 - 2;
+                  driveDelayNext     <= 9999 - 2;
                else
                   if (modeReg(7) = '1') then
-                     driveDelay      <= READSPEED2X - 1;
-                     driveDelayNext  <= READSPEED2X - 1;
+                     driveDelay      <= READSPEED2X - 2;
+                     driveDelayNext  <= READSPEED2X - 2;
                   else
-                     driveDelay      <= READSPEED1X - 1;
-                     driveDelayNext  <= READSPEED1X - 1;
+                     driveDelay      <= READSPEED1X - 2;
+                     driveDelayNext  <= READSPEED1X - 2;
                   end if;
                end if;
                driveBusy          <= '1';
                driveState         <= DRIVE_READING;
                writeSectorPointer <= (others => '0');
                readSectorPointer  <= (others => '0');
+               readOnDisk         <= '1';
+               readLBA            <= currentLBA;
             end if;
             
             if (startPlaying = '1') then
+               clearSectorBuffers <= '1';
                --todo: check for setLocActive needed when coming from readSN?
                --todo: check for seekstate required? should never end here when still in seek?
                internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                internalStatus(1)          <= '1'; -- motor on
                internalStatus(7)          <= '1'; -- playing_cdda
                if (fastCD = '1') then
-                  driveDelay         <= 9999 - 1;
-                  driveDelayNext     <= 9999 - 1;
+                  driveDelay         <= 9999 - 2;
+                  driveDelayNext     <= 9999 - 2;
                else
                   if (modeReg(7) = '1') then
-                     driveDelay      <= READSPEED2X - 1;
-                     driveDelayNext  <= READSPEED2X - 1;
+                     driveDelay      <= READSPEED2X - 2;
+                     driveDelayNext  <= READSPEED2X - 2;
                   else
-                     driveDelay      <= READSPEED1X - 1;
-                     driveDelayNext  <= READSPEED1X - 1;
+                     driveDelay      <= READSPEED1X - 2;
+                     driveDelayNext  <= READSPEED1X - 2;
                   end if;
                end if;
                driveBusy          <= '1';
                driveState         <= DRIVE_PLAYING;
                writeSectorPointer <= (others => '0');
                readSectorPointer  <= (others => '0');
+               readOnDisk         <= '1';
+               readLBA            <= currentLBA;
             end if;
             
             if (cmdStop = '1') then
@@ -1813,6 +1980,8 @@ begin
                end if;
             end if;
             
+            --modeReg(1) <= '0'; -- debug autopause
+            
          end if; -- ce
       end if;
    end process;
@@ -1862,8 +2031,6 @@ begin
       q_b         => sectorBuffers_DataB
    );
    
-   ss_out(10)              <= std_logic_vector(to_unsigned(startLBA, 32));
-   ss_out(15)(15 downto 8) <= std_logic_vector(trackNumberBCD);
    ss_out(19)              <= header;
    ss_out(20)              <= subheader;
    ss_out(6)(19 downto 0)  <= std_logic_vector(to_unsigned(lastReadSector, 20));
@@ -1911,8 +2078,9 @@ begin
             cdSlow <= '0';
          end if;
          
-         XA_write <= '0';
-         XA_start <= '0'; 
+         XA_write   <= '0';
+         XA_start   <= '0'; 
+         CDDA_write <= '0'; 
 
          if (reset = '1') then
          
@@ -1921,7 +2089,6 @@ begin
             sectorFetchState     <= SFETCH_IDLE;
             sectorProcessState   <= SPROC_IDLE;
             copyState            <= COPY_IDLE;
-            trackNumberBCD       <= unsigned(ss_in(15)(15 downto 8)); --  x"00";
             header               <= ss_in(19);
             subheader            <= ss_in(20);
             lastReadSector       <= to_integer(unsigned(ss_in(6)(19 downto 0))); -- 0
@@ -1930,11 +2097,7 @@ begin
             XaCurrentChannel     <= ss_in(22)(15 downto 8);
             XaCurrentSet         <= ss_in(22)(16);
             
-            if (to_integer(unsigned(ss_in(11)(19 downto 0))) <= 524287) then
-               positionInIndex   <= to_integer(unsigned(ss_in(11)(19 downto 0))); -- 0
-            else
-               positionInIndex   <= 0;
-            end if;
+            positionInIndex   <= to_integer(signed(ss_in(11)(19 downto 0))); -- 0
             
             for i in 0 to 11 loop
                nextSubdata(i) <= ss_in(i + 64)(7 downto 0);
@@ -1980,11 +2143,6 @@ begin
                when SFETCH_IDLE =>
                   if (readOnDisk = '1' and ce = '1') then
                      lastReadSector   <= readLBA;
-                     if (readLBA >= startLBA) then
-                        positionInIndex <= readLBA - startLBA;
-                     else
-                        positionInIndex <= 0;
-                     end if;
                      sectorFetchState <= SFETCH_DELAY;
                      fetchCount       <= 0;
                      fetchDelay       <= 15;
@@ -1994,8 +2152,13 @@ begin
                   if (cd_hps_on = '0' or cd_hps_ack = '0') then
                      if (fetchDelay > 0) then
                         fetchDelay <= fetchDelay - 1;
-                     else
+                     elsif (trackSearchState = TRACKSEARCH_IDLE) then
                         sectorFetchState <= SFETCH_START;
+                        if (trackNumberBCD = "01" and isAudio = '0') then
+                           positionInIndex <= lastReadSector - startLBA - PREGAPSIZE;
+                        else
+                           positionInIndex <= lastReadSector - startLBA;
+                        end if;
                      end if;   
                   end if;
                   
@@ -2003,18 +2166,24 @@ begin
                   if (cd_hps_on = '1') then
                      sectorFetchState <= SFETCH_HPSACK;
                      cd_hps_req       <= '1';
-                     cd_hps_lba       <= std_logic_vector(to_unsigned(positionInIndex, 32));
+                     if (positionInIndex >= 0) then
+                        cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(positionInIndex, 24));
+                     else
+                        cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(0, 24));
+                     end if;
+                     if (multitrack = '1') then
+                        cd_hps_lba(30 downto 24) <= trackNumber;
+                     end if;
                   else
                      sectorFetchState <= SFETCH_DATA;
-                     cd_addr <= std_logic_vector(to_unsigned(positionInIndex * 2352, 27)); -- todo: needs more bits for real CD
+                     if (positionInIndex >= 0) then
+                        cd_addr <= std_logic_vector(to_unsigned(positionInIndex * 2352, 27)); -- needs more bits for real CD
+                     else
+                        cd_addr <= std_logic_vector(to_unsigned(0 * 2352, 27));
+                     end if;
                      cd_req  <= '1';
                   end if;
                   
-                  if (positionInIndex = lbaCount) then
-                     trackNumberBCD <= x"AA";
-                  else
-                     trackNumberBCD <= x"01"; -- todo
-                  end if;
                   readSubchannel <= '1';
                   
                   if (
@@ -2042,7 +2211,7 @@ begin
                   if (cd_done = '1') then
                      sectorBuffer_addrA <= std_logic_vector(to_unsigned(fetchCount, 10));
                      sectorBuffer_wrenA <= '1';
-                     if (readLBA >= startLBA) then
+                     if (positionInIndex >= 0) then
                         checkData := cd_data;
                      else
                         checkData := (others => '0');
@@ -2066,16 +2235,21 @@ begin
                   if (cd_hps_ack = '1') then
                      sectorFetchState <= SFETCH_HPSWORD;
                      cd_hps_req       <= '0';
+                     peakvolumeL      <= (others => '0');
+                     peakvolumeR      <= (others => '0');
                   end if;
                
                when SFETCH_HPSWORD =>
                   if (cd_hps_write = '1') then
                      sectorFetchState                <= SFETCH_HPSDATA;
-                     if (readLBA >= startLBA) then
+                     if (positionInIndex >= 0) then
                         sectorBuffer_DataA(15 downto 0) <= cd_hps_data;
+                        if (signed(cd_hps_data) > peakvolumeL) then
+                           peakvolumeL <= signed(cd_hps_data);
+                        end if;
                      else
                         sectorBuffer_DataA(15 downto 0) <= (others => '0');
-                     end if;
+                     end if; 
                   end if;
                
                when SFETCH_HPSDATA =>
@@ -2083,8 +2257,11 @@ begin
                      sectorBuffer_addrA <= std_logic_vector(to_unsigned(fetchCount, 10));
                      sectorBuffer_wrenA <= '1';
                      checkData := sectorBuffer_DataA;
-                     if (readLBA >= startLBA) then
+                     if (positionInIndex >= 0) then
                         checkData(31 downto 16) := cd_hps_data;
+                        if (signed(cd_hps_data) > peakvolumeR) then
+                           peakvolumeR <= signed(cd_hps_data);
+                        end if;
                      else
                         checkData(31 downto 16) := (others => '0');
                      end if;
@@ -2108,10 +2285,20 @@ begin
             
                when SSUB_IDLE => -- todo: maybe replace with sbi
                   if (readSubchannel = '1') then
-                     nextSubdata(0)       <= x"40";          -- index control bits
+                     nextSubdata(0)       <= '0' & (not isAudio) & "000000"; -- index control bits
                      nextSubdata(1)       <= std_logic_vector(trackNumberBCD); 
-                     nextSubdata(2)       <= x"01";           -- index number
-                     subchannelLBAwork    <= positionInIndex; 
+
+                     if ((lastReadSector - startLBA) >= PREGAPSIZE) then
+                        nextSubdata(2)       <= x"01"; -- index number
+                        if (isAudio = '0') then
+                           subchannelLBAwork    <= lastReadSector - startLBA;
+                        else
+                           subchannelLBAwork    <= lastReadSector - startLBA - PREGAPSIZE;
+                        end if;
+                     else
+                        nextSubdata(2)       <= x"00"; -- index number
+                        subchannelLBAwork    <= PREGAPSIZE - (lastReadSector - startLBA) - 1;
+                     end if;
                      readSubchannelState  <= SSUB_CALCPOS;
                      sub_SecondsHigh      <= (others => '0');
                      sub_SecondsLow       <= (others => '0');
@@ -2144,7 +2331,7 @@ begin
                      subchannelLBAwork <= 0;
                      if (readSubchannelState = SSUB_CALCPOS) then
                         readSubchannelState        <= SSUB_CALCSECTOR;
-                        subchannelLBAwork          <= readLBA; 
+                        subchannelLBAwork          <= lastReadSector; 
                         nextSubdata(3)             <= std_logic_vector(sub_MinutesHigh & sub_MinutesLow);
                         nextSubdata(4)             <= std_logic_vector(sub_SecondsHigh & sub_SecondsLow);
                         nextSubdata(5)(7 downto 4) <= std_logic_vector(resize(frameLeft / 10, 4));
@@ -2172,7 +2359,17 @@ begin
                      sectorProcessState <= SPROC_READHEADER;
                      procReadAddr       <= procReadAddr + 1;
                      procCount          <= 0;
+                  elsif (processCDDASector = '1' and ce = '1') then
+                     procReadAddr       <= 0;
+                     procCount          <= 0;
+                     sectorProcessState <= SPROC_CDDAFIRST;
+                  elsif (processSeekHeader = '1' and ce = '1') then
+                     sectorProcessState <= SPROC_SEEKREADHEADER;
+                     procReadAddr       <= procReadAddr + 1;
                   end if;
+                  
+               when SPROC_SEEKREADHEADER    => sectorProcessState <= SPROC_SEEKREADSUBHEADER; header    <= sectorBuffer_DataB;
+               when SPROC_SEEKREADSUBHEADER => sectorProcessState <= SPROC_IDLE;              subheader <= sectorBuffer_DataB;
                   
                when SPROC_READHEADER =>
                   sectorProcessState <= SPROC_READSUBHEADER;
@@ -2257,6 +2454,21 @@ begin
                   XA_data  <= sectorBuffer_DataB;
                   XA_addr  <= procCount;
                   
+               when SPROC_CDDAFIRST =>
+                  sectorProcessState <= SPROC_CDDA;
+                  procReadAddr       <= procReadAddr + 1;
+               
+               when SPROC_CDDA =>
+                  procCount    <= procCount + 1;
+                  if (procReadAddr < 587) then
+                     procReadAddr <= procReadAddr + 1;
+                  end if;
+                  if (procCount = 587) then
+                     sectorProcessState  <= SPROC_IDLE;
+                  end if;
+                  CDDA_write <= '1';
+                  CDDA_data  <= sectorBuffer_DataB;
+                  
             end case;
             
 
@@ -2316,6 +2528,10 @@ begin
                copyState   <= COPY_IDLE;
                FifoData_Wr <= '0';
             end if;
+            
+            if (clearSectorBuffers = '1') then
+               sectorBufferSizes <= (others => 0);
+            end if;
 
          end if;
          
@@ -2328,6 +2544,10 @@ begin
       end if;
    end process;
    
+--##############################################################
+--############################### Audio
+--##############################################################
+   
    XA_reset <= reset or softReset or startReading or startPlaying or cmdResetXa;
    
    icd_xa : entity work.cd_xa
@@ -2338,7 +2558,11 @@ begin
       reset                => reset,
 
       spu_tick             => spu_tick,
-                                       
+      xa_muted             => xa_muted,
+      
+      CDDA_write           => CDDA_write,
+      CDDA_data            => CDDA_data, 
+      
       XA_addr              => XA_addr,  
       XA_data              => XA_data,  
       XA_write             => XA_write, 
@@ -2347,11 +2571,10 @@ begin
       
       XA_eof               => XA_eof,
       
-      cdxa_left            => cdxa_left, 
-      cdxa_right           => cdxa_right
+      cdaudio_left         => cdaudio_left, 
+      cdaudio_right        => cdaudio_right
    );
    
-   -- cd volume
    process(clk1x)
    begin
       if (rising_edge(clk1x)) then
@@ -2362,24 +2585,24 @@ begin
       
          case (cd_volume_step) is
             when 0 =>
-               if (modeReg(6) = '1' and xa_muted = '0' and muted = '0') then
-                  soundmul1 <= cdxa_left;
+               if (modeReg(6) = '1' and muted = '0') then
+                  soundmul1 <= cdaudio_left;
                else
                   soundmul1 <= (others => '0');
                end if;
                soundmul2 <= unsigned(cdvol_00);
                
             when 1 =>
-               if (modeReg(6) = '1' and xa_muted = '0' and muted = '0') then
-                  soundmul1 <= cdxa_right;
+               if (modeReg(6) = '1' and muted = '0') then
+                  soundmul1 <= cdaudio_right;
                else
                   soundmul1 <= (others => '0');
                end if;
                soundmul2 <= unsigned(cdvol_10);
 
             when 2 =>
-               if (modeReg(6) = '1' and xa_muted = '0' and muted = '0') then
-                  soundmul1 <= cdxa_left;
+               if (modeReg(6) = '1' and muted = '0') then
+                  soundmul1 <= cdaudio_left;
                else
                   soundmul1 <= (others => '0');
                end if;
@@ -2388,8 +2611,8 @@ begin
                soundsum <= resize(soundmulresult, 18);
                
             when 3 =>
-               if (modeReg(6) = '1' and xa_muted = '0' and muted = '0') then
-                  soundmul1 <= cdxa_right;
+               if (modeReg(6) = '1' and muted = '0') then
+                  soundmul1 <= cdaudio_right;
                else
                   soundmul1 <= (others => '0');
                end if;
@@ -2425,11 +2648,166 @@ begin
       end if;
    end process;
    
+--##############################################################
+--############################### track infos
+--##############################################################
+
+   ss_out(15)(15 downto 8) <= std_logic_vector(trackNumberBCD);
+   ss_out(25)(14 downto 8) <= trackNumber;
+   
+   process(clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         trackInfo_wrenA <= '0';
+      
+         if (reset = '1') then
+         
+            trackSearchState     <= TRACKSEARCH_IDLE;
+         
+            trackNumberBCD       <= unsigned(ss_in(15)(15 downto 8)); --  x"00";
+            trackInfo_addrB      <= ss_in(25)(14 downto 8); -- x"00";
+            trackNumber          <= ss_in(25)(14 downto 8); -- x"00";
+            
+         else  
+               
+            case (trackSearchState) is
+            
+               when TRACKSEARCH_IDLE => 
+                  if (sectorFetchState = SFETCH_IDLE and readOnDisk = '1' and ce = '1') then
+                     trackSearchState <= TRACKSEARCH_READ;
+                     trackInfo_addrB  <= std_logic_vector(to_unsigned(1, 7));
+                     trackNumberBCD   <= x"01";
+                  end if;
+                  
+               when TRACKSEARCH_READ =>
+                  trackSearchState <= TRACKSEARCH_CHECK;
+               
+               when TRACKSEARCH_CHECK => 
+                  if (lastReadSector >= startLBA and lastReadSector <= endLBA) then
+                     trackSearchState <= TRACKSEARCH_IDLE;
+                     trackNumber      <= trackInfo_addrB;
+                  elsif (trackNumberBCD = x"99") then
+                     trackSearchState <= TRACKSEARCH_IDLE;
+                     trackNumberBCD   <= x"AA";
+                     trackNumber      <= std_logic_vector(to_unsigned(1, 7)); -- todo: what to do here?
+                  else
+                     trackSearchState <= TRACKSEARCH_READ;
+                     trackInfo_addrB  <= std_logic_vector(unsigned(trackInfo_addrB) + 1);
+                     if (trackNumberBCD(3 downto 0) = x"9") then
+                        trackNumberBCD(3 downto 0) <= x"0";
+                        trackNumberBCD(7 downto 4) <= trackNumberBCD(7 downto 4) + 1;
+                     else
+                        trackNumberBCD(3 downto 0) <= trackNumberBCD(3 downto 0) + 1;
+                     end if;
+                  end if;
+            
+            end case;
+            
+            if (trackinfo_write = '1') then
+            
+               -- header
+               if (to_integer(unsigned(trackinfo_addr)) = 0) then
+                  --trackcount    <= trackinfo_data(7 downto 0);
+                  trackcountBCD <= trackinfo_data(15 downto 8);
+               end if;
+               
+               --if (to_integer(unsigned(trackinfo_addr)) = 1) then
+               --   totalLBAs <= to_integer(unsigned(trackinfo_data(18 downto 0)));
+               --end if;
+               
+               if (to_integer(unsigned(trackinfo_addr)) = 2) then
+                  totalSecondsBCD <= trackinfo_data(7 downto 0);
+                  totalMinutesBCD <= trackinfo_data(15 downto 8);
+               end if;
+            
+               -- tracks
+               if (trackinfo_addr(1 downto 0) = "00") then
+                  trackInfo_DataA(18 downto 0)  <= trackinfo_data(18 downto 0); -- lbaStart
+               end if;
+               if (trackinfo_addr(1 downto 0) = "01") then
+                  trackInfo_DataA(37 downto 19) <= trackinfo_data(18 downto 0); -- lbaEnd
+               end if;
+               if (trackinfo_addr(1 downto 0) = "10") then
+                  trackInfo_DataA(45 downto 38) <= trackinfo_data( 7 downto 0); -- secondsBCD
+                  trackInfo_DataA(53 downto 46) <= trackinfo_data(15 downto 8); -- minutesBCD
+                  trackInfo_DataA(54)           <= trackinfo_data(16);          -- isAudio
+                  if (to_integer(unsigned(trackinfo_addr)) = 6) then
+                     isAudioCD <= trackinfo_data(16);
+                  end if;
+               end if;
+               if (trackinfo_addr(1 downto 0) = "11") then
+                  trackInfo_addrA <= trackinfo_addr(8 downto 2);
+                  trackInfo_wrenA <= '1';
+               end if;
+               
+            elsif (FifoParam_Empty = '0') then
+               
+               trackInfo_addrA <= std_logic_vector(to_unsigned(to_integer(unsigned(FifoParam_Dout(6 downto 4))) * 8 + 
+                                                   to_integer(unsigned(FifoParam_Dout(6 downto 4))) * 2 + 
+                                                   to_integer(unsigned(FifoParam_Dout(3 downto 0))), 7));
+               
+            --else trackInfo_addrA <= "0000100"; -- debug test!
+            
+            end if;
+            
+         end if;
+         
+         if (writeSingletrack = '1') then
+            trackNumber     <= "0000001";
+            trackNumberBCD  <= x"01";
+            isAudioCD       <= '0';
+            totalSecondsBCD <= std_logic_vector(cd_SecondsHigh & cd_SecondsLow);
+            totalMinutesBCD <= std_logic_vector(cd_MinutesHigh & cd_MinutesLow);
+            
+            trackInfo_DataA(18 downto 0)  <= (others => '0');
+            trackInfo_DataA(37 downto 19) <= std_logic_vector(to_unsigned(lbaCount - 1, 19));
+            trackInfo_DataA(45 downto 38) <= x"02";
+            trackInfo_DataA(53 downto 46) <= x"00";
+            trackInfo_DataA(54)           <= '0';
+            trackInfo_addrA <= "0000001";
+            trackInfo_wrenA <= '1';
+         end if;
+
+      end if;
+   end process;
+   
+   startLBA   <= to_integer(unsigned(trackInfo_DataOutB(18 downto 0)));
+   endLBA     <= to_integer(unsigned(trackInfo_DataOutB(37 downto 19)));
+   isAudio    <= trackInfo_DataOutB(54);    
+
+   secondsBCD <= trackInfo_DataOutA(45 downto 38);
+   minutesBCD <= trackInfo_DataOutA(53 downto 46);   
+   
+   iramTrackInfos: entity work.dpram
+   generic map 
+   ( 
+      addr_width => 7, 
+      data_width => 55
+   )
+   port map
+   (
+      clock_a     => clk1x,
+      address_a   => trackInfo_addrA,
+      data_a      => trackInfo_DataA,
+      wren_a      => trackInfo_wrenA,
+      q_a         => trackInfo_DataOutA,
+      
+      clock_b     => clk1x,
+      address_b   => trackInfo_addrB,
+      data_b      => (54 downto 0 => '0'),
+      wren_b      => '0',
+      q_b         => trackInfo_DataOutB
+   );
+   
    -- size calculation
    process(clk1x)
    begin
       if (rising_edge(clk1x)) then
-         if (reset = '1') then
+      
+         writeSingletrack <= '0';
+      
+         if (newCD = '1') then
             cdSize_work    <= cdSize;
             lbaCount       <= 0;
             lbaCount_work  <= 0;
@@ -2462,13 +2840,17 @@ begin
                lbaCount_work <= 0;
             end if;
             
+            if (lbaCount_work > 0 and lbaCount_work <= FRAMES_PER_SECOND) then
+               writeSingletrack <= not multitrack; 
+            end if;
+            
             if (cdSize_work > 0) then
                lbaCount <= lbaCount + 1;
                if (cdSize_work > RAW_SECTOR_SIZE) then
                   cdSize_work <= cdSize_work - RAW_SECTOR_SIZE;
                else
-                  cdSize_work   <= (others => '0');
-                  lbaCount_work <= lbaCount + 1;
+                  cdSize_work      <= (others => '0');
+                  lbaCount_work    <= lbaCount + 1;
                end if;
             end if;
             
@@ -2493,6 +2875,11 @@ begin
             ss_in(13) <= x"00002010"; -- pendingDriveIRQ & nextCmd & modeReg & internalStatus
             
             ss_in(21) <= x"00000018"; -- CDROM_IRQFLAG & CDROM_IRQENA & CDROM_STATUS;
+            
+            ss_in(23) <= x"80000080"; --  CD Volume;
+            ss_in(24) <= x"80000080"; --  CD Volume;
+            
+            ss_in(25) <= x"001F0000"; --  lastreportCDDA & trackNumber & currentTrackBCD;
             
          elsif (SS_wren = '1' and SS_Adr < 128) then
             ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
@@ -2539,7 +2926,7 @@ begin
    
    begin
       process
-         constant WRITETIME            : std_logic := '1';
+         constant WRITETIME            : std_logic := '0';
          
          file outfile                  : text;
          variable f_status             : FILE_OPEN_STATUS;
@@ -2553,6 +2940,9 @@ begin
          variable ackRead_valid_1      : std_logic;
          variable ackDriveEnd_1        : std_logic;
          variable ackPendingIRQNext_1  : std_logic;
+         variable readOnDisk_1         : std_logic;
+         variable readOnDisk_2         : std_logic;
+         variable readOnDisk_3         : std_logic;
          variable fifoResponseSize     : unsigned(31 downto 0);
          variable newoutputCnt         : unsigned(31 downto 0); 
          variable fifoDataWrCnt        : unsigned(7 downto 0);
@@ -2665,6 +3055,21 @@ begin
                end loop;
             end if;
             
+            if (readOnDisk_3 = '1') then
+               write(line_out, string'("SECTORREAD: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter - 7));
+                  write(line_out, string'(" ")); 
+               end if;
+               write(line_out, string'("00 "));
+               write(line_out, to_hstring(to_unsigned(lastReadSector, 32)));               
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if;
+            readOnDisk_3 := readOnDisk_2;
+            readOnDisk_2 := readOnDisk_1;
+            readOnDisk_1 := readOnDisk;
+
             --if (copyState = COPY_DATA and copyByteCnt = 0) then
             --   write(line_out, string'("DATA: "));
             --   write(line_out, to_hstring(fifoDataWrCnt));
@@ -2726,6 +3131,37 @@ begin
       end process;
    
    end generate goutput;
+   
+   goutputcdda : if 1 = 1 generate
+      signal outputCnt  : unsigned(23 downto 0) := (others => '0'); 
+   begin
+      process
+         file outfile                  : text;
+         variable f_status             : FILE_OPEN_STATUS;
+         variable line_out             : line;
+      begin
+   
+         file_open(f_status, outfile, "R:\\debug_cdda_sim.txt", write_mode);
+         file_close(outfile);
+         file_open(f_status, outfile, "R:\\debug_cdda_sim.txt", append_mode);
+         
+         while (true) loop
+            
+            wait until rising_edge(clk1x);
+            
+            if (CDDA_write = '1') then
+               write(line_out, to_hstring(outputCnt));
+               write(line_out, string'(" ")); 
+               write(line_out, to_hstring(CDDA_data));
+               writeline(outfile, line_out);
+               outputCnt <= outputCnt + 1;
+            end if; 
+           
+         end loop;
+         
+      end process;
+   
+   end generate goutputcdda;
    
    -- synthesis translate_on
 

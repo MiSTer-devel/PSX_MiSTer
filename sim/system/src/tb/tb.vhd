@@ -79,7 +79,6 @@ architecture arch of etb is
    signal ram_128             : std_logic;
    signal ram_done            : std_logic;   
    signal ram_reqprocessed    : std_logic;   
-   signal ram_idle            : std_logic;   
    signal ram_refresh         : std_logic;   
    
    -- ddrram
@@ -151,6 +150,10 @@ architecture arch of etb is
 
    signal cdSize              : unsigned(29 downto 0);
    
+   signal trackinfo_data      : std_logic_vector(31 downto 0);
+   signal trackinfo_addr      : std_logic_vector(8 downto 0);
+   signal trackinfo_write     : std_logic := '0';
+   
    -- spu
    signal spuram_dataWrite    : std_logic_vector(31 downto 0);
    signal spuram_Adr          : std_logic_vector(18 downto 0);
@@ -213,11 +216,12 @@ begin
       pause                 => '0',
       loadExe               => psx_LoadExe(0),
       fastboot              => '0',
-      FASTMEM               => '0',
-      REPRODUCIBLEGPUTIMING => '0',
-      REPRODUCIBLEDMATIMING => '0',
+      FASTMEM               => '1',
+      REPRODUCIBLEGPUTIMING => '1',
+      REPRODUCIBLEDMATIMING => '1',
       DMABLOCKATONCE        => '0',
-      INSTANTSEEK           => '0',
+      multitrack            => '0',
+      INSTANTSEEK           => '1',
       ditherOff             => '0',
       fpscountOn            => '0',
       errorOn               => '0',
@@ -238,7 +242,6 @@ begin
       ram_128               => ram_128,      
       ram_done              => ram_done,
       ram_reqprocessed      => ram_reqprocessed,
-      ram_idle              => ram_idle,
       -- vram/ddr3 interface
       DDRAM_BUSY            => DDRAM_BUSY,      
       DDRAM_BURSTCNT        => DDRAM_BURSTCNT,  
@@ -250,9 +253,15 @@ begin
       DDRAM_BE              => DDRAM_BE,        
       DDRAM_WE              => DDRAM_WE,
       -- cd
-      region                => "00",
+      region                => "10",
       hasCD                 => '1',
+      newCD                 => reset,
+      LIDopen               => '0',
       fastCD                => '0',
+      libcryptKey           => x"0000",
+      trackinfo_data        => trackinfo_data,
+      trackinfo_addr        => trackinfo_addr, 
+      trackinfo_write       => trackinfo_write,
       cd_Size               => cdSize,
       cd_req                => cd_req,
       cd_addr               => cd_addr,
@@ -308,10 +317,12 @@ begin
       -- Keys - all active high
       PadPortEnable1        => '1',
       PadPortAnalog1        => '0',
-      PadPortMouse1         => '1',
-      PadPortEnable2        => '1',
+      PadPortMouse1         => '0',
+      PadPortGunCon1        => '0',
+      PadPortEnable2        => '0',
       PadPortAnalog2        => '0',
       PadPortMouse2         => '0', 
+      PadPortGunCon2        => '0',
       KeyTriangle           => KeyTriangle,           
       KeyCircle             => KeyCircle,           
       KeyCross              => KeyCross,           
@@ -357,7 +368,7 @@ begin
    iddrram_model : entity tb.ddrram_model
    generic map
    (
-      SLOWTIMING => 15
+      SLOWTIMING => 0
    )
    port map
    (
@@ -376,7 +387,7 @@ begin
    isdram_model : entity tb.sdram_model3x 
    generic map
    (
-      DOREFRESH     => '1',
+      DOREFRESH     => '0',
       SCRIPTLOADING => '1'
    )
    port map
@@ -395,7 +406,7 @@ begin
       do32         => ram_dataRead32,
       done         => ram_done,
       reqprocessed => ram_reqprocessed,
-      ram_idle     => ram_idle
+      ram_idle     => open
    );
    
    ispu_ram : entity work.sdram_model3x 

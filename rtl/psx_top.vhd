@@ -24,6 +24,7 @@ entity psx_top is
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
+      multitrack            : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       ditherOff             : in  std_logic;
       fpscountOn            : in  std_logic;
@@ -58,9 +59,13 @@ entity psx_top is
       -- cd
       region                : in  std_logic_vector(1 downto 0);
       hasCD                 : in  std_logic;
+      newCD                 : in  std_logic;
       fastCD                : in  std_logic;
       LIDopen               : in  std_logic;
       libcryptKey           : in  std_logic_vector(15 downto 0);
+      trackinfo_data        : in std_logic_vector(31 downto 0);
+      trackinfo_addr        : in std_logic_vector(8 downto 0);
+      trackinfo_write       : in std_logic;
       cd_Size               : in  unsigned(29 downto 0);
       cd_req                : out std_logic := '0';
       cd_addr               : out std_logic_vector(26 downto 0) := (others => '0');
@@ -1141,8 +1146,10 @@ begin
       ce                   => ce,   
       reset                => reset_intern,
      
+      multitrack           => multitrack,
       INSTANTSEEK          => INSTANTSEEK,
       hasCD                => hasCD,
+      newCD                => newCD,
       fastCD               => fastCD,
       LIDopen              => LIDopen,
       region               => region,
@@ -1178,6 +1185,10 @@ begin
       cd_hps_ack           => cd_hps_ack,
       cd_hps_write         => cd_hps_write,
       cd_hps_data          => cd_hps_data, 
+      
+      trackinfo_data       => trackinfo_data,
+      trackinfo_addr       => trackinfo_addr, 
+      trackinfo_write      => trackinfo_write,
       
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,

@@ -230,7 +230,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXX          X
+// X XXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXX         X
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -286,6 +286,7 @@ parameter CONF_STR = {
 	"P2OK,RepTimingDMA,Off,On;",
 	"P2oB,RepTimingSPUDMA,Off,On;",
 	"P2OQ,DMAinBLOCKs,Off,On;",
+	"P2oL,CD Multitrack,Off,On;",
 	"P2OL,CD Instant Seek,Off,On;",
 	"P2oJ,CD Lid,Closed,Open;",
 	"P2oK,CD Inserted,Yes,No;",
@@ -423,13 +424,14 @@ assign sd_wr[1] = 0;
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
-reg bios_download, cart_download, cd_download, sbi_download;
+reg bios_download, cart_download, cd_download, sbi_download, cdinfo_download;
 always @(posedge clk_1x) begin
 	//code_download <= ioctl_download & &ioctl_index;
-	bios_download <= ioctl_download & (ioctl_index == 0);
-	cart_download <= ioctl_download & (ioctl_index == 1);
-	cd_download   <= ioctl_download & (ioctl_index[5:0] == 2);
-	sbi_download  <= ioctl_download & (ioctl_index == 250);
+	bios_download    <= ioctl_download & (ioctl_index == 0);
+	cart_download    <= ioctl_download & (ioctl_index == 1);
+	cd_download      <= ioctl_download & (ioctl_index[5:0] == 2);
+	sbi_download     <= ioctl_download & (ioctl_index == 250);
+	cdinfo_download  <= ioctl_download & (ioctl_index == 251);
 end
 
 reg cart_loaded = 0;
@@ -448,6 +450,7 @@ reg        ramdownload_wr;
 
 reg[29:0]  cd_Size;
 reg        hasCD = 0;
+reg        newCD = 0;
 
 reg cart_download_1 = 0;
 reg cd_download_1 = 0;
@@ -475,17 +478,19 @@ reg [15:0] libcryptKey;
 
 always @(posedge clk_1x) begin
 	ramdownload_wr <= 0;
-	if(cart_download | bios_download | cd_download) begin
+	if(cart_download | bios_download | cd_download | cdinfo_download) begin
       if (ioctl_wr) begin
          if(~ioctl_addr[1]) begin
             ramdownload_wrdata[15:0] <= ioctl_dout;
-            if (bios_download)      ramdownload_wraddr  <= ioctl_addr[26:0] + BIOS_START[26:0];
-            else if (cart_download) ramdownload_wraddr  <= ioctl_addr[26:0] + EXE_START[26:0];                          
-            else if (cd_download)   ramdownload_wraddr  <= ioctl_addr[26:0] ;      
+            if (bios_download)         ramdownload_wraddr  <= ioctl_addr[26:0] + BIOS_START[26:0];
+            else if (cart_download)    ramdownload_wraddr  <= ioctl_addr[26:0] + EXE_START[26:0];                          
+            else if (cd_download)      ramdownload_wraddr  <= ioctl_addr[26:0];      
+            else if (cdinfo_download)  ramdownload_wraddr  <= ioctl_addr[26:0];      
          end else begin
             ramdownload_wrdata[31:16] <= ioctl_dout;
             ramdownload_wr            <= 1;
             ioctl_wait                <= 1;
+            if (cdinfo_download) ioctl_wait <= 0;
          end
       end
       if(sdram_writeack | sdram_writeack2) ioctl_wait <= 0;
@@ -506,11 +511,13 @@ always @(posedge clk_1x) begin
       libcryptKey <= ioctl_dout;
    end
      
+   newCD <= 0;
    if (img_mounted[1]) begin
       if (img_size > 0) begin
          cd_Size     <= img_size[29:0];
          cd_hps_on   <= 1;
          hasCD       <= 1;
+         newCD       <= 1;
       end else begin
          hasCD     <= 0;
       end
@@ -616,6 +623,7 @@ psx
    .REPRODUCIBLEGPUTIMING(status[19]),
    .REPRODUCIBLEDMATIMING(status[20]),
    .DMABLOCKATONCE(status[26]),
+   .multitrack(status[53]),
    .INSTANTSEEK(status[21]),
    .ditherOff(status[22]),
    .fpscountOn(status[28]),
@@ -650,9 +658,13 @@ psx
    // cd
    .region          (status[40:39]),
    .hasCD           (hasCD && ~status[52]),
+   .newCD           (newCD),
    .LIDopen         (status[51]),
    .fastCD          (0),
    .libcryptKey     (libcryptKey),
+   .trackinfo_data  (ramdownload_wrdata),
+   .trackinfo_addr  (ramdownload_wraddr[10:2]),
+   .trackinfo_write (ramdownload_wr && cdinfo_download),
    .cd_Size         (cd_Size),
    .cd_req          (cd_req),
    .cd_addr         (cd_addr),

@@ -43,9 +43,19 @@ architecture arch of etb is
    signal spu_tick            : std_logic := '0';
    
    -- hps emulation
+   type ttracknames is array(0 to 99) of string(1 to 255);
+   signal tracknames : ttracknames;
+   
    type filetype is file of integer;
    type t_data is array(0 to (2**28)-1) of integer;
    signal cdLoaded            : std_logic := '0';
+   signal cdTrack             : std_logic_vector(7 downto 0) := x"FF";
+   
+   signal trackinfo_data      : std_logic_vector(31 downto 0);
+   signal trackinfo_addr      : std_logic_vector(8 downto 0);
+   signal trackinfo_write     : std_logic := '0';
+   
+   signal multitrack          : std_logic := '0';
    
    -- savestates
    signal reset_in            : std_logic;
@@ -72,8 +82,10 @@ begin
       ce                   => '1',        
       reset                => reset_out,  
 
+      multitrack           => multitrack,
       INSTANTSEEK          => '1',
       hasCD                => '1',
+      newCD                => reset_out,
       LIDopen              => '0',
       cdSize               => cdSize,
       fastCD               => '0',
@@ -105,6 +117,10 @@ begin
       cd_hps_write         => cd_hps_write,
       cd_hps_data          => cd_hps_data, 
       
+      trackinfo_data       => trackinfo_data, 
+      trackinfo_addr       => trackinfo_addr, 
+      trackinfo_write      => trackinfo_write,
+      
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(13 downto 0),
@@ -115,9 +131,13 @@ begin
    itb_savestates : entity work.tb_savestates
    generic map
    (
-      LOADSTATE         => '0',
-      FILENAME          => "C:\Users\FPGADev\Desktop\savestates_psxcore\Suikoden II (USA)_1.ss"
-      --FILENAME          => "C:\Projekte\psx\FPSXApp\Suikoden II (USA)_1.ss"
+      LOADSTATE         => '1',
+      --FILENAME          => "C:\Users\FPGADev\Desktop\savestates_psxcore\Suikoden II (USA)_1.ss"
+      --FILENAME          => "C:\Projekte\psx\FPSXApp\Rayman (USA)_beforeplay2.sst"
+      --FILENAME          => "C:\Projekte\psx\FPSXApp\Rayman (USA)_endtrack2.sst"
+      --FILENAME          => "C:\Projekte\psx\FPSXApp\Rayman (USA)_restart.sst"
+      --FILENAME          => "C:\Projekte\psx\FPSXApp\Rayman (USA)_music.sst"
+      FILENAME          => "C:\Projekte\psx\FPSXApp\Rayman (USA)_music_all.sst"
    )
    port map
    (
@@ -146,6 +166,28 @@ begin
    end process;
    
    -- hps emulation
+   process
+      file infile          : text;
+      variable f_status    : FILE_OPEN_STATUS;
+      variable inLine      : LINE;
+      variable count       : integer;
+   begin
+
+      file_open(f_status, infile, "R:\cdtracks.txt", read_mode);
+
+      count := 1;
+      while (not endfile(infile)) loop
+         readline(infile,inLine);
+         tracknames(count) <= (others => ' ');
+         tracknames(count)(1 to inLine'length) <= inLine(1 to inLine'length); 
+         count := count + 1;
+      end loop;
+      
+      file_close(infile);
+      
+      wait;
+   end process;
+   
    process
       variable data           : t_data := (others => 0);
       file infile             : filetype;
@@ -188,10 +230,9 @@ begin
       end;
    begin
       
-      if (cdLoaded = '0') then
+      if (cdLoaded = '0' and multitrack = '1') then
       
-         --file_open(f_status, infile, "C:\Projekte\psx\Croc - Legend of the Gobbos (Europe) (Demo).bin", read_mode);
-         file_open(f_status, infile, "C:\\Projekte\\psx\\Um Jammer Lammy (USA).bin", read_mode);
+         file_open(f_status, infile, "R:\\cuedata.bin", read_mode);
          
          targetpos := 0;
          
@@ -206,13 +247,55 @@ begin
          
          file_close(infile);
          
-         cdSize <= to_unsigned(targetpos * 4, 30);
+         wait for 10 us;
+         for i in 0 to 400 loop
+            trackinfo_data  <= std_logic_vector(to_signed(data(i), 32));
+            trackinfo_addr  <= std_logic_vector(to_unsigned(i, 9));
+            trackinfo_write <= '1';
+            wait until rising_edge(clk1x);
+            trackinfo_write <= '0';
+            wait until rising_edge(clk1x);
+         end loop;
+
          cdLoaded <= '1';
       end if;
    
    
       wait until rising_edge(clk1x);
+      if (cd_hps_req = '1' or (multitrack = '0' and cdLoaded = '0')) then
+      
+         -- load new track if required
+         if ((multitrack = '1' and cdTrack /= cd_hps_lba(31 downto 24)) or (multitrack = '0' and cdLoaded = '0')) then
+         
+            if (multitrack = '1') then
+               cdTrack <= cd_hps_lba(31 downto 24);
+               report "Loading new File";
+               report tracknames(to_integer(unsigned(cd_hps_lba(31 downto 24))));
+               file_open(f_status, infile, tracknames(to_integer(unsigned(cd_hps_lba(31 downto 24)))), read_mode);
+            else
+               cdLoaded <= '1';
+               file_open(f_status, infile, "C:\Projekte\psx\Croc - Legend of the Gobbos (Europe) (Demo).bin", read_mode);
+            end if;
+            
+            targetpos := 0;
+            
+            while (not endfile(infile)) loop
+               
+               read(infile, next_int);  
+               
+               data(targetpos) := next_int;
+               targetpos       := targetpos + 1;
+   
+            end loop;
+            
+            file_close(infile);
+            cdSize <= to_unsigned(targetpos * 4, 30);
+            
+         end if;
+      end if;
+      
       if (cd_hps_req = '1') then
+      
          for i in 0 to 100 loop
             wait until rising_edge(clk1x);
          end loop;
@@ -222,7 +305,7 @@ begin
          wait until rising_edge(clk1x);
          
          for i in 0 to 587 loop
-            cdData := std_logic_vector(to_signed(data(to_integer(unsigned(cd_hps_lba)) * (2352 / 4) + i), 32));
+            cdData := std_logic_vector(to_signed(data(to_integer(unsigned(cd_hps_lba(23 downto 0))) * (2352 / 4) + i), 32));
             
             cd_hps_data  <= cdData(15 downto 0);
             cd_hps_write <= '1';
