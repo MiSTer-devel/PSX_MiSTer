@@ -49,6 +49,7 @@ entity cd_top is
       cd_hps_on            : in  std_logic;
       cd_hps_req           : out std_logic := '0';
       cd_hps_lba           : out std_logic_vector(31 downto 0);
+      cd_hps_lba_sim       : out std_logic_vector(31 downto 0);
       cd_hps_ack           : in  std_logic;
       cd_hps_write         : in  std_logic;
       cd_hps_data          : in  std_logic_vector(15 downto 0);
@@ -1401,7 +1402,7 @@ begin
                if (cmd_delay = 4 and FifoResponse_empty = '0') then 
                   FifoResponse_reset <= '1'; 
                end if;
-               if (FifoParam_Dout = x"00" ) then -- track 0 -> total size of CD
+               if (FifoParam_Dout = x"00") then -- track 0 -> total size of CD
                   if (cmd_delay = 3 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= internalStatus; end if;
                   if (cmd_delay = 2 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= totalMinutesBCD; end if;
                   if (cmd_delay = 1 and hasCD = '1') then FifoResponse_Wr <= '1'; FifoResponse_Din <= totalSecondsBCD; end if;
@@ -2172,7 +2173,8 @@ begin
                         cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(0, 24));
                      end if;
                      if (multitrack = '1') then
-                        cd_hps_lba(30 downto 24) <= trackNumber;
+                        cd_hps_lba                   <= std_logic_vector(to_unsigned(lastReadSector, 32));
+                        cd_hps_lba_sim(30 downto 24) <= trackNumber;
                      end if;
                   else
                      sectorFetchState <= SFETCH_DATA;
@@ -2755,7 +2757,7 @@ begin
          
          if (writeSingletrack = '1') then
             trackNumber     <= "0000001";
-            trackNumberBCD  <= x"01";
+            trackcountBCD   <= x"01";
             isAudioCD       <= '0';
             totalSecondsBCD <= std_logic_vector(cd_SecondsHigh & cd_SecondsLow);
             totalMinutesBCD <= std_logic_vector(cd_MinutesHigh & cd_MinutesLow);
