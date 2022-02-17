@@ -429,6 +429,7 @@ begin
                            ack <= '1';
 
                         when NEGCONSTEERING =>
+                           -- Same as ANALOGLEFTX, use IF in there to go to NEGCONANALOGI?
                            receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog1X) + 128, 8));
                            receiveValid    <= '1';
                            controllerState <= NEGCONANALOGI;
@@ -437,12 +438,10 @@ begin
                         when NEGCONANALOGI =>
                            if ( to_integer(Analog2Y) < 0) then
                               -- Buttons are right stick up
-                              receiveBuffer   <= std_logic_vector(shift_left(to_unsigned(1-to_integer(Analog2Y),8),1)); -- -128-0 -> 0->255
-                           elsif (KeyCross = '1') then
+                              -- Due to half resolution of the stick its range of -128 to 1 is mapped to 0x03 to 0xFF
+                              receiveBuffer   <= std_logic_vector(1 + shift_left(not to_unsigned(to_integer(Analog2Y),8),1));
+                           elsif (KeyCross = '1' or KeyR2 = '1') then
                               -- Buttons are Buttons and full throttle
-                              receiveBuffer   <= "11111111";
-                           elsif (KeyR2 = '1') then
-                              -- Prep for Analog Trigger
                               receiveBuffer   <= "11111111";
                            else
                               receiveBuffer   <= "00000000";
@@ -454,23 +453,19 @@ begin
                         when NEGCONANALOGII =>
                            if ( to_integer(Analog2Y) > 0) then
                               -- Buttons are right stick down
-                              receiveBuffer   <= std_logic_vector(shift_left(to_unsigned(to_integer(Analog2Y),8),1));-- 0-127 -> 0->255
-                           elsif (KeySquare = '1') then
+                              -- Due to half resolution of the stick its range of 1 to 127 is mapped to 0x03 to 0xFF
+                              receiveBuffer   <= std_logic_vector(1 + shift_left(to_unsigned(to_integer(Analog2Y),8),1));
+                           elsif (KeySquare = '1' or KeyL2 = '1') then
                               -- Buttons are Buttons and full throttle
                               receiveBuffer   <= "11111111";
-                           elsif (KeyL2 = '1') then
-                              -- Prep for Analog Trigger
-                              receiveBuffer   <= "11111111";
-                           else
-                              receiveBuffer   <= "00000000";
                            end if;
                            receiveValid    <= '1';
                            controllerState <= NEGCONANALOGL;
                            ack             <= '1';
 
                         when NEGCONANALOGL =>
-                           -- Ran out of analog buttons
-                           -- if (KeyL2 = '1') then
+                           -- Ran out of analog buttons, ideally analog triggers would be supported and a layout
+                           -- R2->I, L2->II, AnalogR->L would be possible, enabling I/II being independent when analog and have analog L
                            if (KeyL1 = '1') then
                               receiveBuffer   <= "11111111";
                            else
