@@ -235,7 +235,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 `include "build_id.v"
 parameter CONF_STR = {
 	"PSX;SS3E000000:400000;",
-	"S1,CUE,Load CD;",
+	"S1,CUECHD,Load CD;",
 	"F1,EXE,Load Exe;",
 	//"h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
