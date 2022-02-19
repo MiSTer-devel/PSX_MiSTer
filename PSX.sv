@@ -235,7 +235,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 `include "build_id.v"
 parameter CONF_STR = {
 	"PSX;SS3E000000:400000;",
-	"S1,ISOCUE,Load CD;",
+	"S1,CUE,Load CD;",
 	"F1,EXE,Load Exe;",
 	//"h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
@@ -286,7 +286,7 @@ parameter CONF_STR = {
 	"P2OK,RepTimingDMA,Off,On;",
 	"P2oB,RepTimingSPUDMA,Off,On;",
 	"P2OQ,DMAinBLOCKs,Off,On;",
-	"P2oL,CD Multitrack,Off,On;",
+	"P2oL,CD Singletrack,Off,On;",
 	"P2OL,CD Instant Seek,Off,On;",
 	"P2oJ,CD Lid,Closed,Open;",
 	"P2oK,CD Inserted,Yes,No;",
@@ -623,7 +623,7 @@ psx
    .REPRODUCIBLEGPUTIMING(status[19]),
    .REPRODUCIBLEDMATIMING(status[20]),
    .DMABLOCKATONCE(status[26]),
-   .multitrack(status[53]),
+   .multitrack(~status[53]),
    .INSTANTSEEK(status[21]),
    .ditherOff(status[22]),
    .fpscountOn(status[28]),

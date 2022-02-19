@@ -216,6 +216,7 @@ architecture arch of cd_top is
    signal seekLBA                   : integer range 0 to 524287; 
    signal playLBA                   : integer range 0 to 524287; 
    signal currentTrackBCD           : std_logic_vector(7 downto 0);
+   signal nextTrack                 : std_logic_vector(7 downto 0);
    
    signal readAfterSeek             : std_logic := '0';
    signal playAfterSeek             : std_logic := '0';
@@ -912,9 +913,11 @@ begin
                         else
                         
                            playTrack <= '0';
+                           nextTrack <= x"00";
                            if (FifoParam_Empty = '0') then
                               playLBA   <= to_integer(unsigned(trackInfo_DataOutA(18 downto 0))) + PREGAPSIZE;
                               playTrack <= '1';
+                              nextTrack <= FifoParam_Dout;
                            end if;
                            
                            --playLBA   <= to_integer(unsigned(trackInfo_DataOutA(18 downto 0))) + PREGAPSIZE; -- debug test!
@@ -1850,8 +1853,9 @@ begin
                if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
                   -- todo: updatePositionWhileSeeking();
                end if;
+               currentTrackBCD <= nextTrack;
                if (playTrack = '1') then
-                  seekOnDiskPlay   <= '1';
+                  seekOnDiskPlay    <= '1';
                   readAfterSeek     <= '0';
                   playAfterSeek     <= '1';
                elsif (setLocActive = '1') then
@@ -2169,8 +2173,10 @@ begin
                      cd_hps_req       <= '1';
                      if (positionInIndex >= 0) then
                         cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(positionInIndex, 24));
+                        cd_hps_lba_sim   <= x"00" & std_logic_vector(to_unsigned(positionInIndex, 24));
                      else
                         cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(0, 24));
+                        cd_hps_lba_sim   <= x"00" & std_logic_vector(to_unsigned(0, 24));
                      end if;
                      if (multitrack = '1') then
                         cd_hps_lba                   <= std_logic_vector(to_unsigned(lastReadSector, 32));
@@ -2560,7 +2566,6 @@ begin
       reset                => reset,
 
       spu_tick             => spu_tick,
-      xa_muted             => xa_muted,
       
       CDDA_write           => CDDA_write,
       CDDA_data            => CDDA_data, 
@@ -2582,42 +2587,31 @@ begin
       if (rising_edge(clk1x)) then
          
          if (spu_tick = '1') then
-            cd_volume_step <= 0;
+            if ((modeReg(0) = '1' or (modeReg(6) = '1' and xa_muted = '0')) and muted = '0') then
+               cd_volume_step <= 0;
+            else
+               cd_left  <= (others => '0');
+               cd_right <= (others => '0');
+            end if;
          end if;
       
          case (cd_volume_step) is
             when 0 =>
-               if (modeReg(6) = '1' and muted = '0') then
-                  soundmul1 <= cdaudio_left;
-               else
-                  soundmul1 <= (others => '0');
-               end if;
+               soundmul1 <= cdaudio_left;
                soundmul2 <= unsigned(cdvol_00);
                
             when 1 =>
-               if (modeReg(6) = '1' and muted = '0') then
-                  soundmul1 <= cdaudio_right;
-               else
-                  soundmul1 <= (others => '0');
-               end if;
+               soundmul1 <= cdaudio_right;
                soundmul2 <= unsigned(cdvol_10);
 
             when 2 =>
-               if (modeReg(6) = '1' and muted = '0') then
-                  soundmul1 <= cdaudio_left;
-               else
-                  soundmul1 <= (others => '0');
-               end if;
+               soundmul1 <= cdaudio_left;
                soundmul2 <= unsigned(cdvol_01);
                
                soundsum <= resize(soundmulresult, 18);
                
             when 3 =>
-               if (modeReg(6) = '1' and muted = '0') then
-                  soundmul1 <= cdaudio_right;
-               else
-                  soundmul1 <= (others => '0');
-               end if;
+               soundmul1 <= cdaudio_right;
                soundmul2 <= unsigned(cdvol_11); 
                
                soundsum <= soundsum + resize(soundmulresult, 18);

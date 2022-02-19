@@ -13,7 +13,6 @@ entity cd_xa is
       reset                : in  std_logic;
 
       spu_tick             : in  std_logic;
-      xa_muted             : in  std_logic;
       
       CDDA_write           : in  std_logic;
       CDDA_data            : in  std_logic_vector(31 downto 0);
@@ -528,10 +527,6 @@ begin
                      resampleSamples           <= resampleSamples + 1;
                   end if;
                   
-                  if (xa_muted = '1') then
-                     FifoOut_Din <= (others => '0');
-                  end if;
-                  
             end case;
             
          end if;
@@ -544,7 +539,7 @@ begin
    ififoOut: entity mem.SyncFifoFallThrough
    generic map
    (
-      SIZE             => 32,
+      SIZE             => 1024,
       DATAWIDTH        => 32,
       NEARFULLDISTANCE => 16
    )
