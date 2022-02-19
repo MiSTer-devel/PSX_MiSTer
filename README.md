@@ -6,12 +6,16 @@ SDRAM of any size is required.
 
 ## Features
 * Savestates
-* Memory Card file loading (.MCD)
-* CUE+BIN format support
+* Option for core pause when OSD is open
+* Optional manual Memory Card file loading (.MCD)
+* CUE+BIN and CHD format support
+* Multiple Disc Game support with Lid open/close toggle
 * Instant CD-ROM Seek (disables simulation of motor delay)
-* Fast Boot
+* Fast Boot (Skips BIOS)
 * Dithering On/Off Toggle
 * Bob or Weave Deinterlacing
+* Option to Force PAL to 60hz
+* Inputs: Digital, Analog, Mouse, and Guncon support.
 
 ## Bios
 Rename your playstation bios file (e.g. `scph-1001.bin`/`ps-22a.bin` ) to `boot.rom` and place it in the `./games/PSX/` folder.
@@ -22,6 +26,15 @@ You can also place a cd_bios.rom in the same directory as the CD or 1 directory 
 One card can be mounted for each controller slot. Cards are in raw .mcd format. An empty formatted .mcd file is available for [download here](https://github.com/MiSTer-devel/PSX_MiSTer/raw/main/memcard/empty.mcd).
 
 You need to save them either manually in the OSD or turn on autosave. Saving or loading a card will pause the core for a short time.
+
+## Multiple Disc Games
+To swap discs while the game is running, you will need have all of the disc files for the game placed in the same folder. Then when loading a new disc for most games you will need to toggle the Lid Open/Close option to tell the game you have opened the lid and closed it. Example folder structure of a multi disc game:
+
+```
+/media/fat/games/PSX/Final Fantasy VII (USA)/Final Fantasy VII (USA) (Disc 1).chd
+/media/fat/games/PSX/Final Fantasy VII (USA)/Final Fantasy VII (USA) (Disc 2).chd
+/media/fat/games/PSX/Final Fantasy VII (USA)/Final Fantasy VII (USA) (Disc 3).chd
+```
 
 ## Video output
 Core uses either normal output or direct framebuffer mode.
