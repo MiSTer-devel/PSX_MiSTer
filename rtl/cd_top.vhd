@@ -145,6 +145,7 @@ architecture arch of cd_top is
    signal setFilterReadStep         : integer range 0 to 3;
    signal XaFilterFile              : std_logic_vector(7 downto 0);
    signal XaFilterChannel           : std_logic_vector(7 downto 0);
+   signal ClearXACurrentSet         : std_logic;
    
    signal XaCurrentFile             : std_logic_vector(7 downto 0);
    signal XaCurrentChannel          : std_logic_vector(7 downto 0);
@@ -828,6 +829,7 @@ begin
             shell_close             <= '0';
             errorResponseCmd_new    <= '0';
             errorResponseNext_new   <= '0';
+            ClearXACurrentSet       <= '0';
          
             -- receive new command request or decrease wait timer on pending command
             if (beginCommand = '1') then
@@ -1054,6 +1056,7 @@ begin
                         
                      when x"0D" => -- setfilter
                         setFilterReadStep <= 3;
+                        ClearXACurrentSet <= '1';
                         cmdAck            <= '1';
                         cmdPending        <= '0';
                         
@@ -2437,7 +2440,7 @@ begin
                      sectorProcessState <= SPROC_IDLE;
                   else
                      if (XaCurrentSet = '0') then
-                        if (subheader(15 downto 8) = x"FF" and (modeReg(3) = '1' or XaFilterChannel /= x"FF")) then
+                        if (subheader(15 downto 8) = x"FF" and (modeReg(3) = '0' or XaFilterChannel /= x"FF")) then
                            sectorProcessState <= SPROC_IDLE;   
                         else
                            XaCurrentFile    <= subheader(7 downto 0);
@@ -2547,6 +2550,10 @@ begin
             XaCurrentFile    <= (others => '0');
             XaCurrentChannel <= (others => '0');
             XaCurrentSet     <= '0';         
+         end if;
+         
+         if (ClearXACurrentSet = '1') then
+            XaCurrentSet     <= '0';
          end if;
          
       end if;
