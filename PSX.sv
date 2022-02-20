@@ -270,7 +270,6 @@ parameter CONF_STR = {
 	"P1-;",
 	"P1OM,Dithering,On,Off;",
 	"P1o9,Deinterlacing,Weave,Bob;",
-	"P1OF,Force 60Hz PAL,Off,On;",
 	"P1-;",
 	"d1P1oC,SPU RAM select,DDR3,SDRAM2;",
 	"P1O78,Stereo Mix,None,25%,50%,100%;",
@@ -278,7 +277,6 @@ parameter CONF_STR = {
 	"P2,Miscellaneous;",
 	"P2-;",
 	"P2OG,Fastboot,Off,On;",
-	"P2OL,CD Instant Seek,Off,On;",
 	"P2OP,Pause when OSD is open,Off,On;",
 	"-;",
 
@@ -295,7 +293,9 @@ parameter CONF_STR = {
 	"P3oB,RepTimingSPUDMA,Off,On;",
 	"P3OQ,DMAinBLOCKs,Off,On;",
 	"P3oL,CD Singletrack,Off,On;",
+	"P3OL,CD Instant Seek,Off,On;",
 	"P3oK,CD Inserted,Yes,No;",
+	"P3OF,Force 60Hz PAL,Off,On;",
 	"P3OR,Textures,On,Off;",
 
 	"- ;",
