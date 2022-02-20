@@ -61,11 +61,11 @@ entity joypad is
       MouseX               : in  signed(8 downto 0);
       MouseY               : in  signed(8 downto 0);
       Gun1X                : in  unsigned(7 downto 0);
-      Gun1Y                : in  unsigned(7 downto 0);
       Gun2X                : in  unsigned(7 downto 0);
-      Gun2Y                : in  unsigned(7 downto 0);
       Gun1Y_scanlines      : in  unsigned(8 downto 0);
       Gun2Y_scanlines      : in  unsigned(8 downto 0);
+      Gun1AimOffscreen     : in  std_logic;
+      Gun2AimOffscreen     : in  std_logic;
 
       mem1_request         : out std_logic;
       mem1_BURSTCNT        : out std_logic_vector(7 downto 0) := (others => '0'); 
@@ -415,8 +415,8 @@ begin
       MouseX               => MouseX,
       MouseY               => MouseY,
       GunX                 => Gun1X,
-      GunY                 => Gun1Y,
-      GunY_scanlines       => Gun1Y_scanlines
+      GunY_scanlines       => Gun1Y_scanlines,
+      GunAimOffscreen      => Gun1AimOffscreen
    );
    
    ijoypad_pad2 : entity work.joypad_pad
@@ -472,8 +472,8 @@ begin
       MouseX               => MouseX,
       MouseY               => MouseY,
       GunX                 => Gun2X,
-      GunY                 => Gun2Y,
-      GunY_scanlines       => Gun2Y_scanlines
+      GunY_scanlines       => Gun2Y_scanlines,
+      GunAimOffscreen      => Gun2AimOffscreen
    );
    
    ijoypad_mem1 : entity work.joypad_mem

@@ -55,8 +55,8 @@ entity joypad_pad is
       MouseX               : in  signed(8 downto 0);
       MouseY               : in  signed(8 downto 0);
       GunX                 : in  unsigned(7 downto 0);
-      GunY                 : in  unsigned(7 downto 0);
-      GunY_scanlines       : in  unsigned(8 downto 0)
+      GunY_scanlines       : in  unsigned(8 downto 0);
+      GunAimOffscreen      : in  std_logic
    );
 end entity;
 
@@ -290,7 +290,7 @@ begin
                            ack             <= '1';
                            receiveValid    <= '1';
 
-                           if KeyTriangle = '1' or GunX = x"00" or GunX = x"FF" or GunY = x"00" or GunY = x"FF" then
+                           if KeyTriangle = '1' or GunAimOffscreen = '1' then
                               gunOffscreen <= '1';
                            else
                               gunOffscreen <= '0';

@@ -475,6 +475,8 @@ architecture arch of psx_top is
    signal Gun2Y                  : unsigned(7 downto 0);
    signal Gun1Y_scanlines        : unsigned(8 downto 0);
    signal Gun2Y_scanlines        : unsigned(8 downto 0);
+   signal Gun1AimOffscreen       : std_logic;
+   signal Gun2AimOffscreen       : std_logic;
 
    -- memcard
    signal memcard1_pause         : std_logic;
@@ -870,9 +872,6 @@ begin
       SS_DataRead          => SS_DataRead_MEMORY      
    );
 
-   Gun1CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon1 = '1' else '0';
-   Gun2CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon2 = '1' else '0';
-
    -- Gun coordinate mapping is toplevel so that the gun's
    -- coordinates can be passed to both joypad
    -- and GPU (for crosshair overlays)
@@ -881,6 +880,12 @@ begin
 
    Gun1Y <= to_unsigned(to_integer(Analog1YP1 + 128), 8);
    Gun2Y <= to_unsigned(to_integer(Analog1YP2 + 128), 8);
+
+   Gun1AimOffscreen <= '1' when Gun1X = x"00" or Gun1X = x"FF" or Gun1Y = x"00" or Gun1Y = x"FF" else '0';
+   Gun2AimOffscreen <= '1' when Gun2X = x"00" or Gun2X = x"FF" or Gun2Y = x"00" or Gun2Y = x"FF" else '0';
+
+   Gun1CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon1 = '1' and Gun1AimOffscreen = '0' else '0';
+   Gun2CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon2 = '1' and Gun2AimOffscreen = '0' else '0';
 
    Gun1Y_scanlines <= resize(Gun1Y, 9) + resize(Gun1Y(7 downto 3), 9)       -- Gun1Y * 288 / 256
                       when (isPal = '1' and pal60 = '0')
@@ -945,11 +950,11 @@ begin
       MouseX               => MouseX,
       MouseY               => MouseY,
       Gun1X                => Gun1X,
-      Gun1Y                => Gun1Y,
       Gun2X                => Gun2X,
-      Gun2Y                => Gun2Y,
       Gun1Y_scanlines      => Gun1Y_scanlines,
       Gun2Y_scanlines      => Gun2Y_scanlines,
+      Gun1AimOffscreen     => Gun1AimOffscreen,
+      Gun2AimOffscreen     => Gun2AimOffscreen,
       
       mem1_request         => memDDR3card1_request,   
       mem1_BURSTCNT        => memDDR3card1_BURSTCNT,  
