@@ -473,6 +473,8 @@ architecture arch of psx_top is
    signal Gun1Y                  : unsigned(7 downto 0);
    signal Gun2X                  : unsigned(7 downto 0);
    signal Gun2Y                  : unsigned(7 downto 0);
+   signal Gun1Y_scanlines        : unsigned(8 downto 0);
+   signal Gun2Y_scanlines        : unsigned(8 downto 0);
 
    -- memcard
    signal memcard1_pause         : std_logic;
@@ -880,6 +882,14 @@ begin
    Gun1Y <= to_unsigned(to_integer(Analog1YP1 + 128), 8);
    Gun2Y <= to_unsigned(to_integer(Analog1YP2 + 128), 8);
 
+   Gun1Y_scanlines <= resize(Gun1Y, 9) + resize(Gun1Y(7 downto 3), 9)       -- Gun1Y * 288 / 256
+                      when (isPal = '1' and pal60 = '0')
+                      else resize(Gun1Y, 9) - resize(Gun1Y(7 downto 4), 9); -- Gun1Y * 240 / 256
+
+   Gun2Y_scanlines <= resize(Gun2Y, 9) + resize(Gun2Y(7 downto 3), 9)       -- Gun1Y * 288 / 256
+                      when (isPal = '1' and pal60 = '0')
+                      else resize(Gun2Y, 9) - resize(Gun2Y(7 downto 4), 9); -- Gun1Y * 240 / 256
+
    ijoypad: entity work.joypad
    port map 
    (
@@ -938,6 +948,8 @@ begin
       Gun1Y                => Gun1Y,
       Gun2X                => Gun2X,
       Gun2Y                => Gun2Y,
+      Gun1Y_scanlines      => Gun1Y_scanlines,
+      Gun2Y_scanlines      => Gun2Y_scanlines,
       
       mem1_request         => memDDR3card1_request,   
       mem1_BURSTCNT        => memDDR3card1_BURSTCNT,  
@@ -1252,11 +1264,11 @@ begin
       
       Gun1CrosshairOn      => Gun1CrosshairOn,
       Gun1X                => Gun1X,
-      Gun1Y                => Gun1Y,
+      Gun1Y_scanlines      => Gun1Y_scanlines,
 
       Gun2CrosshairOn      => Gun2CrosshairOn,
       Gun2X                => Gun2X,
-      Gun2Y                => Gun2Y,
+      Gun2Y_scanlines      => Gun2Y_scanlines,
 
       cdSlow               => cdSlow,
       

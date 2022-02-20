@@ -26,11 +26,11 @@ entity gpu is
 
       Gun1CrosshairOn      : in  std_logic;
       Gun1X                : in  unsigned(7 downto 0);
-      Gun1Y                : in  unsigned(7 downto 0);
+      Gun1Y_scanlines      : in  unsigned(8 downto 0);
 
       Gun2CrosshairOn      : in  std_logic;
       Gun2X                : in  unsigned(7 downto 0);
-      Gun2Y                : in  unsigned(7 downto 0);
+      Gun2Y_scanlines      : in  unsigned(8 downto 0);
       
       cdSlow               : in  std_logic;
       
@@ -1686,11 +1686,11 @@ begin
 
       Gun1CrosshairOn         => Gun1CrosshairOn,
       Gun1X                   => Gun1X,
-      Gun1Y                   => Gun1Y,
+      Gun1Y_scanlines         => Gun1Y_scanlines,
 
       Gun2CrosshairOn         => Gun2CrosshairOn,
       Gun2X                   => Gun2X,
-      Gun2Y                   => Gun2Y,
+      Gun2Y_scanlines         => Gun2Y_scanlines,
       
       debug_lateSamples       => debug_lateSamples,
       debug_lateTicks         => debug_lateTicks, 
@@ -1706,7 +1706,6 @@ begin
       lineInNext              => videoout_lineInNext,
       nextHCount              => nextHCount,
       DisplayWidth            => DisplayWidth,
-      DisplayHeight           => DisplayHeight,
       DisplayOffsetX          => DisplayOffsetX,
       DisplayOffsetY          => DisplayOffsetY,
       GPUSTAT_HorRes2         => GPUSTAT_HorRes2,

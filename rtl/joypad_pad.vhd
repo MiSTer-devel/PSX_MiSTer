@@ -55,7 +55,8 @@ entity joypad_pad is
       MouseX               : in  signed(8 downto 0);
       MouseY               : in  signed(8 downto 0);
       GunX                 : in  unsigned(7 downto 0);
-      GunY                 : in  unsigned(7 downto 0)
+      GunY                 : in  unsigned(7 downto 0);
+      GunY_scanlines       : in  unsigned(8 downto 0)
    );
 end entity;
 
@@ -310,9 +311,9 @@ begin
                            receiveValid     <= '1';
 
                            -- GunCon reports X as # of 8MHz clks since HSYNC (01h=Error, or 04Dh..1CDh).
-                           -- Map from joystick's +/-128 to GunCon range.
+                           -- Map from joystick's +/-128 to GunCon range (8MHz clocks): (GunX * 384/256) + 67
                            if gunOffscreen = '0' then
-                              gunConX_8MHz  <= std_logic_vector(to_unsigned(70, 9) + resize(GunX, 9) + resize(GunX(7 downto 1), 9) );
+                              gunConX_8MHz  <= std_logic_vector(to_unsigned(67, 9) + resize(GunX, 9) + resize(GunX(7 downto 1), 9) );
                            else
                               gunConX_8MHz  <= "000000001"; -- X: 0x0001, Y: 0x000A indicates no light / offscreen shot
                            end if;
@@ -339,10 +340,8 @@ begin
                            ack             <= '1';
 
                            -- GunCon reports Y as # of scanlines since VSYNC (05h/0Ah=Error, PAL=20h..127h, NTSC=19h..F8h)
-                           -- Map from joystick's +/-128 to GunCon range.
-                           -- TODO: report Analog1Y directly if in PAL(50)
                            if gunOffscreen = '0' then
-                              gunConY      <= std_logic_vector(unsigned(to_unsigned(240, 9) * GunY) (16 downto 8) + 16);
+                              gunConY      <= std_logic_vector(to_unsigned(16, 9) + GunY_scanlines);
                            else
                               gunConY      <= "000001010"; -- X: 0x0001, Y: 0x000A indicates no light / offscreen shot
                            end if;

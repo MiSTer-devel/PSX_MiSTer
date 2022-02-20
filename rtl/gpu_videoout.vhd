@@ -20,11 +20,11 @@ entity gpu_videoout is
 
       Gun1CrosshairOn         : in  std_logic;
       Gun1X                   : in  unsigned(7 downto 0);
-      Gun1Y                   : in  unsigned(7 downto 0);
+      Gun1Y_scanlines         : in  unsigned(8 downto 0);
 
       Gun2CrosshairOn         : in  std_logic;
       Gun2X                   : in  unsigned(7 downto 0);
-      Gun2Y                   : in  unsigned(7 downto 0);
+      Gun2Y_scanlines         : in  unsigned(8 downto 0);
 
       debug_lateSamples       : in  unsigned(15 downto 0);
       debug_lateTicks         : in  unsigned(15 downto 0);      
@@ -40,7 +40,6 @@ entity gpu_videoout is
       lineInNext              : in  unsigned(8 downto 0);
       nextHCount              : in  integer range 0 to 4095;
       DisplayWidth            : in  unsigned(9 downto 0);
-      DisplayHeight           : in  unsigned(8 downto 0);
       DisplayOffsetX          : in  unsigned(9 downto 0);
       DisplayOffsetY          : in  unsigned(8 downto 0);
       GPUSTAT_HorRes2         : in  std_logic;
@@ -143,9 +142,10 @@ architecture arch of gpu_videoout is
    signal overlay_Gun2_ena    : std_logic;
 
    signal Gun1X_screen        : integer range 0 to 1023;
-   signal Gun1Y_screen        : integer range 0 to 1023;
    signal Gun2X_screen        : integer range 0 to 1023;
-   signal Gun2Y_screen        : integer range 0 to 1023;
+
+   signal Gun1Y_screen        : unsigned(9 downto 0);
+   signal Gun2Y_screen        : unsigned(9 downto 0);
    
 begin 
 
@@ -532,8 +532,8 @@ begin
    Gun1X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * Gun1X), 18) (17 downto 8));
    Gun2X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * Gun2X), 18) (17 downto 8));
 
-   Gun1Y_screen <= to_integer(to_unsigned(to_integer(DisplayHeight * Gun1Y), 17) (16 downto 8));
-   Gun2Y_screen <= to_integer(to_unsigned(to_integer(DisplayHeight * Gun2Y), 17) (16 downto 8));
+   Gun1Y_screen <= '0' & Gun1Y_scanlines when interlacedMode = '0' else Gun1Y_scanlines & '0';
+   Gun2Y_screen <= '0' & Gun2Y_scanlines when interlacedMode = '0' else Gun2Y_scanlines & '0';
 
    -- Lightgun crosshairs
    overlay_Gun1_ena <= '1' when Gun1CrosshairOn = '1' and (
