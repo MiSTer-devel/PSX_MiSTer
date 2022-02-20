@@ -56,6 +56,31 @@ List of Errors:
 
 The debug menu is intended for use by developers only. They don't really serve any purpose for regular users so it's best to leave them at their default setting as a lot of undesirable behavior could occur.
 
+## Pad Options
+The following pad types are emulated by the core and can be independently assigned to each port:
+- Digital  
+  (ID 0x41) Ten button digital pad.
+- Analog  
+  (ID 0x73) Twinstick pad.  
+  Currently does not support rumble function or the configuration protocol, so older games might not detect it.
+- Mouse  
+  (ID 0x12) Two button mouse.
+- Off  
+  Pad unplugged from port.
+- GunCon  
+  (ID 0x62) GunCon compatible lightgun.
+- NeGcon  
+  (ID 0x23) NeGcon compatible racing pad.  
+  Primarily developed for dual analog stick usage with the following mapping (genuine NeGcons  
+   may work if usb adapters map steering to Left Analog and I/II to Right Analog):
+   - Steering -> Left Analog
+   - Circle -> Circle
+   - Triangle -> Triangle
+   - I -> Right Analog Up, Cross (100% pressed), R2 (100% pressed)
+   - II -> Right Analog Down, Rectangle (100% pressed), L2 (100% pressed)
+   - L -> L1 (100% pressed)
+   - R -> R1
+
 ## Status
 
 Work in progress, don't report any bugs!
