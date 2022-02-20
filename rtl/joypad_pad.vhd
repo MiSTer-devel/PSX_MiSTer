@@ -104,6 +104,7 @@ architecture arch of joypad_pad is
    signal mouseOutX       : signed(7 downto 0) := (others => '0');
    signal mouseOutY       : signed(7 downto 0) := (others => '0');
 
+   signal gunOffScreen    : std_logic := '0';
    signal gunConX_8MHz    : std_logic_vector(8 downto 0) := (others => '0');
    signal gunConY         : std_logic_vector(8 downto 0) := (others => '0');
   
@@ -288,6 +289,12 @@ begin
                            ack             <= '1';
                            receiveValid    <= '1';
 
+                           if KeyTriangle = '1' or GunX = x"00" or GunX = x"FF" or GunY = x"00" or GunY = x"FF" then
+                              gunOffscreen <= '1';
+                           else
+                              gunOffscreen <= '0';
+                           end if;
+
                            receiveBuffer(0) <= '1';
                            receiveBuffer(1) <= '1';
                            receiveBuffer(2) <= '1';
@@ -304,15 +311,18 @@ begin
 
                            -- GunCon reports X as # of 8MHz clks since HSYNC (01h=Error, or 04Dh..1CDh).
                            -- Map from joystick's +/-128 to GunCon range.
-                           -- TODO: handle shooting outside screen
-                           gunConX_8MHz     <= std_logic_vector(unsigned(to_unsigned(384, 9) * GunX) (16 downto 8) + 77);
+                           if gunOffscreen = '0' then
+                              gunConX_8MHz  <= std_logic_vector(to_unsigned(70, 9) + resize(GunX, 9) + resize(GunX(7 downto 1), 9) );
+                           else
+                              gunConX_8MHz  <= "000000001"; -- X: 0x0001, Y: 0x000A indicates no light / offscreen shot
+                           end if;
 
                            receiveBuffer(0) <= '1';
                            receiveBuffer(1) <= '1';
                            receiveBuffer(2) <= '1';
                            receiveBuffer(3) <= '1';
                            receiveBuffer(4) <= '1';
-                           receiveBuffer(5) <= not KeyCircle; -- Trigger
+                           receiveBuffer(5) <= not (KeyCircle or KeyTriangle); -- Trigger
                            receiveBuffer(6) <= not KeyCross; -- B (right-side button)
                            receiveBuffer(7) <= '1';
 
@@ -331,8 +341,11 @@ begin
                            -- GunCon reports Y as # of scanlines since VSYNC (05h/0Ah=Error, PAL=20h..127h, NTSC=19h..F8h)
                            -- Map from joystick's +/-128 to GunCon range.
                            -- TODO: report Analog1Y directly if in PAL(50)
-                           -- TODO: handle shooting outside screen
-                           gunConY         <= std_logic_vector((to_unsigned(to_integer(240 * GunY), 17) (16 downto 8)) + 16);
+                           if gunOffscreen = '0' then
+                              gunConY      <= std_logic_vector(unsigned(to_unsigned(240, 9) * GunY) (16 downto 8) + 16);
+                           else
+                              gunConY      <= "000001010"; -- X: 0x0001, Y: 0x000A indicates no light / offscreen shot
+                           end if;
 
                            receiveBuffer   <= "0000000" & gunConX_8MHz(8);
 
