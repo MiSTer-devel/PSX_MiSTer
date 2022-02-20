@@ -465,7 +465,15 @@ architecture arch of psx_top is
    signal debug_lateTicks        : unsigned(15 downto 0);
    
    signal debugmodeOn            : std_logic;
-   
+
+   signal showGunCrosshairs      : std_logic := '1';
+   signal gun1CrosshairOn        : std_logic;
+   signal gun2CrosshairOn        : std_logic;
+   signal gun1X                  : integer range 0 to 1023;
+   signal gun1Y                  : integer range 0 to 511;
+   signal gun2X                  : integer range 0 to 1023;
+   signal gun2Y                  : integer range 0 to 511;
+
    -- memcard
    signal memcard1_pause         : std_logic;
    signal memcard2_pause         : std_logic;
@@ -1207,6 +1215,17 @@ begin
    
    
    hblank <= hblank_intern;
+
+   gun1CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon1 = '1' else '0';
+   gun2CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon2 = '1' else '0';
+
+   -- Gun coordinate mapping is toplevel so that the gun's
+   -- coordinates can be passed to GPU for crosshair overlays.
+   gun1X <= to_integer(Analog1XP1 + 128);
+   gun2X <= to_integer(Analog1XP2 + 128);
+
+   gun1Y <= to_integer(Analog1YP1 + 128);
+   gun2Y <= to_integer(Analog1YP2 + 128);
    
    igpu : entity work.gpu
    port map
@@ -1226,6 +1245,14 @@ begin
       noTexture            => noTexture,
       debugmodeOn          => debugmodeOn,
       
+      gun1CrosshairOn      => gun1CrosshairOn,
+      gun1X                => gun1X,
+      gun1Y                => gun1Y,
+
+      gun2CrosshairOn      => gun2CrosshairOn,
+      gun2X                => gun2X,
+      gun2Y                => gun2Y,
+
       cdSlow               => cdSlow,
       
       errorOn              => errorOn,  

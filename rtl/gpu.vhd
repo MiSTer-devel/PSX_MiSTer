@@ -23,6 +23,14 @@ entity gpu is
       fpscountOn           : in  std_logic;
       noTexture            : in  std_logic;
       debugmodeOn          : in  std_logic;
+
+      gun1CrosshairOn      : in  std_logic;
+      gun1X                : in  integer range 0 to 255;
+      gun1Y                : in  integer range 0 to 255;
+
+      gun2CrosshairOn      : in  std_logic;
+      gun2X                : in  integer range 0 to 255;
+      gun2Y                : in  integer range 0 to 255;
       
       cdSlow               : in  std_logic;
       
@@ -1675,6 +1683,14 @@ begin
          
       fpscountOn              => fpscountOn,
       fpscountBCD             => fpscountBCD,
+
+      gun1CrosshairOn         => gun1CrosshairOn,
+      gun1X                   => gun1X,
+      gun1Y                   => gun1Y,
+
+      gun2CrosshairOn         => gun2CrosshairOn,
+      gun2X                   => gun2X,
+      gun2Y                   => gun2Y,
       
       debug_lateSamples       => debug_lateSamples,
       debug_lateTicks         => debug_lateTicks, 
@@ -1690,6 +1706,7 @@ begin
       lineInNext              => videoout_lineInNext,
       nextHCount              => nextHCount,
       DisplayWidth            => DisplayWidth,
+      DisplayHeight           => DisplayHeight,
       DisplayOffsetX          => DisplayOffsetX,
       DisplayOffsetY          => DisplayOffsetY,
       GPUSTAT_HorRes2         => GPUSTAT_HorRes2,
