@@ -286,7 +286,10 @@ begin
       Empty    => FifoIn_Empty   
    );
    
-   FifoIn_Rd  <= '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_IDLE) else
+   FifoIn_Rd  <= '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_IDLE and FifoIn_Dout(31 downto 29) = "001") else
+                 '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_IDLE and FifoIn_Dout(31 downto 29) = "010") else
+                 '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_IDLE and FifoIn_Dout(31 downto 29) = "011") else
+                 '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_IDLE and wordsRemain > 0) else
                  '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_YUV) else
                  '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_SCALE) else
                  '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_BLOCK and decodeDone = '0' and fifoSecondAvail = '1') else
@@ -395,7 +398,11 @@ begin
                            recCount     <= (others => '0');
                            wordsRemain  <= to_unsigned(32, 16);
                            
-                        when others => null;
+                        when others =>
+                           if (wordsRemain > 0) then
+                              wordsRemain <= wordsRemain - 1;
+                           end if;
+                        
                      end case;
                   end if;
             

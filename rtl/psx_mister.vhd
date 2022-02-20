@@ -70,6 +70,7 @@ entity psx_mister is
       cd_hps_on             : in  std_logic;
       cd_hps_req            : out std_logic := '0';
       cd_hps_lba            : out std_logic_vector(31 downto 0);
+      cd_hps_lba_sim        : out std_logic_vector(31 downto 0);
       cd_hps_ack            : in  std_logic;
       cd_hps_write          : in  std_logic;
       cd_hps_data           : in  std_logic_vector(15 downto 0);
@@ -255,6 +256,7 @@ begin
       cd_hps_on             => cd_hps_on,   
       cd_hps_req            => cd_hps_req,  
       cd_hps_lba            => cd_hps_lba,  
+      cd_hps_lba_sim        => cd_hps_lba_sim,  
       cd_hps_ack            => cd_hps_ack,
       cd_hps_write          => cd_hps_write,
       cd_hps_data           => cd_hps_data, 

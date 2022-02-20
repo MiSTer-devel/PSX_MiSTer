@@ -812,7 +812,9 @@ begin
                else
                   ram_ena         <= '1';
                   requestOnFlyNew := requestOnFlyNew + 1;
-                  requestedDwords <= requestedDwords + 4;
+                  if (DMABLOCKATONCE = '0') then
+                     requestedDwords <= requestedDwords + 4;
+                  end if;
                   if (directionNeg = '1') then
                      ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
                   else
