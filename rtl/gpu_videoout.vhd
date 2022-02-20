@@ -18,13 +18,13 @@ entity gpu_videoout is
       fpscountOn              : in  std_logic;
       fpscountBCD             : in  unsigned(7 downto 0);     
 
-      gun1CrosshairOn         : in  std_logic;
-      gun1X                   : in  integer range 0 to 255;
-      gun1Y                   : in  integer range 0 to 255;
+      Gun1CrosshairOn         : in  std_logic;
+      Gun1X                   : in  unsigned(7 downto 0);
+      Gun1Y                   : in  unsigned(7 downto 0);
 
-      gun2CrosshairOn         : in  std_logic;
-      gun2X                   : in  integer range 0 to 255;
-      gun2Y                   : in  integer range 0 to 255;
+      Gun2CrosshairOn         : in  std_logic;
+      Gun2X                   : in  unsigned(7 downto 0);
+      Gun2Y                   : in  unsigned(7 downto 0);
 
       debug_lateSamples       : in  unsigned(15 downto 0);
       debug_lateTicks         : in  unsigned(15 downto 0);      
@@ -139,13 +139,13 @@ architecture arch of gpu_videoout is
    signal debugtextDbg_data   : std_logic_vector(23 downto 0);
    signal debugtextDbg_ena    : std_logic;
 
-   signal overlay_gun1_ena    : std_logic;
-   signal overlay_gun2_ena    : std_logic;
+   signal overlay_Gun1_ena    : std_logic;
+   signal overlay_Gun2_ena    : std_logic;
 
-   signal gun1X_screen        : integer range 0 to 1023;
-   signal gun1Y_screen        : integer range 0 to 1023;
-   signal gun2X_screen        : integer range 0 to 1023;
-   signal gun2Y_screen        : integer range 0 to 1023;
+   signal Gun1X_screen        : integer range 0 to 1023;
+   signal Gun1Y_screen        : integer range 0 to 1023;
+   signal Gun2X_screen        : integer range 0 to 1023;
+   signal Gun2Y_screen        : integer range 0 to 1023;
    
 begin 
 
@@ -292,11 +292,11 @@ begin
                      video_r      <= debugtextDbg_data( 7 downto 0);
                      video_g      <= debugtextDbg_data(15 downto 8);
                      video_b      <= debugtextDbg_data(23 downto 16);
-                  elsif (overlay_gun1_ena = '1') then
+                  elsif (overlay_Gun1_ena = '1') then
                      video_r      <= (others => '1');
                      video_g      <= (others => '0');
                      video_b      <= (others => '0');
-                  elsif (overlay_gun2_ena = '1') then
+                  elsif (overlay_Gun2_ena = '1') then
                      video_r      <= (others => '0');
                      video_g      <= (others => '1');
                      video_b      <= (others => '1');
@@ -529,20 +529,20 @@ begin
    );
 
    -- Map gun coordinates (0-255 X, Y) to screen positions
-   gun1X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * to_unsigned(gun1X, 8)), 24) (17 downto 8));
-   gun2X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * to_unsigned(gun2X, 8)), 24) (17 downto 8));
+   Gun1X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * Gun1X), 18) (17 downto 8));
+   Gun2X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * Gun2X), 18) (17 downto 8));
 
-   gun1Y_screen <= to_integer(to_unsigned(to_integer(DisplayHeight * to_unsigned(gun1Y, 8)), 24) (16 downto 8));
-   gun2Y_screen <= to_integer(to_unsigned(to_integer(DisplayHeight * to_unsigned(gun2Y, 8)), 24) (16 downto 8));
+   Gun1Y_screen <= to_integer(to_unsigned(to_integer(DisplayHeight * Gun1Y), 17) (16 downto 8));
+   Gun2Y_screen <= to_integer(to_unsigned(to_integer(DisplayHeight * Gun2Y), 17) (16 downto 8));
 
    -- Lightgun crosshairs
-   overlay_gun1_ena <= '1' when gun1CrosshairOn = '1' and (
-                       (xpos = gun1X_screen and to_integer(lineDisp) > gun1Y_screen - 3 and to_integer(lineDisp) < gun1Y_screen + 3)
-                       or (to_integer(lineDisp) = gun1Y_screen and xpos > gun1X_screen - 3 and xpos < gun1X_screen + 3)
+   overlay_Gun1_ena <= '1' when Gun1CrosshairOn = '1' and (
+                       (xpos = Gun1X_screen and to_integer(lineDisp) > Gun1Y_screen - 3 and to_integer(lineDisp) < Gun1Y_screen + 3)
+                       or (to_integer(lineDisp) = Gun1Y_screen and xpos > Gun1X_screen - 3 and xpos < Gun1X_screen + 3)
                ) else '0';
-   overlay_gun2_ena <= '1' when gun2CrosshairOn = '1' and (
-                       (xpos = gun2X_screen and to_integer(lineDisp) > gun2Y_screen - 3 and to_integer(lineDisp) < gun2Y_screen + 3)
-                       or (to_integer(lineDisp) = gun2Y_screen and xpos > gun2X_screen - 3 and xpos < gun2X_screen + 3)
+   overlay_Gun2_ena <= '1' when Gun2CrosshairOn = '1' and (
+                       (xpos = Gun2X_screen and to_integer(lineDisp) > Gun2Y_screen - 3 and to_integer(lineDisp) < Gun2Y_screen + 3)
+                       or (to_integer(lineDisp) = Gun2Y_screen and xpos > Gun2X_screen - 3 and xpos < Gun2X_screen + 3)
                ) else '0';
 
 end architecture;

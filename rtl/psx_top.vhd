@@ -467,12 +467,12 @@ architecture arch of psx_top is
    signal debugmodeOn            : std_logic;
 
    signal showGunCrosshairs      : std_logic := '1';
-   signal gun1CrosshairOn        : std_logic;
-   signal gun2CrosshairOn        : std_logic;
-   signal gun1X                  : integer range 0 to 1023;
-   signal gun1Y                  : integer range 0 to 511;
-   signal gun2X                  : integer range 0 to 1023;
-   signal gun2Y                  : integer range 0 to 511;
+   signal Gun1CrosshairOn        : std_logic;
+   signal Gun2CrosshairOn        : std_logic;
+   signal Gun1X                  : unsigned(7 downto 0);
+   signal Gun1Y                  : unsigned(7 downto 0);
+   signal Gun2X                  : unsigned(7 downto 0);
+   signal Gun2Y                  : unsigned(7 downto 0);
 
    -- memcard
    signal memcard1_pause         : std_logic;
@@ -868,6 +868,18 @@ begin
       SS_DataRead          => SS_DataRead_MEMORY      
    );
 
+   Gun1CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon1 = '1' else '0';
+   Gun2CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon2 = '1' else '0';
+
+   -- Gun coordinate mapping is toplevel so that the gun's
+   -- coordinates can be passed to both joypad
+   -- and GPU (for crosshair overlays)
+   Gun1X <= to_unsigned(to_integer(Analog1XP1 + 128), 8);
+   Gun2X <= to_unsigned(to_integer(Analog1XP2 + 128), 8);
+
+   Gun1Y <= to_unsigned(to_integer(Analog1YP1 + 128), 8);
+   Gun2Y <= to_unsigned(to_integer(Analog1YP2 + 128), 8);
+
    ijoypad: entity work.joypad
    port map 
    (
@@ -922,6 +934,10 @@ begin
       MouseRight           => MouseRight,
       MouseX               => MouseX,
       MouseY               => MouseY,
+      Gun1X                => Gun1X,
+      Gun1Y                => Gun1Y,
+      Gun2X                => Gun2X,
+      Gun2Y                => Gun2Y,
       
       mem1_request         => memDDR3card1_request,   
       mem1_BURSTCNT        => memDDR3card1_BURSTCNT,  
@@ -1216,17 +1232,6 @@ begin
    
    hblank <= hblank_intern;
 
-   gun1CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon1 = '1' else '0';
-   gun2CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon2 = '1' else '0';
-
-   -- Gun coordinate mapping is toplevel so that the gun's
-   -- coordinates can be passed to GPU for crosshair overlays.
-   gun1X <= to_integer(Analog1XP1 + 128);
-   gun2X <= to_integer(Analog1XP2 + 128);
-
-   gun1Y <= to_integer(Analog1YP1 + 128);
-   gun2Y <= to_integer(Analog1YP2 + 128);
-   
    igpu : entity work.gpu
    port map
    (
@@ -1245,13 +1250,13 @@ begin
       noTexture            => noTexture,
       debugmodeOn          => debugmodeOn,
       
-      gun1CrosshairOn      => gun1CrosshairOn,
-      gun1X                => gun1X,
-      gun1Y                => gun1Y,
+      Gun1CrosshairOn      => Gun1CrosshairOn,
+      Gun1X                => Gun1X,
+      Gun1Y                => Gun1Y,
 
-      gun2CrosshairOn      => gun2CrosshairOn,
-      gun2X                => gun2X,
-      gun2Y                => gun2Y,
+      Gun2CrosshairOn      => Gun2CrosshairOn,
+      Gun2X                => Gun2X,
+      Gun2Y                => Gun2Y,
 
       cdSlow               => cdSlow,
       

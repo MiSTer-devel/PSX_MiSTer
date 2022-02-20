@@ -53,7 +53,9 @@ entity joypad_pad is
       MouseLeft            : in  std_logic;
       MouseRight           : in  std_logic;
       MouseX               : in  signed(8 downto 0);
-      MouseY               : in  signed(8 downto 0)
+      MouseY               : in  signed(8 downto 0);
+      GunX                 : in  unsigned(7 downto 0);
+      GunY                 : in  unsigned(7 downto 0)
    );
 end entity;
 
@@ -102,7 +104,8 @@ architecture arch of joypad_pad is
    signal mouseOutX       : signed(7 downto 0) := (others => '0');
    signal mouseOutY       : signed(7 downto 0) := (others => '0');
 
-   signal gunConX         : std_logic_vector(8 downto 0) := (others => '0');
+   signal gunConX_8MHz    : std_logic_vector(8 downto 0) := (others => '0');
+   signal gunConY         : std_logic_vector(8 downto 0) := (others => '0');
   
 begin 
 
@@ -299,12 +302,10 @@ begin
                            ack              <= '1';
                            receiveValid     <= '1';
 
-                           -- TODO
-                           -- GunCon reports X as # of 8MHz clks since HSYNC (01h=Error, or 04Dh..1CDh)
-                           -- MiSTer framework reports gun as +/-128 joystick, which would require
-                           -- an expensive integer multiply in order to map to the correct range.
-                           -- For now, just double and shift the value, and rely on compensation from framework.
-                           gunConX          <= std_logic_vector(to_unsigned(to_integer(Analog1X & '0') + 269, 9));
+                           -- GunCon reports X as # of 8MHz clks since HSYNC (01h=Error, or 04Dh..1CDh).
+                           -- Map from joystick's +/-128 to GunCon range.
+                           -- TODO: handle shooting outside screen
+                           gunConX_8MHz     <= std_logic_vector(unsigned(to_unsigned(384, 9) * GunX) (16 downto 8) + 77);
 
                            receiveBuffer(0) <= '1';
                            receiveBuffer(1) <= '1';
@@ -320,33 +321,33 @@ begin
                            receiveValid    <= '1';
                            ack             <= '1';
 
-                           receiveBuffer   <= gunConX(7 downto 0);
+                           receiveBuffer   <= gunConX_8MHz(7 downto 0);
 
                         when GUNCONXMSB =>
                            controllerState <= GUNCONYLSB;
                            receiveValid    <= '1';
                            ack             <= '1';
 
-                           receiveBuffer   <= "0000000" & gunConX(8);
+                           -- GunCon reports Y as # of scanlines since VSYNC (05h/0Ah=Error, PAL=20h..127h, NTSC=19h..F8h)
+                           -- Map from joystick's +/-128 to GunCon range.
+                           -- TODO: report Analog1Y directly if in PAL(50)
+                           -- TODO: handle shooting outside screen
+                           gunConY         <= std_logic_vector((to_unsigned(to_integer(240 * GunY), 17) (16 downto 8)) + 16);
+
+                           receiveBuffer   <= "0000000" & gunConX_8MHz(8);
 
                         when GUNCONYLSB =>
                            controllerState <= GUNCONYMSB;
                            receiveValid    <= '1';
                            ack             <= '1';
 
-                           -- TODO
-                           -- GunCon reports Y as # of scanlines since VSYNC (05h/0Ah=Error, PAL=20h..127h, NTSC=19h..F8h)
-                           -- MiSTer framework reports gun as +/-128 joystick, which would require
-                           -- an expensive integer multiply in order to map to the correct range.
-                           -- For now, just shift the value, and rely on compensation from framework.
-                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog1Y) + 128, 8));
+                           receiveBuffer   <= gunConY(7 downto 0);
 
                         when GUNCONYMSB =>
                            controllerState <= IDLE;
                            receiveValid    <= '1';
 
-                           -- TODO GunCon Y value will always be < 0xFF for NTSC, but may exceed 0x100 for PAL
-                           receiveBuffer   <= X"00";
+                           receiveBuffer   <= "0000000" & gunConY(8);
 
                         when BUTTONLSB => 
                            receiveBuffer(0) <= not KeySelect;

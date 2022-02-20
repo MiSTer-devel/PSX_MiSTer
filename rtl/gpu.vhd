@@ -24,13 +24,13 @@ entity gpu is
       noTexture            : in  std_logic;
       debugmodeOn          : in  std_logic;
 
-      gun1CrosshairOn      : in  std_logic;
-      gun1X                : in  integer range 0 to 255;
-      gun1Y                : in  integer range 0 to 255;
+      Gun1CrosshairOn      : in  std_logic;
+      Gun1X                : in  unsigned(7 downto 0);
+      Gun1Y                : in  unsigned(7 downto 0);
 
-      gun2CrosshairOn      : in  std_logic;
-      gun2X                : in  integer range 0 to 255;
-      gun2Y                : in  integer range 0 to 255;
+      Gun2CrosshairOn      : in  std_logic;
+      Gun2X                : in  unsigned(7 downto 0);
+      Gun2Y                : in  unsigned(7 downto 0);
       
       cdSlow               : in  std_logic;
       
@@ -1684,13 +1684,13 @@ begin
       fpscountOn              => fpscountOn,
       fpscountBCD             => fpscountBCD,
 
-      gun1CrosshairOn         => gun1CrosshairOn,
-      gun1X                   => gun1X,
-      gun1Y                   => gun1Y,
+      Gun1CrosshairOn         => Gun1CrosshairOn,
+      Gun1X                   => Gun1X,
+      Gun1Y                   => Gun1Y,
 
-      gun2CrosshairOn         => gun2CrosshairOn,
-      gun2X                   => gun2X,
-      gun2Y                   => gun2Y,
+      Gun2CrosshairOn         => Gun2CrosshairOn,
+      Gun2X                   => Gun2X,
+      Gun2Y                   => Gun2Y,
       
       debug_lateSamples       => debug_lateSamples,
       debug_lateTicks         => debug_lateTicks, 
