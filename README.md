@@ -10,11 +10,9 @@ SDRAM of any size is required.
 * Optional manual Memory Card file loading (.MCD)
 * CUE+BIN and CHD format support
 * Multiple Disc Game support with Lid open/close toggle
-* Instant CD-ROM Seek (disables simulation of motor delay)
 * Fast Boot (Skips BIOS)
 * Dithering On/Off Toggle
 * Bob or Weave Deinterlacing
-* Option to Force PAL to 60hz
 * Inputs: Digital, Analog, Mouse, and Guncon support.
 
 ## Bios
