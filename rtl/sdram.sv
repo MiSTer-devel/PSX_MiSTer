@@ -59,11 +59,12 @@ module sdram
    input      [3:0]   ch2_be,      
 	output reg         ch2_ready,
                       
-	input      [24:1]  ch3_addr,
-	output reg [15:0]  ch3_dout,
-	input      [15:0]  ch3_din,
-	input              ch3_req,
-	input              ch3_rnw,
+	input      [26:0]  ch3_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
+	output reg [31:0]  ch3_dout,    // data output to cpu
+	input      [31:0]  ch3_din,     // data input from cpu
+	input              ch3_req,     // request
+	input              ch3_rnw,     // 1 - read, 0 - write
+	input      [3:0]   ch3_be,
 	output reg         ch3_ready
 );
 
@@ -205,9 +206,9 @@ always @(posedge clk) begin
 	if(data_ready_delay2[6]) ch2_dout[31:16]    <= dq_reg;
 	if(data_ready_delay2[2]) ch2_ready_ramclock <= 1;
 
-	if(data_ready_delay3[7]) ch3_dout[07:00]    <= dq_reg[7:0];
-	if(data_ready_delay3[5]) ch3_dout[15:08]    <= dq_reg[7:0];
-	if(data_ready_delay3[1]) ch3_ready_ramclock <= 1;
+	if(data_ready_delay3[7]) ch3_dout[15:00]    <= dq_reg;
+	if(data_ready_delay3[6]) ch3_dout[31:16]    <= dq_reg;
+	if(data_ready_delay3[2]) ch3_ready_ramclock <= 1;
 
 	SDRAM_DQ <= 16'bZ;
    
@@ -312,10 +313,11 @@ always @(posedge clk) begin
                state      <= STATE_WAIT;
                ch1_reqprocessed_ramclock <= 1;
             end else if(ch3_rq) begin
-               {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, ch3_rnw, ch3_addr[23:1], 2'b00};
-               chip       <= ch3_addr[24];
-               saved_data <= {8'hFF, ch3_din[15:8], 8'hFF, ch3_din[7:0]};
+               {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch3_be[1:0], ch3_rnw, ch3_addr[25:1]};
+               chip       <= ch3_addr[26];
+               saved_data <= ch3_din;
                saved_wr   <= ~ch3_rnw;
+               saved_be   <= ch3_be;
                ch         <= 2;
                ch3_rq     <= 0;
                command    <= CMD_ACTIVE;
@@ -359,9 +361,10 @@ always @(posedge clk) begin
             else begin
                state                <= STATE_IDLE_2;
                SDRAM_A[10]          <= 1;
-               SDRAM_A[1]           <= 1;
+               SDRAM_A[0]           <= 1;
                command              <= CMD_WRITE;
                SDRAM_DQ             <= saved_data[31:16];
+               SDRAM_A[12:11]       <= ~saved_be[3:2];
                ch3_ready_ramclock   <= 1;
             end
          end

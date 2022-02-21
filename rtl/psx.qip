@@ -6,6 +6,7 @@ set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) divider.vh
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) pGPU.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) mul32u.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) mul9s.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) cheats.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_fillVram.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_cpu2vram.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_vram2vram.vhd ]

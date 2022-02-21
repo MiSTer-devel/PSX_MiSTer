@@ -174,7 +174,20 @@ entity psx_mister is
       savestate_number      : in  integer range 0 to 3;
       state_loaded          : out std_logic;
       rewind_on             : in  std_logic;
-      rewind_active         : in  std_logic
+      rewind_active         : in  std_logic;
+      -- cheats
+      cheat_clear           : in  std_logic;
+      cheats_enabled        : in  std_logic;
+      cheat_on              : in  std_logic;
+      cheat_in              : in  std_logic_vector(127 downto 0);
+      cheats_active         : out std_logic := '0';
+      Cheats_BusAddr        : buffer std_logic_vector(20 downto 0);
+      Cheats_BusRnW         : out    std_logic;
+      Cheats_BusByteEnable  : out    std_logic_vector(3 downto 0);
+      Cheats_BusWriteData   : out    std_logic_vector(31 downto 0);
+      Cheats_Bus_ena        : out    std_logic := '0';
+      Cheats_BusReadData    : in     std_logic_vector(31 downto 0);
+      Cheats_BusDone        : in     std_logic
    );
 end entity;
 
@@ -358,7 +371,21 @@ begin
       savestate_number      => savestate_number,     
       state_loaded          => state_loaded,
       rewind_on             => rewind_on,    
-      rewind_active         => rewind_active
+      -- cheats
+      rewind_active         => rewind_active,
+      cheat_clear           => cheat_clear,
+      cheats_enabled        => cheats_enabled,
+      cheat_on              => cheat_on,
+      cheat_in              => cheat_in,
+      cheats_active         => cheats_active,
+      Cheats_BusAddr        => Cheats_BusAddr,
+		--Cheats_BusAddr        => cheats_addr,
+      Cheats_BusRnW         => Cheats_BusRnW,
+      Cheats_BusByteEnable  => Cheats_BusByteEnable,
+      Cheats_BusWriteData   => Cheats_BusWriteData,
+      Cheats_Bus_ena        => Cheats_Bus_ena,
+      Cheats_BusReadData    => Cheats_BusReadData,
+      Cheats_BusDone        => Cheats_BusDone
    );                          
 
 end architecture;
