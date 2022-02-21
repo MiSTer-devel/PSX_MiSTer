@@ -13,7 +13,7 @@ SDRAM of any size is required.
 * Fast Boot (Skips BIOS)
 * Dithering On/Off Toggle
 * Bob or Weave Deinterlacing
-* Inputs: Digital, Analog, Mouse, and Guncon support.
+* Inputs: Digital, Analog, Mouse, NeGcon, and Guncon support.
 
 ## Bios
 Rename your playstation bios file (e.g. `scph-1001.bin`/`ps-22a.bin` ) to `boot.rom` and place it in the `./games/PSX/` folder.
