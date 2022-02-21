@@ -384,6 +384,8 @@ architecture arch of spu is
    signal voice_lastVolume1 : signed(15 downto 0);
    signal voice_lastVolume3 : signed(15 downto 0);
    
+   signal voice_adsrWrite   : std_logic_vector(23 downto 0) := (others => '0');
+   
    -- voicerecordram
    signal RamVoiceRecord_addrA : unsigned(4 downto 0) := (others => '0');
    signal RamVoiceRecord_dataA : std_logic_vector(100 downto 0) := (others => '0');
@@ -469,6 +471,8 @@ architecture arch of spu is
    signal adsr_ticks    : tadsr_ticks;
    signal adsr_step     : tadsr_steps;
    signal adsr_target   : tadsr_target;
+   
+   signal reset_adsr    : std_logic := '0';
    
    -- reverb
    signal reverbRight            : std_logic := '0';
@@ -1043,7 +1047,13 @@ begin
                if (bus_addr < 16#180#) then
                   RamVoice_write <= '1';
                   RamVoice_dataA <= bus_dataWrite;
-                  RamVoice_addrA <= bus_addr(8 downto 1);                 
+                  RamVoice_addrA <= bus_addr(8 downto 1);
+
+                  case (bus_addr(3 downto 0)) is
+                     when x"8" | x"A" => voice_adsrWrite(to_integer(bus_addr(8 downto 4))) <= '1';
+                     when others => null;
+                  end case;
+                  
                else
                   case (to_integer(bus_addr)) is
                      when 16#180# => VOLUME_LEFT               <= bus_dataWrite;
@@ -1444,23 +1454,31 @@ begin
                
                -- VOICE
                when VOICE_START =>
-                  state         <= VOICE_READHEADER;
-                  voiceCounter  <= 0;
-                  
-                  volLeft       <= signed(RamVoiceVolumes_dataB(1));
-                  envVolLeft    <= signed(RamVoiceVolumes_dataB(1));
-                  chanLeft      <= (others => '0');
-                  chanRight     <= (others => '0');
-                  adsrSetting(15 downto 0) <= unsigned(RamVoice_dataB(1));
-                  
-                  --voice         <= voiceArray(index);
-                  voice.currentAddr    <= unsigned(RamVoiceRecord_dataB(0)( 15 downto   0));
-                  voice.adpcmLast0     <=   signed(RamVoiceRecord_dataB(0)( 31 downto  16));
-                  voice.adpcmLast1     <=   signed(RamVoiceRecord_dataB(0)( 47 downto  32));
-                  voice.adpcmSamplePos <= unsigned(RamVoiceRecord_dataB(0)( 67 downto  48));
-                  voice.adpcmDecodePtr <= unsigned(RamVoiceRecord_dataB(0)( 73 downto  68));
-                  voice.adsrphase      <= unsigned(RamVoiceRecord_dataB(0)( 76 downto  74));
-                  voice.adsrTicks      <= unsigned(RamVoiceRecord_dataB(0)(100 downto  77));
+                  if (bus_write = '0') then
+                     state         <= VOICE_READHEADER;
+                     voiceCounter  <= 0;
+                     
+                     volLeft       <= signed(RamVoiceVolumes_dataB(1));
+                     envVolLeft    <= signed(RamVoiceVolumes_dataB(1));
+                     chanLeft      <= (others => '0');
+                     chanRight     <= (others => '0');
+                     adsrSetting(15 downto 0) <= unsigned(RamVoice_dataB(1));
+                     
+                     --voice         <= voiceArray(index);
+                     voice.currentAddr    <= unsigned(RamVoiceRecord_dataB(0)( 15 downto   0));
+                     voice.adpcmLast0     <=   signed(RamVoiceRecord_dataB(0)( 31 downto  16));
+                     voice.adpcmLast1     <=   signed(RamVoiceRecord_dataB(0)( 47 downto  32));
+                     voice.adpcmSamplePos <= unsigned(RamVoiceRecord_dataB(0)( 67 downto  48));
+                     voice.adpcmDecodePtr <= unsigned(RamVoiceRecord_dataB(0)( 73 downto  68));
+                     voice.adsrphase      <= unsigned(RamVoiceRecord_dataB(0)( 76 downto  74));
+                     voice.adsrTicks      <= unsigned(RamVoiceRecord_dataB(0)(100 downto  77));
+                        
+                     reset_adsr <= '0';
+                     if (voice_adsrWrite(index) = '1') then
+                        voice_adsrWrite(index) <= '0'; 
+                        reset_adsr             <= '1';
+                     end if;
+                  end if;
                      
                when VOICE_READHEADER =>
                   state           <= VOICE_EVALHEADER;
@@ -1472,7 +1490,7 @@ begin
                   interpolIndex   <= voice.adpcmSamplePos(11 downto  4);
                   volRight        <= signed(RamVoiceVolumes_dataB(1));
                   envVolRight     <= signed(RamVoiceVolumes_dataB(1));
-
+   
                   adsrSetting(31 downto 16) <= unsigned(RamVoice_dataB(1));
                   
                   if (voice.adpcmSamplePos(13 downto 12) > 0) then adpcm_ram_address_b(0) <= to_unsigned(index, 5) & (voice.adpcmSamplePos(16 downto 14) + 1); 
@@ -1540,6 +1558,17 @@ begin
                   
                   if (envelope_startnext = '1') then
                      volumeSettingR     <= unsigned(RamVoice_dataB(1));
+                  end if;
+                  
+                  if (reset_adsr = '1') then
+                     case (voice.adsrphase) is
+                        when ADSRPHASE_OFF     => voice.adsrTicks <= adsr_ticks(ADSR_OFF);
+                        when ADSRPHASE_ATTACK  => voice.adsrTicks <= adsr_ticks(ADSR_ATTACK);
+                        when ADSRPHASE_DECAY   => voice.adsrTicks <= adsr_ticks(ADSR_DECAY);
+                        when ADSRPHASE_SUSTAIN => voice.adsrTicks <= adsr_ticks(ADSR_SUSTAIN);
+                        when ADSRPHASE_RELEASE => voice.adsrTicks <= adsr_ticks(ADSR_RELEASE);
+                        when others => null;
+                     end case;
                   end if;
                
                when VOICE_DECODESAMPLE =>
@@ -1741,6 +1770,7 @@ begin
                   if (KEYON(index) = '1') then
                      KEYON(index)           <= '0';
                      ENDX(index)            <= '0';
+                     voice_adsrWrite(index) <= '0'; 
                      voice.adpcmDecodePtr   <= (others => '0');
                      voice.currentAddr      <= unsigned(RamVoice_dataB(1));
                      voice.adsrphase        <= ADSRPHASE_ATTACK;
