@@ -318,7 +318,7 @@ parameter CONF_STR = {
 	"Save to state 3,",
 	"Restore state 3,",
 	"Save to state 4,",
-	"Restore state 4;",
+	"Restore state 4,",
 	"Rewinding...;",
 	"V,v",`BUILD_DATE
 };
