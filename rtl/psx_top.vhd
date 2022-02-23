@@ -406,6 +406,8 @@ architecture arch of psx_top is
    -- dma
    signal cpuPaused              : std_logic;
    signal dmaOn                  : std_logic;
+   signal dmaRequest             : std_logic;
+   signal canDMA                 : std_logic;
    
    signal ram_dma_dataWrite      : std_logic_vector(31 downto 0);
    signal ram_dma_Adr            : std_logic_vector(22 downto 0);
@@ -649,6 +651,8 @@ begin
    SS_idle <= SS_Idle_gpu and SS_Idle_mdec and SS_Idle_cd and SS_idle_spu and SS_idle_pad and SS_idle_irq and SS_idle_cpu and SS_idle_gte and SS_idle_dma;
    
    -- ce generation
+   canDMA <= memMuxIdle and not stallNext;
+   
    process (clk1x)
    begin
       if rising_edge(clk1x) then
@@ -683,7 +687,7 @@ begin
                   pausing <= '1';
                   ce      <= '0';
                   ce_cpu  <= '0';
-               elsif ((cpuPaused = '1' and dmaOn = '1') or (dmaOn = '1' and memMuxIdle = '1' and stallNext = '0')) then -- switch to dma
+               elsif ((cpuPaused = '1' and dmaOn = '1') or (dmaRequest = '1' and canDMA = '1')) then -- switch to dma
                   cpuPaused <= '1';
                   ce_cpu    <= '0';
                elsif (dmaOn = '0') then -- switch to CPU
@@ -1014,7 +1018,7 @@ begin
       ce             => ce,
       reset          => reset_intern,
 
-      dmaOn => dmaOn,
+      dmaOn          => dmaOn,
 
       cheat_clear    => cheat_clear,
       cheats_enabled => cheats_enabled,
@@ -1112,7 +1116,9 @@ begin
       REPRODUCIBLEDMATIMING=> REPRODUCIBLEDMATIMING,
       DMABLOCKATONCE       => DMABLOCKATONCE,
       
+      canDMA               => canDMA,
       cpuPaused            => cpuPaused,
+      dmaRequest           => dmaRequest,
       dmaOn                => dmaOn,
       irqOut               => irq_DMA,
       

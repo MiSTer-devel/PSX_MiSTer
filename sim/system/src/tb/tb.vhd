@@ -224,10 +224,10 @@ begin
       pause                 => '0',
       loadExe               => psx_LoadExe(0),
       fastboot              => '0',
-      FASTMEM               => '1',
+      FASTMEM               => '0',
       REPRODUCIBLEGPUTIMING => '1',
       REPRODUCIBLEDMATIMING => '1',
-      DMABLOCKATONCE        => '1',
+      DMABLOCKATONCE        => '0',
       multitrack            => multitrack,
       INSTANTSEEK           => '1',
       ditherOff             => '0',
@@ -235,7 +235,7 @@ begin
       errorOn               => '0',
       noTexture             => '0',
       SPUon                 => '1',
-      SPUSDRAM              => '0',
+      SPUSDRAM              => '1',
       REVERBOFF             => '0',
       REPRODUCIBLESPUDMA    => '0',
       -- RAM/BIOS interface        
@@ -328,7 +328,7 @@ begin
       PadPortMouse1         => '0',
       PadPortGunCon1        => '0',
       PadPortneGcon1        => '0',
-      PadPortEnable2        => '0',
+      PadPortEnable2        => '1',
       PadPortAnalog2        => '0',
       PadPortMouse2         => '0', 
       PadPortGunCon2        => '0',
@@ -372,13 +372,20 @@ begin
       savestate_number      => 0,
       state_loaded          => open,
       rewind_on             => '0',
-      rewind_active         => '0'
+      rewind_active         => '0',
+      -- cheats
+      cheat_clear           => '0',
+      cheats_enabled        => '0',
+      cheat_on              => '0',
+      cheat_in              => (127 downto 0 => '0'),
+      Cheats_BusReadData    => (31 downto 0 => '0'),
+      Cheats_BusDone        => '0'
    );
    
    iddrram_model : entity tb.ddrram_model
    generic map
    (
-      SLOWTIMING => 0
+      SLOWTIMING => 15
    )
    port map
    (
@@ -397,7 +404,7 @@ begin
    isdram_model : entity tb.sdram_model3x 
    generic map
    (
-      DOREFRESH     => '0',
+      DOREFRESH     => '1',
       SCRIPTLOADING => '1'
    )
    port map

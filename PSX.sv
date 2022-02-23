@@ -230,7 +230,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X XXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXX         X
+// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXX         X
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -300,6 +300,7 @@ parameter CONF_STR = {
 	"P3oK,CD Inserted,Yes,No;",
 	"P3OF,Force 60Hz PAL,Off,On;",
 	"P3OR,Textures,On,Off;",
+	"P3T1,Advance Pause;",
 
 	"- ;",
 	"R0,Reset;",
@@ -620,6 +621,27 @@ wire PadPortGunCon2 = (status[50:48] == 3'b100);
 wire PadPortNeGcon2 = (status[50:48] == 3'b101);
 
 
+////////////////////////////  PAUSE  ///////////////////////////////////
+reg paused = 0;
+reg [9:0] unpause = 0;
+reg status1_1;
+
+always @(posedge clk_1x) begin
+
+   paused <= 0;
+   if (status[25] & OSD_STATUS & (unpause == 0)) begin
+      paused <= 1;
+   end
+   
+   status1_1 <= status[1];
+   if (status[1] & ~status1_1) begin
+      unpause <= 1023;
+   end else if (unpause > 0) begin
+      unpause <= unpause - 1'd1;
+   end
+
+end
+
 ////////////////////////////  SYSTEM  ///////////////////////////////////
 
 psx_mister
@@ -629,7 +651,7 @@ psx
    .clk2x(clk_2x),
    .reset(reset),
    // commands 
-   .pause(status[25] & OSD_STATUS),
+   .pause(paused),
    .loadExe(loadExe),
    .fastboot(status[16]),
    .FASTMEM(status[31]),
@@ -830,6 +852,7 @@ wire         sdram_128;
 
 wire [20:0] cheats_addr;
 wire cheats_rnw;
+wire [3:0] cheats_be;
 wire [31:0] cheats_dout;
 wire cheats_ena;
 wire [31:0] cheats_din;

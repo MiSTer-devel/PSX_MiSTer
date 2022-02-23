@@ -1104,6 +1104,8 @@ begin
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       SetMask              => GPUSTAT_SetMask,
       
+      REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,  
+      
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 
       fifo_data            => fifoIn_Dout,

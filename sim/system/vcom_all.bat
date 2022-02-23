@@ -65,6 +65,7 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/memcard.vhd ^
 ../../rtl/statemanager.vhd ^
 ../../rtl/savestates.vhd ^
+../../rtl/cheats.vhd ^
 ../../rtl/psx_top.vhd ^
 ../../rtl/psx_mister.vhd 
 

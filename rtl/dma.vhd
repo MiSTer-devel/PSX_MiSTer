@@ -16,7 +16,9 @@ entity dma is
       REPRODUCIBLEDMATIMING: in  std_logic;
       DMABLOCKATONCE       : in  std_logic;
       
+      canDMA               : in  std_logic;
       cpuPaused            : in  std_logic;
+      dmaRequest           : out std_logic;
       dmaOn                : out std_logic;
       irqOut               : out std_logic := '0';
       
@@ -97,7 +99,8 @@ architecture arch of dma is
    end record;
   
    type tdmaArray is array (0 to 6) of dmaRecord;
-   signal dmaArray : tdmaArray;
+   signal dmaArray    : tdmaArray;
+   signal dmaSettings : dmaRecord;
   
    signal DPCR                : unsigned(31 downto 0);
    signal DICR                : unsigned(23 downto 0);
@@ -105,6 +108,7 @@ architecture arch of dma is
    signal DICR_IRQs           : unsigned(6 downto 0);
          
    signal triggerDMA          : std_logic_vector(6 downto 0);
+   signal triggerchannel      : integer range 0 to 6;
       
    signal readStall           : std_logic;
       
@@ -175,7 +179,7 @@ architecture arch of dma is
   
 begin 
 
-   dmaOn <= '1' when (dmaState = WAITING or dmaState = READHEADER or dmaState = WAITREAD or dmaState = WORKING or dmaState = STOPPING or dmaState = PAUSING) else '0';
+   dmaOn <= '1' when (dmaState /= OFF) else '0';
 
    ram_refresh <= '1' when ((reset = '1') or (dmaState = WAITING and cpuPaused = '1' and waitcnt = 9)) else '0';
    ram_be      <= "1111";
@@ -238,7 +242,6 @@ begin
    process (clk1x)
       variable channel         : integer range 0 to 7;
       variable triggerNew      : std_logic;
-      variable triggerchannel  : integer range 0 to 6;
       variable triggerPrio     : unsigned(2 downto 0);
       variable requestOnFlyNew : integer range 0 to 2;
    begin
@@ -308,8 +311,6 @@ begin
          
             ram_ena    <= '0';
          
-            triggerDMA <= (others => '0');
-         
             bus_dataRead <= (others => '0');
 
             channel := to_integer(unsigned(bus_addr(6 downto 4)));
@@ -328,12 +329,7 @@ begin
                   case (bus_addr(3 downto 2)) is
                      when "00" => bus_dataRead <= x"00" & std_logic_vector(dmaArray(channel).D_MADR);
                      when "01" => bus_dataRead <= std_logic_vector(dmaArray(channel).D_BCR); 
-                     when "10" => 
-                        bus_dataRead <= std_logic_vector(dmaArray(channel).D_CHCR);
-                        -- deliver busy bit even if it was cleared by cpu already when channel is still running, maybe R/W bits should be seperate?
-                        if (dmaState /= OFF and activeChannel = channel) then 
-                           bus_dataRead(24) <= '1';
-                        end if;
+                     when "10" => bus_dataRead <= std_logic_vector(dmaArray(channel).D_CHCR);
                      when others => bus_dataRead <= (others => '1');
                   end case;
                else
@@ -361,20 +357,12 @@ begin
                         if (bus_dataWrite(24) = '0') then
                            dmaArray(channel).channelOn <= '0';
                         end if;
-                        if (dmaArray(channel).request = '1') then
-                           triggerDMA(channel) <= '1';
-                        end if;
                      when others => null;
                   end case;
                else
                   case (bus_addr(3 downto 2)) is
                      when "00" => 
                         DPCR       <= unsigned(bus_dataWrite);
-                        for i in 0 to 6 loop
-                           if (dmaArray(i).request = '1') then
-                              triggerDMA(i) <= '1';
-                           end if;
-                        end loop;
                      when "01" => 
                         DICR( 5 downto  0) <= unsigned(bus_dataWrite(5 downto 0));
                         DICR(14 downto  6) <= (14 downto 6 => '0');
@@ -391,38 +379,39 @@ begin
             end if;
             
             -- triggers from modules
-            if (mdec_dmaWriteRequest = '1')  then triggerDMA(0) <= '1'; end if;
-            if (mdec_dmaReadRequest = '1')   then triggerDMA(1) <= '1'; end if;
-            if (gpu_dmaRequest = '1')        then triggerDMA(2) <= '1'; end if;
-            if (dmaArray(3).D_CHCR(28))      then triggerDMA(3) <= '1'; end if;
-            if (spu_dmaRequest = '1')        then triggerDMA(4) <= '1'; end if;
-            if (dmaArray(6).D_CHCR(28))      then triggerDMA(6) <= '1'; end if;
+            triggerDMA <= (others => '0');
+            if (dmaArray(0).D_CHCR(28) = '1' or mdec_dmaWriteRequest = '1')  then triggerDMA(0) <= '1'; end if;
+            if (dmaArray(1).D_CHCR(28) = '1' or mdec_dmaReadRequest = '1')   then triggerDMA(1) <= '1'; end if;
+            if (dmaArray(2).D_CHCR(28) = '1' or gpu_dmaRequest = '1')        then triggerDMA(2) <= '1'; end if;
+            if (dmaArray(3).D_CHCR(28) = '1')                                then triggerDMA(3) <= '1'; end if;
+            if (dmaArray(4).D_CHCR(28) = '1' or spu_dmaRequest = '1')        then triggerDMA(4) <= '1'; end if;
+            if (dmaArray(6).D_CHCR(28) = '1')                                then triggerDMA(6) <= '1'; end if;
              
             -- trigger
             triggerNew     := '0';
-            triggerchannel := 0;
             triggerPrio    := "111";
-            for i in 0 to 6 loop
-               if (triggerDMA(i) = '1' and dmaArray(i).chopwaiting = '0' and dmaState = OFF) then
-                  if ((DPCR((i * 4) + 3) = '1' and dmaArray(i).D_CHCR(24) = '1') or dmaArray(i).channelOn = '1') then -- enable + start or already on(retrigger after busy)
-                     if (isOn = '0' or activeChannel /= i) then
-                     
+            if (dmaState = OFF and dmaEndWait(2) = '1' and bus_write = '0' and bus_read = '0') then
+               for i in 0 to 6 loop
+                  if (triggerDMA(i) = '1' and dmaArray(i).chopwaiting = '0') then
+                     if ((DPCR((i * 4) + 3) = '1' and dmaArray(i).D_CHCR(24) = '1') or dmaArray(i).channelOn = '1') then -- enable + start or already on(retrigger after busy)
+                        
                         if (triggerNew = '0' or (unsigned(DPCR((i * 4) + 2 downto (i*4))) <= triggerPrio)) then
                            triggerNew     := '1';
-                           triggerchannel := i;
+                           triggerchannel <= i;
                            triggerPrio    := unsigned(DPCR((i * 4) + 2 downto (i*4)));
                         end if;
-                        
+                           
                      end if;
                   end if;
-               end if;
-            end loop;
+               end loop;
+            end if;
+            dmaRequest <= triggerNew;
             
             if (dmaEndWait(2) = '0') then
                dmaEndWait <= dmaEndWait + 1;
             end if;
             
-            if (triggerNew = '1' and dmaEndWait(2) = '1') then
+            if (dmaRequest = '1' and canDMA = '1' and dmaState = OFF) then
                dmaArray(triggerchannel).requestsPending <= '0';
                dmaArray(triggerchannel).timeupPending   <= '0';
                dmaArray(triggerchannel).D_CHCR(28)      <= '0';
@@ -433,6 +422,10 @@ begin
                isOn          <= '1';
                activeChannel <= triggerchannel;
                REP_target    <= 32;
+               
+               dmaSettings.D_CHCR <= dmaArray(triggerchannel).D_CHCR;
+               dmaSettings.D_MADR <= dmaArray(triggerchannel).D_MADR;
+               dmaSettings.D_BCR  <= dmaArray(triggerchannel).D_BCR;
             end if;
             
             -- accu
@@ -466,6 +459,10 @@ begin
                end if;
             end loop;
             
+            if (dmaState /= OFF and (bus_write = '1' or bus_read = '1')) then
+               errorCHOP <= '1';
+            end if;
+            
             case (dmaState) is
             
                when OFF => null;
@@ -476,13 +473,13 @@ begin
                   end if;
                   
                   if (waitcnt = 9) then
-                     chopsize     <= to_unsigned(1, 8) sll to_integer(dmaArray(activeChannel).D_CHCR(18 downto 16));
-                     chopwaittime <= to_unsigned(1, 8) sll to_integer(dmaArray(activeChannel).D_CHCR(22 downto 20));
+                     chopsize     <= to_unsigned(1, 8) sll to_integer(dmaSettings.D_CHCR(18 downto 16));
+                     chopwaittime <= to_unsigned(1, 8) sll to_integer(dmaSettings.D_CHCR(22 downto 20));
                   end if;
                   
                   if (waitcnt = 8) then
                      dmacount     <= (others => '0');
-                     toDevice     <= dmaArray(activeChannel).D_CHCR(0);
+                     toDevice     <= dmaSettings.D_CHCR(0);
                      wordAccu     <= 0;
                      if (activeChannel = 3) then
                         wordAccu <= 3;
@@ -491,56 +488,56 @@ begin
                         wordAccu <= 1;
                      end if;
                      
-                     if (dmaArray(activeChannel).D_CHCR(8) = '1' and activeChannel /= 3 and activeChannel /= 6) then
+                     if (dmaSettings.D_CHCR(8) = '1' and activeChannel /= 3 and activeChannel /= 6) then
                         errorCHOP <= '1';
                      end if;
                      
-                     if (dmaArray(activeChannel).D_CHCR(0) = '1') then
+                     if (dmaSettings.D_CHCR(0) = '1') then
                         if (requestOnFly = 0) then
                            ram_rnw         <= '1';
                            ram_ena         <= '1';
-                           ram_Adr         <= "00" & std_logic_vector(dmaArray(activeChannel).D_MADR(20 downto 2)) & "00";
+                           ram_Adr         <= "00" & std_logic_vector(dmaSettings.D_MADR(20 downto 2)) & "00";
                            autoread        <= '1';
                            requestOnFlyNew := 1;
                         else
                            waitcnt <= waitcnt;
                         end if;
                      else
-                        case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
+                        case (dmaSettings.D_CHCR(10 downto 9)) is
                            when "00" => -- manual
-                              if (dmaArray(activeChannel).D_CHCR(8) = '1') then -- chopping
+                              if (dmaSettings.D_CHCR(8) = '1') then -- chopping
                                  wordcount <= resize(chopsize, 17);
-                                 if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
-                                    dmaArray(activeChannel).D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
-                                 elsif (dmaArray(activeChannel).D_BCR(15 downto 0) > chopsize) then
-                                    dmaArray(activeChannel).D_BCR(15 downto 0) <= dmaArray(activeChannel).D_BCR(15 downto 0) - chopsize;
+                                 if (dmaSettings.D_BCR(15 downto 0) = 0) then
+                                    dmaSettings.D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
+                                 elsif (dmaSettings.D_BCR(15 downto 0) > chopsize) then
+                                    dmaSettings.D_BCR(15 downto 0) <= dmaSettings.D_BCR(15 downto 0) - chopsize;
                                  else
-                                    wordcount                                  <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
-                                    dmaArray(activeChannel).D_BCR(15 downto 0) <= (others => '0');
+                                    wordcount                                  <= '0' & dmaSettings.D_BCR(15 downto 0);
+                                    dmaSettings.D_BCR(15 downto 0) <= (others => '0');
                                  end if;
                               else
-                                 if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
+                                 if (dmaSettings.D_BCR(15 downto 0) = 0) then
                                     wordcount <= '1' & x"0000";
                                  else
-                                    wordcount <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                                    wordcount <= '0' & dmaSettings.D_BCR(15 downto 0);
                                  end if;
                               end if;
                            
                            when "01" => -- request
-                              blocksleft  <= dmaArray(activeChannel).D_BCR(31 downto 16) - 1;
-                              wordcount   <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                              blocksleft  <= dmaSettings.D_BCR(31 downto 16) - 1;
+                              wordcount   <= '0' & dmaSettings.D_BCR(15 downto 0);
                            
                            when others => null;
                         end case;
                      end if;
                      directionNeg <= '0';
-                     if (dmaArray(activeChannel).D_CHCR(10) = '0' and dmaArray(activeChannel).D_CHCR(1) = '1') then
+                     if (dmaSettings.D_CHCR(10) = '0' and dmaSettings.D_CHCR(1) = '1') then
                         directionNeg <= '1';
                      end if;    
                      
-                     if (dmaArray(activeChannel).D_CHCR(0) = '0') then -- from device -> can start immidiatly
+                     if (dmaSettings.D_CHCR(0) = '0') then -- from device -> can start immidiatly
                         waitcnt <= 0;
-                        case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
+                        case (dmaSettings.D_CHCR(10 downto 9)) is
                            when "00" => -- manual
                               dmaState    <= WORKING;
                            
@@ -562,7 +559,7 @@ begin
                      if (fifoIn_Empty = '1' and toDevice = '1') then
                         waitcnt <= waitcnt;
                      else
-                        case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
+                        case (dmaSettings.D_CHCR(10 downto 9)) is
                            when "00" => -- manual
                               dmaState    <= WORKING;
                            
@@ -584,13 +581,13 @@ begin
                   dmacount  <= dmacount + 1;
                   nextAddr  <= fifoIn_Dout(23 downto 0);
                   if (unsigned(fifoIn_Dout(31 downto 24)) > 0) then
-                     dmaArray(activeChannel).D_MADR <= dmaArray(activeChannel).D_MADR + 4;
-                     dmaState  <= WAITREAD;           
-                  elsif (fifoIn_Dout(23) = '1' or fifoIn_Dout(23 downto 0) = x"000000" or dmaArray(activeChannel).D_CHCR(0) = '0') then
+                     dmaSettings.D_MADR <= dmaSettings.D_MADR + 4;
+                     dmaState           <= WAITREAD;           
+                  elsif (fifoIn_Dout(23) = '1' or fifoIn_Dout(23 downto 0) = x"000000" or dmaSettings.D_CHCR(0) = '0') then
                      dmaState <= STOPPING;
                      autoread <= '0';
                   else
-                     dmaArray(activeChannel).D_MADR <= unsigned(fifoIn_Dout(23 downto 0));
+                     dmaSettings.D_MADR <= unsigned(fifoIn_Dout(23 downto 0));
                      if (fifoIn_Dout(23) = '1') then
                         dmaState <= STOPPING;
                         autoread <= '0';
@@ -623,7 +620,7 @@ begin
                         when 1 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(1).D_MADR(20 downto 2));
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_MDEC_read;
                            else
                               report "write to MDEC out not possible" severity failure;
@@ -632,14 +629,14 @@ begin
                         when 2 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(2).D_MADR(20 downto 2));
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_GPU_read;
                            end if;
                            
                         when 3 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(3).D_MADR(20 downto 2));
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_CD_read & DMA_CD_read_accu;
                               REP_target                <= REP_target + 4;
                            end if;
@@ -648,18 +645,18 @@ begin
                            REP_target <= REP_target + 2;
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(4).D_MADR(20 downto 2));
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_SPU_read & DMA_SPU_read_accu;
                            end if;
                            
                         when 6 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaArray(6).D_MADR(20 downto 2));
+                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
                               if (wordcount = 1) then
                                  fifoOut_Din(31 downto 0) <= x"00FFFFFF";
                               else
-                                 fifoOut_Din(31 downto 0) <= x"00" & std_logic_vector(dmaArray(6).D_MADR(23 downto 2) - 1) & "00";
+                                 fifoOut_Din(31 downto 0) <= x"00" & std_logic_vector(dmaSettings.D_MADR(23 downto 2) - 1) & "00";
                               end if;
                               REP_target                <= REP_target + 3;
                            end if;
@@ -667,17 +664,17 @@ begin
                         when others => report "DMA channel not implemented" severity failure; 
                      end case;
                      
-                     if (dmaArray(activeChannel).D_CHCR(10) = '0' and directionNeg = '1')  then 
-                        dmaArray(activeChannel).D_MADR <= dmaArray(activeChannel).D_MADR - 4;
+                     if (dmaSettings.D_CHCR(10) = '0' and directionNeg = '1')  then 
+                        dmaSettings.D_MADR <= dmaSettings.D_MADR - 4;
                      else
-                        dmaArray(activeChannel).D_MADR <= dmaArray(activeChannel).D_MADR + 4;
+                        dmaSettings.D_MADR <= dmaSettings.D_MADR + 4;
                      end if;
                   
                      wordcount <= wordcount - 1;
                      if (wordcount <= 1) then
-                        case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
+                        case (dmaSettings.D_CHCR(10 downto 9)) is
                            when "00" => -- manual
-                              if (dmaArray(activeChannel).D_CHCR(8) = '1' and dmaArray(activeChannel).D_BCR(15 downto 0) > 0) then
+                              if (dmaSettings.D_CHCR(8) = '1' and dmaSettings.D_BCR(15 downto 0) > 0) then
                                  dmaState <= PAUSING;
                                  autoread <= '0';
                                  dmaArray(activeChannel).chopwaiting   <= '1';
@@ -689,13 +686,13 @@ begin
                               end if;
                                  
                            when "01" => -- request
-                              dmaArray(activeChannel).D_BCR(31 downto 16) <= blocksleft;
+                              dmaSettings.D_BCR(31 downto 16) <= blocksleft;
                               blocksleft <= blocksleft - 1;
                               if (blocksleft = 0) then
                                  dmaState <= STOPPING;
                                  autoread <= '0';
                               else
-                                 wordcount  <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
+                                 wordcount  <= '0' & dmaSettings.D_BCR(15 downto 0);
                                  if (DMABLOCKATONCE = '0' or dmaArray(activeChannel).request = '0') then
                                     dmaState <= PAUSING;
                                     autoread <= '0';
@@ -703,7 +700,7 @@ begin
                               end if;
                            
                            when "10" => -- linked list
-                              dmaArray(activeChannel).D_MADR <= unsigned(nextAddr);
+                              dmaSettings.D_MADR <= unsigned(nextAddr);
                               if (nextAddr(23) = '1') then
                                  dmaState <= STOPPING;
                                  autoread <= '0';
@@ -730,6 +727,8 @@ begin
                         dmaState   <= OFF;
                         isOn       <= '0';
                         dmaEndWait <= (others => '0');
+                        dmaArray(activeChannel).D_MADR <= dmaSettings.D_MADR;
+                        dmaArray(activeChannel).D_BCR  <= dmaSettings.D_BCR;
                         dmaArray(activeChannel).D_CHCR(24) <= '0';
                         dmaArray(activeChannel).channelOn  <= '0';
                         if (DICR(16 + activeChannel) = '1') then
@@ -747,6 +746,8 @@ begin
                         dmaState   <= OFF;
                         isOn       <= '0';
                         dmaEndWait <= (others => '0');
+                        dmaArray(activeChannel).D_MADR <= dmaSettings.D_MADR;
+                        dmaArray(activeChannel).D_BCR  <= dmaSettings.D_BCR;
                      end if;
                   end if;
             
@@ -764,34 +765,34 @@ begin
                if (firstword = '1') then
                   firstword       <= '0';
                   dataCount       <= firstsize;
-                  case (dmaArray(activeChannel).D_CHCR(10 downto 9)) is
+                  case (dmaSettings.D_CHCR(10 downto 9)) is
                      when "00" => -- manual
-                        if (dmaArray(activeChannel).D_CHCR(8) = '1') then -- chopping
+                        if (dmaSettings.D_CHCR(8) = '1') then -- chopping
                            wordcount      <= resize(chopsize, 17);
                            requiredDwords <= to_integer(chopsize);
-                           if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
-                              dmaArray(activeChannel).D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
-                           elsif (dmaArray(activeChannel).D_BCR(15 downto 0) > chopsize) then
-                              dmaArray(activeChannel).D_BCR(15 downto 0) <= dmaArray(activeChannel).D_BCR(15 downto 0) - chopsize;
+                           if (dmaSettings.D_BCR(15 downto 0) = 0) then
+                              dmaSettings.D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
+                           elsif (dmaSettings.D_BCR(15 downto 0) > chopsize) then
+                              dmaSettings.D_BCR(15 downto 0) <= dmaSettings.D_BCR(15 downto 0) - chopsize;
                            else
-                              wordcount                                  <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
-                              requiredDwords                             <= to_integer(dmaArray(activeChannel).D_BCR(15 downto 0));
-                              dmaArray(activeChannel).D_BCR(15 downto 0) <= (others => '0');
+                              wordcount                                  <= '0' & dmaSettings.D_BCR(15 downto 0);
+                              requiredDwords                             <= to_integer(dmaSettings.D_BCR(15 downto 0));
+                              dmaSettings.D_BCR(15 downto 0)             <= (others => '0');
                            end if;
                         else
-                           if (dmaArray(activeChannel).D_BCR(15 downto 0) = 0) then
+                           if (dmaSettings.D_BCR(15 downto 0) = 0) then
                               wordcount <= '1' & x"0000";
                               requiredDwords <= 16#10000#;
                            else
-                              wordcount      <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
-                              requiredDwords <= to_integer(dmaArray(activeChannel).D_BCR(15 downto 0));
+                              wordcount      <= '0' & dmaSettings.D_BCR(15 downto 0);
+                              requiredDwords <= to_integer(dmaSettings.D_BCR(15 downto 0));
                            end if;
                         end if;
                      
                      when "01" => -- request
-                        blocksleft     <= dmaArray(activeChannel).D_BCR(31 downto 16) - 1;
-                        wordcount      <= '0' & dmaArray(activeChannel).D_BCR(15 downto 0);
-                        requiredDwords <= to_integer(dmaArray(activeChannel).D_BCR(15 downto 0));
+                        blocksleft     <= dmaSettings.D_BCR(31 downto 16) - 1;
+                        wordcount      <= '0' & dmaSettings.D_BCR(15 downto 0);
+                        requiredDwords <= to_integer(dmaSettings.D_BCR(15 downto 0));
                      
                      when "10" => -- linked list
                         wordcount      <= "0" & x"00" & unsigned(ram_dataRead(31 downto 24)); 
@@ -807,7 +808,7 @@ begin
             end if;
             
             if (ram_reqprocessed = '1' and autoread = '1') then
-               if (ram_done = '1' and toDevice = '1' and firstword = '1' and dmaArray(activeChannel).D_CHCR(10 downto 9) = "10" and ram_dataRead(31 downto 24) = x"00") then
+               if (ram_done = '1' and toDevice = '1' and firstword = '1' and dmaSettings.D_CHCR(10 downto 9) = "10" and ram_dataRead(31 downto 24) = x"00") then
                   autoread <= '0'; -- stop third read for empty linked list
                else
                   ram_ena         <= '1';
@@ -825,8 +826,8 @@ begin
             
             if (dmaState = WAITING and waitcnt = 8) then
                firstword        <= '1';
-               firstsize        <= to_integer(3 - dmaArray(activeChannel).D_MADR(3 downto 2));
-               requestedDwords  <= to_integer(4 - dmaArray(activeChannel).D_MADR(3 downto 2));
+               firstsize        <= to_integer(3 - dmaSettings.D_MADR(3 downto 2));
+               requestedDwords  <= to_integer(4 - dmaSettings.D_MADR(3 downto 2));
                fifoIn_reset     <= '1';
                dataCount        <= 0;
             elsif (dataCount > 0) then
@@ -939,7 +940,7 @@ begin
          end if;
       
          SS_idle <= '0';
-         if (dmaOn = '0') then
+         if (dmaOn = '0' and dmaRequest = '0') then
             SS_idle <= '1';
          end if;
       
