@@ -53,7 +53,10 @@ entity joypad_pad is
       MouseLeft            : in  std_logic;
       MouseRight           : in  std_logic;
       MouseX               : in  signed(8 downto 0);
-      MouseY               : in  signed(8 downto 0)
+      MouseY               : in  signed(8 downto 0);
+      GunX                 : in  unsigned(7 downto 0);
+      GunY_scanlines       : in  unsigned(8 downto 0);
+      GunAimOffscreen      : in  std_logic
    );
 end entity;
 
@@ -102,7 +105,9 @@ architecture arch of joypad_pad is
    signal mouseOutX       : signed(7 downto 0) := (others => '0');
    signal mouseOutY       : signed(7 downto 0) := (others => '0');
 
-   signal gunConX         : std_logic_vector(8 downto 0) := (others => '0');
+   signal gunOffScreen    : std_logic := '0';
+   signal gunConX_8MHz    : std_logic_vector(8 downto 0) := (others => '0');
+   signal gunConY         : std_logic_vector(8 downto 0) := (others => '0');
   
 begin 
 
@@ -285,6 +290,12 @@ begin
                            ack             <= '1';
                            receiveValid    <= '1';
 
+                           if KeyTriangle = '1' or GunAimOffscreen = '1' then
+                              gunOffscreen <= '1';
+                           else
+                              gunOffscreen <= '0';
+                           end if;
+
                            receiveBuffer(0) <= '1';
                            receiveBuffer(1) <= '1';
                            receiveBuffer(2) <= '1';
@@ -299,19 +310,20 @@ begin
                            ack              <= '1';
                            receiveValid     <= '1';
 
-                           -- TODO
-                           -- GunCon reports X as # of 8MHz clks since HSYNC (01h=Error, or 04Dh..1CDh)
-                           -- MiSTer framework reports gun as +/-128 joystick, which would require
-                           -- an expensive integer multiply in order to map to the correct range.
-                           -- For now, just double and shift the value, and rely on compensation from framework.
-                           gunConX          <= std_logic_vector(to_unsigned(to_integer(Analog1X & '0') + 269, 9));
+                           -- GunCon reports X as # of 8MHz clks since HSYNC (01h=Error, or 04Dh..1CDh).
+                           -- Map from joystick's +/-128 to GunCon range (8MHz clocks): (GunX * 384/256) + 67
+                           if gunOffscreen = '0' then
+                              gunConX_8MHz  <= std_logic_vector(to_unsigned(67, 9) + resize(GunX, 9) + resize(GunX(7 downto 1), 9) );
+                           else
+                              gunConX_8MHz  <= "000000001"; -- X: 0x0001, Y: 0x000A indicates no light / offscreen shot
+                           end if;
 
                            receiveBuffer(0) <= '1';
                            receiveBuffer(1) <= '1';
                            receiveBuffer(2) <= '1';
                            receiveBuffer(3) <= '1';
                            receiveBuffer(4) <= '1';
-                           receiveBuffer(5) <= not KeyCircle; -- Trigger
+                           receiveBuffer(5) <= not (KeyCircle or KeyTriangle); -- Trigger
                            receiveBuffer(6) <= not KeyCross; -- B (right-side button)
                            receiveBuffer(7) <= '1';
 
@@ -320,33 +332,34 @@ begin
                            receiveValid    <= '1';
                            ack             <= '1';
 
-                           receiveBuffer   <= gunConX(7 downto 0);
+                           receiveBuffer   <= gunConX_8MHz(7 downto 0);
 
                         when GUNCONXMSB =>
                            controllerState <= GUNCONYLSB;
                            receiveValid    <= '1';
                            ack             <= '1';
 
-                           receiveBuffer   <= "0000000" & gunConX(8);
+                           -- GunCon reports Y as # of scanlines since VSYNC (05h/0Ah=Error, PAL=20h..127h, NTSC=19h..F8h)
+                           if gunOffscreen = '0' then
+                              gunConY      <= std_logic_vector(to_unsigned(16, 9) + GunY_scanlines);
+                           else
+                              gunConY      <= "000001010"; -- X: 0x0001, Y: 0x000A indicates no light / offscreen shot
+                           end if;
+
+                           receiveBuffer   <= "0000000" & gunConX_8MHz(8);
 
                         when GUNCONYLSB =>
                            controllerState <= GUNCONYMSB;
                            receiveValid    <= '1';
                            ack             <= '1';
 
-                           -- TODO
-                           -- GunCon reports Y as # of scanlines since VSYNC (05h/0Ah=Error, PAL=20h..127h, NTSC=19h..F8h)
-                           -- MiSTer framework reports gun as +/-128 joystick, which would require
-                           -- an expensive integer multiply in order to map to the correct range.
-                           -- For now, just shift the value, and rely on compensation from framework.
-                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog1Y) + 128, 8));
+                           receiveBuffer   <= gunConY(7 downto 0);
 
                         when GUNCONYMSB =>
                            controllerState <= IDLE;
                            receiveValid    <= '1';
 
-                           -- TODO GunCon Y value will always be < 0xFF for NTSC, but may exceed 0x100 for PAL
-                           receiveBuffer   <= X"00";
+                           receiveBuffer   <= "0000000" & gunConY(8);
 
                         when BUTTONLSB => 
                            receiveBuffer(0) <= not KeySelect;

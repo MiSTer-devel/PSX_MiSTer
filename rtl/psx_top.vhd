@@ -479,7 +479,19 @@ architecture arch of psx_top is
    signal debug_lateTicks        : unsigned(15 downto 0);
    
    signal debugmodeOn            : std_logic;
-   
+
+   signal showGunCrosshairs      : std_logic := '1';
+   signal Gun1CrosshairOn        : std_logic;
+   signal Gun2CrosshairOn        : std_logic;
+   signal Gun1X                  : unsigned(7 downto 0);
+   signal Gun1Y                  : unsigned(7 downto 0);
+   signal Gun2X                  : unsigned(7 downto 0);
+   signal Gun2Y                  : unsigned(7 downto 0);
+   signal Gun1Y_scanlines        : unsigned(8 downto 0);
+   signal Gun2Y_scanlines        : unsigned(8 downto 0);
+   signal Gun1AimOffscreen       : std_logic;
+   signal Gun2AimOffscreen       : std_logic;
+
    -- memcard
    signal memcard1_pause         : std_logic;
    signal memcard2_pause         : std_logic;
@@ -874,6 +886,29 @@ begin
       SS_DataRead          => SS_DataRead_MEMORY      
    );
 
+   -- Gun coordinate mapping is toplevel so that the gun's
+   -- coordinates can be passed to both joypad
+   -- and GPU (for crosshair overlays)
+   Gun1X <= to_unsigned(to_integer(Analog1XP1 + 128), 8);
+   Gun2X <= to_unsigned(to_integer(Analog1XP2 + 128), 8);
+
+   Gun1Y <= to_unsigned(to_integer(Analog1YP1 + 128), 8);
+   Gun2Y <= to_unsigned(to_integer(Analog1YP2 + 128), 8);
+
+   Gun1AimOffscreen <= '1' when Gun1X = x"00" or Gun1X = x"FF" or Gun1Y = x"00" or Gun1Y = x"FF" else '0';
+   Gun2AimOffscreen <= '1' when Gun2X = x"00" or Gun2X = x"FF" or Gun2Y = x"00" or Gun2Y = x"FF" else '0';
+
+   Gun1CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon1 = '1' and Gun1AimOffscreen = '0' else '0';
+   Gun2CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon2 = '1' and Gun2AimOffscreen = '0' else '0';
+
+   Gun1Y_scanlines <= resize(Gun1Y, 9) + resize(Gun1Y(7 downto 3), 9)       -- Gun1Y * 288 / 256
+                      when (isPal = '1' and pal60 = '0')
+                      else resize(Gun1Y, 9) - resize(Gun1Y(7 downto 4), 9); -- Gun1Y * 240 / 256
+
+   Gun2Y_scanlines <= resize(Gun2Y, 9) + resize(Gun2Y(7 downto 3), 9)       -- Gun1Y * 288 / 256
+                      when (isPal = '1' and pal60 = '0')
+                      else resize(Gun2Y, 9) - resize(Gun2Y(7 downto 4), 9); -- Gun1Y * 240 / 256
+
    ijoypad: entity work.joypad
    port map 
    (
@@ -928,6 +963,12 @@ begin
       MouseRight           => MouseRight,
       MouseX               => MouseX,
       MouseY               => MouseY,
+      Gun1X                => Gun1X,
+      Gun2X                => Gun2X,
+      Gun1Y_scanlines      => Gun1Y_scanlines,
+      Gun2Y_scanlines      => Gun2Y_scanlines,
+      Gun1AimOffscreen     => Gun1AimOffscreen,
+      Gun2AimOffscreen     => Gun2AimOffscreen,
       
       mem1_request         => memDDR3card1_request,   
       mem1_BURSTCNT        => memDDR3card1_BURSTCNT,  
@@ -1249,7 +1290,7 @@ begin
    
    
    hblank <= hblank_intern;
-   
+
    igpu : entity work.gpu
    port map
    (
@@ -1268,6 +1309,14 @@ begin
       noTexture            => noTexture,
       debugmodeOn          => debugmodeOn,
       
+      Gun1CrosshairOn      => Gun1CrosshairOn,
+      Gun1X                => Gun1X,
+      Gun1Y_scanlines      => Gun1Y_scanlines,
+
+      Gun2CrosshairOn      => Gun2CrosshairOn,
+      Gun2X                => Gun2X,
+      Gun2Y_scanlines      => Gun2Y_scanlines,
+
       cdSlow               => cdSlow,
       
       errorOn              => errorOn,  
