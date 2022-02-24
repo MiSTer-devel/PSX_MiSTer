@@ -60,6 +60,7 @@ architecture arch of etb is
    
    -- testbench
    signal clkCount            : integer := 0;
+   signal cmdCount            : integer := 0;
    
 begin
 
@@ -101,6 +102,20 @@ begin
       isPal                   => '1',
       videoout_on             => '1',
       fpscountOn              => '0',
+      pal60                   => '0',
+      noTexture               => '0',
+      debugmodeOn             => '0',
+      
+      Gun1CrosshairOn         => '0',
+      Gun1X                   => (7 downto 0 => '0'),
+      Gun1Y_scanlines         => (8 downto 0 => '0'),
+                              
+      Gun2CrosshairOn         => '0',
+      Gun2X                   => (7 downto 0 => '0'),
+      Gun2Y_scanlines         => (8 downto 0 => '0'),
+      
+      debug_lateSamples       => (15 downto 0 => '0'),
+      debug_lateTicks         => (15 downto 0 => '0'),
       
       cdSlow                  => '0',
                               
@@ -121,6 +136,7 @@ begin
       DMA_GPU_readEna         => '1', -- hack -> make sure read fifo is always empty so vram2cpu doesn't stall
       DMA_GPU_write           => x"00000000",
       
+      vram_pause              => '0',      
       vram_BUSY               => DDRAM_BUSY,      
       vram_DOUT               => DDRAM_DOUT,      
       vram_DOUT_READY         => DDRAM_DOUT_READY,
@@ -131,13 +147,13 @@ begin
       vram_WE                 => DDRAM_WE,        
       vram_RD                 => DDRAM_RD,
 
-      hblank                => hblank,  
-      vblank                => vblank,  
-      video_ce              => video_ce,
-      video_interlace       => video_interlace,
-      video_r               => video_r, 
-      video_g               => video_g,    
-      video_b               => video_b,  
+      hblank                  => hblank,  
+      vblank                  => vblank,  
+      video_ce                => video_ce,
+      video_interlace         => video_interlace,
+      video_r                 => video_r, 
+      video_g                 => video_g,    
+      video_b                 => video_b,  
          
       loading_savestate       => loading_savestate,
       SS_reset                => '0',
@@ -238,6 +254,7 @@ begin
          bus_gpu_write     <= '1';
          
          clkCount <= clkCount + 1;
+         cmdCount <= cmdCount + 1;
          wait until rising_edge(clk1x);
          bus_gpu_write     <= '0';
       end loop;
@@ -246,7 +263,9 @@ begin
       
       wait for 10 ms;
       
-      report "DONE" severity failure;
+      if (cmdCount >= 0) then
+         report "DONE" severity failure;
+      end if;
       
    end process;
    

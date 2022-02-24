@@ -1136,8 +1136,6 @@ begin
    
    DMA_GPU_read <= vram2cpu_Fifo_Dout when (vram2cpu_Fifo_Empty = '0') else (others => '1');
    
-   GPUSTAT_ReadySendVRAM <= not vram2cpu_Fifo_Empty;
-   
    igpu_vram2cpu : entity work.gpu_vram2cpu
    port map
    (
@@ -1166,7 +1164,8 @@ begin
       
       Fifo_Dout            => vram2cpu_Fifo_Dout, 
       Fifo_Rd              => vram2cpu_Fifo_Rd,   
-      Fifo_Empty           => vram2cpu_Fifo_Empty
+      Fifo_Empty           => vram2cpu_Fifo_Empty,
+      Fifo_ready           => GPUSTAT_ReadySendVRAM
    );
    
    igpu_line : entity work.gpu_line
@@ -1834,7 +1833,7 @@ begin
             
             wait until rising_edge(clk2x);
             
-            if ((pipeline_pixelWrite = '1' or vram2vram_pixelWrite = '1') and pixelCount >= 0) then
+            if (pixelWrite = '1' and pixelCount >= 0) then
             
                write(line_out, to_integer(pixelAddr(10 downto 1)));
                write(line_out, string'(" ")); 

@@ -29,6 +29,7 @@ entity psx_top is
       ditherOff             : in  std_logic;
       fpscountOn            : in  std_logic;
       errorOn               : in  std_logic;
+      PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
@@ -481,6 +482,10 @@ architecture arch of psx_top is
    signal debug_lateTicks        : unsigned(15 downto 0);
    
    signal debugmodeOn            : std_logic;
+   
+   signal serial_newchar         : std_logic;
+   signal serial_newline         : std_logic;
+   signal serial_char            : std_logic_vector(7 downto 0);
 
    signal showGunCrosshairs      : std_logic := '1';
    signal Gun1CrosshairOn        : std_logic;
@@ -745,6 +750,7 @@ begin
          if (REPRODUCIBLESPUDMA    = '1') then debugmodeOn <= '1'; end if;
          if (videoout_on           = '0') then debugmodeOn <= '1'; end if;
          if (pal60                 = '1') then debugmodeOn <= '1'; end if;
+         if (PATCHSERIAL           = '1') then debugmodeOn <= '1'; end if;
          
       end if;
    end process;
@@ -1337,7 +1343,7 @@ begin
       errorPOLY            => errorPOLY,
       errorGPU             => errorGPU, 
       errorMASK            => errorMASK, 
-      errorFIFO            => errorGPUFIFO, 
+      errorFIFO            => errorGPUFIFO,
       
       bus_addr             => bus_gpu_addr,     
       bus_dataWrite        => bus_gpu_dataWrite,
@@ -1526,7 +1532,11 @@ begin
       bus_read             => bus_exp2_read,     
       bus_write            => bus_exp2_write,    
       bus_writeMask        => bus_exp2_writeMask, 
-      bus_dataRead         => bus_exp2_dataRead
+      bus_dataRead         => bus_exp2_dataRead,
+      
+      serial_newchar       => serial_newchar,
+      serial_newline       => serial_newline,
+      serial_char          => serial_char
    );
 
    imemorymux : entity work.memorymux
@@ -1543,6 +1553,7 @@ begin
       
       fastboot             => fastboot,
       NOMEMWAIT            => FASTMEM,
+      PATCHSERIAL          => PATCHSERIAL,
             
       ram_dataWrite        => ram_cpu_dataWrite,
       ram_dataRead         => ram_dataRead, 

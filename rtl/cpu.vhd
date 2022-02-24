@@ -268,7 +268,7 @@ architecture arch of cpu is
    signal execute_gte_cmdData          : unsigned(31 downto 0);
    signal execute_gte_cmdEna           : std_logic := '0'; 
    signal execute_gte_readAddr         : unsigned(5 downto 0) := (others => '0');
-   signal execute_lastreadGTE          : std_logic := '0'; 
+   signal execute_lastreadCOP          : std_logic := '0'; 
 
    --wires
    signal branch                       : std_logic := '0';
@@ -302,7 +302,7 @@ architecture arch of cpu is
    signal EXEgte_writeEna              : std_logic := '0';    
    signal EXEgte_cmdData               : unsigned(31 downto 0);
    signal EXEgte_cmdEna                : std_logic := '0'; 
-   signal EXElastreadGTE               : std_logic := '0'; 
+   signal EXElastreadCOP               : std_logic := '0'; 
    
    --MULT/DIV
    type CPU_HILOCALC is
@@ -969,17 +969,17 @@ begin
 --############################### stage 3
 --##############################################################
 
-   process (decodeValue1, decodeValue2, decodeSource1, decodeSource2, resultTarget, writebackTarget, writeDoneTarget, resultWriteEnable, writebackWriteEnable, writeDoneWriteEnable, resultData, writebackData, writeDoneData, blockLoadforward, execute_lastreadGTE)
+   process (decodeValue1, decodeValue2, decodeSource1, decodeSource2, resultTarget, writebackTarget, writeDoneTarget, resultWriteEnable, writebackWriteEnable, writeDoneWriteEnable, resultData, writebackData, writeDoneData, blockLoadforward, execute_lastreadCOP)
    begin
    
       value1 <= decodeValue1;
-      if    (decodeSource1 > 0 and resultTarget    = decodeSource1 and resultWriteEnable    = '1' and execute_lastreadGTE = '0') then value1 <= resultData;
+      if    (decodeSource1 > 0 and resultTarget    = decodeSource1 and resultWriteEnable    = '1' and execute_lastreadCOP = '0') then value1 <= resultData;
       elsif (decodeSource1 > 0 and writebackTarget = decodeSource1 and writebackWriteEnable = '1')                               then value1 <= writebackData;
       elsif (decodeSource1 > 0 and writeDoneTarget = decodeSource1 and writeDoneWriteEnable = '1')                               then value1 <= writeDoneData;
       end if;
       
       value2 <= decodeValue2;
-      if    (decodeSource2 > 0 and resultTarget    = decodeSource2 and resultWriteEnable    = '1' and execute_lastreadGTE = '0') then value2 <= resultData;
+      if    (decodeSource2 > 0 and resultTarget    = decodeSource2 and resultWriteEnable    = '1' and execute_lastreadCOP = '0') then value2 <= resultData;
       elsif (decodeSource2 > 0 and writebackTarget = decodeSource2 and writebackWriteEnable = '1' and blockLoadforward = '0'   ) then value2 <= writebackData;
       elsif (decodeSource2 > 0 and writeDoneTarget = decodeSource2 and writeDoneWriteEnable = '1')                               then value2 <= writeDoneData;
       end if;
@@ -1029,7 +1029,7 @@ begin
       EXEhiUpdate             <= '0';
       EXEloUpdate             <= '0';
       
-      EXElastreadGTE          <= '0';
+      EXElastreadCOP          <= '0';
       
       EXEgte_cmdEna           <= '0';
       EXEgte_cmdData          <= opcode1;
@@ -1352,6 +1352,7 @@ begin
                      
                         when 0 => -- mfcn
                            EXEresultWriteEnable <= '1';
+                           EXElastreadCOP       <= '1';
                            case (to_integer(decodeRD)) is
                               when 16#3# => EXEresultData <= cop0_BPC;
                               when 16#5# => EXEresultData <= cop0_BDA;
@@ -1396,7 +1397,7 @@ begin
                         when x"0" => --mfcn
                            EXEresultWriteEnable <= '1';
                            EXEresultData        <= gte_readData;
-                           EXElastreadGTE       <= '1';
+                           EXElastreadCOP       <= '1';
                            if (gte_busy = '1' or gte_cmdEna = '1' or execute_gte_cmdEna = '1') then
                               stallNew3    <= '1';
                               EXEstalltype <= EXESTALLTYPE_GTE;
@@ -1407,7 +1408,7 @@ begin
                         when x"2" => --cfcn
                            EXEresultWriteEnable <= '1';
                            EXEresultData        <= gte_readData;
-                           EXElastreadGTE       <= '1';
+                           EXElastreadCOP       <= '1';
                            if (gte_busy = '1' or gte_cmdEna = '1' or execute_gte_cmdEna = '1') then
                               stallNew3    <= '1';
                               EXEstalltype <= EXESTALLTYPE_GTE;
@@ -1643,7 +1644,7 @@ begin
    ss_out(58)               <= std_logic_vector(execute_gte_cmdData);        
    ss_out(59)(9)            <= execute_gte_cmdEna;   
    
-   ss_out(59)(10)           <= execute_lastreadGTE;         
+   ss_out(59)(10)           <= execute_lastreadCOP;         
    
    process (clk1x)
    begin
@@ -1701,7 +1702,7 @@ begin
             execute_gte_cmdData           <= unsigned(ss_in(58));
             execute_gte_cmdEna            <= ss_in(59)(9);
             
-            execute_lastreadGTE           <= ss_in(59)(10);
+            execute_lastreadCOP           <= ss_in(59)(10);
             
             DIVstart                      <= '0';
             
@@ -1806,7 +1807,7 @@ begin
                   execute_gte_cmdEna            <= EXEgte_cmdEna;  
 
                   execute_gte_readAddr          <= decode_gte_readAddr;  
-                  execute_lastreadGTE           <= EXElastreadGTE;              
+                  execute_lastreadCOP           <= EXElastreadCOP;              
 
                   if (EXECOP0WriteEnable = '1') then
                      case (to_integer(EXECOP0WriteDestination)) is

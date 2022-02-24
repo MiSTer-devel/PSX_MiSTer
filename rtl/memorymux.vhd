@@ -14,6 +14,7 @@ entity memorymux is
       
       fastboot             : in  std_logic;
       NOMEMWAIT            : in  std_logic;
+      PATCHSERIAL          : in  std_logic;
       
       isIdle               : out std_logic;
       
@@ -536,6 +537,9 @@ begin
                            when "11" => mem_dataRead_buf <= x"000000" & biosPatch(31 downto 24);
                            when others => null;
                         end case;
+                     elsif (PATCHSERIAL = '1' and (to_integer(addressBIOS_buf(18 downto 2)) = 16#1BC3# or to_integer(addressBIOS_buf(18 downto 2)) = 16#1BC5#)) then
+                        if (to_integer(addressBIOS_buf(18 downto 2)) = 16#1BC3#) then mem_dataRead_buf <= x"24010001"; end if;
+                        if (to_integer(addressBIOS_buf(18 downto 2)) = 16#1BC5#) then mem_dataRead_buf <= x"AF81A9C0"; end if;
                      else
                         if (ram_Adr(0) = '1') then
                            mem_dataRead_buf <= x"00" & ram_dataRead(31 downto 8);

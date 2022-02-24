@@ -374,23 +374,7 @@ begin
             
             pipeline_stall_1 <= pipeline_stall;
             
-            if (pipeline_busy = '0') then
-               drawMode       <= drawMode_in;      
-               DrawPixelsMask <= DrawPixelsMask_in;
-               SetMask        <= SetMask_in;       
-            end if;
-            
-            if (clearCache = '1') then
-               clearCacheBuffer <= '1';
-               textPalFetched   <= '0';
-            end if;
-            
-            if (textPalInNew = '1' and drawMode_in(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
-               textPalReq  <= not noTexture;
-               textPalReqX <= textPalInX;
-               textPalReqY <= textPalInY;
-            end if;
-            
+            -- fetch of texture and palette data
             case (state) is
                when IDLE =>
                   if (clearCacheBuffer = '1' and pipeline_busy = '0') then
@@ -460,6 +444,29 @@ begin
                
             end case;
             
+            -- new palette request 
+            if (pipeline_busy = '0') then
+               drawMode       <= drawMode_in;      
+               DrawPixelsMask <= DrawPixelsMask_in;
+               SetMask        <= SetMask_in; 
+               if (drawMode_in(8) = '0' and drawMode_in(7) /= drawMode(7)) then
+                  textPalReq  <= not noTexture;
+               end if;
+            end if;
+            
+            if (textPalInNew = '1' and drawMode_in(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
+               textPalReq  <= not noTexture;
+               textPalReqX <= textPalInX;
+               textPalReqY <= textPalInY;
+            end if;
+            
+            -- clear cache request
+            if (clearCache = '1') then
+               clearCacheBuffer <= '1';
+               textPalFetched   <= '0';
+            end if;
+            
+            -- pixel pipeline
             if (pipeline_stall = '1' and pipeline_stall_1 = '0') then
                stageS_valid         <= pipeline_new and ((not DrawPixelsMask) or (not vramLineData(15)));
                stageS_texture       <= pipeline_texture;

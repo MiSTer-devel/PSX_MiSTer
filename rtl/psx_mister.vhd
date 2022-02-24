@@ -25,6 +25,7 @@ entity psx_mister is
       ditherOff             : in  std_logic;
       fpscountOn            : in  std_logic;
       errorOn               : in  std_logic;
+      PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
@@ -224,6 +225,7 @@ begin
       ditherOff             => ditherOff,
       fpscountOn            => fpscountOn,
       errorOn               => errorOn,
+      PATCHSERIAL           => PATCHSERIAL,
       noTexture             => noTexture,
       SPUon                 => SPUon,
       SPUSDRAM              => SPUSDRAM,

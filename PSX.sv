@@ -230,7 +230,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXX         X
+// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXXXX       X
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -300,6 +300,7 @@ parameter CONF_STR = {
 	"P3oK,CD Inserted,Yes,No;",
 	"P3OF,Force 60Hz PAL,Off,On;",
 	"P3OR,Textures,On,Off;",
+	"P3oM,Patch TTY,Off,On;",
 	"P3T1,Advance Pause;",
 
 	"- ;",
@@ -663,6 +664,7 @@ psx
    .ditherOff(status[22]),
    .fpscountOn(status[28]),
    .errorOn(~status[29]),
+   .PATCHSERIAL(status[54]),
    .noTexture(status[27]),
    .SPUon(~status[30]),
    .SPUSDRAM(status[44] & SDRAM2_EN),
