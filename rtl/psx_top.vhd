@@ -905,13 +905,9 @@ begin
    Gun1CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon1 = '1' and Gun1AimOffscreen = '0' else '0';
    Gun2CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon2 = '1' and Gun2AimOffscreen = '0' else '0';
 
-   Gun1Y_scanlines <= resize(Gun1Y, 9) + resize(Gun1Y(7 downto 3), 9)       -- Gun1Y * 288 / 256
-                      when (isPal = '1' and pal60 = '0')
-                      else resize(Gun1Y, 9) - resize(Gun1Y(7 downto 4), 9); -- Gun1Y * 240 / 256
-
-   Gun2Y_scanlines <= resize(Gun2Y, 9) + resize(Gun2Y(7 downto 3), 9)       -- Gun1Y * 288 / 256
-                      when (isPal = '1' and pal60 = '0')
-                      else resize(Gun2Y, 9) - resize(Gun2Y(7 downto 4), 9); -- Gun1Y * 240 / 256
+   -- Map the gun's Y coordinate to 240 scanlines
+   Gun1Y_scanlines <= resize(Gun1Y, 9) - resize(Gun1Y(7 downto 4), 9); -- Gun1Y * 240 / 256
+   Gun2Y_scanlines <= resize(Gun2Y, 9) - resize(Gun2Y(7 downto 4), 9); -- Gun1Y * 240 / 256
 
    ijoypad: entity work.joypad
    port map 
@@ -921,6 +917,8 @@ begin
       clk2xIndex           => clk2xIndex,
       ce                   => ce,   
       reset                => reset_intern,
+
+      isPal                => isPal, -- passed through for GunCon
       
       PadPortEnable1       => PadPortEnable1,
       PadPortAnalog1       => PadPortAnalog1,

@@ -535,18 +535,24 @@ begin
    Gun1Y_screen <= '0' & Gun1Y_scanlines when interlacedMode = '0' else Gun1Y_scanlines & '0';
    Gun2Y_screen <= '0' & Gun2Y_scanlines when interlacedMode = '0' else Gun2Y_scanlines & '0';
 
-   -- Lightgun crosshairs
-   --overlay_Gun1_ena <= '1' when Gun1CrosshairOn = '1' and (
-   --                    (xpos = Gun1X_screen and to_integer(lineDisp) > Gun1Y_screen - 3 and to_integer(lineDisp) < Gun1Y_screen + 3)
-   --                    or (to_integer(lineDisp) = Gun1Y_screen and xpos > Gun1X_screen - 3 and xpos < Gun1X_screen + 3)
-   --            ) else '0';
-   --overlay_Gun2_ena <= '1' when Gun2CrosshairOn = '1' and (
-   --                    (xpos = Gun2X_screen and to_integer(lineDisp) > Gun2Y_screen - 3 and to_integer(lineDisp) < Gun2Y_screen + 3)
-   --                    or (to_integer(lineDisp) = Gun2Y_screen and xpos > Gun2X_screen - 3 and xpos < Gun2X_screen + 3)
-   --            ) else '0';
-   
-   overlay_Gun1_ena <= '0';
-   overlay_Gun2_ena <= '0';
+   -- Lightgun crosshairs (currently single pixel to save resources)
+   process (clk2x)
+   begin
+      if rising_edge(clk2x) then
+         if (video_ce = '1') then
+            overlay_Gun1_ena <= '0';
+            overlay_Gun2_ena <= '0';
+
+            if (Gun1CrosshairOn = '1' and xpos = Gun1X_screen and to_integer(lineDisp) = Gun1Y_screen) then
+               overlay_Gun1_ena <= '1';
+            end if;
+
+            if (Gun2CrosshairOn = '1' and xpos = Gun2X_screen and to_integer(lineDisp) = Gun2Y_screen) then
+               overlay_Gun2_ena <= '1';
+            end if;
+         end if;
+      end if;
+   end process;
 
 end architecture;
 
