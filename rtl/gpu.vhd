@@ -440,7 +440,7 @@ begin
    GPUSTAT_DMADataRequest <= '0' when (GPUSTAT_DMADirection = "00") else
                              GPUSTAT_ReadyRecDMA when (GPUSTAT_DMADirection = "01") else
                              GPUSTAT_ReadyRecDMA when (GPUSTAT_DMADirection = "10") else
-                             GPUSTAT_ReadySendVRAM;                   
+                             not vram2cpu_Fifo_Empty; -- GPUSTAT_ReadySendVRAM cannot be used, because data is read earlier                
 
    video_interlace        <= GPUSTAT_VerRes and interlacedDisplayField;
 

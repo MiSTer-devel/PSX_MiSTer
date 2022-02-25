@@ -2459,7 +2459,7 @@ begin
          end if;
          
          SS_idle <= '0';
-         if (FifoIn_Empty = '1' and FifoOut_Empty = '1' and state = IDLE and sampleticks < 760) then
+         if (FifoIn_Empty = '1' and FifoOut_Empty = '1' and state = IDLE and sampleticks < 760 and sampleticks > 0 and stashedSamples = 0) then
             SS_idle <= '1';
          end if;
          

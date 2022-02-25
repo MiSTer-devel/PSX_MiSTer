@@ -254,6 +254,7 @@ begin
             
          if (reset = '1') then
             
+            state                <= IDLE;
             fifoOut_reset        <= '1';
             cache_transfer_valid <= '0';
             cache_voice_valid    <= (others => '0');

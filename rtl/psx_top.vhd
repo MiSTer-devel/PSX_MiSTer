@@ -688,7 +688,7 @@ begin
             else
          
                -- switch to pause/savestate pausing
-               if ((pause = '1' or savestate_pause = '1' or memcard1_pause = '1' or memcard2_pause = '1') and cpuPaused = '0' and dmaOn = '0' and stallNext = '0' and memMuxIdle = '1' and SS_idle = '1') then
+               if ((pause = '1' or savestate_pause = '1' or memcard1_pause = '1' or memcard2_pause = '1') and cpuPaused = '0' and dmaRequest = '0' and canDMA = '1' and SS_idle = '1') then
                   pausing <= '1';
                   ce      <= '0';
                   ce_cpu  <= '0';
