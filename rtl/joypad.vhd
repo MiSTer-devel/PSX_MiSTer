@@ -94,37 +94,37 @@ architecture arch of joypad is
    signal JOY_MODE            : std_logic_vector(15 downto 0);
    signal JOY_CTRL            : std_logic_vector(15 downto 0);
    signal JOY_BAUD            : std_logic_vector(15 downto 0);
+   signal JOY_CTRL_13_1       : std_logic;
       
    signal beginTransfer       : std_logic := '0';
    signal actionNext          : std_logic := '0';
    signal actionNextPad       : std_logic := '0';
       
    -- devices  
-   signal isActivePad1        : std_logic;
-   signal isActivePad2        : std_logic;
+   signal isActivePad         : std_logic;
    signal isActiveMem1        : std_logic;
    signal isActiveMem2        : std_logic;
       
    signal selectedPort1       : std_logic;
    signal selectedPort2       : std_logic;
+   signal selectedPort        : std_logic;
       
    signal ack                 : std_logic;
-   signal ackPad1             : std_logic;
-   signal ackPad2             : std_logic;
+   signal ackPad              : std_logic;
    signal ackMem1             : std_logic;
    signal ackMem2             : std_logic;
    
    signal receiveBuffer       : std_logic_vector(7 downto 0);
-   signal receiveBufferPad1   : std_logic_vector(7 downto 0);
-   signal receiveBufferPad2   : std_logic_vector(7 downto 0);
+   signal receiveBufferPad    : std_logic_vector(7 downto 0);
    signal receiveBufferMem1   : std_logic_vector(7 downto 0);
    signal receiveBufferMem2   : std_logic_vector(7 downto 0);
    
    signal receiveValid        : std_logic;
-   signal receiveValidPad1    : std_logic;
-   signal receiveValidPad2    : std_logic;
+   signal receiveValidPad     : std_logic;
    signal receiveValidMem1    : std_logic;
    signal receiveValidMem2    : std_logic;
+
+   signal joypad_selected     : joypad_t;
 
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
@@ -297,7 +297,7 @@ begin
                if (transmitting = '1') then
                   JOY_CTRL(2)    <= '1';
                   if (receiveValid = '1') then
-                     receiveBuffer <= receiveBufferPad1 or receiveBufferPad2 or receiveBufferMem1 or receiveBufferMem2;
+                     receiveBuffer <= receiveBufferPad or receiveBufferMem1 or receiveBufferMem2;
                   else
                      receiveBuffer  <= x"FF";
                   end if;
@@ -323,37 +323,41 @@ begin
                end if;
             end if;
             
+            JOY_CTRL_13_1 <= JOY_CTRL(13);
          end if;
       end if;
    end process;
    
-   ack          <= ackPad1 or ackPad2 or ackMem1 or ackMem2;
-   receiveValid <= receiveValidPad1 or receiveValidPad2 or receiveValidMem1 or receiveValidMem2;
+   ack          <= ackPad or ackMem1 or ackMem2;
+   receiveValid <= receiveValidPad or receiveValidMem1 or receiveValidMem2;
    
    selectedPort1 <= '1' when (JOY_CTRL(13) = '0' and JOY_CTRL(1 downto 0) = "11") else '0';
    selectedPort2 <= '1' when (JOY_CTRL(13) = '1' and JOY_CTRL(1 downto 0) = "11") else '0';
-   
-   ijoypad_pad1 : entity work.joypad_pad
+   selectedPort  <= '1' when (JOY_CTRL(13) = JOY_CTRL_13_1 and JOY_CTRL(1 downto 0) = "11") else '0';
+
+   joypad_selected <= joypad2 when selectedPort2 else joypad1;
+
+   ijoypad_pad : entity work.joypad_pad
    port map
    (
       clk1x                => clk1x,    
       ce                   => ce,       
       reset                => reset,    
        
-      joypad               => joypad1,
+      joypad               => joypad_selected,
       isPal                => isPal,
 
-      selected             => selectedPort1,
+      selected             => selectedPort,
       actionNext           => actionNextPad,
       transmitting         => transmitting,
       transmitValue        => transmitValue,
  
-      isActive             => isActivePad1,
-      slotIdle             => not isActiveMem1,
+      isActive             => isActivePad,
+      slotIdle             => not (isActiveMem1 or isActiveMem2),
 
-      receiveValid         => receiveValidPad1,
-      receiveBuffer        => receiveBufferPad1,
-      ack                  => ackPad1,
+      receiveValid         => receiveValidPad,
+      receiveBuffer        => receiveBufferPad,
+      ack                  => ackPad,
 
       rumbleOn             => rumbleOn,
 
@@ -365,40 +369,6 @@ begin
       GunX                 => Gun1X,
       GunY_scanlines       => Gun1Y_scanlines,
       GunAimOffscreen      => Gun1AimOffscreen
-   );
-   
-   ijoypad_pad2 : entity work.joypad_pad
-   port map
-   (
-      clk1x                => clk1x,    
-      ce                   => ce,       
-      reset                => reset,    
-       
-      joypad               => joypad2,
-      isPal                => isPal,
-
-      selected             => selectedPort2,
-      actionNext           => actionNextPad,
-      transmitting         => transmitting,
-      transmitValue        => transmitValue,
- 
-      isActive             => isActivePad2,
-      slotIdle             => not isActiveMem2,
-
-      receiveValid         => receiveValidPad2,
-      receiveBuffer        => receiveBufferPad2,
-      ack                  => ackPad2,
-
-      rumbleOn             => rumbleOn,
-
-      MouseEvent           => MouseEvent,
-      MouseLeft            => MouseLeft,
-      MouseRight           => MouseRight,
-      MouseX               => MouseX,
-      MouseY               => MouseY,
-      GunX                 => Gun2X,
-      GunY_scanlines       => Gun2Y_scanlines,
-      GunAimOffscreen      => Gun2AimOffscreen
    );
    
    ijoypad_mem1 : entity work.joypad_mem
@@ -428,7 +398,7 @@ begin
       transmitValue        => transmitValue,
       
       isActive             => isActiveMem1,
-      slotIdle             => not isActivePad1,
+      slotIdle             => not isActivePad,
       
       receiveValid         => receiveValidMem1,
       receiveBuffer        => receiveBufferMem1,
@@ -462,7 +432,7 @@ begin
       transmitValue        => transmitValue,
       
       isActive             => isActiveMem2,
-      slotIdle             => not isActivePad2,
+      slotIdle             => not isActivePad,
       
       receiveValid         => receiveValidMem2,
       receiveBuffer        => receiveBufferMem2,
@@ -488,7 +458,7 @@ begin
          end if;
          
          SS_idle <= '0';
-         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNext = '0' and isActivePad1 = '0' and isActivePad2 = '0') then
+         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNext = '0' and isActivePad = '0') then
             SS_idle <= '1';
          end if;
          
