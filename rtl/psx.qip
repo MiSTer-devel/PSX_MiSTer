@@ -19,6 +19,7 @@ set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_overla
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_videoout.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) irq.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) pJoypad.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) joypad_pad.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) joypad_mem.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) joypad.vhd ]

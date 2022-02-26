@@ -3,6 +3,7 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all; 
 
 use STD.textio.all;
+use work.pJoypad.all;
 
 entity joypad is
    port 
@@ -15,16 +16,8 @@ entity joypad is
 
       isPal                : in  std_logic; -- passed through for GunCon
       
-      PadPortEnable1       : in  std_logic;
-      PadPortAnalog1       : in  std_logic;
-      PadPortMouse1        : in  std_logic;
-      PadPortGunCon1       : in  std_logic;
-      PadPortNeGcon1       : in  std_logic;
-      PadPortEnable2       : in  std_logic;
-      PadPortAnalog2       : in  std_logic;
-      PadPortMouse2        : in  std_logic;
-      PadPortGunCon2       : in  std_logic;
-      PadPortNeGcon2       : in  std_logic;
+      joypad1              : in  joypad_t;
+      joypad2              : in  joypad_t;
       
       memcard1_available   : in  std_logic;
       memcard2_available   : in  std_logic;
@@ -33,30 +26,6 @@ entity joypad is
       
       irqRequest           : out std_logic := '0';
       
-      KeyTriangle          : in  std_logic_vector(1 downto 0); 
-      KeyCircle            : in  std_logic_vector(1 downto 0); 
-      KeyCross             : in  std_logic_vector(1 downto 0); 
-      KeySquare            : in  std_logic_vector(1 downto 0);
-      KeySelect            : in  std_logic_vector(1 downto 0);
-      KeyStart             : in  std_logic_vector(1 downto 0);
-      KeyRight             : in  std_logic_vector(1 downto 0);
-      KeyLeft              : in  std_logic_vector(1 downto 0);
-      KeyUp                : in  std_logic_vector(1 downto 0);
-      KeyDown              : in  std_logic_vector(1 downto 0);
-      KeyR1                : in  std_logic_vector(1 downto 0);
-      KeyR2                : in  std_logic_vector(1 downto 0);
-      KeyR3                : in  std_logic_vector(1 downto 0);
-      KeyL1                : in  std_logic_vector(1 downto 0);
-      KeyL2                : in  std_logic_vector(1 downto 0);
-      KeyL3                : in  std_logic_vector(1 downto 0);
-      Analog1XP1           : in  signed(7 downto 0);
-      Analog1YP1           : in  signed(7 downto 0);
-      Analog2XP1           : in  signed(7 downto 0);
-      Analog2YP1           : in  signed(7 downto 0);         
-      Analog1XP2           : in  signed(7 downto 0);
-      Analog1YP2           : in  signed(7 downto 0);
-      Analog2XP2           : in  signed(7 downto 0);
-      Analog2YP2           : in  signed(7 downto 0);   
       MouseEvent           : in  std_logic;
       MouseLeft            : in  std_logic;
       MouseRight           : in  std_logic;
@@ -371,11 +340,7 @@ begin
       ce                   => ce,       
       reset                => reset,    
        
-      PortEnabled          => PadPortEnable1,
-      analogPad            => PadPortAnalog1,
-      isMouse              => PadPortMouse1,
-      isGunCon             => PadPortGunCon1,
-      isNeGcon             => PadPortNeGcon1,
+      joypad               => joypad1,
       isPal                => isPal,
 
       selected             => selectedPad1,
@@ -392,26 +357,6 @@ begin
 
       rumbleOn             => rumbleOn,
 
-      KeyTriangle          => KeyTriangle(0),
-      KeyCircle            => KeyCircle(0),  
-      KeyCross             => KeyCross(0),   
-      KeySquare            => KeySquare(0),  
-      KeySelect            => KeySelect(0),  
-      KeyStart             => KeyStart(0),   
-      KeyRight             => KeyRight(0),   
-      KeyLeft              => KeyLeft(0),    
-      KeyUp                => KeyUp(0),      
-      KeyDown              => KeyDown(0),    
-      KeyR1                => KeyR1(0),      
-      KeyR2                => KeyR2(0),      
-      KeyR3                => KeyR3(0),      
-      KeyL1                => KeyL1(0),      
-      KeyL2                => KeyL2(0),      
-      KeyL3                => KeyL3(0),      
-      Analog1X             => Analog1XP1,   
-      Analog1Y             => Analog1YP1,   
-      Analog2X             => Analog2XP1,   
-      Analog2Y             => Analog2YP1,
       MouseEvent           => MouseEvent,
       MouseLeft            => MouseLeft,
       MouseRight           => MouseRight,
@@ -429,11 +374,7 @@ begin
       ce                   => ce,       
       reset                => reset,    
        
-      PortEnabled          => PadPortEnable2,
-      analogPad            => PadPortAnalog2,
-      isMouse              => PadPortMouse2,
-      isGunCon             => PadPortGunCon2,
-      isNeGcon             => PadPortNeGcon2,
+      joypad               => joypad2,
       isPal                => isPal,
 
       selected             => selectedPad2,
@@ -450,26 +391,6 @@ begin
 
       rumbleOn             => rumbleOn,
 
-      KeyTriangle          => KeyTriangle(1),
-      KeyCircle            => KeyCircle(1),  
-      KeyCross             => KeyCross(1),   
-      KeySquare            => KeySquare(1),  
-      KeySelect            => KeySelect(1),  
-      KeyStart             => KeyStart(1),   
-      KeyRight             => KeyRight(1),   
-      KeyLeft              => KeyLeft(1),    
-      KeyUp                => KeyUp(1),      
-      KeyDown              => KeyDown(1),    
-      KeyR1                => KeyR1(1),      
-      KeyR2                => KeyR2(1),      
-      KeyR3                => KeyR3(1),      
-      KeyL1                => KeyL1(1),      
-      KeyL2                => KeyL2(1),      
-      KeyL3                => KeyL3(1),      
-      Analog1X             => Analog1XP2,   
-      Analog1Y             => Analog1YP2,   
-      Analog2X             => Analog2XP2,   
-      Analog2Y             => Analog2YP2,
       MouseEvent           => MouseEvent,
       MouseLeft            => MouseLeft,
       MouseRight           => MouseRight,

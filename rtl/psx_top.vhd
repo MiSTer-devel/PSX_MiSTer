@@ -5,6 +5,7 @@ use IEEE.numeric_std.all;
 library MEM;
 use work.pProc_bus.all;
 use work.pexport.all;
+use work.pJoypad.all;
 
 entity psx_top is
    generic
@@ -127,41 +128,10 @@ entity psx_top is
       video_r               : out std_logic_vector(7 downto 0);
       video_g               : out std_logic_vector(7 downto 0);
       video_b               : out std_logic_vector(7 downto 0);
-      -- Keys - all active high   
-      PadPortEnable1        : in  std_logic;
-      PadPortAnalog1        : in  std_logic;
-      PadPortMouse1         : in  std_logic;
-      PadPortGunCon1        : in  std_logic;
-      PadPortneGcon1        : in  std_logic;
-      PadPortEnable2        : in  std_logic;
-      PadPortAnalog2        : in  std_logic;
-      PadPortMouse2         : in  std_logic;
-      PadPortGunCon2        : in  std_logic;
-      PadPortneGcon2        : in  std_logic;
-      KeyTriangle           : in  std_logic_vector(1 downto 0); 
-      KeyCircle             : in  std_logic_vector(1 downto 0); 
-      KeyCross              : in  std_logic_vector(1 downto 0); 
-      KeySquare             : in  std_logic_vector(1 downto 0);
-      KeySelect             : in  std_logic_vector(1 downto 0);
-      KeyStart              : in  std_logic_vector(1 downto 0);
-      KeyRight              : in  std_logic_vector(1 downto 0);
-      KeyLeft               : in  std_logic_vector(1 downto 0);
-      KeyUp                 : in  std_logic_vector(1 downto 0);
-      KeyDown               : in  std_logic_vector(1 downto 0);
-      KeyR1                 : in  std_logic_vector(1 downto 0);
-      KeyR2                 : in  std_logic_vector(1 downto 0);
-      KeyR3                 : in  std_logic_vector(1 downto 0);
-      KeyL1                 : in  std_logic_vector(1 downto 0);
-      KeyL2                 : in  std_logic_vector(1 downto 0);
-      KeyL3                 : in  std_logic_vector(1 downto 0);
-      Analog1XP1            : in  signed(7 downto 0);
-      Analog1YP1            : in  signed(7 downto 0);
-      Analog2XP1            : in  signed(7 downto 0);
-      Analog2YP1            : in  signed(7 downto 0);         
-      Analog1XP2            : in  signed(7 downto 0);
-      Analog1YP2            : in  signed(7 downto 0);
-      Analog2XP2            : in  signed(7 downto 0);
-      Analog2YP2            : in  signed(7 downto 0);              
+
+      joypad1               : in  joypad_t;
+      joypad2               : in  joypad_t;
+
       MouseEvent            : in  std_logic;
       MouseLeft             : in  std_logic;
       MouseRight            : in  std_logic;
@@ -899,17 +869,17 @@ begin
    -- Gun coordinate mapping is toplevel so that the gun's
    -- coordinates can be passed to both joypad
    -- and GPU (for crosshair overlays)
-   Gun1X <= to_unsigned(to_integer(Analog1XP1 + 128), 8);
-   Gun2X <= to_unsigned(to_integer(Analog1XP2 + 128), 8);
+   Gun1X <= to_unsigned(to_integer(joypad1.Analog1X + 128), 8);
+   Gun2X <= to_unsigned(to_integer(joypad2.Analog1X + 128), 8);
 
-   Gun1Y <= to_unsigned(to_integer(Analog1YP1 + 128), 8);
-   Gun2Y <= to_unsigned(to_integer(Analog1YP2 + 128), 8);
+   Gun1Y <= to_unsigned(to_integer(joypad1.Analog1Y + 128), 8);
+   Gun2Y <= to_unsigned(to_integer(joypad1.Analog1Y + 128), 8);
 
    Gun1AimOffscreen <= '1' when Gun1X = x"00" or Gun1X = x"FF" or Gun1Y = x"00" or Gun1Y = x"FF" else '0';
    Gun2AimOffscreen <= '1' when Gun2X = x"00" or Gun2X = x"FF" or Gun2Y = x"00" or Gun2Y = x"FF" else '0';
 
-   Gun1CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon1 = '1' and Gun1AimOffscreen = '0' else '0';
-   Gun2CrosshairOn <= '1' when showGunCrosshairs = '1' and PadPortGunCon2 = '1' and Gun2AimOffscreen = '0' else '0';
+   Gun1CrosshairOn <= '1' when showGunCrosshairs = '1' and joypad1.PadPortGunCon = '1' and Gun1AimOffscreen = '0' else '0';
+   Gun2CrosshairOn <= '1' when showGunCrosshairs = '1' and joypad2.PadPortGunCon = '1' and Gun2AimOffscreen = '0' else '0';
 
    -- Map the gun's Y coordinate to 240 scanlines
    Gun1Y_scanlines <= resize(Gun1Y, 9) - resize(Gun1Y(7 downto 4), 9); -- Gun1Y * 240 / 256
@@ -926,46 +896,14 @@ begin
 
       isPal                => isPal, -- passed through for GunCon
       
-      PadPortEnable1       => PadPortEnable1,
-      PadPortAnalog1       => PadPortAnalog1,
-      PadPortMouse1        => PadPortMouse1,
-      PadPortGunCon1       => PadPortGunCon1,
-      PadPortNeGcon1       => PadPortNeGcon1,
-      PadPortEnable2       => PadPortEnable2,
-      PadPortAnalog2       => PadPortAnalog2,
-      PadPortMouse2        => PadPortMouse2, 
-      PadPortGunCon2       => PadPortGunCon2,
-      PadPortNeGcon2       => PadPortNeGcon2,
+      joypad1              => joypad1,
+      joypad2              => joypad2,
       
       memcard1_available   => memcard1_available,
       memcard2_available   => memcard2_available,
       
       irqRequest           => irq_PAD,
       
-      KeyTriangle          => KeyTriangle,           
-      KeyCircle            => KeyCircle,           
-      KeyCross             => KeyCross,           
-      KeySquare            => KeySquare,           
-      KeySelect            => KeySelect,      
-      KeyStart             => KeyStart,       
-      KeyRight             => KeyRight,       
-      KeyLeft              => KeyLeft,        
-      KeyUp                => KeyUp,          
-      KeyDown              => KeyDown,        
-      KeyR1                => KeyR1,           
-      KeyR2                => KeyR2,           
-      KeyR3                => KeyR3,           
-      KeyL1                => KeyL1,           
-      KeyL2                => KeyL2,           
-      KeyL3                => KeyL3,           
-      Analog1XP1           => Analog1XP1,       
-      Analog1YP1           => Analog1YP1,       
-      Analog2XP1           => Analog2XP1,       
-      Analog2YP1           => Analog2YP1,
-      Analog1XP2           => Analog1XP2,
-      Analog1YP2           => Analog1YP2,
-      Analog2XP2           => Analog2XP2,
-      Analog2YP2           => Analog2YP2,
       MouseEvent           => MouseEvent,
       MouseLeft            => MouseLeft,
       MouseRight           => MouseRight,
