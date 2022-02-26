@@ -14,6 +14,7 @@ entity joypad_pad is
       isMouse              : in  std_logic;
       isGunCon             : in  std_logic;
       isNeGcon             : in  std_logic;
+      isPal                : in  std_logic;
       
       selected             : in  std_logic;
       actionNext           : in  std_logic := '0';
@@ -341,7 +342,11 @@ begin
 
                            -- GunCon reports Y as # of scanlines since VSYNC (05h/0Ah=Error, PAL=20h..127h, NTSC=19h..F8h)
                            if gunOffscreen = '0' then
-                              gunConY      <= std_logic_vector(to_unsigned(16, 9) + GunY_scanlines);
+                              if isPal = '1' then
+                                 gunConY      <= std_logic_vector(to_unsigned(40, 9) + GunY_scanlines);
+                              else
+                                 gunConY      <= std_logic_vector(to_unsigned(16, 9) + GunY_scanlines);
+                              end if;
                            else
                               gunConY      <= "000001010"; -- X: 0x0001, Y: 0x000A indicates no light / offscreen shot
                            end if;

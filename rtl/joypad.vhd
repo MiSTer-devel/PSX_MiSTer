@@ -12,6 +12,8 @@ entity joypad is
       clk2xIndex           : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
+
+      isPal                : in  std_logic; -- passed through for GunCon
       
       PadPortEnable1       : in  std_logic;
       PadPortAnalog1       : in  std_logic;
@@ -374,6 +376,7 @@ begin
       isMouse              => PadPortMouse1,
       isGunCon             => PadPortGunCon1,
       isNeGcon             => PadPortNeGcon1,
+      isPal                => isPal,
 
       selected             => selectedPad1,
       actionNext           => actionNextPad,
@@ -431,6 +434,7 @@ begin
       isMouse              => PadPortMouse2,
       isGunCon             => PadPortGunCon2,
       isNeGcon             => PadPortNeGcon2,
+      isPal                => isPal,
 
       selected             => selectedPad2,
       actionNext           => actionNextPad,
