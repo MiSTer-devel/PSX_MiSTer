@@ -336,6 +336,8 @@ begin
              unsigned(to_signed(-vt(coreVertex).y, 32));
    
    process (clk2x)
+      variable xrec12   : signed(11 downto 0);
+      variable yrec12   : signed(11 downto 0);
       variable cull     : std_logic;    
       variable xMax     : integer;
       variable dx1      : signed(44 downto 0);
@@ -451,8 +453,19 @@ begin
                when REQUESTPOS =>
                   drawTiming   <= (others => '0');
                   if (fifo_Valid = '1') then
-                     rec_vertices(rec_index).x <= to_integer(resize(signed(fifo_data(10 downto  0)),12) + resize(drawingOffsetX, 12));
-                     rec_vertices(rec_index).y <= to_integer(resize(signed(fifo_data(26 downto 16)),12) + resize(drawingOffsetY, 12));
+                     if (drawingOffsetX < 0) then
+                        xrec12                    := resize(drawingOffsetX, 12) + signed('0' & fifo_data(10 downto  0));
+                        rec_vertices(rec_index).x <= to_integer(xrec12(10 downto 0));
+                     else
+                        rec_vertices(rec_index).x <= to_integer(resize(signed(fifo_data(10 downto  0)),12) + resize(drawingOffsetX, 12));
+                     end if;
+                     
+                     if (drawingOffsetY < 0) then
+                        yrec12                    := resize(drawingOffsetY, 12) + signed('0' & fifo_data(26 downto 16));    
+                        rec_vertices(rec_index).y <= to_integer(yrec12(10 downto 0));
+                     else
+                        rec_vertices(rec_index).y <= to_integer(resize(signed(fifo_data(26 downto 16)),12) + resize(drawingOffsetY, 12));
+                     end if;
                      
                      if (rec_texture = '1') then
                         state    <= REQUESTTEXTURE;  

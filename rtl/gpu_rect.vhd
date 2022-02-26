@@ -118,12 +118,14 @@ begin
    vramLineAddr <= unsigned(xPos(9 downto 0)) when (state = PROCPIXELS) else (others => '0');
    
    process (clk2x)
-      variable xsize : signed(11 downto 0);
-      variable ysize : signed(11 downto 0);
-      variable xdiff : signed(11 downto 0);
-      variable ydiff : signed(11 downto 0);
-      variable ynew  : signed(11 downto 0);
-      variable yAdd  : integer range 1 to 2;
+      variable xrec12 : signed(11 downto 0);
+      variable yrec12 : signed(11 downto 0);
+      variable xsize  : signed(11 downto 0);
+      variable ysize  : signed(11 downto 0);
+      variable xdiff  : signed(11 downto 0);
+      variable ydiff  : signed(11 downto 0);
+      variable ynew   : signed(11 downto 0);
+      variable yAdd   : integer range 1 to 2;
    begin
       if rising_edge(clk2x) then
       
@@ -198,8 +200,10 @@ begin
                   end case;
                
                   if (fifo_Valid = '1') then
-                     rec_posx   <= resize(signed(fifo_data(10 downto  0)),12) + resize(drawingOffsetX, 12);
-                     yPos       <= resize(signed(fifo_data(26 downto 16)),12) + resize(drawingOffsetY, 12);
+                     xrec12     := resize(drawingOffsetX, 12) + signed('0' & fifo_data(10 downto  0));
+                     yrec12     := resize(drawingOffsetY, 12) + signed('0' & fifo_data(26 downto 16));                     
+                     rec_posx   <= resize(xrec12(10 downto 0), 12);
+                     yPos       <= resize(yrec12(10 downto 0), 12);
                      
                      if (rec_texture = '1') then
                         state    <= REQUESTTEXTURE;  
