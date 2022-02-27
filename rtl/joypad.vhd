@@ -105,8 +105,8 @@ architecture arch of joypad is
    signal isActiveMem1        : std_logic;
    signal isActiveMem2        : std_logic;
       
-   signal selectedPad1        : std_logic;
-   signal selectedPad2        : std_logic;
+   signal selectedPort1       : std_logic;
+   signal selectedPort2       : std_logic;
       
    signal ack                 : std_logic;
    signal ackPad1             : std_logic;
@@ -330,8 +330,8 @@ begin
    ack          <= ackPad1 or ackPad2 or ackMem1 or ackMem2;
    receiveValid <= receiveValidPad1 or receiveValidPad2 or receiveValidMem1 or receiveValidMem2;
    
-   selectedPad1 <= '1' when (JOY_CTRL(13) = '0' and JOY_CTRL(1 downto 0) = "11") else '0';
-   selectedPad2 <= '1' when (JOY_CTRL(13) = '1' and JOY_CTRL(1 downto 0) = "11") else '0';
+   selectedPort1 <= '1' when (JOY_CTRL(13) = '0' and JOY_CTRL(1 downto 0) = "11") else '0';
+   selectedPort2 <= '1' when (JOY_CTRL(13) = '1' and JOY_CTRL(1 downto 0) = "11") else '0';
    
    ijoypad_pad1 : entity work.joypad_pad
    port map
@@ -343,7 +343,7 @@ begin
       joypad               => joypad1,
       isPal                => isPal,
 
-      selected             => selectedPad1,
+      selected             => selectedPort1,
       actionNext           => actionNextPad,
       transmitting         => transmitting,
       transmitValue        => transmitValue,
@@ -377,7 +377,7 @@ begin
       joypad               => joypad2,
       isPal                => isPal,
 
-      selected             => selectedPad2,
+      selected             => selectedPort2,
       actionNext           => actionNextPad,
       transmitting         => transmitting,
       transmitValue        => transmitValue,
@@ -422,7 +422,7 @@ begin
       mem_DOUT             => mem_DOUT,      
       mem_DOUT_READY       => mem_DOUT_READY,
       
-      selected             => selectedPad1,
+      selected             => selectedPort1,
       actionNext           => actionNextPad,
       transmitting         => transmitting,
       transmitValue        => transmitValue,
@@ -456,7 +456,7 @@ begin
       mem_DOUT             => mem_DOUT,      
       mem_DOUT_READY       => mem_DOUT_READY,
       
-      selected             => selectedPad2,
+      selected             => selectedPort2,
       actionNext           => actionNextPad,
       transmitting         => transmitting,
       transmitValue        => transmitValue,
