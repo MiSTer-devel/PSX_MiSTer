@@ -66,10 +66,6 @@ entity spu is
       mem_DOUT             : in  std_logic_vector(63 downto 0);
       mem_DOUT_READY       : in  std_logic;
       
-      -- debug
-      debug_lateSamples    : out unsigned(15 downto 0);
-      debug_lateTicks      : out unsigned(15 downto 0);
-      
       -- savestates
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
@@ -899,9 +895,6 @@ begin
          end if;
       
          if (reset = '1') then
-         
-            debug_lateSamples    <= (others => '0');
-            debug_lateTicks      <= (others => '0');
             
             state                <= IDLE;
             irqOut               <= '0';
@@ -1409,14 +1402,9 @@ begin
             if (sampleticks = 0 and state /= IDLE) then
                if (stashedSamples < 15) then
                   stashedSamples    <= stashedSamples + 1;
-                  debug_lateSamples <= debug_lateSamples + 1;
                else
                   sound_timeout <= '1';
                end if;
-            end if;
-            
-            if (stashedSamples > 0) then
-               debug_lateTicks <= debug_lateTicks + 1;
             end if;
             
             if (voiceCounter < 31) then
