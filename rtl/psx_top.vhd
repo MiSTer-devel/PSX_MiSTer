@@ -868,11 +868,11 @@ begin
    -- and GPU (for crosshair overlays)
    showGunCrosshairs <= '1';
    
-   Gun1X <= to_unsigned(to_integer(Analog1XP1 + 128), 8);
-   Gun2X <= to_unsigned(to_integer(Analog1XP2 + 128), 8);
+   Gun1X <= to_unsigned(to_integer(joypad1.Analog1X + 128), 8);
+   Gun2X <= to_unsigned(to_integer(joypad2.Analog1X + 128), 8);
 
    Gun1Y <= to_unsigned(to_integer(joypad1.Analog1Y + 128), 8);
-   Gun2Y <= to_unsigned(to_integer(joypad1.Analog1Y + 128), 8);
+   Gun2Y <= to_unsigned(to_integer(joypad2.Analog1Y + 128), 8);
 
    Gun1AimOffscreen <= '1' when Gun1X = x"00" or Gun1X = x"FF" or Gun1Y = x"00" or Gun1Y = x"FF" else '0';
    Gun2AimOffscreen <= '1' when Gun2X = x"00" or Gun2X = x"FF" or Gun2Y = x"00" or Gun2Y = x"FF" else '0';
