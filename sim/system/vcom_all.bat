@@ -43,6 +43,7 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/gpu_videoout.vhd ^
 ../../rtl/gpu.vhd ^
 ../../rtl/irq.vhd ^
+../../rtl/pjoypad.vhd ^
 ../../rtl/joypad_pad.vhd ^
 ../../rtl/joypad_mem.vhd ^
 ../../rtl/joypad.vhd ^

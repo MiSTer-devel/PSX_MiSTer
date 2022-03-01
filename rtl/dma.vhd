@@ -869,7 +869,7 @@ begin
       end if;
    end process;
    
-   fifoIn_Wr  <= '1' when (toDevice = '1' and (ram_done = '1' or dataCount > 0)) else '0'; 
+   fifoIn_Wr  <= ce when (toDevice = '1' and (ram_done = '1' or dataCount > 0)) else '0'; 
    
    fifoIn_Din <= ram_dataRead(31 downto 0) when ram_done = '1' else dataNext(31 downto 0);
    
