@@ -38,9 +38,6 @@ entity gpu is
       errorEna             : in  std_logic;
       errorCode            : in  unsigned(3 downto 0);
       
-      debug_lateSamples    : in  unsigned(15 downto 0);
-      debug_lateTicks      : in  unsigned(15 downto 0);
-      
       errorLINE            : out std_logic;
       errorRECT            : out std_logic;
       errorPOLY            : out std_logic;
@@ -83,10 +80,10 @@ entity gpu is
       hblank_tmr           : out std_logic := '0';
       vblank               : out std_logic := '0';
       vblank_extern        : out std_logic := '0';
-      DisplayWidth         : buffer unsigned( 9 downto 0);
-      DisplayHeight        : buffer unsigned( 8 downto 0);
-      DisplayOffsetX       : buffer unsigned( 9 downto 0) := (others => '0'); 
-      DisplayOffsetY       : buffer unsigned( 8 downto 0) := (others => '0'); 
+      DisplayWidth         : out unsigned( 9 downto 0);
+      DisplayHeight        : out unsigned( 8 downto 0);
+      DisplayOffsetX       : out unsigned( 9 downto 0) := (others => '0'); 
+      DisplayOffsetY       : out unsigned( 8 downto 0) := (others => '0'); 
       
       video_ce             : out std_logic;
       video_interlace      : out std_logic;
@@ -119,6 +116,9 @@ architecture arch of gpu is
   
    signal softReset                 : std_logic := '0';
    
+   signal videoout_settings         : tvideoout_settings;
+   signal videoout_reports          : tvideoout_reports;
+   
    signal GPUREAD                   : std_logic_vector(31 downto 0) := (others => '0');
    signal GPUSTAT                   : std_logic_vector(31 downto 0) := (others => '0');
    signal GPUSTAT_TextPageX         : std_logic_vector(3 downto 0);
@@ -129,7 +129,6 @@ architecture arch of gpu is
    signal GPUSTAT_DrawToDisplay     : std_logic;
    signal GPUSTAT_SetMask           : std_logic;
    signal GPUSTAT_DrawPixelsMask    : std_logic;
-   signal GPUSTAT_InterlaceField    : std_logic;
    signal GPUSTAT_ReverseFlag       : std_logic;
    signal GPUSTAT_TextureDisable    : std_logic;
    signal GPUSTAT_HorRes2           : std_logic;
@@ -145,10 +144,8 @@ architecture arch of gpu is
    signal GPUSTAT_ReadySendVRAM     : std_logic;
    signal GPUSTAT_ReadyRecDMA       : std_logic;
    signal GPUSTAT_DMADirection      : std_logic_vector(1 downto 0);
-   signal GPUSTAT_DrawingOddline    : std_logic;
       
    signal vramRange                 : unsigned(18 downto 0) := (others => '0');
-   alias vramRangeY                 : unsigned is vramRange(18 downto 10);
    signal hDisplayRange             : unsigned(23 downto 0) := (others => '0');
    signal vDisplayRange             : unsigned(19 downto 0) := (others => '0');
       
@@ -166,19 +163,7 @@ architecture arch of gpu is
    signal drawingAreaBottom         : unsigned(8 downto 0) := (others => '0');
    signal drawingOffsetX            : signed(10 downto 0) := (others => '0');
    signal drawingOffsetY            : signed(10 downto 0) := (others => '0');
-      
-   signal nextHCount                : integer range 0 to 4095;
-   signal vpos                      : integer range 0 to 511;
-   signal vsyncCount                : integer range 0 to 511;
-   signal inVsync                   : std_logic := '0';
-   signal interlacedDisplayField    : std_logic := '0';
-   signal activeLineLSB             : std_logic := '0';
    signal interlacedDrawing         : std_logic;
-      
-   signal htotal                    : integer range 2169 to 2173; -- 3406 to 3413 in GPU clock domain
-   signal vtotal                    : integer range 263 to 314;
-   signal vDisplayStart             : integer range 0 to 314;
-   signal vDisplayEnd               : integer range 0 to 314;
       
    -- FIFO IN  
    signal fifoIn_reset              : std_logic; 
@@ -380,9 +365,6 @@ architecture arch of gpu is
    signal vramLineData              : std_logic_vector(15 downto 0);
    
    -- videoout
-   signal videoout_fetch            : std_logic := '0';
-   signal videoout_lineIn           : unsigned(8 downto 0) := (others => '0');
-   signal videoout_lineInNext       : unsigned(8 downto 0) := (others => '0');
    signal videoout_reqVRAMEnable    : std_logic;
    signal videoout_reqVRAMXPos      : unsigned(9 downto 0);
    signal videoout_reqVRAMYPos      : unsigned(8 downto 0);
@@ -401,11 +383,14 @@ architecture arch of gpu is
    signal ss_gpu_out    : t_ssarray := (others => (others => '0'));
    signal ss_timing_out : t_ssarray := (others => (others => '0'));
    
+   signal videoout_ss_in  : tvideoout_ss;
+   signal videoout_ss_out : tvideoout_ss;
+   
 begin 
 
 -- synthesis translate_off
-   export_gtm  <= to_unsigned(nextHCount, 12);
-   export_line <= to_unsigned(vpos, 12);
+   export_gtm  <= unsigned(videoout_ss_out.nextHCount);
+   export_line <= "000" & unsigned(videoout_ss_out.vpos);
    export_gpus <= unsigned(GPUSTAT);
 -- synthesis translate_on
    
@@ -419,7 +404,7 @@ begin
    GPUSTAT(10)             <= GPUSTAT_DrawToDisplay;
    GPUSTAT(11)             <= GPUSTAT_SetMask;
    GPUSTAT(12)             <= GPUSTAT_DrawPixelsMask;
-   GPUSTAT(13)             <= GPUSTAT_InterlaceField;
+   GPUSTAT(13)             <= videoout_reports.GPUSTAT_InterlaceField;
    GPUSTAT(14)             <= GPUSTAT_ReverseFlag;
    GPUSTAT(15)             <= GPUSTAT_TextureDisable;
    GPUSTAT(16)             <= GPUSTAT_HorRes2;
@@ -435,33 +420,40 @@ begin
    GPUSTAT(27)             <= GPUSTAT_ReadySendVRAM;
    GPUSTAT(28)             <= GPUSTAT_ReadyRecDMA;
    GPUSTAT(30 downto 29)   <= GPUSTAT_DMADirection;
-   GPUSTAT(31)             <= GPUSTAT_DrawingOddline;
+   GPUSTAT(31)             <= videoout_reports.GPUSTAT_DrawingOddline;
 
    GPUSTAT_DMADataRequest <= '0' when (GPUSTAT_DMADirection = "00") else
                              GPUSTAT_ReadyRecDMA when (GPUSTAT_DMADirection = "01") else
                              GPUSTAT_ReadyRecDMA when (GPUSTAT_DMADirection = "10") else
                              not vram2cpu_Fifo_Empty; -- GPUSTAT_ReadySendVRAM cannot be used, because data is read earlier                
 
-   video_interlace        <= GPUSTAT_VerRes and interlacedDisplayField;
+   -- video out
+
+   video_interlace        <= GPUSTAT_VerRes and videoout_reports.interlacedDisplayField;
+   
+   DisplayOffsetX         <= vramRange(9 downto 0);
+   DisplayOffsetY         <= vramRange(18 downto 10);
+   
+   irq_VBLANK             <= videoout_reports.irq_VBLANK;
+
+   vsync                  <= videoout_reports.vsync;
+   hblank_tmr             <= videoout_reports.hblank_tmr;
+
+   -- savestates
 
    ss_gpu_out(0)  <= GPUREAD;                
    ss_gpu_out(1)  <= GPUSTAT;                
 
-   ss_timing_out(4)(19)            <= interlacedDisplayField;
+   ss_timing_out(4)(19)            <= videoout_ss_out.interlacedDisplayField;
    ss_timing_out(2)(18 downto 0)   <= std_logic_vector(vramRange);    
    ss_timing_out(1)(23 downto 0)   <= std_logic_vector(hDisplayRange);
    ss_timing_out(0)(19 downto 0)   <= std_logic_vector(vDisplayRange);
-   ss_timing_out(4)(11 downto 0)   <= std_logic_vector(to_unsigned(nextHCount, 12));
-   ss_timing_out(3)(24 downto 16)  <= std_logic_vector(to_unsigned(vpos, 9));
-   ss_timing_out(4)(17)            <= inVsync;      
-   ss_timing_out(4)(20)            <= activeLineLSB;
+   ss_timing_out(4)(11 downto 0)   <= videoout_ss_out.nextHCount;
+   ss_timing_out(3)(24 downto 16)  <= videoout_ss_out.vpos;      
+   ss_timing_out(4)(17)            <= videoout_ss_out.inVsync;      
+   ss_timing_out(4)(20)            <= videoout_ss_out.activeLineLSB;
 
    process (clk1x)
-      variable mode480i                  : std_logic;
-      variable isVsync                   : std_logic;
-      variable vposNew                   : integer range 0 to 511;
-      variable interlacedDisplayFieldNew : std_logic;
-      
       variable cmdNew                    : unsigned(7 downto 0);
    begin
       if rising_edge(clk1x) then
@@ -469,43 +461,21 @@ begin
          fifoIn_reset  <= '0';
          fifoOut_reset <= '0';
          
-         --if (nextHCount < 200) then hsync      <= '1'; else hsync      <= '0'; end if;
-         --if (nextHCount < 400) then hblank     <= '1'; else hblank     <= '0'; end if;
-         if (nextHCount <   3) then hblank_tmr <= '1'; else hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
-         
-         vblank <= inVsync;
-         
-         vsync <= '0';
-         if (GPUSTAT_VerRes = '1') then
-            if (vsyncCount >= 5 and vsyncCount < 8) then vsync <= '1'; end if;
-         else
-            if (vsyncCount >= 10 and vsyncCount < 13) then vsync <= '1'; end if;
-         end if;
+         vblank <= videoout_reports.inVsync;
 
-         vblank_extern <= inVsync;
+         vblank_extern <= videoout_reports.inVsync;
 
          if (reset = '1') then
                
-            interlacedDisplayField  <= ss_timing_in(4)(19);
-            
             softReset               <= not loading_savestate;
             
             fifoIn_reset            <= '1';
             fifoOut_reset           <= '1';
             
-            irq_VBLANK              <= '0';
-            
             vramRange               <= unsigned(ss_timing_in(2)(18 downto 0));
             hDisplayRange           <= unsigned(ss_timing_in(1)(23 downto 0)); -- x"C60260";
             vDisplayRange           <= unsigned(ss_timing_in(0)(19 downto 0)); -- x"3FC10";
-
-            nextHCount              <= to_integer(unsigned(ss_timing_in(4)(11 downto 0)));
-
-            vpos                    <= to_integer(unsigned(ss_timing_in(3)(24 downto 16)));
-            inVsync                 <= ss_timing_in(4)(17);
-            activeLineLSB           <= ss_timing_in(4)(20);
-                  
-            GPUSTAT_InterlaceField  <= ss_gpu_in(1)(13);
+      
             GPUSTAT_ReverseFlag     <= ss_gpu_in(1)(14);
             GPUSTAT_HorRes2         <= ss_gpu_in(1)(16);
             GPUSTAT_HorRes1         <= ss_gpu_in(1)(18 downto 17);
@@ -516,37 +486,12 @@ begin
             GPUSTAT_DisplayDisable  <= ss_gpu_in(1)(23);
             GPUSTAT_IRQRequest      <= ss_gpu_in(1)(24);
             GPUSTAT_DMADirection    <= ss_gpu_in(1)(30 downto 29);
-            GPUSTAT_DrawingOddline  <= ss_gpu_in(1)(31);
             GPUREAD                 <= ss_gpu_in(0);       
 
          elsif (ce = '1') then
          
-            irq_VBLANK   <= '0';
-         
             bus_dataRead <= (others => '0');
             softReset    <= '0';
-            
-            if (GPUSTAT_HorRes2 = '1') then
-               DisplayWidth  <= to_unsigned(368, 10);
-            else
-               case (GPUSTAT_HorRes1) is
-                  when "00" => DisplayWidth <= to_unsigned(256, 10);
-                  when "01" => DisplayWidth <= to_unsigned(320, 10);
-                  when "10" => DisplayWidth <= to_unsigned(512, 10);
-                  when "11" => DisplayWidth <= to_unsigned(640, 10);
-                  when others => null;
-               end case;
-            end if;
-            
-            if (GPUSTAT_VerRes = '1') then
-               DisplayHeight  <= to_unsigned(480, 9);
-            else
-               DisplayHeight  <= to_unsigned(240, 9);
-            end if;
-            
-            DisplayOffsetX <= vramRange(9 downto 0);
-            DisplayOffsetY <= vramRange(18 downto 10);
-            
             
             -- bus read
             if (bus_read = '1') then
@@ -635,144 +580,26 @@ begin
                GPUSTAT_IRQRequest <= '1';
             end if;
             
-            --gpu timing calc
-            if (GPUSTAT_PalVideoMode = '1' and pal60 = '0') then
-               htotal <= 2169; -- overwritten below
-               vtotal <= 314;
-            else
-               htotal <= 2173; -- overwritten below
-               vtotal <= 263;
-            end if;
-            
-            -- todo: different values for ntsc
             if (GPUSTAT_HorRes2 = '1') then
-               htotal  <= 2169; -- 368
+               DisplayWidth  <= to_unsigned(368, 10);
             else
                case (GPUSTAT_HorRes1) is
-                  when "00" => htotal <= 2172; -- 256;
-                  when "01" => htotal <= 2170; -- 320;
-                  when "10" => htotal <= 2169;  -- 512;
-                  when "11" => htotal <= 2170;  -- 640;
+                  when "00" => DisplayWidth <= to_unsigned(256, 10);
+                  when "01" => DisplayWidth <= to_unsigned(320, 10);
+                  when "10" => DisplayWidth <= to_unsigned(512, 10);
+                  when "11" => DisplayWidth <= to_unsigned(640, 10);
                   when others => null;
                end case;
             end if;
             
-            
-            if (vDisplayRange( 9 downto  0) < 314) then vDisplayStart <= to_integer(vDisplayRange( 9 downto  0)); else vDisplayStart <= 314; end if;
-            if (vDisplayRange(19 downto 10) < 314) then vDisplayEnd   <= to_integer(vDisplayRange(19 downto 10)); else vDisplayEnd   <= 314; end if;
-              
-            -- gpu timing count
-            if (nextHCount > 1) then
-               nextHCount <= nextHCount - 1;
+            if (GPUSTAT_VerRes = '1') then
+               DisplayHeight  <= to_unsigned(480, 9);
             else
-               
-               nextHCount <= htotal;
-               
-               vposNew := vpos + 1;
-               if (vposNew >= vtotal) then
-                  vposNew := 0;
-                  if (GPUSTAT_VertInterlace = '1') then
-                     GPUSTAT_InterlaceField <= not GPUSTAT_InterlaceField;
-                  else
-                     GPUSTAT_InterlaceField <= '0';
-                  end if;
-               end if;
-               
-               vpos <= vposNew;
-               
-               -- todo: timer 1
-               
-               mode480i := '0';
-               if (GPUSTAT_VerRes = '1' and GPUSTAT_VertInterlace = '1') then mode480i := '1'; end if;
-               
-               isVsync := '0';
-               vsyncCount <= 0;
-               if (vposNew < vDisplayStart or vposNew >= vDisplayEnd) then 
-                  isVsync := '1'; 
-                  vsyncCount <= vsyncCount + 1;
-               else
-                  if (GPUSTAT_VerRes = '1') then
-                     if (interlacedDisplayField = '1') then
-                        videoout_lineIn <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
-                     else
-                        videoout_lineIn <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
-                     end if;
-                  else
-                     videoout_lineIn <= to_unsigned(vposNew - vDisplayStart, 9);
-                  end if;
-               end if;
-
-               interlacedDisplayFieldNew := interlacedDisplayField;
-               if (isVsync /= inVsync) then
-                  if (isVsync = '1') then
-                     videoout_fetch <= '0';
-                     irq_VBLANK     <= '1';
-                     if (mode480i = '1') then 
-                        interlacedDisplayFieldNew := not GPUSTAT_InterlaceField;
-                     else 
-                        interlacedDisplayFieldNew := '0';
-                     end if;
-                     --GPU.finishFrame();
-                  end if;
-                  inVsync <= isVsync;
-                  --Timer.gateChange(1, inVsync);
-               end if;
-               interlacedDisplayField <= interlacedDisplayFieldNew;
-               
-             
-               GPUSTAT_DrawingOddline <= '0';
-               activeLineLSB          <= '0';
-               if (mode480i = '1') then
-                  if (vramRange(10) = '0' and interlacedDisplayFieldNew = '1') then activeLineLSB <= '1'; end if;
-                  if (vramRange(10) = '1' and interlacedDisplayFieldNew = '0') then activeLineLSB <= '1'; end if;
-               
-                  if (vramRange(10) = '0' and isVsync = '0' and interlacedDisplayFieldNew = '1') then GPUSTAT_DrawingOddline <= '1'; end if;
-                  if (vramRange(10) = '1' and isVsync = '1' and interlacedDisplayFieldNew = '0') then GPUSTAT_DrawingOddline <= '1'; end if;
-               else
-                  if (vramRange(10) = '0' and (vposNew mod 2) = 1) then GPUSTAT_DrawingOddline <= '1'; end if;
-                  if (vramRange(10) = '1' and (vposNew mod 2) = 0) then GPUSTAT_DrawingOddline <= '1'; end if;
-               end if;
-               
-               vposNew := vposNew + 1;
-               if (vDisplayStart > 0) then
-                  if (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
-                     if (GPUSTAT_VerRes = '1') then
-                        if (activeLineLSB = '1') then
-                           videoout_lineInNext <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
-                        else
-                           videoout_lineInNext <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
-                        end if;
-                     else
-                        videoout_lineInNext <= to_unsigned(vposNew - vDisplayStart, 9);
-                     end if;
-                     videoout_fetch      <= '1';
-                  end if;
-               else  
-                  if (vposNew = vtotal) then
-                     if (GPUSTAT_VerRes = '1' and interlacedDisplayField = '1') then
-                        videoout_lineInNext <= to_unsigned(1, 9);
-                     else
-                        videoout_lineInNext <= to_unsigned(0, 9);
-                     end if;
-                     videoout_fetch      <= '1';
-                  elsif (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
-                     if (GPUSTAT_VerRes = '1') then
-                        if (activeLineLSB = '1') then
-                           videoout_lineInNext <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
-                        else
-                           videoout_lineInNext <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
-                        end if;
-                     else
-                        videoout_lineInNext <= to_unsigned(vposNew - vDisplayStart, 9);
-                     end if;
-                     videoout_fetch      <= '1';
-                  end if;
-               end if;
-              
+               DisplayHeight  <= to_unsigned(240, 9);
             end if;
             
             -- fps counter
-            if (irq_VBLANK = '1') then
+            if (videoout_reports.irq_VBLANK = '1') then
                fps_vramRange_last <= vramRange;
                if (vramRange /= fps_vramRange_last) then
                   if (fpscountBCD_next(3 downto 0) = x"9") then
@@ -797,15 +624,7 @@ begin
                vramRange              <= (others => '0');
                hDisplayRange          <= x"C60260";
                vDisplayRange          <= x"3FC10";
-                    
-               nextHCount             <= htotal;
-                 
-               vpos                   <= 0;
-               inVsync                <= '0';
                      
-               irq_VBLANK             <= '0';
-                     
-               GPUSTAT_InterlaceField <= '1';
                GPUSTAT_ReverseFlag    <= '0';
                GPUSTAT_HorRes2        <= '0';
                GPUSTAT_HorRes1        <= "00";
@@ -816,7 +635,6 @@ begin
                GPUSTAT_DisplayDisable <= '1';
                GPUSTAT_IRQRequest     <= '0';
                GPUSTAT_DMADirection   <= "00";
-               GPUSTAT_DrawingOddline <= '0';
 
             end if;
 
@@ -1055,7 +873,7 @@ begin
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,      
       
       interlacedDrawing    => interlacedDrawing,
-      activeLineLSB        => activeLineLSB,    
+      activeLineLSB        => videoout_reports.activeLineLSB,    
       
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 
@@ -1182,7 +1000,7 @@ begin
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
-      activeLineLSB        => activeLineLSB,    
+      activeLineLSB        => videoout_reports.activeLineLSB,    
       drawingOffsetX       => drawingOffsetX,   
       drawingOffsetY       => drawingOffsetY,   
       drawingAreaLeft      => drawingAreaLeft,  
@@ -1238,7 +1056,7 @@ begin
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
-      activeLineLSB        => activeLineLSB,    
+      activeLineLSB        => videoout_reports.activeLineLSB,    
       drawingOffsetX       => drawingOffsetX,   
       drawingOffsetY       => drawingOffsetY,   
       drawingAreaLeft      => drawingAreaLeft,  
@@ -1295,7 +1113,7 @@ begin
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing,
-      activeLineLSB        => activeLineLSB,    
+      activeLineLSB        => videoout_reports.activeLineLSB,    
       drawingOffsetX       => drawingOffsetX,   
       drawingOffsetY       => drawingOffsetY,   
       drawingAreaLeft      => drawingAreaLeft,  
@@ -1671,66 +1489,80 @@ begin
 --############################### video out
 --##############################################################
    
+   videoout_settings.GPUSTAT_VerRes          <= GPUSTAT_VerRes;
+   videoout_settings.GPUSTAT_PalVideoMode    <= GPUSTAT_PalVideoMode;
+   videoout_settings.GPUSTAT_VertInterlace   <= GPUSTAT_VertInterlace;
+   videoout_settings.GPUSTAT_HorRes2         <= GPUSTAT_HorRes2;
+   videoout_settings.GPUSTAT_HorRes1         <= GPUSTAT_HorRes1;
+   videoout_settings.GPUSTAT_ColorDepth24    <= GPUSTAT_ColorDepth24;
+   videoout_settings.GPUSTAT_DisplayDisable  <= GPUSTAT_DisplayDisable;
+   videoout_settings.vramRange               <= vramRange;
+   videoout_settings.hDisplayRange           <= hDisplayRange;
+   videoout_settings.vDisplayRange           <= vDisplayRange;
+   videoout_settings.DisplayWidth            <= DisplayWidth;
+   videoout_settings.pal60                   <= pal60;
+   
+   
+   videoout_ss_in.interlacedDisplayField  <= ss_timing_in(4)(19);
+   videoout_ss_in.nextHCount              <= ss_timing_in(4)(11 downto 0);
+   videoout_ss_in.vpos                    <= ss_timing_in(3)(24 downto 16);
+   videoout_ss_in.inVsync                 <= ss_timing_in(4)(17);
+   videoout_ss_in.activeLineLSB           <= ss_timing_in(4)(20);
+   videoout_ss_in.GPUSTAT_InterlaceField  <= ss_gpu_in(1)(13);
+   videoout_ss_in.GPUSTAT_DrawingOddline  <= ss_gpu_in(1)(31);
+   
    igpu_videoout : entity work.gpu_videoout
    port map
    (
-      clk2x                   => clk2x,
-      ce                      => ce,   
-      reset                   => reset,
+      clk1x                      => clk1x,
+      clk2x                      => clk2x,
+      ce                         => ce,   
+      reset                      => reset,
+      softReset                  => softReset,
+               
+      videoout_settings          => videoout_settings,
+      videoout_reports           => videoout_reports,
+         
+      videoout_on                => videoout_on,
             
-      videoout_on             => videoout_on,
-         
-      debugmodeOn             => debugmodeOn,
-         
-      fpscountOn              => fpscountOn,
-      fpscountBCD             => fpscountBCD,
-
-      Gun1CrosshairOn         => Gun1CrosshairOn,
-      Gun1X                   => Gun1X,
-      Gun1Y_scanlines         => Gun1Y_scanlines,
-
-      Gun2CrosshairOn         => Gun2CrosshairOn,
-      Gun2X                   => Gun2X,
-      Gun2Y_scanlines         => Gun2Y_scanlines,
+      debugmodeOn                => debugmodeOn,
+            
+      fpscountOn                 => fpscountOn,
+      fpscountBCD                => fpscountBCD,
+   
+      Gun1CrosshairOn            => Gun1CrosshairOn,
+      Gun1X                      => Gun1X,
+      Gun1Y_scanlines            => Gun1Y_scanlines,
+   
+      Gun2CrosshairOn            => Gun2CrosshairOn,
+      Gun2X                      => Gun2X,
+      Gun2Y_scanlines            => Gun2Y_scanlines,
+            
+      cdSlow                     => cdSlow,      
+                                 
+      errorOn                    => errorOn,  
+      errorEna                   => errorEna, 
+      errorCode                  => errorCode, 
+                                 
+      requestVRAMEnable          => videoout_reqVRAMEnable,
+      requestVRAMXPos            => videoout_reqVRAMXPos,  
+      requestVRAMYPos            => videoout_reqVRAMYPos,  
+      requestVRAMSize            => videoout_reqVRAMSize,  
+      requestVRAMIdle            => VRAMIdle and (not vram_pause),
+      requestVRAMDone            => reqVRAMDone,
+                                 
+      vram_DOUT                  => vram_DOUT,      
+      vram_DOUT_READY            => vram_DOUT_READY,
+            
+      video_ce                   => video_ce,
+      video_r                    => video_r, 
+      video_g                    => video_g, 
+      video_b                    => video_b, 
+      video_hblank               => hblank,
+      video_hsync                => hsync,
       
-      debug_lateSamples       => debug_lateSamples,
-      debug_lateTicks         => debug_lateTicks, 
-         
-      cdSlow                  => cdSlow,      
-                              
-      errorOn                 => errorOn,  
-      errorEna                => errorEna, 
-      errorCode               => errorCode, 
-         
-      fetch                   => videoout_fetch,
-      lineIn                  => videoout_lineIn,
-      lineInNext              => videoout_lineInNext,
-      nextHCount              => nextHCount,
-      DisplayWidth            => DisplayWidth,
-      DisplayOffsetX          => DisplayOffsetX,
-      DisplayOffsetY          => DisplayOffsetY,
-      GPUSTAT_HorRes2         => GPUSTAT_HorRes2,
-      GPUSTAT_HorRes1         => GPUSTAT_HorRes1,
-      GPUSTAT_ColorDepth24    => GPUSTAT_ColorDepth24,
-      GPUSTAT_DisplayDisable  => GPUSTAT_DisplayDisable,
-      interlacedMode          => GPUSTAT_VerRes,
-                              
-      requestVRAMEnable       => videoout_reqVRAMEnable,
-      requestVRAMXPos         => videoout_reqVRAMXPos,  
-      requestVRAMYPos         => videoout_reqVRAMYPos,  
-      requestVRAMSize         => videoout_reqVRAMSize,  
-      requestVRAMIdle         => VRAMIdle and (not vram_pause),
-      requestVRAMDone         => reqVRAMDone,
-                              
-      vram_DOUT               => vram_DOUT,      
-      vram_DOUT_READY         => vram_DOUT_READY,
-         
-      video_ce                => video_ce,
-      video_r                 => video_r, 
-      video_g                 => video_g, 
-      video_b                 => video_b, 
-      video_hblank            => hblank,
-      video_hsync             => hsync
+      videoout_ss_in             => videoout_ss_in,
+      videoout_ss_out            => videoout_ss_out
    );
    
 --##############################################################

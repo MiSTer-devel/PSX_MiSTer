@@ -15,11 +15,11 @@ entity exp2 is
       bus_read             : in  std_logic;
       bus_write            : in  std_logic;
       bus_writeMask        : in  std_logic_vector(3 downto 0);
-      bus_dataRead         : out std_logic_vector(31 downto 0);
+      bus_dataRead         : out std_logic_vector(31 downto 0)
       
-      serial_newchar       : out std_logic := '0';
-      serial_newline       : out std_logic := '0';
-      serial_char          : out std_logic_vector(7 downto 0)
+      --serial_newchar       : out std_logic := '0';
+      --serial_newline       : out std_logic := '0';
+      --serial_char          : out std_logic_vector(7 downto 0)
    );
 end entity;
 
@@ -32,8 +32,8 @@ begin
    begin
       if rising_edge(clk1x) then
       
-         serial_newchar <= '0';
-         serial_newline <= '0';
+         --serial_newchar <= '0';
+         --serial_newline <= '0';
       
          if (reset = '1') then
          
@@ -48,26 +48,26 @@ begin
                end if;
             end if;
             
-            if (bus_write = '1') then
-               if ((bus_addr = 16#20# and bus_writeMask(3) = '1') or (bus_addr = 16#80# and bus_writeMask(0) = '1')) then
-                  
-                  newchar := bus_dataWrite(7 downto 0);
-                  if (bus_addr = 16#20#) then
-                     newchar := bus_dataWrite(31 downto 24);
-                  end if;
-                  serial_char <= newchar;
-                  
-                  if (newchar = x"0D") then -- '\r'
-                     -- do nothing
-                  elsif (newchar = x"0A") then -- '\n'
-                     serial_newline <= '1';
-                  else
-                     serial_newchar <= '1';
-                  end if;
-                  
-               
-               end if;
-            end if;
+            --if (bus_write = '1') then
+            --   if ((bus_addr = 16#20# and bus_writeMask(3) = '1') or (bus_addr = 16#80# and bus_writeMask(0) = '1')) then
+            --      
+            --      newchar := bus_dataWrite(7 downto 0);
+            --      if (bus_addr = 16#20#) then
+            --         newchar := bus_dataWrite(31 downto 24);
+            --      end if;
+            --      serial_char <= newchar;
+            --      
+            --      if (newchar = x"0D") then -- '\r'
+            --         -- do nothing
+            --      elsif (newchar = x"0A") then -- '\n'
+            --         serial_newline <= '1';
+            --      else
+            --         serial_newchar <= '1';
+            --      end if;
+            --      
+            --   
+            --   end if;
+            --end if;
             
          end if;
       end if;

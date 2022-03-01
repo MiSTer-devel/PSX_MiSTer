@@ -44,7 +44,7 @@ begin
          file_close(outfile);
          
          file_open(f_status, outfile, "gra_fb_out_vga.gra", append_mode);
-         write(line_out, string'("640#480#1")); 
+         write(line_out, string'("640#480#2")); 
          writeline(outfile, line_out);
          
          while (true) loop
