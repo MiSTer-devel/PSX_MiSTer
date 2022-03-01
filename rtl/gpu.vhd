@@ -80,10 +80,10 @@ entity gpu is
       hblank_tmr           : out std_logic := '0';
       vblank               : out std_logic := '0';
       vblank_extern        : out std_logic := '0';
-      DisplayWidth         : buffer unsigned( 9 downto 0);
-      DisplayHeight        : buffer unsigned( 8 downto 0);
-      DisplayOffsetX       : buffer unsigned( 9 downto 0) := (others => '0'); 
-      DisplayOffsetY       : buffer unsigned( 8 downto 0) := (others => '0'); 
+      DisplayWidth         : out unsigned( 9 downto 0);
+      DisplayHeight        : out unsigned( 8 downto 0);
+      DisplayOffsetX       : out unsigned( 9 downto 0) := (others => '0'); 
+      DisplayOffsetY       : out unsigned( 8 downto 0) := (others => '0'); 
       
       video_ce             : out std_logic;
       video_interlace      : out std_logic;
@@ -1499,6 +1499,7 @@ begin
    videoout_settings.vramRange               <= vramRange;
    videoout_settings.hDisplayRange           <= hDisplayRange;
    videoout_settings.vDisplayRange           <= vDisplayRange;
+   videoout_settings.DisplayWidth            <= DisplayWidth;
    videoout_settings.pal60                   <= pal60;
    
    

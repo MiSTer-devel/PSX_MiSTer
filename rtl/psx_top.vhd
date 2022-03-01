@@ -477,14 +477,12 @@ architecture arch of psx_top is
    signal errorCHOP              : std_logic;
    signal errorGPUFIFO           : std_logic;
    signal errorSPUTIME           : std_logic;
+   signal errorDMACPU            : std_logic;
+   signal errorDMAFIFO           : std_logic;
    
    signal debugmodeOn            : std_logic;
-   
-   signal serial_newchar         : std_logic;
-   signal serial_newline         : std_logic;
-   signal serial_char            : std_logic_vector(7 downto 0);
 
-   signal showGunCrosshairs      : std_logic := '1';
+   signal showGunCrosshairs      : std_logic;
    signal Gun1CrosshairOn        : std_logic;
    signal Gun2CrosshairOn        : std_logic;
    signal Gun1X                  : unsigned(7 downto 0);
@@ -725,6 +723,8 @@ begin
                if (errorCHOP    = '1') then errorEna  <= '1'; errorCode <= x"8"; end if;
                if (errorGPUFIFO = '1') then errorEna  <= '1'; errorCode <= x"9"; end if;
                if (errorSPUTIME = '1') then errorEna  <= '1'; errorCode <= x"A"; end if;
+               if (errorDMACPU  = '1') then errorEna  <= '1'; errorCode <= x"B"; end if;
+               if (errorDMAFIFO = '1') then errorEna  <= '1'; errorCode <= x"C"; end if;
             end if;
             
             if (errorEna = '0' or errorCode = x"3") then
@@ -896,6 +896,8 @@ begin
    -- Gun coordinate mapping is toplevel so that the gun's
    -- coordinates can be passed to both joypad
    -- and GPU (for crosshair overlays)
+   showGunCrosshairs <= '1';
+   
    Gun1X <= to_unsigned(to_integer(Analog1XP1 + 128), 8);
    Gun2X <= to_unsigned(to_integer(Analog1XP2 + 128), 8);
 
@@ -1113,6 +1115,8 @@ begin
       reset                => reset_intern,
       
       errorCHOP            => errorCHOP, 
+      errorDMACPU          => errorDMACPU, 
+      errorDMAFIFO         => errorDMAFIFO, 
       
       REPRODUCIBLEDMATIMING=> REPRODUCIBLEDMATIMING,
       DMABLOCKATONCE       => DMABLOCKATONCE,
@@ -1521,11 +1525,7 @@ begin
       bus_read             => bus_exp2_read,     
       bus_write            => bus_exp2_write,    
       bus_writeMask        => bus_exp2_writeMask, 
-      bus_dataRead         => bus_exp2_dataRead,
-      
-      serial_newchar       => serial_newchar,
-      serial_newline       => serial_newline,
-      serial_char          => serial_char
+      bus_dataRead         => bus_exp2_dataRead
    );
 
    imemorymux : entity work.memorymux

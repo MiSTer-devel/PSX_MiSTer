@@ -12,6 +12,8 @@ entity dma is
       reset                : in  std_logic;
       
       errorCHOP            : out std_logic;
+      errorDMACPU          : out std_logic;
+      errorDMAFIFO         : out std_logic;
       
       REPRODUCIBLEDMATIMING: in  std_logic;
       DMABLOCKATONCE       : in  std_logic;
@@ -148,7 +150,6 @@ architecture arch of dma is
    signal fifoIn_Din          : std_logic_vector(31 downto 0);
    signal fifoIn_Wr           : std_logic; 
    signal fifoIn_Full         : std_logic;
-   signal fifoIn_NearFull     : std_logic;
    signal fifoIn_Dout         : std_logic_vector(31 downto 0);
    signal fifoIn_Rd           : std_logic;
    signal fifoIn_Empty        : std_logic;
@@ -261,6 +262,10 @@ begin
             REP_counter <= 0;
          end if;
          
+         errorCHOP      <= '0';
+         errorDMACPU    <= '0';
+         errorDMAFIFO   <= '0';
+         
          requestOnFlyNew := requestOnFly;
       
          if (reset = '1') then
@@ -302,8 +307,6 @@ begin
             ramwrite_pending <= '0';
          
             irqOut         <= '0';
-            
-            errorCHOP      <= '0';
 
          elsif (ce = '1') then
          
@@ -460,7 +463,11 @@ begin
             end loop;
             
             if (dmaState /= OFF and (bus_write = '1' or bus_read = '1')) then
-               errorCHOP <= '1';
+               errorDMACPU <= '1';
+            end if;
+            
+            if (fifoIn_Full = '1' or fifoOut_Full = '1') then
+               errorDMAFIFO <= '1';
             end if;
             
             case (dmaState) is
@@ -887,7 +894,7 @@ begin
       Din      => fifoIn_Din,     
       Wr       => fifoIn_Wr,      
       Full     => fifoIn_Full,    
-      NearFull => fifoIn_NearFull,
+      NearFull => open, -- todo: is there any situation where data is coming faster? SPU? -> full error should trigger
       Dout     => fifoIn_Dout,    
       Rd       => fifoIn_Rd,      
       Empty    => fifoIn_Empty   

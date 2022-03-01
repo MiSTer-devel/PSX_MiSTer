@@ -3,13 +3,19 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all; 
 
 library mem;
+use work.pGPU.all;
 
 entity gpu_videoout_sync is
    port 
    (
+      clk1x                   : in  std_logic;
       clk2x                   : in  std_logic;
       ce                      : in  std_logic;
       reset                   : in  std_logic;
+      softReset               : in  std_logic;
+      
+      videoout_settings       : in  tvideoout_settings;
+      videoout_reports        : out tvideoout_reports;
          
       videoout_on             : in  std_logic;
          
@@ -31,71 +37,51 @@ entity gpu_videoout_sync is
       errorOn                 : in  std_logic;
       errorEna                : in  std_logic;
       errorCode               : in  unsigned(3 downto 0);
-         
-      fetch                   : in  std_logic;
-      lineIn                  : in  unsigned(8 downto 0);
-      lineInNext              : in  unsigned(8 downto 0);
-      nextHCount              : in  integer range 0 to 4095;
-      DisplayWidth            : in  unsigned(9 downto 0);
-      DisplayOffsetX          : in  unsigned(9 downto 0);
-      DisplayOffsetY          : in  unsigned(8 downto 0);
-      GPUSTAT_HorRes2         : in  std_logic;
-      GPUSTAT_HorRes1         : in  std_logic_vector(1 downto 0);
-      GPUSTAT_ColorDepth24    : in  std_logic;
-      GPUSTAT_DisplayDisable  : in  std_logic;
-      interlacedMode          : in  std_logic;
       
-      requestVRAMEnable       : out std_logic := '0';
-      requestVRAMXPos         : out unsigned(9 downto 0);
-      requestVRAMYPos         : out unsigned(8 downto 0);
-      requestVRAMSize         : out unsigned(10 downto 0);
-      requestVRAMIdle         : in  std_logic;
-      requestVRAMDone         : in  std_logic;
-         
+      videoout_request        : out tvideoout_request := ('0', (others => '0'), (others => '0'), (others => '0'), 0, (others => '0'));
+      videoout_pixelRead      : in  std_logic_vector(15 downto 0);
+      
+      overlay_data            : in  std_logic_vector(23 downto 0);
+      overlay_ena             : in  std_logic;
+      
       vram_DOUT               : in  std_logic_vector(63 downto 0);
       vram_DOUT_READY         : in  std_logic;
          
-      video_ce                : buffer std_logic := '0';
-      video_r                 : out std_logic_vector(7 downto 0);
-      video_g                 : out std_logic_vector(7 downto 0);
-      video_b                 : out std_logic_vector(7 downto 0);
+      video_ce                : out std_logic := '0';
+      video_r                 : out std_logic_vector(7 downto 0) := (others => '0');
+      video_g                 : out std_logic_vector(7 downto 0) := (others => '0');
+      video_b                 : out std_logic_vector(7 downto 0) := (others => '0');
       video_hblank            : out std_logic := '1';
-      video_hsync             : out std_logic := '0'
+      video_hsync             : out std_logic := '0';
+      
+      videoout_ss_in          : in  tvideoout_ss;
+      videoout_ss_out         : out tvideoout_ss
    );
 end entity;
 
 architecture arch of gpu_videoout_sync is
    
-   type tState is
-   (
-      WAITNEWLINE,
-      REQUEST,
-      WAITREAD
-   );
-   signal state : tState := WAITNEWLINE;
+   -- timing
+   signal nextHCount       : integer range 0 to 4095;
+   signal vpos             : integer range 0 to 511;
+   signal vsyncCount       : integer range 0 to 511;
    
-   signal reqPosX       : unsigned(9 downto 0);
-   signal reqPosY       : unsigned(8 downto 0);
-   signal reqSize       : unsigned(10 downto 0);
-   signal lineAct       : unsigned(8 downto 0);
-   signal fillAddr      : unsigned(8 downto 0) := (others => '0');
-   signal store         : std_logic := '0';
-      
+   signal htotal           : integer range 2169 to 2173; -- 3406 to 3413 in GPU clock domain
+   signal vtotal           : integer range 263 to 314;
+   signal vDisplayStart    : integer range 0 to 314;
+   signal vDisplayEnd      : integer range 0 to 314;
+   
    -- output   
-   signal readAddr      : unsigned(10 downto 0) := (others => '0');
-   signal pixelRead     : std_logic_vector(15 downto 0);
-   signal pixelData_R   : std_logic_vector(7 downto 0);
-   signal pixelData_G   : std_logic_vector(7 downto 0);
-   signal pixelData_B   : std_logic_vector(7 downto 0);
-   
-   signal lineDisp      : unsigned(8 downto 0);
-   signal clkDiv        : integer range 5 to 12 := 5; 
-   signal clkCnt        : integer range 0 to 12 := 0;
-   signal xpos          : integer range 0 to 1023 := 0;
-   signal xmax          : integer range 0 to 1023;
-   
-   signal hsync_start   : integer range 0 to 4095;
-   signal hsync_end     : integer range 0 to 4095;
+   signal pixelData_R      : std_logic_vector(7 downto 0) := (others => '0');
+   signal pixelData_G      : std_logic_vector(7 downto 0) := (others => '0');
+   signal pixelData_B      : std_logic_vector(7 downto 0) := (others => '0');
+      
+   signal clkDiv           : integer range 5 to 12 := 5; 
+   signal clkCnt           : integer range 0 to 12 := 0;
+   signal xmax             : integer range 0 to 1023;
+      
+   signal hsync_start      : integer range 0 to 4095;
+   signal hsync_end        : integer range 0 to 4095;
    
    type tReadState is
    (
@@ -111,113 +97,194 @@ architecture arch of gpu_videoout_sync is
    
    signal fetchNext : std_logic := '0';
    
-   -- overlay
-   signal fpstext             : unsigned(15 downto 0);
-   signal overlay_fps_data    : std_logic_vector(23 downto 0);
-   signal overlay_fps_ena     : std_logic;
-   
-   signal overlay_cd_data     : std_logic_vector(23 downto 0);
-   signal overlay_cd_ena      : std_logic;
-   
-   signal errortext           : unsigned(7 downto 0);
-   signal overlay_error_data  : std_logic_vector(23 downto 0);
-   signal overlay_error_ena   : std_logic;
-   
-   signal debugtextDbg        : unsigned(23 downto 0);
-   signal debugtextDbg_data   : std_logic_vector(23 downto 0);
-   signal debugtextDbg_ena    : std_logic;
-
-   signal overlay_Gun1_ena    : std_logic;
-   signal overlay_Gun2_ena    : std_logic;
-
-   signal Gun1X_screen        : integer range 0 to 1023;
-   signal Gun2X_screen        : integer range 0 to 1023;
-
-   signal Gun1Y_screen        : unsigned(9 downto 0);
-   signal Gun2Y_screen        : unsigned(9 downto 0);
-   
 begin 
 
-   requestVRAMEnable <= '1'     when (state = REQUEST and requestVRAMIdle = '1') else '0';
-   requestVRAMXPos   <= reqPosX when (state = REQUEST and requestVRAMIdle = '1') else (others => '0');
-   requestVRAMYPos   <= reqPosY when (state = REQUEST and requestVRAMIdle = '1') else (others => '0');
-   requestVRAMSize   <= reqSize when (state = REQUEST and requestVRAMIdle = '1') else (others => '0');
+   -- video timing
+   videoout_ss_out.interlacedDisplayField <= videoout_reports.interlacedDisplayField;                 
+   videoout_ss_out.nextHCount             <= std_logic_vector(to_unsigned(nextHCount, 12));                             
+   videoout_ss_out.vpos                   <= std_logic_vector(to_unsigned(vpos, 9));                            
+   videoout_ss_out.inVsync                <= videoout_reports.inVsync;                                
+   videoout_ss_out.activeLineLSB          <= videoout_reports.activeLineLSB;                          
+   videoout_ss_out.GPUSTAT_InterlaceField <= videoout_reports.GPUSTAT_InterlaceField;
+   videoout_ss_out.GPUSTAT_DrawingOddline <= videoout_reports.GPUSTAT_DrawingOddline;
 
-   
-   -- vram reading
-   process (clk2x)
+   process (clk1x)
+      variable mode480i                  : std_logic;
+      variable isVsync                   : std_logic;
+      variable vposNew                   : integer range 0 to 511;
+      variable interlacedDisplayFieldNew : std_logic;
    begin
-      if rising_edge(clk2x) then
-         
+      if rising_edge(clk1x) then
+      
+         if (nextHCount <   3) then videoout_reports.hblank_tmr <= '1'; else videoout_reports.hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
+                
+         videoout_reports.vsync <= '0';
+         if (videoout_settings.GPUSTAT_VerRes = '1') then
+            if (vsyncCount >= 5 and vsyncCount < 8) then videoout_reports.vsync <= '1'; end if;
+         else
+            if (vsyncCount >= 10 and vsyncCount < 13) then videoout_reports.vsync <= '1'; end if;
+         end if;
+
          if (reset = '1') then
-         
-            state   <= WAITNEWLINE;
-            lineAct <= (others => '0');
-         
+               
+            videoout_reports.irq_VBLANK  <= '0';
+               
+            videoout_reports.interlacedDisplayField   <= videoout_ss_in.interlacedDisplayField;
+            nextHCount                                <= to_integer(unsigned(videoout_ss_in.nextHCount));
+            vpos                                      <= to_integer(unsigned(videoout_ss_in.vpos));
+            videoout_reports.inVsync                  <= videoout_ss_in.inVsync;
+            videoout_reports.activeLineLSB            <= videoout_ss_in.activeLineLSB;
+            videoout_reports.GPUSTAT_InterlaceField   <= videoout_ss_in.GPUSTAT_InterlaceField;
+            videoout_reports.GPUSTAT_DrawingOddline   <= videoout_ss_in.GPUSTAT_DrawingOddline;
+                  
          elsif (ce = '1') then
          
-            case (state) is
+            videoout_reports.irq_VBLANK <= '0';
             
-               when WAITNEWLINE =>
-                  if (videoout_on = '1' and lineInNext /= lineAct and fetch = '1' and GPUSTAT_DisplayDisable = '0') then
-                     state     <= REQUEST;
-                     lineAct   <= lineInNext;
-                     reqPosX   <= DisplayOffsetX;
-                     reqPosY   <= lineInNext + DisplayOffsetY;
-                     fillAddr  <= lineInNext(0) & x"00";
-                     if (interlacedMode = '1') then
-                        fillAddr(8) <= lineInNext(1);
-                     end if;
-                     if (GPUSTAT_ColorDepth24 = '1') then
-                        reqSize <= resize(DisplayWidth, 11) + resize(DisplayWidth(9 downto 1), 11);
+            --gpu timing calc
+            if (videoout_settings.GPUSTAT_PalVideoMode = '1' and videoout_settings.pal60 = '0') then
+               htotal <= 2169; -- overwritten below
+               vtotal <= 314;
+            else
+               htotal <= 2173; -- overwritten below
+               vtotal <= 263;
+            end if;
+            
+            -- todo: different values for ntsc
+            if (videoout_settings.GPUSTAT_HorRes2 = '1') then
+               htotal  <= 2169; -- 368
+            else
+               case (videoout_settings.GPUSTAT_HorRes1) is
+                  when "00" => htotal <= 2172; -- 256;
+                  when "01" => htotal <= 2170; -- 320;
+                  when "10" => htotal <= 2169;  -- 512;
+                  when "11" => htotal <= 2170;  -- 640;
+                  when others => null;
+               end case;
+            end if;
+            
+            
+            if (videoout_settings.vDisplayRange( 9 downto  0) < 314) then vDisplayStart <= to_integer(videoout_settings.vDisplayRange( 9 downto  0)); else vDisplayStart <= 314; end if;
+            if (videoout_settings.vDisplayRange(19 downto 10) < 314) then vDisplayEnd   <= to_integer(videoout_settings.vDisplayRange(19 downto 10)); else vDisplayEnd   <= 314; end if;
+              
+            -- gpu timing count
+            if (nextHCount > 1) then
+               nextHCount <= nextHCount - 1;
+            else
+               
+               nextHCount <= htotal;
+               
+               vposNew := vpos + 1;
+               if (vposNew >= vtotal) then
+                  vposNew := 0;
+                  if (videoout_settings.GPUSTAT_VertInterlace = '1') then
+                     videoout_reports.GPUSTAT_InterlaceField <= not videoout_reports.GPUSTAT_InterlaceField;
+                  else
+                     videoout_reports.GPUSTAT_InterlaceField <= '0';
+                  end if;
+               end if;
+               
+               vpos <= vposNew;
+               
+               -- todo: timer 1
+               
+               mode480i := '0';
+               if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_settings.GPUSTAT_VertInterlace = '1') then mode480i := '1'; end if;
+               
+               isVsync := '0';
+               vsyncCount <= 0;
+               if (vposNew < vDisplayStart or vposNew >= vDisplayEnd) then 
+                  isVsync := '1'; 
+                  vsyncCount <= vsyncCount + 1;
+               else
+                  if (videoout_settings.GPUSTAT_VerRes = '1') then
+                     if (videoout_reports.interlacedDisplayField = '1') then
+                        videoout_request.lineIn <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
                      else
-                        reqSize <= '0' & DisplayWidth;
+                        videoout_request.lineIn <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
+                     end if;
+                  else
+                     videoout_request.lineIn <= to_unsigned(vposNew - vDisplayStart, 9);
+                  end if;
+               end if;
+
+               interlacedDisplayFieldNew := videoout_reports.interlacedDisplayField;
+               if (isVsync /= videoout_reports.inVsync) then
+                  if (isVsync = '1') then
+                     videoout_request.fetch      <= '0';
+                     videoout_reports.irq_VBLANK <= '1';
+                     if (mode480i = '1') then 
+                        interlacedDisplayFieldNew := not videoout_reports.GPUSTAT_InterlaceField;
+                     else 
+                        interlacedDisplayFieldNew := '0';
                      end if;
                   end if;
-
-               when REQUEST =>
-                  if (requestVRAMIdle = '1') then
-                     state <= WAITREAD;
-                     store <= '1';
+                  videoout_reports.inVsync <= isVsync;
+                  --Timer.gateChange(1, inVsync);
+               end if;
+               videoout_reports.interlacedDisplayField <= interlacedDisplayFieldNew;
+               
+             
+               videoout_reports.GPUSTAT_DrawingOddline <= '0';
+               videoout_reports.activeLineLSB          <= '0';
+               if (mode480i = '1') then
+                  if (videoout_settings.vramRange(10) = '0' and interlacedDisplayFieldNew = '1') then videoout_reports.activeLineLSB <= '1'; end if;
+                  if (videoout_settings.vramRange(10) = '1' and interlacedDisplayFieldNew = '0') then videoout_reports.activeLineLSB <= '1'; end if;
+               
+                  if (videoout_settings.vramRange(10) = '0' and isVsync = '0' and interlacedDisplayFieldNew = '1') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+                  if (videoout_settings.vramRange(10) = '1' and isVsync = '1' and interlacedDisplayFieldNew = '0') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+               else
+                  if (videoout_settings.vramRange(10) = '0' and (vposNew mod 2) = 1) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+                  if (videoout_settings.vramRange(10) = '1' and (vposNew mod 2) = 0) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+               end if;
+               
+               vposNew := vposNew + 1;
+               if (vDisplayStart > 0) then
+                  if (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
+                     if (videoout_settings.GPUSTAT_VerRes = '1') then
+                        if (videoout_reports.activeLineLSB = '1') then
+                           videoout_request.lineInNext <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
+                        else
+                           videoout_request.lineInNext <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
+                        end if;
+                     else
+                        videoout_request.lineInNext <= to_unsigned(vposNew - vDisplayStart, 9);
+                     end if;
+                     videoout_request.fetch      <= '1';
                   end if;
-                  
-               when WAITREAD =>
-                  if (vram_DOUT_READY = '1') then
-                     fillAddr <= fillAddr + 1;
+               else  
+                  if (vposNew = vtotal) then
+                     if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_reports.interlacedDisplayField = '1') then
+                        videoout_request.lineInNext <= to_unsigned(1, 9);
+                     else
+                        videoout_request.lineInNext <= to_unsigned(0, 9);
+                     end if;
+                     videoout_request.fetch      <= '1';
+                  elsif (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
+                     if (videoout_settings.GPUSTAT_VerRes = '1') then
+                        if (videoout_reports.activeLineLSB = '1') then
+                           videoout_request.lineInNext <= to_unsigned(((vposNew - vDisplayStart) * 2) + 1, 9);
+                        else
+                           videoout_request.lineInNext <= to_unsigned((vposNew - vDisplayStart) * 2, 9);
+                        end if;
+                     else
+                        videoout_request.lineInNext <= to_unsigned(vposNew - vDisplayStart, 9);
+                     end if;
+                     videoout_request.fetch      <= '1';
                   end if;
-                  if (requestVRAMDone = '1') then
-                     state <= WAITNEWLINE; 
-                     store <= '0';
-                  end if;
+               end if;
+              
+            end if;
             
-            end case;
-         
+            if (softReset = '1') then
+               videoout_reports.GPUSTAT_InterlaceField <= '1';
+               videoout_reports.GPUSTAT_DrawingOddline <= '0';
+               videoout_reports.irq_VBLANK             <= '0';
+            end if;
+
          end if;
-         
       end if;
-   end process; 
-   
-   ilineram: entity work.dpram_dif
-   generic map 
-   ( 
-      addr_width_a  => 9,
-      data_width_a  => 64,
-      addr_width_b  => 11,
-      data_width_b  => 16
-   )
-   port map
-   (
-      clock       => clk2x,
-      
-      address_a   => std_logic_vector(fillAddr),
-      data_a      => vram_DOUT,
-      wren_a      => (vram_DOUT_READY and store),
-      
-      address_b   => std_logic_vector(readAddr),
-      data_b      => x"0000",
-      wren_b      => '0',
-      q_b         => pixelRead
-   );
+   end process;
    
    -- timing generation reading
    process (clk2x)
@@ -228,17 +295,17 @@ begin
          
          if (reset = '1') then
          
-            clkCnt       <= 0;
-            video_hblank <= '1';
-            lineDisp     <= (others => '0');
-            readstate    <= IDLE;
+            clkCnt                     <= 0;
+            video_hblank               <= '1';
+            videoout_request.lineDisp  <= (others => '0');
+            readstate                  <= IDLE;
          
          elsif (ce = '1') then
          
-            if (GPUSTAT_HorRes2 = '1') then
+            if (videoout_settings.GPUSTAT_HorRes2 = '1') then
                clkDiv  <= 9; -- 368
             else
-               case (GPUSTAT_HorRes1) is
+               case (videoout_settings.GPUSTAT_HorRes1) is
                   when "00" => clkDiv <= 12; -- 256;
                   when "01" => clkDiv <= 10; -- 320;
                   when "10" => clkDiv <= 6;  -- 512;
@@ -252,36 +319,16 @@ begin
             else
                clkCnt    <= 0;
                video_ce  <= '1';
-               if (xpos < 1023) then
-                  xpos <= xpos + 1;
+               if (videoout_request.xpos < 1023) then
+                  videoout_request.xpos <= videoout_request.xpos + 1;
                end if;
-               if (xpos > 0 and xpos <= xmax) then
+               if (videoout_request.xpos > 0 and videoout_request.xpos <= xmax) then
                   video_hblank <= '0';
-                  if (overlay_error_ena = '1') then
-                     video_r      <= overlay_error_data( 7 downto 0);
-                     video_g      <= overlay_error_data(15 downto 8);
-                     video_b      <= overlay_error_data(23 downto 16);
-                  elsif (overlay_cd_ena = '1') then
-                     video_r      <= overlay_cd_data( 7 downto 0);
-                     video_g      <= overlay_cd_data(15 downto 8);
-                     video_b      <= overlay_cd_data(23 downto 16);
-                  elsif (overlay_fps_ena = '1') then
-                     video_r      <= overlay_fps_data( 7 downto 0);
-                     video_g      <= overlay_fps_data(15 downto 8);
-                     video_b      <= overlay_fps_data(23 downto 16);                       
-                  elsif (debugtextDbg_ena = '1') then                              
-                     video_r      <= debugtextDbg_data( 7 downto 0);
-                     video_g      <= debugtextDbg_data(15 downto 8);
-                     video_b      <= debugtextDbg_data(23 downto 16);
-                  elsif (overlay_Gun1_ena = '1') then
-                     video_r      <= (others => '1');
-                     video_g      <= (others => '0');
-                     video_b      <= (others => '0');
-                  elsif (overlay_Gun2_ena = '1') then
-                     video_r      <= (others => '0');
-                     video_g      <= (others => '1');
-                     video_b      <= (others => '1');
-                  elsif (GPUSTAT_DisplayDisable = '1') then
+                  if (overlay_ena = '1') then
+                     video_r      <= overlay_data( 7 downto 0);
+                     video_g      <= overlay_data(15 downto 8);
+                     video_b      <= overlay_data(23 downto 16);
+                  elsif (videoout_settings.GPUSTAT_DisplayDisable = '1') then
                      video_r      <= (others => '0');
                      video_g      <= (others => '0');
                      video_b      <= (others => '0');
@@ -299,14 +346,14 @@ begin
                end if;
             end if;
             
-            if (lineIn /= lineDisp) then
-               lineDisp <= lineIn;
-               readAddr <= lineIn(0) & "00" & x"00";
-               if (interlacedMode = '1') then
-                  readAddr(10) <= lineIn(1);
+            if (videoout_request.lineIn /= videoout_request.lineDisp) then
+               videoout_request.lineDisp <= videoout_request.lineIn;
+               videoout_request.readAddr <= videoout_request.lineIn(0) & "00" & x"00";
+               if (videoout_settings.GPUSTAT_VerRes = '1') then -- interlaced mode
+                  videoout_request.readAddr(10) <= videoout_request.lineIn(1);
                end if;
-               xpos     <= 0;
-               xmax     <= to_integer(DisplayWidth);
+               videoout_request.xpos <= 0;
+               xmax                  <= to_integer(videoout_settings.DisplayWidth);
             end if;
             
             if (nextHCount = hsync_start) then video_hsync <= '1'; end if;
@@ -315,10 +362,10 @@ begin
             case (readstate) is
             
                when IDLE =>
-                  if (clkCnt >= (clkDiv - 1) and xpos < xmax) then
-                     if (GPUSTAT_ColorDepth24 = '1') then
-                        readAddr  <= readAddr + 1;
-                        if (xpos = 0 or readstate24 = READ24_0) then
+                  if (clkCnt >= (clkDiv - 1) and videoout_request.xpos < xmax) then
+                     if (videoout_settings.GPUSTAT_ColorDepth24 = '1') then
+                        videoout_request.readAddr  <= videoout_request.readAddr + 1;
+                        if (videoout_request.xpos = 0 or readstate24 = READ24_0) then
                            readstate <= READ24_0;
                         else
                            readstate <= READ24_8;
@@ -329,32 +376,32 @@ begin
                   end if;
 
                when READ16 =>
-                  readstate   <= IDLE;
-                  readAddr    <= readAddr + 1;
-                  pixelData_R <= pixelRead( 4 downto  0) & pixelRead( 4 downto 2);
-                  pixelData_G <= pixelRead( 9 downto  5) & pixelRead( 9 downto 7);
-                  pixelData_B <= pixelRead(14 downto 10) & pixelRead(14 downto 12);
+                  readstate                  <= IDLE;
+                  videoout_request.readAddr  <= videoout_request.readAddr + 1;
+                  pixelData_R                <= videoout_pixelRead( 4 downto  0) & videoout_pixelRead( 4 downto 2);
+                  pixelData_G                <= videoout_pixelRead( 9 downto  5) & videoout_pixelRead( 9 downto 7);
+                  pixelData_B                <= videoout_pixelRead(14 downto 10) & videoout_pixelRead(14 downto 12);
                   
                when READ24_0 =>
-                  readstate   <= READ24_16;
-                  pixelData_R <= pixelRead( 7 downto  0);
-                  pixelData_G <= pixelRead(15 downto  8);
+                  readstate                  <= READ24_16;
+                  pixelData_R                <= videoout_pixelRead( 7 downto  0);
+                  pixelData_G                <= videoout_pixelRead(15 downto  8);
                  
                when READ24_8 =>
-                  readstate   <= READ24_24;
-                  pixelData_R <= pixelRead(15 downto  8);
+                  readstate                  <= READ24_24;
+                  pixelData_R                <= videoout_pixelRead(15 downto  8);
                   
                when READ24_16 =>
-                  readstate   <= IDLE;
-                  readstate24 <= READ24_8;
-                  pixelData_B <= pixelRead( 7 downto  0);
+                  readstate                  <= IDLE;
+                  readstate24                <= READ24_8;
+                  pixelData_B                <= videoout_pixelRead( 7 downto  0);
             
                 when READ24_24 =>
-                  readstate   <= IDLE;
-                  readstate24 <= READ24_0;
-                  readAddr    <= readAddr + 1;
-                  pixelData_G <= pixelRead( 7 downto  0);
-                  pixelData_B <= pixelRead(15 downto  8);
+                  readstate                  <= IDLE;
+                  readstate24                <= READ24_0;
+                  videoout_request.readAddr  <= videoout_request.readAddr + 1;
+                  pixelData_G                <= videoout_pixelRead( 7 downto  0);
+                  pixelData_B                <= videoout_pixelRead(15 downto  8);
             
             end case;
          
@@ -362,126 +409,6 @@ begin
          
       end if;
    end process; 
-   
-   
-   -- overlays
-   fpstext( 7 downto 0) <= resize(fpscountBCD(3 downto 0), 8) + 16#30#;
-   fpstext(15 downto 8) <= resize(fpscountBCD(7 downto 4), 8) + 16#30#;
-   
-   ioverlayFPS : entity work.gpu_overlay
-   generic map
-   (
-      COLS                   => 2,
-      BACKGROUNDON           => '1',
-      RGB_BACK               => x"FFFFFF",
-      RGB_FRONT              => x"0000FF",
-      OFFSETX                => 4,
-      OFFSETY                => 4
-   )
-   port map
-   (
-      clk                    => clk2x,
-      ce                     => video_ce,
-      ena                    => fpscountOn,                    
-      i_pixel_out_x          => xpos,
-      i_pixel_out_y          => to_integer(lineDisp),
-      o_pixel_out_data       => overlay_fps_data,
-      o_pixel_out_ena        => overlay_fps_ena,
-      textstring             => fpstext
-   );
-   
-   ioverlayCD : entity work.gpu_overlay
-   generic map
-   (
-      COLS                   => 2,
-      BACKGROUNDON           => '1',
-      RGB_BACK               => x"FFFFFF",
-      RGB_FRONT              => x"0000FF",
-      OFFSETX                => 4,
-      OFFSETY                => 24
-   )
-   port map
-   (
-      clk                    => clk2x,
-      ce                     => video_ce,
-      ena                    => cdSlow,                    
-      i_pixel_out_x          => xpos,
-      i_pixel_out_y          => to_integer(lineDisp),
-      o_pixel_out_data       => overlay_cd_data,
-      o_pixel_out_ena        => overlay_cd_ena,
-      textstring             => x"4344"
-   );
-   
-   errortext <= resize(errorCode, 8) + 16#30# when (errorCode < 10) else resize(errorCode, 8) + 16#37#;
-   ioverlayError : entity work.gpu_overlay
-   generic map
-   (
-      COLS                   => 2,
-      BACKGROUNDON           => '1',
-      RGB_BACK               => x"FFFFFF",
-      RGB_FRONT              => x"0000FF",
-      OFFSETX                => 4,
-      OFFSETY                => 44
-   )
-   port map
-   (
-      clk                    => clk2x,
-      ce                     => video_ce,
-      ena                    => errorOn and errorEna,                    
-      i_pixel_out_x          => xpos,
-      i_pixel_out_y          => to_integer(lineDisp),
-      o_pixel_out_data       => overlay_error_data,
-      o_pixel_out_ena        => overlay_error_ena,
-      textstring             => x"45" & errortext
-   );   
-   
-   idebugtext_dbg : entity work.gpu_overlay
-   generic map
-   (
-      COLS                   => 3,
-      BACKGROUNDON           => '1',
-      RGB_BACK               => x"FFFFFF",
-      RGB_FRONT              => x"0000FF",
-      OFFSETX                => 30,
-      OFFSETY                => 4
-   )
-   port map
-   (
-      clk                    => clk2x,
-      ce                     => video_ce,
-      ena                    => debugmodeOn,                    
-      i_pixel_out_x          => xpos,
-      i_pixel_out_y          => to_integer(lineDisp),
-      o_pixel_out_data       => debugtextDbg_data,
-      o_pixel_out_ena        => debugtextDbg_ena,
-      textstring             => x"444247"
-   );
-
-   -- Map gun coordinates (0-255 X, Y) to screen positions
-   Gun1X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * Gun1X), 18) (17 downto 8));
-   Gun2X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * Gun2X), 18) (17 downto 8));
-
-   Gun1Y_screen <= '0' & Gun1Y_scanlines when interlacedMode = '0' else Gun1Y_scanlines & '0';
-   Gun2Y_screen <= '0' & Gun2Y_scanlines when interlacedMode = '0' else Gun2Y_scanlines & '0';
-
-   -- Lightgun crosshairs (currently single pixel to save resources)
-   process (clk2x)
-   begin
-      if rising_edge(clk2x) then
-         if (video_ce = '1') then
-            overlay_Gun1_ena <= '0';
-            overlay_Gun2_ena <= '0';
-
-            if (Gun1CrosshairOn = '1' and xpos = Gun1X_screen and to_integer(lineDisp) = Gun1Y_screen) then
-               overlay_Gun1_ena <= '1';
-            end if;
-
-            if (Gun2CrosshairOn = '1' and xpos = Gun2X_screen and to_integer(lineDisp) = Gun2Y_screen) then
-               overlay_Gun2_ena <= '1';
-            end if;
-         end if;
-      end if;
-   end process;
 
 end architecture;
 

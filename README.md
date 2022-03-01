@@ -62,6 +62,8 @@ List of Errors:
 - E8     - DMA chopping enabled
 - E9     - GPU FIFO overflow
 - EA     - SPU timeout
+- EB     - DMA and CPU interlock error 
+- EC     - DMA FIFO overflow
 
 ## Debug Options
 
