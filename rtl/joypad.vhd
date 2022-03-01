@@ -3,6 +3,7 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all; 
 
 use STD.textio.all;
+use work.pJoypad.all;
 
 entity joypad is
    port 
@@ -15,16 +16,8 @@ entity joypad is
 
       isPal                : in  std_logic; -- passed through for GunCon
       
-      PadPortEnable1       : in  std_logic;
-      PadPortAnalog1       : in  std_logic;
-      PadPortMouse1        : in  std_logic;
-      PadPortGunCon1       : in  std_logic;
-      PadPortNeGcon1       : in  std_logic;
-      PadPortEnable2       : in  std_logic;
-      PadPortAnalog2       : in  std_logic;
-      PadPortMouse2        : in  std_logic;
-      PadPortGunCon2       : in  std_logic;
-      PadPortNeGcon2       : in  std_logic;
+      joypad1              : in  joypad_t;
+      joypad2              : in  joypad_t;
       
       memcard1_available   : in  std_logic;
       memcard2_available   : in  std_logic;
@@ -33,30 +26,6 @@ entity joypad is
       
       irqRequest           : out std_logic := '0';
       
-      KeyTriangle          : in  std_logic_vector(1 downto 0); 
-      KeyCircle            : in  std_logic_vector(1 downto 0); 
-      KeyCross             : in  std_logic_vector(1 downto 0); 
-      KeySquare            : in  std_logic_vector(1 downto 0);
-      KeySelect            : in  std_logic_vector(1 downto 0);
-      KeyStart             : in  std_logic_vector(1 downto 0);
-      KeyRight             : in  std_logic_vector(1 downto 0);
-      KeyLeft              : in  std_logic_vector(1 downto 0);
-      KeyUp                : in  std_logic_vector(1 downto 0);
-      KeyDown              : in  std_logic_vector(1 downto 0);
-      KeyR1                : in  std_logic_vector(1 downto 0);
-      KeyR2                : in  std_logic_vector(1 downto 0);
-      KeyR3                : in  std_logic_vector(1 downto 0);
-      KeyL1                : in  std_logic_vector(1 downto 0);
-      KeyL2                : in  std_logic_vector(1 downto 0);
-      KeyL3                : in  std_logic_vector(1 downto 0);
-      Analog1XP1           : in  signed(7 downto 0);
-      Analog1YP1           : in  signed(7 downto 0);
-      Analog2XP1           : in  signed(7 downto 0);
-      Analog2YP1           : in  signed(7 downto 0);         
-      Analog1XP2           : in  signed(7 downto 0);
-      Analog1YP2           : in  signed(7 downto 0);
-      Analog2XP2           : in  signed(7 downto 0);
-      Analog2YP2           : in  signed(7 downto 0);   
       MouseEvent           : in  std_logic;
       MouseLeft            : in  std_logic;
       MouseRight           : in  std_logic;
@@ -125,37 +94,37 @@ architecture arch of joypad is
    signal JOY_MODE            : std_logic_vector(15 downto 0);
    signal JOY_CTRL            : std_logic_vector(15 downto 0);
    signal JOY_BAUD            : std_logic_vector(15 downto 0);
+   signal JOY_CTRL_13_1       : std_logic;
       
    signal beginTransfer       : std_logic := '0';
    signal actionNext          : std_logic := '0';
    signal actionNextPad       : std_logic := '0';
       
    -- devices  
-   signal isActivePad1        : std_logic;
-   signal isActivePad2        : std_logic;
+   signal isActivePad         : std_logic;
    signal isActiveMem1        : std_logic;
    signal isActiveMem2        : std_logic;
       
-   signal selectedPad1        : std_logic;
-   signal selectedPad2        : std_logic;
+   signal selectedPort1       : std_logic;
+   signal selectedPort2       : std_logic;
+   signal selectedPort        : std_logic;
       
    signal ack                 : std_logic;
-   signal ackPad1             : std_logic;
-   signal ackPad2             : std_logic;
+   signal ackPad              : std_logic;
    signal ackMem1             : std_logic;
    signal ackMem2             : std_logic;
    
    signal receiveBuffer       : std_logic_vector(7 downto 0);
-   signal receiveBufferPad1   : std_logic_vector(7 downto 0);
-   signal receiveBufferPad2   : std_logic_vector(7 downto 0);
+   signal receiveBufferPad    : std_logic_vector(7 downto 0);
    signal receiveBufferMem1   : std_logic_vector(7 downto 0);
    signal receiveBufferMem2   : std_logic_vector(7 downto 0);
    
    signal receiveValid        : std_logic;
-   signal receiveValidPad1    : std_logic;
-   signal receiveValidPad2    : std_logic;
+   signal receiveValidPad     : std_logic;
    signal receiveValidMem1    : std_logic;
    signal receiveValidMem2    : std_logic;
+
+   signal joypad_selected     : joypad_t;
 
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
@@ -328,7 +297,7 @@ begin
                if (transmitting = '1') then
                   JOY_CTRL(2)    <= '1';
                   if (receiveValid = '1') then
-                     receiveBuffer <= receiveBufferPad1 or receiveBufferPad2 or receiveBufferMem1 or receiveBufferMem2;
+                     receiveBuffer <= receiveBufferPad or receiveBufferMem1 or receiveBufferMem2;
                   else
                      receiveBuffer  <= x"FF";
                   end if;
@@ -354,64 +323,44 @@ begin
                end if;
             end if;
             
+            JOY_CTRL_13_1 <= JOY_CTRL(13);
          end if;
       end if;
    end process;
    
-   ack          <= ackPad1 or ackPad2 or ackMem1 or ackMem2;
-   receiveValid <= receiveValidPad1 or receiveValidPad2 or receiveValidMem1 or receiveValidMem2;
+   ack          <= ackPad or ackMem1 or ackMem2;
+   receiveValid <= receiveValidPad or receiveValidMem1 or receiveValidMem2;
    
-   selectedPad1 <= '1' when (JOY_CTRL(13) = '0' and JOY_CTRL(1 downto 0) = "11") else '0';
-   selectedPad2 <= '1' when (JOY_CTRL(13) = '1' and JOY_CTRL(1 downto 0) = "11") else '0';
-   
-   ijoypad_pad1 : entity work.joypad_pad
+   selectedPort1 <= '1' when (JOY_CTRL(13) = '0' and JOY_CTRL(1 downto 0) = "11") else '0';
+   selectedPort2 <= '1' when (JOY_CTRL(13) = '1' and JOY_CTRL(1 downto 0) = "11") else '0';
+   selectedPort  <= '1' when (JOY_CTRL(13) = JOY_CTRL_13_1 and JOY_CTRL(1 downto 0) = "11") else '0';
+
+   joypad_selected <= joypad2 when selectedPort2 else joypad1;
+
+   ijoypad_pad : entity work.joypad_pad
    port map
    (
       clk1x                => clk1x,    
       ce                   => ce,       
       reset                => reset,    
        
-      PortEnabled          => PadPortEnable1,
-      analogPad            => PadPortAnalog1,
-      isMouse              => PadPortMouse1,
-      isGunCon             => PadPortGunCon1,
-      isNeGcon             => PadPortNeGcon1,
+      joypad               => joypad_selected,
       isPal                => isPal,
 
-      selected             => selectedPad1,
+      selected             => selectedPort,
       actionNext           => actionNextPad,
       transmitting         => transmitting,
       transmitValue        => transmitValue,
  
-      isActive             => isActivePad1,
-      slotIdle             => not isActiveMem1,
+      isActive             => isActivePad,
+      slotIdle             => not (isActiveMem1 or isActiveMem2),
 
-      receiveValid         => receiveValidPad1,
-      receiveBuffer        => receiveBufferPad1,
-      ack                  => ackPad1,
+      receiveValid         => receiveValidPad,
+      receiveBuffer        => receiveBufferPad,
+      ack                  => ackPad,
 
       rumbleOn             => rumbleOn,
 
-      KeyTriangle          => KeyTriangle(0),
-      KeyCircle            => KeyCircle(0),  
-      KeyCross             => KeyCross(0),   
-      KeySquare            => KeySquare(0),  
-      KeySelect            => KeySelect(0),  
-      KeyStart             => KeyStart(0),   
-      KeyRight             => KeyRight(0),   
-      KeyLeft              => KeyLeft(0),    
-      KeyUp                => KeyUp(0),      
-      KeyDown              => KeyDown(0),    
-      KeyR1                => KeyR1(0),      
-      KeyR2                => KeyR2(0),      
-      KeyR3                => KeyR3(0),      
-      KeyL1                => KeyL1(0),      
-      KeyL2                => KeyL2(0),      
-      KeyL3                => KeyL3(0),      
-      Analog1X             => Analog1XP1,   
-      Analog1Y             => Analog1YP1,   
-      Analog2X             => Analog2XP1,   
-      Analog2Y             => Analog2YP1,
       MouseEvent           => MouseEvent,
       MouseLeft            => MouseLeft,
       MouseRight           => MouseRight,
@@ -420,64 +369,6 @@ begin
       GunX                 => Gun1X,
       GunY_scanlines       => Gun1Y_scanlines,
       GunAimOffscreen      => Gun1AimOffscreen
-   );
-   
-   ijoypad_pad2 : entity work.joypad_pad
-   port map
-   (
-      clk1x                => clk1x,    
-      ce                   => ce,       
-      reset                => reset,    
-       
-      PortEnabled          => PadPortEnable2,
-      analogPad            => PadPortAnalog2,
-      isMouse              => PadPortMouse2,
-      isGunCon             => PadPortGunCon2,
-      isNeGcon             => PadPortNeGcon2,
-      isPal                => isPal,
-
-      selected             => selectedPad2,
-      actionNext           => actionNextPad,
-      transmitting         => transmitting,
-      transmitValue        => transmitValue,
- 
-      isActive             => isActivePad2,
-      slotIdle             => not isActiveMem2,
-
-      receiveValid         => receiveValidPad2,
-      receiveBuffer        => receiveBufferPad2,
-      ack                  => ackPad2,
-
-      rumbleOn             => rumbleOn,
-
-      KeyTriangle          => KeyTriangle(1),
-      KeyCircle            => KeyCircle(1),  
-      KeyCross             => KeyCross(1),   
-      KeySquare            => KeySquare(1),  
-      KeySelect            => KeySelect(1),  
-      KeyStart             => KeyStart(1),   
-      KeyRight             => KeyRight(1),   
-      KeyLeft              => KeyLeft(1),    
-      KeyUp                => KeyUp(1),      
-      KeyDown              => KeyDown(1),    
-      KeyR1                => KeyR1(1),      
-      KeyR2                => KeyR2(1),      
-      KeyR3                => KeyR3(1),      
-      KeyL1                => KeyL1(1),      
-      KeyL2                => KeyL2(1),      
-      KeyL3                => KeyL3(1),      
-      Analog1X             => Analog1XP2,   
-      Analog1Y             => Analog1YP2,   
-      Analog2X             => Analog2XP2,   
-      Analog2Y             => Analog2YP2,
-      MouseEvent           => MouseEvent,
-      MouseLeft            => MouseLeft,
-      MouseRight           => MouseRight,
-      MouseX               => MouseX,
-      MouseY               => MouseY,
-      GunX                 => Gun2X,
-      GunY_scanlines       => Gun2Y_scanlines,
-      GunAimOffscreen      => Gun2AimOffscreen
    );
    
    ijoypad_mem1 : entity work.joypad_mem
@@ -501,13 +392,13 @@ begin
       mem_DOUT             => mem_DOUT,      
       mem_DOUT_READY       => mem_DOUT_READY,
       
-      selected             => selectedPad1,
+      selected             => selectedPort1,
       actionNext           => actionNextPad,
       transmitting         => transmitting,
       transmitValue        => transmitValue,
       
       isActive             => isActiveMem1,
-      slotIdle             => not isActivePad1,
+      slotIdle             => not isActivePad,
       
       receiveValid         => receiveValidMem1,
       receiveBuffer        => receiveBufferMem1,
@@ -535,13 +426,13 @@ begin
       mem_DOUT             => mem_DOUT,      
       mem_DOUT_READY       => mem_DOUT_READY,
       
-      selected             => selectedPad2,
+      selected             => selectedPort2,
       actionNext           => actionNextPad,
       transmitting         => transmitting,
       transmitValue        => transmitValue,
       
       isActive             => isActiveMem2,
-      slotIdle             => not isActivePad2,
+      slotIdle             => not isActivePad,
       
       receiveValid         => receiveValidMem2,
       receiveBuffer        => receiveBufferMem2,
@@ -567,7 +458,7 @@ begin
          end if;
          
          SS_idle <= '0';
-         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNext = '0' and isActivePad1 = '0' and isActivePad2 = '0') then
+         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNext = '0' and isActivePad = '0') then
             SS_idle <= '1';
          end if;
          

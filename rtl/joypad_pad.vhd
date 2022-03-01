@@ -2,6 +2,8 @@ library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all; 
 
+use work.pJoypad.all;
+
 entity joypad_pad is
    port 
    (
@@ -9,11 +11,8 @@ entity joypad_pad is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
-      PortEnabled          : in  std_logic;
-      analogPad            : in  std_logic;
-      isMouse              : in  std_logic;
-      isGunCon             : in  std_logic;
-      isNeGcon             : in  std_logic;
+      joypad               : in  joypad_t;
+
       isPal                : in  std_logic;
       
       selected             : in  std_logic;
@@ -30,26 +29,6 @@ entity joypad_pad is
 
       rumbleOn             : out std_logic := '0';
 
-      KeyTriangle          : in  std_logic; 
-      KeyCircle            : in  std_logic; 
-      KeyCross             : in  std_logic; 
-      KeySquare            : in  std_logic;
-      KeySelect            : in  std_logic;
-      KeyStart             : in  std_logic;
-      KeyRight             : in  std_logic;
-      KeyLeft              : in  std_logic;
-      KeyUp                : in  std_logic;
-      KeyDown              : in  std_logic;
-      KeyR1                : in  std_logic;
-      KeyR2                : in  std_logic;
-      KeyR3                : in  std_logic;
-      KeyL1                : in  std_logic;
-      KeyL2                : in  std_logic;
-      KeyL3                : in  std_logic;
-      Analog1X             : in  signed(7 downto 0);
-      Analog1Y             : in  signed(7 downto 0);
-      Analog2X             : in  signed(7 downto 0);
-      Analog2Y             : in  signed(7 downto 0);
       MouseEvent           : in  std_logic;
       MouseLeft            : in  std_logic;
       MouseRight           : in  std_logic;
@@ -177,16 +156,16 @@ begin
             mouseAccY <= newMouseAccClippedY;
          
             if (actionNext = '1' and transmitting = '1') then
-               if (selected = '1' and PortEnabled = '1') then
+               if (selected = '1' and joypad.PadPortEnable = '1') then
                   if (isActive = '0' and slotIdle = '1') then
                      if (controllerState = IDLE and transmitValue = x"01") then
                         controllerState <= READY;
                         isActive        <= '1';
                         ack             <= '1'; 
-                        analogPadSave   <= analogPad;
-                        mouseSave       <= isMouse;
-                        gunConSave      <= isGunCon;
-                        neGconSave      <= isNeGcon;
+                        analogPadSave   <= joypad.PadPortAnalog;
+                        mouseSave       <= joypad.PadPortMouse;
+                        gunConSave      <= joypad.PadPortGunCon;
+                        neGconSave      <= joypad.PadPortNeGcon;
                         receiveValid    <= '1';
                         receiveBuffer   <= x"FF";
 
@@ -198,10 +177,10 @@ begin
                               controllerState <= READY;
                               isActive        <= '1';
                               ack             <= '1';
-                              analogPadSave   <= analogPad;
-                              mouseSave       <= isMouse;
-                              gunConSave      <= isGunCon;
-                              neGconSave      <= isNeGcon;
+                              analogPadSave   <= joypad.PadPortAnalog;
+                              mouseSave       <= joypad.PadPortMouse;
+                              gunConSave      <= joypad.PadPortGunCon;
+                              neGconSave      <= joypad.PadPortNeGcon;
                               receiveValid    <= '1';
                               receiveBuffer   <= x"FF";
                            end if;
@@ -291,7 +270,7 @@ begin
                            ack             <= '1';
                            receiveValid    <= '1';
 
-                           if KeyTriangle = '1' or GunAimOffscreen = '1' then
+                           if joypad.KeyTriangle = '1' or GunAimOffscreen = '1' then
                               gunOffscreen <= '1';
                            else
                               gunOffscreen <= '0';
@@ -300,7 +279,7 @@ begin
                            receiveBuffer(0) <= '1';
                            receiveBuffer(1) <= '1';
                            receiveBuffer(2) <= '1';
-                           receiveBuffer(3) <= not KeyStart; -- A (left-side button)
+                           receiveBuffer(3) <= not joypad.KeyStart; -- A (left-side button)
                            receiveBuffer(4) <= '1';
                            receiveBuffer(5) <= '1';
                            receiveBuffer(6) <= '1';
@@ -324,8 +303,8 @@ begin
                            receiveBuffer(2) <= '1';
                            receiveBuffer(3) <= '1';
                            receiveBuffer(4) <= '1';
-                           receiveBuffer(5) <= not (KeyCircle or KeyTriangle); -- Trigger
-                           receiveBuffer(6) <= not KeyCross; -- B (right-side button)
+                           receiveBuffer(5) <= not (joypad.KeyCircle or joypad.KeyTriangle); -- Trigger
+                           receiveBuffer(6) <= not joypad.KeyCross; -- B (right-side button)
                            receiveBuffer(7) <= '1';
 
                         when GUNCONXLSB =>
@@ -367,14 +346,14 @@ begin
                            receiveBuffer   <= "0000000" & gunConY(8);
 
                         when BUTTONLSB => 
-                           receiveBuffer(0) <= not KeySelect;
-                           receiveBuffer(1) <= not KeyL3;
-                           receiveBuffer(2) <= not KeyR3;
-                           receiveBuffer(3) <= not KeyStart;
-                           receiveBuffer(4) <= not KeyUp;
-                           receiveBuffer(5) <= not KeyRight;
-                           receiveBuffer(6) <= not KeyDown;
-                           receiveBuffer(7) <= not KeyLeft;
+                           receiveBuffer(0) <= not joypad.KeySelect;
+                           receiveBuffer(1) <= not joypad.KeyL3;
+                           receiveBuffer(2) <= not joypad.KeyR3;
+                           receiveBuffer(3) <= not joypad.KeyStart;
+                           receiveBuffer(4) <= not joypad.KeyUp;
+                           receiveBuffer(5) <= not joypad.KeyRight;
+                           receiveBuffer(6) <= not joypad.KeyDown;
+                           receiveBuffer(7) <= not joypad.KeyLeft;
                            if (neGconSave = '1') then
                               controllerState  <= NEGCONBUTTONMSB;
                            else
@@ -389,14 +368,14 @@ begin
                            
                            
                         when BUTTONMSB => 
-                           receiveBuffer(0) <= not KeyL2;
-                           receiveBuffer(1) <= not KeyR2;
-                           receiveBuffer(2) <= not KeyL1;
-                           receiveBuffer(3) <= not KeyR1;
-                           receiveBuffer(4) <= not KeyTriangle;
-                           receiveBuffer(5) <= not KeyCircle;
-                           receiveBuffer(6) <= not KeyCross;
-                           receiveBuffer(7) <= not KeySquare;
+                           receiveBuffer(0) <= not joypad.KeyL2;
+                           receiveBuffer(1) <= not joypad.KeyR2;
+                           receiveBuffer(2) <= not joypad.KeyL1;
+                           receiveBuffer(3) <= not joypad.KeyR1;
+                           receiveBuffer(4) <= not joypad.KeyTriangle;
+                           receiveBuffer(5) <= not joypad.KeyCircle;
+                           receiveBuffer(6) <= not joypad.KeyCross;
+                           receiveBuffer(7) <= not joypad.KeySquare;
                            receiveValid     <= '1';
                            if (analogPadSave = '1') then
                               controllerState <= ANALOGRIGHTX;
@@ -410,25 +389,25 @@ begin
                            end if;
                            
                         when ANALOGRIGHTX => 
-                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog2X) + 128, 8));
+                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(joypad.Analog2X) + 128, 8));
                            receiveValid    <= '1';
                            controllerState <= ANALOGRIGHTY;
                            ack             <= '1';
                         
                         when ANALOGRIGHTY => 
-                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog2Y) + 128, 8));
+                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(joypad.Analog2Y) + 128, 8));
                            receiveValid    <= '1';
                            controllerState <= ANALOGLEFTX;
                            ack             <= '1';
                         
                         when ANALOGLEFTX =>
-                           receiveBuffer   <=std_logic_vector(to_unsigned(to_integer(Analog1X) + 128, 8));
+                           receiveBuffer   <=std_logic_vector(to_unsigned(to_integer(joypad.Analog1X) + 128, 8));
                            receiveValid    <= '1';
                            controllerState <= ANALOGLEFTY;
                            ack             <= '1';
                         
                         when ANALOGLEFTY =>
-                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog1Y) + 128, 8));
+                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(joypad.Analog1Y) + 128, 8));
                            receiveValid    <= '1';
                            controllerState <= IDLE;
 
@@ -437,9 +416,9 @@ begin
                            receiveBuffer(0) <= '1'; -- NeGcon does not report
                            receiveBuffer(1) <= '1'; -- NeGcon does not report
                            receiveBuffer(2) <= '1'; -- NeGcon does not report
-                           receiveBuffer(3) <= not KeyR1;
-                           receiveBuffer(4) <= not KeyTriangle;
-                           receiveBuffer(5) <= not KeyCircle;
+                           receiveBuffer(3) <= not joypad.KeyR1;
+                           receiveBuffer(4) <= not joypad.KeyTriangle;
+                           receiveBuffer(5) <= not joypad.KeyCircle;
                            receiveBuffer(6) <= '1'; -- NeGcon does not report
                            receiveBuffer(7) <= '1'; -- NeGcon does not report
                            receiveValid     <= '1';
@@ -448,17 +427,17 @@ begin
 
                         when NEGCONSTEERING =>
                            -- Same as ANALOGLEFTX, use IF in there to go to NEGCONANALOGI?
-                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(Analog1X) + 128, 8));
+                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(joypad.Analog1X) + 128, 8));
                            receiveValid    <= '1';
                            controllerState <= NEGCONANALOGI;
                            ack             <= '1';
 
                         when NEGCONANALOGI =>
-                           if ( to_integer(Analog2Y) < 0) then
+                           if ( to_integer(joypad.Analog2Y) < 0) then
                               -- Buttons are right stick up
                               -- Due to half resolution of the stick its range of -128 to 1 is mapped to 0x03 to 0xFF
-                              receiveBuffer   <= std_logic_vector(1 + shift_left(not to_unsigned(to_integer(Analog2Y),8),1));
-                           elsif (KeyCross = '1' or KeyR2 = '1') then
+                              receiveBuffer   <= std_logic_vector(1 + shift_left(not to_unsigned(to_integer(joypad.Analog2Y),8),1));
+                           elsif (joypad.KeyCross = '1' or joypad.KeyR2 = '1') then
                               -- Buttons are Buttons and full throttle
                               receiveBuffer   <= "11111111";
                            else
@@ -469,11 +448,11 @@ begin
                            ack             <= '1';
 
                         when NEGCONANALOGII =>
-                           if ( to_integer(Analog2Y) > 0) then
+                           if ( to_integer(joypad.Analog2Y) > 0) then
                               -- Buttons are right stick down
                               -- Due to half resolution of the stick its range of 1 to 127 is mapped to 0x03 to 0xFF
-                              receiveBuffer   <= std_logic_vector(1 + shift_left(to_unsigned(to_integer(Analog2Y),8),1));
-                           elsif (KeySquare = '1' or KeyL2 = '1') then
+                              receiveBuffer   <= std_logic_vector(1 + shift_left(to_unsigned(to_integer(joypad.Analog2Y),8),1));
+                           elsif (joypad.KeySquare = '1' or joypad.KeyL2 = '1') then
                               -- Buttons are Buttons and full throttle
                               receiveBuffer   <= "11111111";
                            end if;
@@ -484,7 +463,7 @@ begin
                         when NEGCONANALOGL =>
                            -- Ran out of analog buttons, ideally analog triggers would be supported and a layout
                            -- R2->I, L2->II, AnalogR->L would be possible, enabling I/II being independent when analog and have analog L
-                           if (KeyL1 = '1') then
+                           if (joypad.KeyL1 = '1') then
                               receiveBuffer   <= "11111111";
                            else
                               receiveBuffer   <= "00000000";
