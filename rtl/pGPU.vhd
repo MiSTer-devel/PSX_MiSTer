@@ -24,7 +24,6 @@ package pGPU is
       vramRange               : unsigned(18 downto 0);
       hDisplayRange           : unsigned(23 downto 0);
       vDisplayRange           : unsigned(19 downto 0);
-      DisplayWidth            : unsigned( 9 downto 0);
       pal60                   : std_logic;
    end record;
    
@@ -51,11 +50,25 @@ package pGPU is
    
    type tvideoout_request is record
       fetch                   : std_logic;
-      lineIn                  : unsigned(8 downto 0);
       lineInNext              : unsigned(8 downto 0);
-      readAddr                : unsigned(10 downto 0);
       xpos                    : integer range 0 to 1023;
       lineDisp                : unsigned(8 downto 0);
+   end record;    
+   
+   type tvideoout_out is record
+      hsync          : std_logic;
+      vsync          : std_logic;
+      hblank         : std_logic;
+      vblank         : std_logic;
+      DisplayWidth   : unsigned( 9 downto 0);
+      DisplayHeight  : unsigned( 8 downto 0);
+      DisplayOffsetX : unsigned( 9 downto 0); 
+      DisplayOffsetY : unsigned( 8 downto 0); 
+      ce             : std_logic;
+      interlace      : std_logic;
+      r              : std_logic_vector(7 downto 0);
+      g              : std_logic_vector(7 downto 0);
+      b              : std_logic_vector(7 downto 0);
    end record; 
    
 end package;

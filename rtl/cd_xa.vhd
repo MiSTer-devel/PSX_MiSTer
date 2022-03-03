@@ -169,12 +169,12 @@ begin
    )
    port map
    (
-      clock       => clk1x,
-      
+      clock_a     => clk1x,
       address_a   => std_logic_vector(RamIn_addrA),
       data_a      => XA_data,
       wren_a      => XA_write,
       
+      clock_b     => clk1x,
       address_b   => std_logic_vector(RamIn_addrB),
       data_b      => x"00",
       wren_b      => '0',

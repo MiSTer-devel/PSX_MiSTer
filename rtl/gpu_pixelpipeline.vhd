@@ -307,12 +307,12 @@ begin
    )
    port map
    (
-      clock       => clk2x,
-      
+      clock_a     => clk2x,
       address_a   => std_logic_vector(CLUTaddrA),
       data_a      => vram_DOUT,
       wren_a      => CLUTwrenA,
       
+      clock_b     => clk2x,
       address_b   => CLUTaddrB,
       data_b      => x"0000",
       wren_b      => '0',

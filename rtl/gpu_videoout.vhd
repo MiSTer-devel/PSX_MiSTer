@@ -10,6 +10,7 @@ entity gpu_videoout is
    (
       clk1x                      : in  std_logic;
       clk2x                      : in  std_logic;
+      clkvid                     : in  std_logic;
       ce                         : in  std_logic;
       reset                      : in  std_logic;
       softReset                  : in  std_logic;
@@ -18,6 +19,7 @@ entity gpu_videoout is
       videoout_reports           : out tvideoout_reports;
             
       videoout_on                : in  std_logic;
+      syncVideoOut               : in  std_logic;
             
       debugmodeOn                : in  std_logic;
          
@@ -48,12 +50,7 @@ entity gpu_videoout is
       vram_DOUT                  : in  std_logic_vector(63 downto 0);
       vram_DOUT_READY            : in  std_logic;
             
-      video_ce                   : buffer std_logic := '0';
-      video_r                    : out std_logic_vector(7 downto 0);
-      video_g                    : out std_logic_vector(7 downto 0);
-      video_b                    : out std_logic_vector(7 downto 0);
-      video_hblank               : out std_logic := '1';
-      video_hsync                : out std_logic := '0';
+      videoout_out               : buffer tvideoout_out;
       
       videoout_ss_in             : in  tvideoout_ss;
       videoout_ss_out            : out tvideoout_ss
@@ -61,21 +58,44 @@ entity gpu_videoout is
 end entity;
 
 architecture arch of gpu_videoout is
-    
-   signal DisplayOffsetX      : unsigned( 9 downto 0) := (others => '0'); 
-   signal DisplayOffsetY      : unsigned( 8 downto 0) := (others => '0'); 
+
+   signal DisplayOffsetX            : unsigned( 9 downto 0) := (others => '0'); 
+   signal DisplayOffsetY            : unsigned( 8 downto 0) := (others => '0'); 
+   signal DisplayWidth              : unsigned( 9 downto 0) := (others => '0');
+         
+   -- muxing      
+   signal videoout_reports_s        : tvideoout_reports;
+   signal videoout_reports_a        : tvideoout_reports;
+         
+   signal videoout_out_s            : tvideoout_out;
+   signal videoout_out_a            : tvideoout_out;
+         
+   signal videoout_ss_out_s         : tvideoout_ss;
+   signal videoout_ss_out_a         : tvideoout_ss;
+         
+   signal videoout_request_s        : tvideoout_request;
+   signal videoout_request_as       : tvideoout_request;
+   signal videoout_request_aa       : tvideoout_request;
+         
+   signal videoout_readAddr_s       : unsigned(10 downto 0);
+   signal videoout_readAddr_a       : unsigned(10 downto 0);
     
    -- data fetch
-   signal videoout_request    : tvideoout_request;
-   signal videoout_pixelRead  : std_logic_vector(15 downto 0);
+   signal videoout_request_clk2x    : tvideoout_request;
+   signal videoout_request_clkvid   : tvideoout_request;
+   signal videoout_readAddr         : unsigned(10 downto 0);
+   signal videoout_pixelRead        : std_logic_vector(15 downto 0);
    
    type tState is
    (
       WAITNEWLINE,
+      WAITREQUEST,
       REQUEST,
       WAITREAD
    );
    signal state : tState := WAITNEWLINE;
+   
+   signal waitcnt             : integer range 0 to 3;
    
    signal reqPosX             : unsigned(9 downto 0) := (others => '0');
    signal reqPosY             : unsigned(8 downto 0) := (others => '0');
@@ -113,7 +133,14 @@ architecture arch of gpu_videoout is
    signal Gun2Y_screen        : unsigned(9 downto 0);
    
 begin 
-  
+
+   videoout_reports        <= videoout_reports_s  when (syncVideoOut = '1') else videoout_reports_a; 
+   videoout_out            <= videoout_out_s      when (syncVideoOut = '1') else videoout_out_a;     
+   videoout_ss_out         <= videoout_ss_out_s   when (syncVideoOut = '1') else videoout_ss_out_a;  
+   videoout_readAddr       <= videoout_readAddr_s when (syncVideoOut = '1') else videoout_readAddr_a;
+   videoout_request_clk2x  <= videoout_request_s  when (syncVideoOut = '1') else videoout_request_as; 
+   videoout_request_clkvid <= videoout_request_s  when (syncVideoOut = '1') else videoout_request_aa; 
+
    igpu_videoout_sync : entity work.gpu_videoout_sync
    port map
    (
@@ -124,47 +151,46 @@ begin
       softReset               => softReset,
                
       videoout_settings       => videoout_settings,
-      videoout_reports        => videoout_reports,                 
-                                                
-      videoout_on             => videoout_on,            
-                                   
-      debugmodeOn             => debugmodeOn,            
-                             
-      fpscountOn              => fpscountOn,             
-      fpscountBCD             => fpscountBCD,            
-                    
-      Gun1CrosshairOn         => Gun1CrosshairOn,        
-      Gun1X                   => Gun1X,                  
-      Gun1Y_scanlines         => Gun1Y_scanlines,        
-                        
-      Gun2CrosshairOn         => Gun2CrosshairOn,        
-      Gun2X                   => Gun2X,                  
-      Gun2Y_scanlines         => Gun2Y_scanlines,          
-                     
-      cdSlow                  => cdSlow,                 
-                  
-      errorOn                 => errorOn,                
-      errorEna                => errorEna,               
-      errorCode               => errorCode,              
-                                
-      videoout_request        => videoout_request,   
+      videoout_reports        => videoout_reports_s,                 
+                                                                      
+      videoout_request        => videoout_request_s, 
+      videoout_readAddr       => videoout_readAddr_s,  
+      videoout_pixelRead      => videoout_pixelRead,   
+   
+      overlay_data            => overlay_data,
+      overlay_ena             => overlay_ena,                     
+                   
+      videoout_out            => videoout_out_s,
+      
+      videoout_ss_in          => videoout_ss_in,
+      videoout_ss_out         => videoout_ss_out_s      
+   );   
+   
+   igpu_videoout_async : entity work.gpu_videoout_async
+   port map
+   (
+      clk1x                   => clk1x,
+      clk2x                   => clk2x,
+      clkvid                  => clkvid,
+      ce_1x                   => ce,   
+      reset_1x                => reset,
+      softReset_1x            => softReset,
+               
+      videoout_settings_1x    => videoout_settings,
+      videoout_reports_1x     => videoout_reports_a,                 
+                                                                      
+      videoout_request_2x     => videoout_request_as, 
+      videoout_request_vid    => videoout_request_aa, 
+      videoout_readAddr       => videoout_readAddr_a,  
       videoout_pixelRead      => videoout_pixelRead,   
 
       overlay_data            => overlay_data,
-      overlay_ena             => overlay_ena,       
-                         
-      vram_DOUT               => vram_DOUT,              
-      vram_DOUT_READY         => vram_DOUT_READY,        
-                   
-      video_ce                => video_ce,               
-      video_r                 => video_r,                
-      video_g                 => video_g,                
-      video_b                 => video_b,                
-      video_hblank            => video_hblank,           
-      video_hsync             => video_hsync,
+      overlay_ena             => overlay_ena,                     
+      
+      videoout_out            => videoout_out_a,
       
       videoout_ss_in          => videoout_ss_in,
-      videoout_ss_out         => videoout_ss_out      
+      videoout_ss_out         => videoout_ss_out_a      
    );
    
    -- vram reading
@@ -179,6 +205,18 @@ begin
    process (clk2x)
    begin
       if rising_edge(clk2x) then
+      
+         if (videoout_settings.GPUSTAT_HorRes2 = '1') then
+            DisplayWidth  <= to_unsigned(368, 10);
+         else
+            case (videoout_settings.GPUSTAT_HorRes1) is
+               when "00" => DisplayWidth <= to_unsigned(256, 10);
+               when "01" => DisplayWidth <= to_unsigned(320, 10);
+               when "10" => DisplayWidth <= to_unsigned(512, 10);
+               when "11" => DisplayWidth <= to_unsigned(640, 10);
+               when others => null;
+            end case;
+         end if;
          
          if (reset = '1') then
          
@@ -190,19 +228,27 @@ begin
             case (state) is
             
                when WAITNEWLINE =>
-                  if (videoout_on = '1' and videoout_request.lineInNext /= lineAct and videoout_request.fetch = '1' and videoout_settings.GPUSTAT_DisplayDisable = '0') then
+                  if (videoout_on = '1' and videoout_request_clk2x.lineInNext /= lineAct and videoout_request_clk2x.fetch = '1' and videoout_settings.GPUSTAT_DisplayDisable = '0') then
+                     waitcnt <= 3;
+                     state   <= WAITREQUEST;
+                  end if;
+                  
+               when WAITREQUEST => 
+                  if (waitcnt > 0) then
+                     waitcnt <= waitcnt - 1;
+                  else
                      state     <= REQUEST;
-                     lineAct   <= videoout_request.lineInNext;
+                     lineAct   <= videoout_request_clk2x.lineInNext;
                      reqPosX   <= DisplayOffsetX;
-                     reqPosY   <= videoout_request.lineInNext + DisplayOffsetY;
-                     fillAddr  <= videoout_request.lineInNext(0) & x"00";
+                     reqPosY   <= videoout_request_clk2x.lineInNext + DisplayOffsetY;
+                     fillAddr  <= videoout_request_clk2x.lineInNext(0) & x"00";
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
-                        fillAddr(8) <= videoout_request.lineInNext(1);
+                        fillAddr(8) <= videoout_request_clk2x.lineInNext(1);
                      end if;
                      if (videoout_settings.GPUSTAT_ColorDepth24 = '1') then
-                        reqSize <= resize(videoout_settings.DisplayWidth, 11) + resize(videoout_settings.DisplayWidth(9 downto 1), 11);
+                        reqSize <= resize(DisplayWidth, 11) + resize(DisplayWidth(9 downto 1), 11);
                      else
-                        reqSize <= '0' & videoout_settings.DisplayWidth;
+                        reqSize <= '0' & DisplayWidth;
                      end if;
                   end if;
 
@@ -238,13 +284,13 @@ begin
    )
    port map
    (
-      clock       => clk2x,
-      
+      clock_a     => clk2x,
       address_a   => std_logic_vector(fillAddr),
       data_a      => vram_DOUT,
       wren_a      => (vram_DOUT_READY and store),
       
-      address_b   => std_logic_vector(videoout_request.readAddr),
+      clock_b     => clkvid,
+      address_b   => std_logic_vector(videoout_readAddr),
       data_b      => x"0000",
       wren_b      => '0',
       q_b         => videoout_pixelRead
@@ -267,11 +313,11 @@ begin
    )
    port map
    (
-      clk                    => clk2x,
-      ce                     => video_ce,
+      clk                    => clkvid,
+      ce                     => videoout_out.ce,
       ena                    => fpscountOn,                    
-      i_pixel_out_x          => videoout_request.xpos,
-      i_pixel_out_y          => to_integer(videoout_request.lineDisp),
+      i_pixel_out_x          => videoout_request_clkvid.xpos,
+      i_pixel_out_y          => to_integer(videoout_request_clkvid.lineDisp),
       o_pixel_out_data       => overlay_fps_data,
       o_pixel_out_ena        => overlay_fps_ena,
       textstring             => fpstext
@@ -289,11 +335,11 @@ begin
    )
    port map
    (
-      clk                    => clk2x,
-      ce                     => video_ce,
+      clk                    => clkvid,
+      ce                     => videoout_out.ce,
       ena                    => cdSlow,                    
-      i_pixel_out_x          => videoout_request.xpos,
-      i_pixel_out_y          => to_integer(videoout_request.lineDisp),
+      i_pixel_out_x          => videoout_request_clkvid.xpos,
+      i_pixel_out_y          => to_integer(videoout_request_clkvid.lineDisp),
       o_pixel_out_data       => overlay_cd_data,
       o_pixel_out_ena        => overlay_cd_ena,
       textstring             => x"4344"
@@ -312,11 +358,11 @@ begin
    )
    port map
    (
-      clk                    => clk2x,
-      ce                     => video_ce,
+      clk                    => clkvid,
+      ce                     => videoout_out.ce,
       ena                    => errorOn and errorEna,                    
-      i_pixel_out_x          => videoout_request.xpos,
-      i_pixel_out_y          => to_integer(videoout_request.lineDisp),
+      i_pixel_out_x          => videoout_request_clkvid.xpos,
+      i_pixel_out_y          => to_integer(videoout_request_clkvid.lineDisp),
       o_pixel_out_data       => overlay_error_data,
       o_pixel_out_ena        => overlay_error_ena,
       textstring             => x"45" & errortext
@@ -334,36 +380,36 @@ begin
    )
    port map
    (
-      clk                    => clk2x,
-      ce                     => video_ce,
+      clk                    => clkvid,
+      ce                     => videoout_out.ce,
       ena                    => debugmodeOn,                    
-      i_pixel_out_x          => videoout_request.xpos,
-      i_pixel_out_y          => to_integer(videoout_request.lineDisp),
+      i_pixel_out_x          => videoout_request_clkvid.xpos,
+      i_pixel_out_y          => to_integer(videoout_request_clkvid.lineDisp),
       o_pixel_out_data       => debugtextDbg_data,
       o_pixel_out_ena        => debugtextDbg_ena,
       textstring             => x"444247"
    );
 
    -- Map gun coordinates (0-255 X, Y) to screen positions
-   Gun1X_screen <= to_integer(to_unsigned(to_integer(videoout_settings.DisplayWidth * Gun1X), 18) (17 downto 8));
-   Gun2X_screen <= to_integer(to_unsigned(to_integer(videoout_settings.DisplayWidth * Gun2X), 18) (17 downto 8));
+   Gun1X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * Gun1X), 18) (17 downto 8)); -- DisplayWidth is async!, shouldn't matter here
+   Gun2X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * Gun2X), 18) (17 downto 8));
 
    Gun1Y_screen <= '0' & Gun1Y_scanlines when videoout_settings.GPUSTAT_VerRes = '0' else Gun1Y_scanlines & '0';
    Gun2Y_screen <= '0' & Gun2Y_scanlines when videoout_settings.GPUSTAT_VerRes = '0' else Gun2Y_scanlines & '0';
 
    -- Lightgun crosshairs (currently single pixel to save resources)
-   process (clk2x)
+   process (clkvid)
    begin
-      if rising_edge(clk2x) then
-         if (video_ce = '1') then
+      if rising_edge(clkvid) then
+         if (videoout_out.ce = '1') then
             overlay_Gun1_ena <= '0';
             overlay_Gun2_ena <= '0';
 
-            if (Gun1CrosshairOn = '1' and videoout_request.xpos = Gun1X_screen and to_integer(videoout_request.lineDisp) = Gun1Y_screen) then
+            if (Gun1CrosshairOn = '1' and videoout_request_clkvid.xpos = Gun1X_screen and to_integer(videoout_request_clkvid.lineDisp) = Gun1Y_screen) then
                overlay_Gun1_ena <= '1';
             end if;
 
-            if (Gun2CrosshairOn = '1' and videoout_request.xpos = Gun2X_screen and to_integer(videoout_request.lineDisp) = Gun2Y_screen) then
+            if (Gun2CrosshairOn = '1' and videoout_request_clkvid.xpos = Gun2X_screen and to_integer(videoout_request_clkvid.lineDisp) = Gun2Y_screen) then
                overlay_Gun2_ena <= '1';
             end if;
          end if;

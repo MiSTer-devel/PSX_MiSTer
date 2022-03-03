@@ -16,6 +16,7 @@ entity psx_top is
    (
       clk1x                 : in  std_logic;  
       clk2x                 : in  std_logic;   
+      clkvid                : in  std_logic;   
       reset                 : in  std_logic; 
       -- commands 
       pause                 : in  std_logic;
@@ -32,6 +33,7 @@ entity psx_top is
       errorOn               : in  std_logic;
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
+      syncVideoOut          : in  std_logic;
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
@@ -347,8 +349,7 @@ architecture arch of psx_top is
    signal ram_cpu_done           : std_logic;
    
    -- gpu
-   signal hblank_intern          : std_logic;
-   signal vblank_intern          : std_logic;
+   signal vblank_tmr             : std_logic;
    signal hblank_tmr             : std_logic;
    
    signal vram_pause             : std_logic; 
@@ -1150,7 +1151,7 @@ begin
       
       dotclock             => '0', -- todo
       hblank               => hblank_tmr,
-      vblank               => vblank_intern,
+      vblank               => vblank_tmr,
       
       irqRequest0          => irq_TIMER0,
       irqRequest1          => irq_TIMER1,
@@ -1236,9 +1237,6 @@ begin
       SS_DataRead          => SS_DataRead_CD,
       SS_Idle              => SS_Idle_cd
    );
-   
-   
-   hblank <= hblank_intern;
 
    igpu : entity work.gpu
    port map
@@ -1246,6 +1244,7 @@ begin
       clk1x                => clk1x,
       clk2x                => clk2x,
       clk2xIndex           => clk2xIndex,
+      clkvid               => clkvid,
       ce                   => ce,   
       reset                => reset_intern,
       
@@ -1257,6 +1256,7 @@ begin
       fpscountOn           => fpscountOn,
       noTexture            => noTexture,
       debugmodeOn          => debugmodeOn,
+      syncVideoOut         => syncVideoOut,
       
       Gun1CrosshairOn      => Gun1CrosshairOn,
       Gun1X                => Gun1X,
@@ -1308,22 +1308,22 @@ begin
       vram_WE              => vram_WE,        
       vram_RD              => vram_RD, 
 
-      hsync                => hsync, 
-      vsync                => vsync, 
-      hblank               => hblank_intern,
       hblank_tmr           => hblank_tmr,
-      vblank               => vblank_intern,
-      vblank_extern        => vblank,
-      DisplayWidth         => DisplayWidth, 
-      DisplayHeight        => DisplayHeight,
-      DisplayOffsetX       => DisplayOffsetX,
-      DisplayOffsetY       => DisplayOffsetY,
+      vblank_tmr           => vblank_tmr,
       
-      video_ce              => video_ce,
-      video_interlace       => video_interlace,
-      video_r               => video_r, 
-      video_g               => video_g, 
-      video_b               => video_b, 
+      video_hsync          => hsync, 
+      video_vsync          => vsync, 
+      video_hblank         => hblank,
+      video_vblank         => vblank,
+      video_DisplayWidth   => DisplayWidth, 
+      video_DisplayHeight  => DisplayHeight,
+      video_DisplayOffsetX => DisplayOffsetX,
+      video_DisplayOffsetY => DisplayOffsetY,
+      video_ce             => video_ce,
+      video_interlace      => video_interlace,
+      video_r              => video_r, 
+      video_g              => video_g, 
+      video_b              => video_b, 
       
 -- synthesis translate_off
       export_gtm           => export_gtm,

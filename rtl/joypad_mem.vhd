@@ -254,13 +254,13 @@ begin
    )
    port map
    (
-      clock       => clk2x,
-      
+      clock_a     => clk1x,
       address_a   => mem_addrA,
       data_a      => mem_DataInA,
       wren_a      => mem_wrenA,
       q_a         => mem_DataOutA,
       
+      clock_b     => clk2x,
       address_b   => mem_addrB,
       data_b      => mem_DataInB,
       wren_b      => mem_wrenB,

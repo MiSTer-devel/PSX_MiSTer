@@ -11,6 +11,7 @@ entity psx_mister is
    (
       clk1x                 : in  std_logic;  
       clk2x                 : in  std_logic;  
+      clkvid                : in  std_logic;  
       reset                 : in  std_logic;
       -- commands 
       pause                 : in  std_logic;
@@ -27,6 +28,7 @@ entity psx_mister is
       errorOn               : in  std_logic;
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
+      syncVideoOut          : in  std_logic;
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
@@ -211,6 +213,7 @@ begin
    (
       clk1x                 => clk1x,          
       clk2x                 => clk2x,          
+      clkvid                => clkvid,          
       reset                 => reset, 
       -- commands 
       pause                 => pause,
@@ -227,6 +230,7 @@ begin
       errorOn               => errorOn,
       PATCHSERIAL           => PATCHSERIAL,
       noTexture             => noTexture,
+      syncVideoOut          => syncVideoOut,
       SPUon                 => SPUon,
       SPUSDRAM              => SPUSDRAM,
       REVERBOFF             => REVERBOFF,

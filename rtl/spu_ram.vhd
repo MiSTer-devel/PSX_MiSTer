@@ -202,12 +202,12 @@ begin
    )
    port map
    (
-      clock       => clk2x,
-      
+      clock_a     => clk2x,
       address_a   => std_logic_vector(cache_addr_a),
       data_a      => mem_DOUT,
       wren_a      => cache_wren_a,
       
+      clock_b     => clk2x,
       address_b   => std_logic_vector(cache_addr_b),
       data_b      => x"0000",
       wren_b      => '0',

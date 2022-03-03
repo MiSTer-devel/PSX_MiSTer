@@ -494,12 +494,12 @@ begin
    )
    port map
    (
-      clock       => clk1x,
-      
+      clock_a     => clk1x,
       address_a   => std_logic_vector(RamYUVaddrA),
       data_a      => RamYUVdataA,
       wren_a      => (RamYUVwrite),
       
+      clock_b     => clk1x,
       address_b   => std_logic_vector(RamYUVaddrB),
       data_b      => x"00",
       wren_b      => '0',
@@ -518,12 +518,12 @@ begin
    )
    port map
    (
-      clock       => clk1x,
-      
+      clock_a     => clk1x,
       address_a   => std_logic_vector(RamSSaddrA),
       data_a      => RamSSdataA,
       wren_a      => (RamSSwrite),
       
+      clock_b     => clk1x,
       address_b   => std_logic_vector(RamSSaddrB),
       data_b      => x"00000000",
       wren_b      => '0',

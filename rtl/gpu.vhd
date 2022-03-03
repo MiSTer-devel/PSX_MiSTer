@@ -12,6 +12,7 @@ entity gpu is
       clk1x                : in  std_logic;
       clk2x                : in  std_logic;
       clk2xIndex           : in  std_logic;
+      clkvid               : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
@@ -23,6 +24,7 @@ entity gpu is
       fpscountOn           : in  std_logic;
       noTexture            : in  std_logic;
       debugmodeOn          : in  std_logic;
+      syncVideoOut         : in  std_logic;
 
       Gun1CrosshairOn      : in  std_logic;
       Gun1X                : in  unsigned(7 downto 0);
@@ -74,17 +76,17 @@ entity gpu is
       vram_WE              : out std_logic := '0';
       vram_RD              : out std_logic := '0';     
 
-      hsync                : out std_logic := '0';
-      vsync                : out std_logic := '0';
-      hblank               : out std_logic := '0';
       hblank_tmr           : out std_logic := '0';
-      vblank               : out std_logic := '0';
-      vblank_extern        : out std_logic := '0';
-      DisplayWidth         : out unsigned( 9 downto 0);
-      DisplayHeight        : out unsigned( 8 downto 0);
-      DisplayOffsetX       : out unsigned( 9 downto 0) := (others => '0'); 
-      DisplayOffsetY       : out unsigned( 8 downto 0) := (others => '0'); 
+      vblank_tmr           : out std_logic := '0';
       
+      video_hsync          : out std_logic := '0';
+      video_vsync          : out std_logic := '0';
+      video_hblank         : out std_logic := '0';
+      video_vblank         : out std_logic := '0';
+      video_DisplayWidth   : out unsigned( 9 downto 0);
+      video_DisplayHeight  : out unsigned( 8 downto 0);
+      video_DisplayOffsetX : out unsigned( 9 downto 0) := (others => '0'); 
+      video_DisplayOffsetY : out unsigned( 8 downto 0) := (others => '0'); 
       video_ce             : out std_logic;
       video_interlace      : out std_logic;
       video_r              : out std_logic_vector(7 downto 0);
@@ -118,6 +120,7 @@ architecture arch of gpu is
    
    signal videoout_settings         : tvideoout_settings;
    signal videoout_reports          : tvideoout_reports;
+   signal videoout_out              : tvideoout_out;
    
    signal GPUREAD                   : std_logic_vector(31 downto 0) := (others => '0');
    signal GPUSTAT                   : std_logic_vector(31 downto 0) := (others => '0');
@@ -428,15 +431,7 @@ begin
                              not vram2cpu_Fifo_Empty; -- GPUSTAT_ReadySendVRAM cannot be used, because data is read earlier                
 
    -- video out
-
-   video_interlace        <= GPUSTAT_VerRes and videoout_reports.interlacedDisplayField;
-   
-   DisplayOffsetX         <= vramRange(9 downto 0);
-   DisplayOffsetY         <= vramRange(18 downto 10);
-   
    irq_VBLANK             <= videoout_reports.irq_VBLANK;
-
-   vsync                  <= videoout_reports.vsync;
    hblank_tmr             <= videoout_reports.hblank_tmr;
 
    -- savestates
@@ -461,9 +456,7 @@ begin
          fifoIn_reset  <= '0';
          fifoOut_reset <= '0';
          
-         vblank <= videoout_reports.inVsync;
-
-         vblank_extern <= videoout_reports.inVsync;
+         vblank_tmr <= videoout_reports.inVsync;
 
          if (reset = '1') then
                
@@ -578,24 +571,6 @@ begin
             
             if (irq_GPU = '1') then
                GPUSTAT_IRQRequest <= '1';
-            end if;
-            
-            if (GPUSTAT_HorRes2 = '1') then
-               DisplayWidth  <= to_unsigned(368, 10);
-            else
-               case (GPUSTAT_HorRes1) is
-                  when "00" => DisplayWidth <= to_unsigned(256, 10);
-                  when "01" => DisplayWidth <= to_unsigned(320, 10);
-                  when "10" => DisplayWidth <= to_unsigned(512, 10);
-                  when "11" => DisplayWidth <= to_unsigned(640, 10);
-                  when others => null;
-               end case;
-            end if;
-            
-            if (GPUSTAT_VerRes = '1') then
-               DisplayHeight  <= to_unsigned(480, 9);
-            else
-               DisplayHeight  <= to_unsigned(240, 9);
             end if;
             
             -- fps counter
@@ -1473,12 +1448,12 @@ begin
    )
    port map
    (
-      clock       => clk2x,
-      
+      clock_a     => clk2x,
       address_a   => std_logic_vector(reqVRAMaddr),
       data_a      => vram_DOUT,
       wren_a      => (vram_DOUT_READY and reqVRAMStore),
       
+      clock_b     => clk2x,
       address_b   => std_logic_vector(vramLineAddr),
       data_b      => x"0000",
       wren_b      => '0',
@@ -1499,9 +1474,7 @@ begin
    videoout_settings.vramRange               <= vramRange;
    videoout_settings.hDisplayRange           <= hDisplayRange;
    videoout_settings.vDisplayRange           <= vDisplayRange;
-   videoout_settings.DisplayWidth            <= DisplayWidth;
    videoout_settings.pal60                   <= pal60;
-   
    
    videoout_ss_in.interlacedDisplayField  <= ss_timing_in(4)(19);
    videoout_ss_in.nextHCount              <= ss_timing_in(4)(11 downto 0);
@@ -1516,6 +1489,7 @@ begin
    (
       clk1x                      => clk1x,
       clk2x                      => clk2x,
+      clkvid                     => clkvid,
       ce                         => ce,   
       reset                      => reset,
       softReset                  => softReset,
@@ -1524,6 +1498,7 @@ begin
       videoout_reports           => videoout_reports,
          
       videoout_on                => videoout_on,
+      syncVideoOut               => syncVideoOut,
             
       debugmodeOn                => debugmodeOn,
             
@@ -1553,17 +1528,26 @@ begin
                                  
       vram_DOUT                  => vram_DOUT,      
       vram_DOUT_READY            => vram_DOUT_READY,
-            
-      video_ce                   => video_ce,
-      video_r                    => video_r, 
-      video_g                    => video_g, 
-      video_b                    => video_b, 
-      video_hblank               => hblank,
-      video_hsync                => hsync,
+          
+      videoout_out               => videoout_out,
       
       videoout_ss_in             => videoout_ss_in,
       videoout_ss_out            => videoout_ss_out
    );
+   
+   video_hsync          <= videoout_out.hsync;         
+   video_vsync          <= videoout_out.vsync;         
+   video_hblank         <= videoout_out.hblank;        
+   video_vblank         <= videoout_out.vblank;        
+   video_DisplayWidth   <= videoout_out.DisplayWidth;  
+   video_DisplayHeight  <= videoout_out.DisplayHeight; 
+   video_DisplayOffsetX <= videoout_out.DisplayOffsetX;
+   video_DisplayOffsetY <= videoout_out.DisplayOffsetY;
+   video_ce             <= videoout_out.ce;            
+   video_interlace      <= videoout_out.interlace;     
+   video_r              <= videoout_out.r;             
+   video_g              <= videoout_out.g;             
+   video_b              <= videoout_out.b;             
    
 --##############################################################
 --############################### savestates

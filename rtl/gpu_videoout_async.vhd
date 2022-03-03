@@ -5,19 +5,21 @@ use IEEE.numeric_std.all;
 library mem;
 use work.pGPU.all;
 
-entity gpu_videoout_sync is
+entity gpu_videoout_async is
    port 
    (
       clk1x                   : in  std_logic;
       clk2x                   : in  std_logic;
-      ce                      : in  std_logic;
-      reset                   : in  std_logic;
-      softReset               : in  std_logic;
+      clkvid                  : in  std_logic;
+      ce_1x                   : in  std_logic;
+      reset_1x                : in  std_logic;
+      softReset_1x            : in  std_logic;
       
-      videoout_settings       : in  tvideoout_settings;
-      videoout_reports        : out tvideoout_reports;
+      videoout_settings_1x    : in  tvideoout_settings;
+      videoout_reports_1x     : out tvideoout_reports;
 
-      videoout_request        : out tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
+      videoout_request_2x     : out tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
+      videoout_request_vid    : out tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
       
       videoout_readAddr       : out unsigned(10 downto 0) := (others => '0');
       videoout_pixelRead      : in  std_logic_vector(15 downto 0);
@@ -32,7 +34,35 @@ entity gpu_videoout_sync is
    );
 end entity;
 
-architecture arch of gpu_videoout_sync is
+architecture arch of gpu_videoout_async is
+   
+   -- clk1x -> clkvid
+   signal videoout_settings_s2 : tvideoout_settings;
+   signal videoout_settings_s1 : tvideoout_settings;
+   signal videoout_settings    : tvideoout_settings;
+   
+   signal ce_s2                : std_logic;        
+   signal ce_s1                : std_logic;        
+   signal ce                   : std_logic;        
+   
+   signal reset_s2             : std_logic;        
+   signal reset_s1             : std_logic;        
+   signal reset                : std_logic;      
+   
+   signal softReset_s2         : std_logic;        
+   signal softReset_s1         : std_logic;        
+   signal softReset            : std_logic;      
+   
+   -- clkvid -> clk1x
+   signal videoout_reports_s2  : tvideoout_reports;
+   signal videoout_reports_s1  : tvideoout_reports;
+   signal videoout_reports     : tvideoout_reports;
+   
+   -- clkvid -> clk2x
+   
+   signal videoout_request_s2  : tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
+   signal videoout_request_s1  : tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
+   signal videoout_request     : tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
    
    -- timing
    signal lineIn           : unsigned(8 downto 0) := (others => '0');
@@ -40,7 +70,7 @@ architecture arch of gpu_videoout_sync is
    signal vpos             : integer range 0 to 511;
    signal vsyncCount       : integer range 0 to 511;
    
-   signal htotal           : integer range 2169 to 2173; -- 3406 to 3413 in GPU clock domain
+   signal htotal           : integer range 3406 to 3413;
    signal vtotal           : integer range 263 to 314;
    signal vDisplayStart    : integer range 0 to 314;
    signal vDisplayEnd      : integer range 0 to 314;
@@ -50,8 +80,8 @@ architecture arch of gpu_videoout_sync is
    signal pixelData_G      : std_logic_vector(7 downto 0) := (others => '0');
    signal pixelData_B      : std_logic_vector(7 downto 0) := (others => '0');
       
-   signal clkDiv           : integer range 5 to 12 := 5; 
-   signal clkCnt           : integer range 0 to 12 := 0;
+   signal clkDiv           : integer range 4 to 10 := 4; 
+   signal clkCnt           : integer range 0 to 10 := 0;
    signal xmax             : integer range 0 to 1023;
       
    signal hsync_start      : integer range 0 to 4095;
@@ -73,6 +103,55 @@ architecture arch of gpu_videoout_sync is
    
 begin 
 
+   -- clk1x -> clkvid
+   process (clkvid)
+   begin
+      if rising_edge(clkvid) then
+   
+         videoout_settings_s2 <= videoout_settings_1x;
+         videoout_settings_s1 <= videoout_settings_s2;
+         videoout_settings    <= videoout_settings_s1;
+         
+         ce_s2                <= ce_1x;
+         ce_s1                <= ce_s2;
+         ce                   <= ce_s1;
+         
+         reset_s2             <= reset_1x;
+         reset_s1             <= reset_s2;
+         reset                <= reset_s1;
+         
+         softReset_s2         <= softReset_1x;
+         softReset_s1         <= softReset_s2;
+         softReset            <= softReset_s1;
+   
+      end if;
+   end process;
+
+   -- clkvid -> clk1x
+   process (clk1x)
+   begin
+      if rising_edge(clk1x) then
+   
+         videoout_reports_s1  <= videoout_reports;
+         videoout_reports_s2  <= videoout_reports_s1;
+         videoout_reports_1x  <= videoout_reports_s2;         
+
+      end if;
+   end process;
+   
+   -- clkvid -> clk2x
+   videoout_request_vid <= videoout_request;
+   process (clk2x)
+   begin
+      if rising_edge(clk2x) then
+   
+         videoout_request_s1  <= videoout_request;
+         videoout_request_s2  <= videoout_request_s1;
+         videoout_request_2x  <= videoout_request_s2;         
+   
+      end if;
+   end process;
+
    -- video timing
    videoout_ss_out.interlacedDisplayField <= videoout_reports.interlacedDisplayField;                 
    videoout_ss_out.nextHCount             <= std_logic_vector(to_unsigned(nextHCount, 12));                             
@@ -82,13 +161,13 @@ begin
    videoout_ss_out.GPUSTAT_InterlaceField <= videoout_reports.GPUSTAT_InterlaceField;
    videoout_ss_out.GPUSTAT_DrawingOddline <= videoout_reports.GPUSTAT_DrawingOddline;
 
-   process (clk1x)
+   process (clkvid)
       variable mode480i                  : std_logic;
       variable isVsync                   : std_logic;
       variable vposNew                   : integer range 0 to 511;
       variable interlacedDisplayFieldNew : std_logic;
    begin
-      if rising_edge(clk1x) then
+      if rising_edge(clkvid) then
       
          if (nextHCount <   3) then videoout_reports.hblank_tmr <= '1'; else videoout_reports.hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
                 
@@ -113,30 +192,14 @@ begin
                   
          elsif (ce = '1') then
          
-            videoout_reports.irq_VBLANK <= '0';
-            
             --gpu timing calc
             if (videoout_settings.GPUSTAT_PalVideoMode = '1' and videoout_settings.pal60 = '0') then
-               htotal <= 2169; -- overwritten below
+               htotal <= 3406;
                vtotal <= 314;
             else
-               htotal <= 2173; -- overwritten below
+               htotal <= 3413;
                vtotal <= 263;
             end if;
-            
-            -- todo: different values for ntsc
-            if (videoout_settings.GPUSTAT_HorRes2 = '1') then
-               htotal  <= 2169; -- 368
-            else
-               case (videoout_settings.GPUSTAT_HorRes1) is
-                  when "00" => htotal <= 2172; -- 256;
-                  when "01" => htotal <= 2170; -- 320;
-                  when "10" => htotal <= 2169;  -- 512;
-                  when "11" => htotal <= 2170;  -- 640;
-                  when others => null;
-               end case;
-            end if;
-            
             
             if (videoout_settings.vDisplayRange( 9 downto  0) < 314) then vDisplayStart <= to_integer(videoout_settings.vDisplayRange( 9 downto  0)); else vDisplayStart <= 314; end if;
             if (videoout_settings.vDisplayRange(19 downto 10) < 314) then vDisplayEnd   <= to_integer(videoout_settings.vDisplayRange(19 downto 10)); else vDisplayEnd   <= 314; end if;
@@ -182,6 +245,7 @@ begin
                   end if;
                end if;
 
+               videoout_reports.irq_VBLANK <= '0';
                interlacedDisplayFieldNew := videoout_reports.interlacedDisplayField;
                if (isVsync /= videoout_reports.inVsync) then
                   if (isVsync = '1') then
@@ -264,28 +328,28 @@ begin
    videoout_out.vsync          <= videoout_reports.vsync; 
    videoout_out.vblank         <= videoout_reports.inVsync;
    videoout_out.interlace      <= videoout_settings.GPUSTAT_VerRes and videoout_reports.interlacedDisplayField;
-   
+
    videoout_out.DisplayOffsetX <= videoout_settings.vramRange(9 downto 0);
    videoout_out.DisplayOffsetY <= videoout_settings.vramRange(18 downto 10);
    
-   process (clk2x)
+   process (clkvid)
    begin
-      if rising_edge(clk2x) then
+      if rising_edge(clkvid) then
          
          videoout_out.ce <= '0';
          
          if (videoout_settings.GPUSTAT_HorRes2 = '1') then
-            clkDiv  <= 9; -- 368
+            clkDiv  <= 7; -- 368
          else
             case (videoout_settings.GPUSTAT_HorRes1) is
-               when "00" => clkDiv <= 12; -- 256;
-               when "01" => clkDiv <= 10; -- 320;
-               when "10" => clkDiv <= 6;  -- 512;
-               when "11" => clkDiv <= 5;  -- 640;
+               when "00" => clkDiv <= 10; -- 256;
+               when "01" => clkDiv <= 8;  -- 320;
+               when "10" => clkDiv <= 5;  -- 512;
+               when "11" => clkDiv <= 4;  -- 640;
                when others => null;
             end case;
          end if;
-            
+         
          if (videoout_settings.GPUSTAT_HorRes2 = '1') then
             videoout_out.DisplayWidth  <= to_unsigned(368, 10);
          else
@@ -297,7 +361,7 @@ begin
                when others => null;
             end case;
          end if;
-            
+         
          if (videoout_settings.GPUSTAT_VerRes = '1') then
             videoout_out.DisplayHeight  <= to_unsigned(480, 9);
          else
@@ -316,7 +380,7 @@ begin
             if (clkCnt < (clkDiv - 1)) then
                clkCnt <= clkCnt + 1;
             else
-               clkCnt    <= 0;
+               clkCnt           <= 0;
                videoout_out.ce  <= '1';
                if (videoout_request.xpos < 1023) then
                   videoout_request.xpos <= videoout_request.xpos + 1;

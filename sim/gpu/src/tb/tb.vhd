@@ -14,6 +14,7 @@ architecture arch of etb is
 
    signal clk1x               : std_logic := '1';
    signal clk2x               : std_logic := '1';
+   signal clkvid              : std_logic := '1';
    
    signal clk1xToggle         : std_logic := '0';
    signal clk1xToggle2X       : std_logic := '0';
@@ -67,6 +68,16 @@ begin
    clk1x  <= not clk1x  after 15 ns;
    clk2x  <= not clk2x  after 7500 ps;
    
+   -- NTSC 53.693175 mhz => 18624.340989ps
+   --clkvid <= not clkvid after 9312 ps;
+      
+   -- PAL  53.203425 mhz => 18795.782414ps
+   
+   -- sync  = 2x => 67.7376 mhz
+   clkvid <= not clkvid  after 7500 ps;
+   
+   
+   
    reset_in  <= '0' after 3000 ns;
    
    -- clock index
@@ -94,6 +105,7 @@ begin
       clk1x                   => clk1x,
       clk2x                   => clk2x,
       clk2xIndex              => clk2xIndex,
+      clkvid                  => clkvid,
       ce                      => '1',   
       reset                   => reset_out,
          
@@ -101,9 +113,10 @@ begin
       REPRODUCIBLEGPUTIMING   => '0',
       isPal                   => '1',
       videoout_on             => '1',
-      fpscountOn              => '0',
+      fpscountOn              => '1',
       pal60                   => '0',
       noTexture               => '0',
+      syncVideoOut            => '1',
       debugmodeOn             => '0',
       
       Gun1CrosshairOn         => '0',
@@ -114,14 +127,11 @@ begin
       Gun2X                   => (7 downto 0 => '0'),
       Gun2Y_scanlines         => (8 downto 0 => '0'),
       
-      debug_lateSamples       => (15 downto 0 => '0'),
-      debug_lateTicks         => (15 downto 0 => '0'),
-      
-      cdSlow                  => '0',
+      cdSlow                  => '1',
                               
-      errorOn                 => '0',
-      errorEna                => '0',
-      errorCode               => x"0",
+      errorOn                 => '1',
+      errorEna                => '1',
+      errorCode               => x"8",
          
       dmaOn                   => '0',
          
@@ -147,8 +157,8 @@ begin
       vram_WE                 => DDRAM_WE,        
       vram_RD                 => DDRAM_RD,
 
-      hblank                  => hblank,  
-      vblank                  => vblank,  
+      video_hblank            => hblank,  
+      video_vblank            => vblank,  
       video_ce                => video_ce,
       video_interlace         => video_interlace,
       video_r                 => video_r, 
@@ -210,7 +220,7 @@ begin
    iframebuffer : entity work.framebuffer
    port map
    (
-      clk               => clk2x,     
+      clk               => clkvid,     
       hblank            => hblank,  
       vblank            => vblank,  
       video_ce          => video_ce,

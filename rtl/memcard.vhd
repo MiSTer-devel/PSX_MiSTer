@@ -255,13 +255,13 @@ begin
    )
    port map
    (
-      clock       => clk2x,
-      
+      clock_a     => clk2x,
       address_a   => mem_addrA,
       data_a      => mem_DataInA,
       wren_a      => mem_wrenA,
       q_a         => mem_DataOutA,
       
+      clock_b     => clk2x,
       address_b   => memcard_addr,                    
       data_b      => memcard_dataIn,                  
       wren_b      => (memcard_write and memcard_ack),

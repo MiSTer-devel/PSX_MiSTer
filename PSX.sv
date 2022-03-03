@@ -211,6 +211,7 @@ wire pll_locked;
 wire clk_1x;
 wire clk_2x;
 wire clk_3x;
+wire clk_vid;
 
 pll pll
 (
@@ -222,6 +223,111 @@ pll pll
 	.locked(pll_locked)
 );
 
+pll2 pll2
+(
+	.refclk(CLK_50M),
+	.rst(0),
+	.outclk_0(clk_vid),
+   .reconfig_to_pll(reconfig_to_pll),
+	.reconfig_from_pll(reconfig_from_pll)
+);
+
+wire [63:0] reconfig_to_pll;
+wire [63:0] reconfig_from_pll;
+wire        cfg_waitrequest;
+reg         cfg_write;
+reg   [5:0] cfg_address;
+reg  [31:0] cfg_data;
+
+pll_cfg pll_cfg
+(
+	.mgmt_clk(CLK_50M),
+	.mgmt_reset(0),
+	.mgmt_waitrequest(cfg_waitrequest),
+	.mgmt_read(0),
+	.mgmt_readdata(),
+	.mgmt_write(cfg_write),
+	.mgmt_address(cfg_address),
+	.mgmt_writedata(cfg_data),
+	.reconfig_to_pll(reconfig_to_pll),
+	.reconfig_from_pll(reconfig_from_pll)
+);
+
+always @(posedge CLK_50M) begin : cfg_block
+	reg pald = 0, pald2 = 0;
+	reg pdbg = 0, pdbg2 = 0; 
+	reg pffw = 1, pffw2 = 1; // PLL starts up with ff mode 85mhz because that checks timings for the highest frequency
+	reg [3:0] state = 0;
+
+	pald  <= status[40];
+	pald2 <= pald;	
+   
+   pdbg  <= status[56];
+	pdbg2 <= pdbg;   
+   
+   pffw  <= fast_forward;
+	pffw2 <= pffw;
+
+	cfg_write <= 0;
+	if(pald2 != pald || pdbg2 != pdbg || pffw2 != pffw) state <= 1;
+
+	if(!cfg_waitrequest) begin
+		if(state) state<=state+1'd1;
+		case(state)
+			1: begin
+					cfg_address <= 0;
+					cfg_data <= 0;
+					cfg_write <= 1;
+				end
+         3: begin
+					cfg_address <= 5;
+					cfg_data <= pffw2 ? 131842 : pdbg2 ? 771 : 1028;
+					cfg_write <= 1;
+				end
+			5: begin
+					cfg_address <= 7;
+					cfg_data <= pffw2 ? 2147483648 : pdbg2 ? 551954751 : pald2 ? 2201376898 : 2537930535;
+					cfg_write <= 1;
+				end
+			7: begin
+					cfg_address <= 2;
+					cfg_data <= 0;
+					cfg_write <= 1;
+				end
+		endcase
+	end
+end
+
+reg fast_forward;
+reg ff_latch;
+
+always @(posedge clk_1x) begin : ffwd
+	reg last_ffw;
+	reg ff_was_held;
+	longint ff_count;
+
+	last_ffw <= joy[17];
+
+	if (joy[17])
+		ff_count <= ff_count + 1;
+
+	if (~last_ffw & joy[17]) begin
+		ff_latch <= 0;
+		ff_count <= 0;
+	end
+
+	if ((last_ffw & ~joy[17])) begin
+		ff_was_held <= 0;
+
+		if (ff_count < 10000000 && ~ff_was_held) begin
+			ff_was_held <= 1;
+			ff_latch <= 1;
+		end
+	end
+
+	fast_forward <= (joy[17] | ff_latch);
+end
+
 wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd_download;
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
@@ -230,7 +336,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXXXX       X
+// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXX     X
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -288,6 +394,8 @@ parameter CONF_STR = {
 	"P3OE,DDR3 Framebuffer,Off,On;",
 	"P3OA,DDR3 FB Color,16,24;",
 	"P3OB,VRAMViewer,Off,On;",
+	"P3oP,Sync Video Out,Off,On;",
+	"P3oO,Sync Video Clock,Off,On;",
 	"P3OU,Sound,On,Off;",
 	"P3oA,SPU Reverb,On,Off;",
 	"P3OV,Fast Memory,Off,On;",
@@ -305,7 +413,7 @@ parameter CONF_STR = {
 
 	"- ;",
 	"R0,Reset;",
-	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Rewind,Savestates;",
+	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Savestates,Fastfoward;",
 	"jn,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,X,X;",
 	"I,",
 	"Slot=DPAD|Save/Load=Start+DPAD,",
@@ -351,9 +459,9 @@ wire        ioctl_wr;
 wire  [7:0] ioctl_index;
 reg         ioctl_wait = 0;
 
-wire [16:0] joy;
-wire [16:0] joy_unmod;
-wire [16:0] joy2;
+wire [17:0] joy;
+wire [17:0] joy_unmod;
+wire [17:0] joy2;
 
 wire [10:0] ps2_key;
 
@@ -650,6 +758,7 @@ psx
 (
    .clk1x(clk_1x),          
    .clk2x(clk_2x),
+   .clkvid(clk_vid),
    .reset(reset),
    // commands 
    .pause(paused),
@@ -666,6 +775,7 @@ psx
    .errorOn(~status[29]),
    .PATCHSERIAL(status[54]),
    .noTexture(status[27]),
+   .syncVideoOut(status[57]),
    .SPUon(~status[30]),
    .SPUSDRAM(status[44] & SDRAM2_EN),
    .REVERBOFF(status[42]),
@@ -994,7 +1104,7 @@ assign DDRAM_CLK = clk_2x;
 
 ////////////////////////////  VIDEO  ////////////////////////////////////
 
-assign CLK_VIDEO = clk_2x;
+assign CLK_VIDEO = clk_vid;
 
 wire hs, vs, hbl, vbl, video_interlace;
 
