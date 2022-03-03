@@ -54,6 +54,8 @@ module emu
 	output [1:0]  VGA_SL,
 	output        VGA_SCALER, // Force VGA scaler
 
+   input         DIRECT_VIDEO,
+
 	input  [11:0] HDMI_WIDTH,
 	input  [11:0] HDMI_HEIGHT,
    output        HDMI_FREEZE,
@@ -253,16 +255,29 @@ pll_cfg pll_cfg
 	.reconfig_from_pll(reconfig_from_pll)
 );
 
+
+`ifdef MISTER_DUAL_SDRAM
+wire FFrequest = joy[17] && ~FB_LL && ~DIRECT_VIDEO;
+wire syncVideoOut = status[57] && ~FB_LL && ~DIRECT_VIDEO;
+wire syncVideoClock = status[56] && ~FB_LL && ~DIRECT_VIDEO;
+`endif
+
+`ifndef MISTER_DUAL_SDRAM
+wire FFrequest = 0;
+wire syncVideoOut = 0;
+wire syncVideoClock = 0;
+`endif
+
 always @(posedge CLK_50M) begin : cfg_block
 	reg pald = 0, pald2 = 0;
 	reg pdbg = 0, pdbg2 = 0; 
-	reg pffw = 1, pffw2 = 1; // PLL starts up with ff mode 85mhz because that checks timings for the highest frequency
+	reg pffw = 0, pffw2 = 0;
 	reg [3:0] state = 0;
 
 	pald  <= status[40];
 	pald2 <= pald;	
    
-   pdbg  <= status[56];
+   pdbg  <= syncVideoClock;
 	pdbg2 <= pdbg;   
    
    pffw  <= fast_forward;
@@ -300,8 +315,6 @@ end
 
 reg fast_forward;
 reg ff_latch;
-
-wire FFrequest = 0; //joy[17] && ~FB_LL;
 
 always @(posedge clk_1x) begin : ffwd
 	reg last_ffw;
@@ -777,7 +790,7 @@ psx
    .errorOn(~status[29]),
    .PATCHSERIAL(status[54]),
    .noTexture(status[27]),
-   .syncVideoOut(status[57]),
+   .syncVideoOut(syncVideoOut),
    .SPUon(~status[30]),
    .SPUSDRAM(status[44] & SDRAM2_EN),
    .REVERBOFF(status[42]),

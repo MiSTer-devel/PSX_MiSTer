@@ -1559,6 +1559,8 @@ emu emu
 	.VGA_DE(de_emu),
 	.VGA_F1(f1),
 	.VGA_SCALER(vga_force_scaler),
+   
+   .DIRECT_VIDEO(direct_video),
 
 	.HDMI_WIDTH(direct_video ? 12'd0 : hdmi_width),
 	.HDMI_HEIGHT(direct_video ? 12'd0 : hdmi_height),
