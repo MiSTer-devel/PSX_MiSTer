@@ -301,22 +301,24 @@ end
 reg fast_forward;
 reg ff_latch;
 
+wire FFrequest = 0; //joy[17] && ~FB_LL;
+
 always @(posedge clk_1x) begin : ffwd
 	reg last_ffw;
 	reg ff_was_held;
 	longint ff_count;
 
-	last_ffw <= joy[17];
+	last_ffw <= FFrequest;
 
-	if (joy[17])
+	if (FFrequest)
 		ff_count <= ff_count + 1;
 
-	if (~last_ffw & joy[17]) begin
+	if (~last_ffw & FFrequest) begin
 		ff_latch <= 0;
 		ff_count <= 0;
 	end
 
-	if ((last_ffw & ~joy[17])) begin
+	if ((last_ffw & ~FFrequest)) begin
 		ff_was_held <= 0;
 
 		if (ff_count < 10000000 && ~ff_was_held) begin
@@ -325,7 +327,7 @@ always @(posedge clk_1x) begin : ffwd
 		end
 	end
 
-	fast_forward <= (joy[17] | ff_latch);
+	fast_forward <= (FFrequest | ff_latch);
 end
 
 wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd_download;
