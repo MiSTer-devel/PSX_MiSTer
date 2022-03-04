@@ -76,6 +76,14 @@ architecture arch of gpu_videoout_async is
    signal vDisplayEnd      : integer range 0 to 314;
    
    -- output   
+   type tState is
+   (
+      WAITNEWLINE,
+      WAITHBLANKEND,
+      DRAW
+   );
+   signal state : tState := WAITNEWLINE;
+   
    signal pixelData_R      : std_logic_vector(7 downto 0) := (others => '0');
    signal pixelData_G      : std_logic_vector(7 downto 0) := (others => '0');
    signal pixelData_B      : std_logic_vector(7 downto 0) := (others => '0');
@@ -86,6 +94,9 @@ architecture arch of gpu_videoout_async is
       
    signal hsync_start      : integer range 0 to 4095;
    signal hsync_end        : integer range 0 to 4095;
+   
+   signal hCropCount       : unsigned(11 downto 0);
+   signal hCropPixels      : unsigned(1 downto 0);
    
    type tReadState is
    (
@@ -276,6 +287,7 @@ begin
                   if (videoout_settings.vramRange(10) = '1' and (vposNew mod 2) = 0) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
                end if;
                
+               -- fetching of next line from framebuffer
                vposNew := vposNew + 1;
                if (vDisplayStart > 0) then
                   if (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
@@ -370,6 +382,8 @@ begin
          
          if (reset = '1') then
          
+            state                      <= WAITNEWLINE;
+         
             clkCnt                     <= 0;
             videoout_out.hblank        <= '1';
             videoout_request.lineDisp  <= (others => '0');
@@ -382,91 +396,120 @@ begin
             else
                clkCnt           <= 0;
                videoout_out.ce  <= '1';
-               if (videoout_request.xpos < 1023) then
-                  videoout_request.xpos <= videoout_request.xpos + 1;
-               end if;
-               if (videoout_request.xpos > 0 and videoout_request.xpos <= xmax) then
-                  videoout_out.hblank <= '0';
-                  if (overlay_ena = '1') then
-                     videoout_out.r      <= overlay_data( 7 downto 0);
-                     videoout_out.g      <= overlay_data(15 downto 8);
-                     videoout_out.b      <= overlay_data(23 downto 16);
-                  elsif (videoout_settings.GPUSTAT_DisplayDisable = '1') then
-                     videoout_out.r      <= (others => '0');
-                     videoout_out.g      <= (others => '0');
-                     videoout_out.b      <= (others => '0');
-                  else
-                     videoout_out.r      <= pixelData_R;
-                     videoout_out.g      <= pixelData_G;
-                     videoout_out.b      <= pixelData_B;
-                  end if;
-               else
-                  videoout_out.hblank <= '1';
-                  if (videoout_out.hblank = '0') then
-                     hsync_start <= (nextHCount / 2) + (26 * clkDiv) - (8 * clkDiv);
-                     hsync_end   <= (nextHCount / 2) + (2 * clkDiv) - (8 * clkDiv);
-                  end if;
-               end if;
             end if;
             
-            if (lineIn /= videoout_request.lineDisp) then
-               videoout_request.lineDisp <= lineIn;
-               videoout_readAddr <= lineIn(0) & "00" & x"00";
-               if (videoout_settings.GPUSTAT_VerRes = '1') then -- interlaced mode
-                  videoout_readAddr(10) <= lineIn(1);
-               end if;
-               videoout_request.xpos <= 0;
-               xmax                  <= to_integer(videoout_out.DisplayWidth);
-            end if;
+            hCropCount <= hCropCount + 1;
+            
+            case (state) is
+            
+               when WAITNEWLINE =>
+                  videoout_out.hblank <= '1';
+                  if (lineIn /= videoout_request.lineDisp) then
+                     state <= WAITHBLANKEND;
+                     videoout_request.lineDisp <= lineIn;
+                     videoout_readAddr <= lineIn(0) & "00" & x"00";
+                     if (videoout_settings.GPUSTAT_VerRes = '1') then -- interlaced mode
+                        videoout_readAddr(10) <= lineIn(1);
+                     end if;
+                     videoout_request.xpos <= 0;
+                     xmax                  <= to_integer(videoout_out.DisplayWidth);
+                     clkCnt                <= 0;
+                     hCropCount            <= (others => '0');
+                     hCropPixels           <= (others => '0');
+                  end if;
+            
+               when WAITHBLANKEND =>
+                  if (clkCnt >= (clkDiv - 1)) then
+                     if ((hCropCount + clkDiv) >= videoout_settings.hDisplayRange(11 downto 0)) then
+                        state       <= DRAW;
+                        readstate   <= IDLE;
+                        readstate24 <= READ24_0;
+                     end if;
+                  end if;
+                  
+               when DRAW =>
+                  if (clkCnt >= (clkDiv - 1)) then
+                     videoout_out.ce     <= '1';
+                     videoout_out.hblank <= '0';
+                     if (overlay_ena = '1') then
+                        videoout_out.r      <= overlay_data( 7 downto 0);
+                        videoout_out.g      <= overlay_data(15 downto 8);
+                        videoout_out.b      <= overlay_data(23 downto 16);
+                     elsif (videoout_settings.GPUSTAT_DisplayDisable = '1') then
+                        videoout_out.r      <= (others => '0');
+                        videoout_out.g      <= (others => '0');
+                        videoout_out.b      <= (others => '0');
+                     else
+                        videoout_out.r      <= pixelData_R;
+                        videoout_out.g      <= pixelData_G;
+                        videoout_out.b      <= pixelData_B;
+                     end if;
+                     
+                     if (videoout_request.xpos < xmax) then
+                        videoout_request.xpos <= videoout_request.xpos + 1;
+                     end if;
+                     
+                     hCropPixels <= hCropPixels + 1;
+                     if (((hCropCount + 1) >= videoout_settings.hDisplayRange(23 downto 12)) or (videoout_request.xpos + 1 = xmax)) then
+                        if ((hCropPixels + 1) = 0) then -- todo: only round up to next 4 pixel border tested, round down untested
+                           state       <= WAITNEWLINE;
+                           hsync_start <= (nextHCount / 2) + (26 * clkDiv) - (8 * clkDiv);
+                           hsync_end   <= (nextHCount / 2) + (2 * clkDiv) - (8 * clkDiv);
+                        end if;
+                     end if;
+                     
+                  end if;
+
+                  case (readstate) is
+            
+                     when IDLE =>
+                        if (clkCnt = 0) then
+                           if (videoout_settings.GPUSTAT_ColorDepth24 = '1') then
+                              videoout_readAddr  <= videoout_readAddr + 1;
+                              if (videoout_request.xpos = 0 or readstate24 = READ24_0) then
+                                 readstate <= READ24_0;
+                              else
+                                 readstate <= READ24_8;
+                              end if;
+                           else
+                              readstate <= READ16;
+                           end if;
+                        end if;
+      
+                     when READ16 =>
+                        readstate          <= IDLE;
+                        videoout_readAddr  <= videoout_readAddr + 1;
+                        pixelData_R        <= videoout_pixelRead( 4 downto  0) & videoout_pixelRead( 4 downto 2);
+                        pixelData_G        <= videoout_pixelRead( 9 downto  5) & videoout_pixelRead( 9 downto 7);
+                        pixelData_B        <= videoout_pixelRead(14 downto 10) & videoout_pixelRead(14 downto 12);
+                        
+                     when READ24_0 =>
+                        readstate          <= READ24_16;
+                        pixelData_R        <= videoout_pixelRead( 7 downto  0);
+                        pixelData_G        <= videoout_pixelRead(15 downto  8);
+                     
+                     when READ24_8 =>
+                        readstate          <= READ24_24;
+                        pixelData_R        <= videoout_pixelRead(15 downto  8);
+                        
+                     when READ24_16 =>
+                        readstate          <= IDLE;
+                        readstate24        <= READ24_8;
+                        pixelData_B        <= videoout_pixelRead( 7 downto  0);
+                  
+                     when READ24_24 =>
+                        readstate          <= IDLE;
+                        readstate24        <= READ24_0;
+                        videoout_readAddr  <= videoout_readAddr + 1;
+                        pixelData_G        <= videoout_pixelRead( 7 downto  0);
+                        pixelData_B        <= videoout_pixelRead(15 downto  8);
+            
+                  end case;
+               
+            end case;
             
             if (nextHCount = hsync_start) then videoout_out.hsync <= '1'; end if;
             if (nextHCount = hsync_end  ) then videoout_out.hsync <= '0'; end if;
-         
-            case (readstate) is
-            
-               when IDLE =>
-                  if (clkCnt >= (clkDiv - 1) and videoout_request.xpos < xmax) then
-                     if (videoout_settings.GPUSTAT_ColorDepth24 = '1') then
-                        videoout_readAddr  <= videoout_readAddr + 1;
-                        if (videoout_request.xpos = 0 or readstate24 = READ24_0) then
-                           readstate <= READ24_0;
-                        else
-                           readstate <= READ24_8;
-                        end if;
-                     else
-                        readstate <= READ16;
-                     end if;
-                  end if;
-
-               when READ16 =>
-                  readstate                  <= IDLE;
-                  videoout_readAddr  <= videoout_readAddr + 1;
-                  pixelData_R                <= videoout_pixelRead( 4 downto  0) & videoout_pixelRead( 4 downto 2);
-                  pixelData_G                <= videoout_pixelRead( 9 downto  5) & videoout_pixelRead( 9 downto 7);
-                  pixelData_B                <= videoout_pixelRead(14 downto 10) & videoout_pixelRead(14 downto 12);
-                  
-               when READ24_0 =>
-                  readstate                  <= READ24_16;
-                  pixelData_R                <= videoout_pixelRead( 7 downto  0);
-                  pixelData_G                <= videoout_pixelRead(15 downto  8);
-                 
-               when READ24_8 =>
-                  readstate                  <= READ24_24;
-                  pixelData_R                <= videoout_pixelRead(15 downto  8);
-                  
-               when READ24_16 =>
-                  readstate                  <= IDLE;
-                  readstate24                <= READ24_8;
-                  pixelData_B                <= videoout_pixelRead( 7 downto  0);
-            
-                when READ24_24 =>
-                  readstate                  <= IDLE;
-                  readstate24                <= READ24_0;
-                  videoout_readAddr  <= videoout_readAddr + 1;
-                  pixelData_G                <= videoout_pixelRead( 7 downto  0);
-                  pixelData_B                <= videoout_pixelRead(15 downto  8);
-            
-            end case;
          
          end if;
          
