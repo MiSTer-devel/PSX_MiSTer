@@ -506,8 +506,8 @@ begin
                
             end case;
             
-            hsync_start <= 32 * clkDiv;
-            hsync_end   <= 1;
+            hsync_start <= 1;
+            hsync_end   <= htotal - (32 * clkDiv);
             
             if (nextHCount = hsync_start) then 
                videoout_out.hsync <= '1'; 
