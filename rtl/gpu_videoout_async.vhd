@@ -337,7 +337,6 @@ begin
    end process;
    
    -- timing generation reading
-   videoout_out.vsync          <= videoout_reports.vsync; 
    videoout_out.vblank         <= videoout_reports.inVsync;
    videoout_out.interlace      <= videoout_settings.GPUSTAT_VerRes and videoout_reports.interlacedDisplayField;
 
@@ -386,6 +385,7 @@ begin
          
             clkCnt                     <= 0;
             videoout_out.hblank        <= '1';
+            videoout_out.vsync         <= '0';
             videoout_request.lineDisp  <= (others => '0');
             readstate                  <= IDLE;
          
@@ -420,7 +420,7 @@ begin
             
                when WAITHBLANKEND =>
                   if (clkCnt >= (clkDiv - 1)) then
-                     if ((hCropCount + clkDiv) >= videoout_settings.hDisplayRange(11 downto 0)) then
+                     if (hCropCount >= videoout_settings.hDisplayRange(11 downto 0)) then
                         state       <= DRAW;
                         readstate   <= IDLE;
                         readstate24 <= READ24_0;
@@ -451,10 +451,8 @@ begin
                      
                      hCropPixels <= hCropPixels + 1;
                      if (((hCropCount + 1) >= videoout_settings.hDisplayRange(23 downto 12)) or (videoout_request.xpos + 1 = xmax)) then
-                        if ((hCropPixels + 1) = 0) then -- todo: only round up to next 4 pixel border tested, round down untested
+                        if ((hCropPixels + 1) = 0) then
                            state       <= WAITNEWLINE;
-                           hsync_start <= (nextHCount / 2) + (26 * clkDiv) - (8 * clkDiv);
-                           hsync_end   <= (nextHCount / 2) + (2 * clkDiv) - (8 * clkDiv);
                         end if;
                      end if;
                      
@@ -508,8 +506,22 @@ begin
                
             end case;
             
-            if (nextHCount = hsync_start) then videoout_out.hsync <= '1'; end if;
-            if (nextHCount = hsync_end  ) then videoout_out.hsync <= '0'; end if;
+            hsync_start <= 32 * clkDiv;
+            hsync_end   <= 1;
+            
+            if (nextHCount = hsync_start) then 
+               videoout_out.hsync <= '1'; 
+               if (vsyncCount = 5) then 
+                  videoout_out.vsync <= '1';
+               end if;
+            end if;
+               
+            if (nextHCount = hsync_end  ) then 
+               videoout_out.hsync <= '0';
+               if (vsyncCount = 8) then 
+                  videoout_out.vsync <= '0';
+               end if;
+            end if;
          
          end if;
          
