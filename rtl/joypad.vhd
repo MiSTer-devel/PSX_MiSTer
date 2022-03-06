@@ -125,6 +125,9 @@ architecture arch of joypad is
    signal receiveValidMem2    : std_logic;
 
    signal joypad_selected     : joypad_t;
+   signal GunX                : unsigned(7 downto 0);
+   signal GunY_scanlines      : unsigned(8 downto 0);
+   signal GunAimOffscreen     : std_logic;
 
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
@@ -336,6 +339,9 @@ begin
    selectedPort  <= '1' when (JOY_CTRL(13) = JOY_CTRL_13_1 and JOY_CTRL(1 downto 0) = "11") else '0';
 
    joypad_selected <= joypad2 when selectedPort2 else joypad1;
+   GunX            <= Gun2X when selectedPort2 else Gun1X;
+   GunY_scanlines  <= Gun2Y_scanlines when selectedPort2 else Gun1Y_scanlines;
+   GunAimOffscreen <= Gun2AimOffscreen when selectedPort2 else Gun1AimOffscreen;
 
    ijoypad_pad : entity work.joypad_pad
    port map
@@ -366,9 +372,9 @@ begin
       MouseRight           => MouseRight,
       MouseX               => MouseX,
       MouseY               => MouseY,
-      GunX                 => Gun1X,
-      GunY_scanlines       => Gun1Y_scanlines,
-      GunAimOffscreen      => Gun1AimOffscreen
+      GunX                 => GunX,
+      GunY_scanlines       => GunY_scanlines,
+      GunAimOffscreen      => GunAimOffscreen
    );
    
    ijoypad_mem1 : entity work.joypad_mem
