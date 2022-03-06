@@ -1123,8 +1123,7 @@ assign CLK_VIDEO = clk_vid;
 
 wire hs, vs, hbl, vbl, video_interlace;
 
-assign VGA_F1 = status[14] ? 1'b0 : (video_interlace & ~status[41]);
-assign VGA_SL = 0;
+
 
 wire ce_pix;
 wire [7:0] r,g,b;
@@ -1142,13 +1141,29 @@ wire [7:0] r,g,b;
 //	.B(b)
 //);
 
+typedef struct {
+	logic [7:0] red;
+	logic [7:0] green;
+	logic [7:0] blue;
+	logic       hs;
+	logic       vs;
+	logic       hb;
+	logic       vb;
+	logic       interlace;
+} vid_info;
+
+vid_info video;
+
 assign CE_PIXEL = ce_pix;
-assign VGA_R    = r;
-assign VGA_G    = g;
-assign VGA_B    = b;
-assign VGA_VS   = vs;
-assign VGA_HS   = hs;
-assign VGA_DE   = ~(vbl | hbl);
+assign VGA_R    = video.red;
+assign VGA_G    = video.green;
+assign VGA_B    = video.blue;
+assign VGA_VS   = video.vs;
+assign VGA_HS   = video.hs;
+assign VGA_DE   = ~(video.vb | video.hb);
+assign VGA_F1 = status[14] ? 1'b0 : (video.interlace & ~status[41]);
+assign VGA_SL = 0;
+logic [11:0] aspect_x, aspect_y;
 
 wire [1:0] ar = status[33:32];
 video_freak video_freak
@@ -1157,12 +1172,99 @@ video_freak video_freak
 	.VGA_DE_IN(VGA_DE),
 	.VGA_DE(),
 
-	.ARX((!ar) ? (status[11] ? 12'd2 : 12'd4) : (ar - 1'd1)),
-	.ARY((!ar) ? (status[11] ? 12'd1 : 12'd3) : 12'd0),
+	.ARX((!ar) ? (status[11] ? 12'd2 : aspect_x) : (ar - 1'd1)),
+	.ARY((!ar) ? (status[11] ? 12'd1 : aspect_y) : 12'd0),
 	.CROP_SIZE(0),
 	.CROP_OFF(0),
 	.SCALE(status[35:34])
 );
+
+//max visible horizontal pixels is 640, max pixel clock is 53.693175 mhz / 4
+	// 256 -> 10 340
+	// 320 -> 8  425
+	// 368 -> 7  486
+	// 512 -> 5  681
+	// 640 -> 4  852
+
+	// 256 -> +25
+	// 320 -> +32
+	// 368 -> +37
+	// 512 -> +51
+	// 640 -> +64
+
+logic [23:0] aspect_ratio_lut[64];
+
+assign aspect_ratio_lut = '{
+	24'hF89951, 24'hB6B6E2, 24'hE678BA, 24'hB006B3, 24'h40F27C, 24'h20013B, 24'h71D466, 24'h58036B,
+	24'h7B34CF, 24'hB2F705, 24'h041029, 24'hB006F9, 24'hF719D6, 24'hF3D9C1, 24'hF7B9F5, 24'h2C01C7,
+	24'h400299, 24'hE2D940, 24'h097063, 24'hB0073F, 24'h521365, 24'hB61791, 24'h86D5A1, 24'h5803B1,
+	24'hD038C6, 24'hFAEA9F, 24'h7114CF, 24'h1000AF, 24'hE5D9DD, 24'hE119B4, 24'hED5A47, 24'h1600F5,
+	24'hDEB9BB, 24'hF31AAB, 24'hDAB9A4, 24'hB007CB, 24'h3AF29F, 24'hEADA7D, 24'h4002DF, 24'h5803F7,
+	24'hBAD874, 24'hFFDBA0, 24'hFA3B6B, 24'hB00811, 24'hE05A53, 24'hF1AB2B, 24'hCDB98C, 24'h2C020D,
+	24'h43B32B, 24'h200181, 24'hF3FB83, 24'hB00857, 24'h67F4F2, 24'hE31AD9, 24'hF5BBC9, 24'h58043D,
+	24'hDA3A8D, 24'hF43BDB, 24'h6B1538, 24'hB0089D, 24'h400325, 24'hEF5BCE, 24'h916733, 24'h02C023
+};
+
+logic [2:0] pix_clk_mode;
+logic [11:0] h_pos, v_pos, v_total;
+logic [11:0] hb_start_lut[8];
+logic [11:0] hb_end_lut[8];
+logic [11:0] hb_start, hb_end;
+
+assign {aspect_x, aspect_y} = aspect_ratio_lut[v_total];
+
+assign hb_start_lut = '{12'd63,  12'd50,  12'd36,  12'd31,  12'd24,  12'd0, 12'd0, 12'd0};
+assign hb_end_lut =   '{12'd767, 12'd613, 12'd441, 12'd383, 12'd305, 12'd0, 12'd0, 12'd0};
+
+always_comb begin
+	// FIXME: This can be fed out directly from gpu module
+	case (DisplayWidth)
+		12'd256: pix_clk_mode = 3'd4;
+		12'd320: pix_clk_mode = 3'd3;
+		12'd368: pix_clk_mode = 3'd2;
+		12'd512: pix_clk_mode = 3'd1;
+		12'd640: pix_clk_mode = 3'd0;
+		default: pix_clk_mode = 3'd0;
+	endcase
+	
+	hb_start = hb_start_lut[pix_clk_mode];
+	hb_end = hb_end_lut[pix_clk_mode];
+end
+
+always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
+	logic old_hs, old_vs;
+	video.hs <= hs;
+	video.vs <= vs;
+	video.vb <= vbl;
+	video.interlace <= video_interlace;
+	video.red <= (vbl || hbl) ? 8'd0 : r;
+	video.green <= (vbl || hbl) ? 8'd0 : g;
+	video.blue <= (vbl || hbl) ? 8'd0 : b;
+
+	h_pos <= h_pos + 1'd1;
+	if (video.hs && ~hs) begin
+		h_pos <= 0;
+		if (~vbl)
+			v_pos <= v_pos + 1'd1;
+	end
+	
+	if (~video.vs && vs) begin
+		v_pos <= 0;
+
+		if (v_pos < 194)
+			v_total <= 6'd0;
+		else if (v_pos > 256)
+			v_total <= 6'd63;
+		else
+			v_total <= v_pos - 8'd194;
+	end
+
+	if (h_pos == hb_start)
+		video.hb <= 0;
+	if (h_pos == hb_end)
+		video.hb <= 1;
+	
+end
 
 ////////////////////////////  CODES  ///////////////////////////////////
 
