@@ -1,5 +1,5 @@
 //============================================================================
-//  GBA
+//  PSX
 //  Copyright (C) 2019 Robert Peip
 //
 //  Port to MiSTer
@@ -887,6 +887,8 @@ psx
    .video_r         (r),
    .video_g         (g),
    .video_b         (b),
+   .video_isPal     (video_isPal),   
+   .video_hResMode  (video_hResMode),
    //Keys
    .PadPortEnable1 (PadPortEnable1),
    .PadPortAnalog1 (PadPortAnalog1),
@@ -1122,9 +1124,9 @@ assign DDRAM_CLK = clk_2x;
 
 assign CLK_VIDEO = clk_vid;
 
-wire hs, vs, hbl, vbl, video_interlace;
+wire hs, vs, hbl, vbl, video_interlace, video_isPal;
 
-
+wire [2:0] video_hResMode;
 
 wire ce_pix;
 wire [7:0] r,g,b;
@@ -1209,7 +1211,6 @@ reg [23:0] aspect_ratio_lut_pal[64] = '{
 	24'hA5C6A9, 24'h67542B, 24'h7EA521, 24'h89F59C, 24'h72D4B0, 24'hD16895, 24'hEF89DB, 24'h21015D
 };
 
-logic [2:0] pix_clk_mode;
 logic [11:0] h_pos, v_pos, v_total;
 logic [11:0] hb_start_lut[8];
 logic [11:0] hb_end_lut[8];
@@ -1220,18 +1221,8 @@ assign hb_start_lut = '{12'd63,  12'd50,  12'd36,  12'd31,  12'd24,  12'd0, 12'd
 assign hb_end_lut =   '{12'd767, 12'd613, 12'd441, 12'd383, 12'd305, 12'd0, 12'd0, 12'd0};
 
 always_comb begin
-	// FIXME: This can be fed out directly from gpu module
-	case (DisplayWidth)
-		12'd256: pix_clk_mode = 3'd4;
-		12'd320: pix_clk_mode = 3'd3;
-		12'd368: pix_clk_mode = 3'd2;
-		12'd512: pix_clk_mode = 3'd1;
-		12'd640: pix_clk_mode = 3'd0;
-		default: pix_clk_mode = 3'd0;
-	endcase
-	
-	hb_start = hb_start_lut[pix_clk_mode];
-	hb_end = hb_end_lut[pix_clk_mode];
+	hb_start = hb_start_lut[video_hResMode];
+	hb_end = hb_end_lut[video_hResMode];
 end
 
 always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
@@ -1243,8 +1234,7 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 	video.red <= (vbl || hbl) ? 8'd0 : r;
 	video.green <= (vbl || hbl) ? 8'd0 : g;
 	video.blue <= (vbl || hbl) ? 8'd0 : b;
-	//FIXME: This should use the PAL signal from the core rather than menu
-	{aspect_x, aspect_y} <= status[40] ? aspect_ratio_lut_pal[v_total] : aspect_ratio_lut_ntsc[v_total];
+	{aspect_x, aspect_y} <= video_isPal ? aspect_ratio_lut_pal[v_total] : aspect_ratio_lut_ntsc[v_total];
 
 	h_pos <= h_pos + 1'd1;
 	if (video.hs && ~hs) begin

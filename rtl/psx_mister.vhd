@@ -125,6 +125,8 @@ entity psx_mister is
       video_r               : out std_logic_vector(7 downto 0);
       video_g               : out std_logic_vector(7 downto 0);
       video_b               : out std_logic_vector(7 downto 0);
+      video_isPal           : out std_logic;
+      video_hResMode        : out std_logic_vector(2 downto 0);
       -- Keys - all active high   
       PadPortEnable1        : in  std_logic;
       PadPortAnalog1        : in  std_logic;
@@ -327,6 +329,8 @@ begin
       video_r               => video_r, 
       video_g               => video_g, 
       video_b               => video_b, 
+      video_isPal           => video_isPal, 
+      video_hResMode        => video_hResMode, 
       -- inputs
       joypad1.PadPortEnable => PadPortEnable1,
       joypad1.PadPortAnalog => PadPortAnalog1,

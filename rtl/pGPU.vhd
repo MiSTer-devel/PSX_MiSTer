@@ -69,6 +69,8 @@ package pGPU is
       r              : std_logic_vector(7 downto 0);
       g              : std_logic_vector(7 downto 0);
       b              : std_logic_vector(7 downto 0);
+      isPal          : std_logic;
+      hResMode       : std_logic_vector(2 downto 0);
    end record; 
    
 end package;

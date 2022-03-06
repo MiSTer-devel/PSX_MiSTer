@@ -130,6 +130,8 @@ entity psx_top is
       video_r               : out std_logic_vector(7 downto 0);
       video_g               : out std_logic_vector(7 downto 0);
       video_b               : out std_logic_vector(7 downto 0);
+      video_isPal           : out std_logic;
+      video_hResMode        : out std_logic_vector(2 downto 0);
 
       joypad1               : in  joypad_t;
       joypad2               : in  joypad_t;
@@ -1324,6 +1326,8 @@ begin
       video_r              => video_r, 
       video_g              => video_g, 
       video_b              => video_b, 
+      video_isPal          => video_isPal, 
+      video_hResMode       => video_hResMode, 
       
 -- synthesis translate_off
       export_gtm           => export_gtm,

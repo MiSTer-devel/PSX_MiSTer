@@ -119,9 +119,11 @@ begin
             if (videoout_settings.GPUSTAT_PalVideoMode = '1' and videoout_settings.pal60 = '0') then
                htotal <= 2169; -- overwritten below
                vtotal <= 314;
+               videoout_out.isPal <= '1';
             else
                htotal <= 2173; -- overwritten below
                vtotal <= 263;
+               videoout_out.isPal <= '0';
             end if;
             
             -- todo: different values for ntsc
@@ -275,13 +277,13 @@ begin
          videoout_out.ce <= '0';
          
          if (videoout_settings.GPUSTAT_HorRes2 = '1') then
-            clkDiv  <= 9; -- 368
+            clkDiv  <= 9; videoout_out.hResMode <= "010"; -- 368
          else
             case (videoout_settings.GPUSTAT_HorRes1) is
-               when "00" => clkDiv <= 12; -- 256;
-               when "01" => clkDiv <= 10; -- 320;
-               when "10" => clkDiv <= 6;  -- 512;
-               when "11" => clkDiv <= 5;  -- 640;
+               when "00" => clkDiv <= 12; videoout_out.hResMode <= "100"; -- 256;
+               when "01" => clkDiv <= 10; videoout_out.hResMode <= "011"; -- 320;
+               when "10" => clkDiv <= 6;  videoout_out.hResMode <= "001"; -- 512;
+               when "11" => clkDiv <= 5;  videoout_out.hResMode <= "000"; -- 640;
                when others => null;
             end case;
          end if;

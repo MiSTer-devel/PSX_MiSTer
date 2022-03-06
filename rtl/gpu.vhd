@@ -92,6 +92,8 @@ entity gpu is
       video_r              : out std_logic_vector(7 downto 0);
       video_g              : out std_logic_vector(7 downto 0);
       video_b              : out std_logic_vector(7 downto 0);
+      video_isPal          : out std_logic;
+      video_hResMode       : out std_logic_vector(2 downto 0);
       
 -- synthesis translate_off
       export_gtm           : out unsigned(11 downto 0);
@@ -1548,6 +1550,8 @@ begin
    video_r              <= videoout_out.r;             
    video_g              <= videoout_out.g;             
    video_b              <= videoout_out.b;             
+   video_isPal          <= videoout_out.isPal;
+   video_hResMode       <= videoout_out.hResMode;
    
 --##############################################################
 --############################### savestates

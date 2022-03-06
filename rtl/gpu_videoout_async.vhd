@@ -207,9 +207,11 @@ begin
             if (videoout_settings.GPUSTAT_PalVideoMode = '1' and videoout_settings.pal60 = '0') then
                htotal <= 3406;
                vtotal <= 314;
+               videoout_out.isPal <= '1';
             else
                htotal <= 3413;
                vtotal <= 263;
+               videoout_out.isPal <= '0';
             end if;
             
             if (videoout_settings.vDisplayRange( 9 downto  0) < 314) then vDisplayStart <= to_integer(videoout_settings.vDisplayRange( 9 downto  0)); else vDisplayStart <= 314; end if;
@@ -350,13 +352,13 @@ begin
          videoout_out.ce <= '0';
          
          if (videoout_settings.GPUSTAT_HorRes2 = '1') then
-            clkDiv  <= 7; -- 368
+            clkDiv  <= 7; videoout_out.hResMode <= "010"; -- 368
          else
             case (videoout_settings.GPUSTAT_HorRes1) is
-               when "00" => clkDiv <= 10; -- 256;
-               when "01" => clkDiv <= 8;  -- 320;
-               when "10" => clkDiv <= 5;  -- 512;
-               when "11" => clkDiv <= 4;  -- 640;
+               when "00" => clkDiv <= 10; videoout_out.hResMode <= "100"; -- 256;
+               when "01" => clkDiv <= 8;  videoout_out.hResMode <= "011"; -- 320;
+               when "10" => clkDiv <= 5;  videoout_out.hResMode <= "001"; -- 512;
+               when "11" => clkDiv <= 4;  videoout_out.hResMode <= "000"; -- 640;
                when others => null;
             end case;
          end if;
@@ -506,20 +508,23 @@ begin
                
             end case;
             
-            hsync_start <= 1;
-            hsync_end   <= htotal - (32 * clkDiv);
+            hsync_start <= 32;
             
             if (nextHCount = hsync_start) then 
+               hsync_end <= 252;
                videoout_out.hsync <= '1'; 
-               if (vsyncCount = 5) then 
+               if (vsyncCount = 4) then 
                   videoout_out.vsync <= '1';
                end if;
             end if;
                
-            if (nextHCount = hsync_end  ) then 
-               videoout_out.hsync <= '0';
-               if (vsyncCount = 8) then 
-                  videoout_out.vsync <= '0';
+            if (hsync_end > 0) then
+               hsync_end <= hsync_end - 1;
+               if (hsync_end = 1) then 
+                  videoout_out.hsync <= '0';
+                  if (vsyncCount = 7) then 
+                     videoout_out.vsync <= '0';
+                  end if;
                end if;
             end if;
          
