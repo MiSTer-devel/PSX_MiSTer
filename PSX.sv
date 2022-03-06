@@ -275,12 +275,12 @@ always @(posedge CLK_50M) begin : cfg_block
 	reg [3:0] state = 0;
 
 	pald  <= status[40];
-	pald2 <= pald;	
-   
-   pdbg  <= syncVideoClock;
-	pdbg2 <= pdbg;   
-   
-   pffw  <= fast_forward;
+	pald2 <= pald;
+
+	pdbg  <= syncVideoClock;
+	pdbg2 <= pdbg;
+
+	pffw  <= fast_forward;
 	pffw2 <= pffw;
 
 	cfg_write <= 0;
@@ -351,7 +351,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXX     X
+// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXX    XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -392,6 +392,7 @@ parameter CONF_STR = {
 	"P1o01,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"P1o23,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"P1-;",
+	"P1oU,Fixed HBlank,On,Off;",
 	"P1OM,Dithering,On,Off;",
 	"P1o9,Deinterlacing,Weave,Bob;",
 	"P1-;",
@@ -1179,22 +1180,14 @@ video_freak video_freak
 	.SCALE(status[35:34])
 );
 
-//max visible horizontal pixels is 640, max pixel clock is 53.693175 mhz / 4
-	// 256 -> 10 340
-	// 320 -> 8  425
-	// 368 -> 7  486
-	// 512 -> 5  681
-	// 640 -> 4  852
+// Res  Div Padding
+// 256  10  +25
+// 320  8   +32
+// 368  7   +37
+// 512  5   +51
+// 640  4   +64
 
-	// 256 -> +25
-	// 320 -> +32
-	// 368 -> +37
-	// 512 -> +51
-	// 640 -> +64
-
-logic [23:0] aspect_ratio_lut[64];
-
-assign aspect_ratio_lut = '{
+reg [23:0] aspect_ratio_lut_ntsc[64] = '{
 	24'hF89951, 24'hB6B6E2, 24'hE678BA, 24'hB006B3, 24'h40F27C, 24'h20013B, 24'h71D466, 24'h58036B,
 	24'h7B34CF, 24'hB2F705, 24'h041029, 24'hB006F9, 24'hF719D6, 24'hF3D9C1, 24'hF7B9F5, 24'h2C01C7,
 	24'h400299, 24'hE2D940, 24'h097063, 24'hB0073F, 24'h521365, 24'hB61791, 24'h86D5A1, 24'h5803B1,
@@ -1205,14 +1198,24 @@ assign aspect_ratio_lut = '{
 	24'hDA3A8D, 24'hF43BDB, 24'h6B1538, 24'hB0089D, 24'h400325, 24'hEF5BCE, 24'h916733, 24'h02C023
 };
 
+reg [23:0] aspect_ratio_lut_pal[64] = '{
+	24'hCCB660, 24'h45422B, 24'h23E121, 24'h9FB50D, 24'hD536C7, 24'h800417, 24'h0B505D, 24'h07A03F,
+	24'hD9670D, 24'h7853EC, 24'hB3F5E5, 24'hCA56A9, 24'hEFF7F0, 24'hE947C1, 24'hDFF77B, 24'h5892F9,
+	24'h629353, 24'hF74861, 24'hE907EF, 24'h43F253, 24'h4E32B0, 24'h1270A3, 24'hD13742, 24'hB1A631,
+	24'h6833A6, 24'h5482F9, 24'hF3889B, 24'hC006D1, 24'hBAC6A9, 24'hC4D70D, 24'hAA5621, 24'hCA374F,
+	24'hD14799, 24'h5132F6, 24'h981592, 24'hE29856, 24'h94F581, 24'hCF77B3, 24'h9DD5E2, 24'hCB979F,
+	24'hD307EF, 24'hB066A9, 24'hDFA87B, 24'hE618C3, 24'h4852C4, 24'h2BF1B0, 24'h4C12EF, 24'hB006D1,
+	24'hA7F688, 24'hF01960, 24'h26C185, 24'h06403F, 24'h7FC50D, 24'hFB59FA, 24'hEA2955, 24'hFACA09,
+	24'hA5C6A9, 24'h67542B, 24'h7EA521, 24'h89F59C, 24'h72D4B0, 24'hD16895, 24'hEF89DB, 24'h21015D
+};
+
 logic [2:0] pix_clk_mode;
 logic [11:0] h_pos, v_pos, v_total;
 logic [11:0] hb_start_lut[8];
 logic [11:0] hb_end_lut[8];
 logic [11:0] hb_start, hb_end;
 
-assign {aspect_x, aspect_y} = aspect_ratio_lut[v_total];
-
+// FIXME: this should be adjusted if hsync changes size to maintain center
 assign hb_start_lut = '{12'd63,  12'd50,  12'd36,  12'd31,  12'd24,  12'd0, 12'd0, 12'd0};
 assign hb_end_lut =   '{12'd767, 12'd613, 12'd441, 12'd383, 12'd305, 12'd0, 12'd0, 12'd0};
 
@@ -1240,6 +1243,8 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 	video.red <= (vbl || hbl) ? 8'd0 : r;
 	video.green <= (vbl || hbl) ? 8'd0 : g;
 	video.blue <= (vbl || hbl) ? 8'd0 : b;
+	//FIXME: This should use the PAL signal from the core rather than menu
+	{aspect_x, aspect_y} <= status[40] ? aspect_ratio_lut_pal[v_total] : aspect_ratio_lut_ntsc[v_total];
 
 	h_pos <= h_pos + 1'd1;
 	if (video.hs && ~hs) begin
@@ -1263,6 +1268,8 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 		video.hb <= 0;
 	if (h_pos == hb_end)
 		video.hb <= 1;
+	if (status[62])
+		video.hb <= hbl;
 	
 end
 
