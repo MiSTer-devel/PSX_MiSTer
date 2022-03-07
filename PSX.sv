@@ -1211,7 +1211,7 @@ reg [23:0] aspect_ratio_lut_pal[64] = '{
 	24'hA5C6A9, 24'h67542B, 24'h7EA521, 24'h89F59C, 24'h72D4B0, 24'hD16895, 24'hEF89DB, 24'h21015D
 };
 
-logic [11:0] h_pos, v_pos, v_total;
+logic [11:0] h_pos, v_pos, vb_pos, v_total;
 logic [11:0] hb_start_lut[8];
 logic [11:0] hb_end_lut[8];
 logic [11:0] hb_start, hb_end;
@@ -1226,7 +1226,8 @@ always_comb begin
 end
 
 always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
-	logic old_hs, old_vs;
+	logic old_vb;
+	old_vb <= vbl;
 	video.hs <= hs;
 	video.vs <= vs;
 	video.vb <= vbl;
@@ -1237,10 +1238,15 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 	{aspect_x, aspect_y} <= video_isPal ? aspect_ratio_lut_pal[v_total] : aspect_ratio_lut_ntsc[v_total];
 
 	h_pos <= h_pos + 1'd1;
+	if (~old_vb && vbl)
+		vb_pos <= 0;
+
 	if (video.hs && ~hs) begin
 		h_pos <= 0;
 		if (~vbl)
 			v_pos <= v_pos + 1'd1;
+		else
+			vb_pos <= vb_pos + 1'd1;
 	end
 	
 	if (~video.vs && vs) begin
@@ -1253,6 +1259,9 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 		else
 			v_total <= v_pos - 8'd194;
 	end
+	
+	if (vb_pos > 70)
+		video.vb <= 0;
 
 	if (h_pos == hb_start)
 		video.hb <= 0;
