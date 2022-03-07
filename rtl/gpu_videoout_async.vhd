@@ -18,8 +18,8 @@ entity gpu_videoout_async is
       videoout_settings_1x    : in  tvideoout_settings;
       videoout_reports_1x     : out tvideoout_reports;
 
-      videoout_request_2x     : out tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
-      videoout_request_vid    : out tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
+      videoout_request_2x     : out tvideoout_request := ('0', (others => '0'), (others => '0'), 0, (others => '0'));
+      videoout_request_vid    : out tvideoout_request := ('0', (others => '0'), (others => '0'), 0, (others => '0'));
       
       videoout_readAddr       : out unsigned(10 downto 0) := (others => '0');
       videoout_pixelRead      : in  std_logic_vector(15 downto 0);
@@ -60,9 +60,9 @@ architecture arch of gpu_videoout_async is
    
    -- clkvid -> clk2x
    
-   signal videoout_request_s2  : tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
-   signal videoout_request_s1  : tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
-   signal videoout_request     : tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
+   signal videoout_request_s2  : tvideoout_request := ('0', (others => '0'), (others => '0'), 0, (others => '0'));
+   signal videoout_request_s1  : tvideoout_request := ('0', (others => '0'), (others => '0'), 0, (others => '0'));
+   signal videoout_request     : tvideoout_request := ('0', (others => '0'), (others => '0'), 0, (others => '0'));
    
    -- timing
    signal lineIn           : unsigned(8 downto 0) := (others => '0');
@@ -74,6 +74,7 @@ architecture arch of gpu_videoout_async is
    signal vtotal           : integer range 263 to 314;
    signal vDisplayStart    : integer range 0 to 314;
    signal vDisplayEnd      : integer range 0 to 314;
+   signal vDisplayOffset   : integer range 0 to 314;
    
    -- output   
    type tState is
@@ -90,7 +91,7 @@ architecture arch of gpu_videoout_async is
       
    signal clkDiv           : integer range 4 to 10 := 4; 
    signal clkCnt           : integer range 0 to 10 := 0;
-   signal xmax             : integer range 0 to 1023;
+   signal xmax             : integer range 0 to 1023 := 256;
       
    signal hsync_start      : integer range 0 to 4095;
    signal hsync_end        : integer range 0 to 4095;
@@ -172,6 +173,8 @@ begin
    videoout_ss_out.GPUSTAT_InterlaceField <= videoout_reports.GPUSTAT_InterlaceField;
    videoout_ss_out.GPUSTAT_DrawingOddline <= videoout_reports.GPUSTAT_DrawingOddline;
 
+   videoout_request.fetchsize <= to_unsigned(xmax, 10);
+
    process (clkvid)
       variable mode480i                  : std_logic;
       variable isVsync                   : std_logic;
@@ -216,6 +219,14 @@ begin
             
             if (videoout_settings.vDisplayRange( 9 downto  0) < 314) then vDisplayStart <= to_integer(videoout_settings.vDisplayRange( 9 downto  0)); else vDisplayStart <= 314; end if;
             if (videoout_settings.vDisplayRange(19 downto 10) < 314) then vDisplayEnd   <= to_integer(videoout_settings.vDisplayRange(19 downto 10)); else vDisplayEnd   <= 314; end if;
+            
+            if ((vDisplayEnd - vDisplayStart) > 240) then
+               vDisplayOffset <= 0;
+            elsif ((vDisplayEnd - vDisplayStart) < 192) then
+               vDisplayOffset <= 28;
+            else
+               vDisplayOffset <= (240 - (vDisplayEnd - vDisplayStart)) / 2;
+            end if;
               
             -- gpu timing count
             if (nextHCount > 1) then
@@ -414,7 +425,6 @@ begin
                         videoout_readAddr(10) <= lineIn(1);
                      end if;
                      videoout_request.xpos <= 0;
-                     xmax                  <= to_integer(videoout_out.DisplayWidth);
                      clkCnt                <= 0;
                      hCropCount            <= (others => '0');
                      hCropPixels           <= (others => '0');
@@ -447,14 +457,15 @@ begin
                         videoout_out.b      <= pixelData_B;
                      end if;
                      
-                     if (videoout_request.xpos < xmax) then
+                     if (videoout_request.xpos < 1023) then
                         videoout_request.xpos <= videoout_request.xpos + 1;
                      end if;
                      
                      hCropPixels <= hCropPixels + 1;
-                     if (((hCropCount + 1) >= videoout_settings.hDisplayRange(23 downto 12)) or (videoout_request.xpos + 1 = xmax)) then
+                     if (((hCropCount + 1) >= videoout_settings.hDisplayRange(23 downto 12))) then
                         if ((hCropPixels + 1) = 0) then
                            state       <= WAITNEWLINE;
+                           xmax        <= videoout_request.xpos + 1;
                         end if;
                      end if;
                      
@@ -513,7 +524,7 @@ begin
             if (nextHCount = hsync_start) then 
                hsync_end <= 252;
                videoout_out.hsync <= '1'; 
-               if (vsyncCount = 4) then 
+               if (vsyncCount = 4 + vDisplayOffset) then 
                   videoout_out.vsync <= '1';
                end if;
             end if;
@@ -522,7 +533,7 @@ begin
                hsync_end <= hsync_end - 1;
                if (hsync_end = 1) then 
                   videoout_out.hsync <= '0';
-                  if (vsyncCount = 7) then 
+                  if (vsyncCount = 7 + vDisplayOffset) then 
                      videoout_out.vsync <= '0';
                   end if;
                end if;

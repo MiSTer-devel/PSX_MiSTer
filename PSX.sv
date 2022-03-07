@@ -1189,7 +1189,7 @@ video_freak video_freak
 // 512  5   +51
 // 640  4   +64
 
-reg [23:0] aspect_ratio_lut_ntsc[64] = '{
+localparam reg [23:0] aspect_ratio_lut_ntsc[64] = '{
 	24'hF89951, 24'hB6B6E2, 24'hE678BA, 24'hB006B3, 24'h40F27C, 24'h20013B, 24'h71D466, 24'h58036B,
 	24'h7B34CF, 24'hB2F705, 24'h041029, 24'hB006F9, 24'hF719D6, 24'hF3D9C1, 24'hF7B9F5, 24'h2C01C7,
 	24'h400299, 24'hE2D940, 24'h097063, 24'hB0073F, 24'h521365, 24'hB61791, 24'h86D5A1, 24'h5803B1,
@@ -1200,7 +1200,7 @@ reg [23:0] aspect_ratio_lut_ntsc[64] = '{
 	24'hDA3A8D, 24'hF43BDB, 24'h6B1538, 24'hB0089D, 24'h400325, 24'hEF5BCE, 24'h916733, 24'h02C023
 };
 
-reg [23:0] aspect_ratio_lut_pal[64] = '{
+localparam reg [23:0] aspect_ratio_lut_pal[64] = '{
 	24'hCCB660, 24'h45422B, 24'h23E121, 24'h9FB50D, 24'hD536C7, 24'h800417, 24'h0B505D, 24'h07A03F,
 	24'hD9670D, 24'h7853EC, 24'hB3F5E5, 24'hCA56A9, 24'hEFF7F0, 24'hE947C1, 24'hDFF77B, 24'h5892F9,
 	24'h629353, 24'hF74861, 24'hE907EF, 24'h43F253, 24'h4E32B0, 24'h1270A3, 24'hD13742, 24'hB1A631,

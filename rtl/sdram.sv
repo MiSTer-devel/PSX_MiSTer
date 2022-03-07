@@ -311,7 +311,7 @@ always @(posedge clk) begin
                ch2_rq     <= 0;
                command    <= CMD_ACTIVE;
                state      <= STATE_WAIT;
-               ch1_reqprocessed_ramclock <= 1;
+               ch2_ready_ramclock <= 1;
             end else if(ch3_rq) begin
                {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch3_be[1:0], ch3_rnw, ch3_addr[25:1]};
                chip       <= ch3_addr[26];
@@ -356,7 +356,6 @@ always @(posedge clk) begin
                command              <= CMD_WRITE;
                SDRAM_DQ             <= saved_data[31:16];
                SDRAM_A[12:11]       <= ~saved_be[3:2];
-               ch2_ready_ramclock   <= 1;
             end
             else begin
                state                <= STATE_IDLE_2;

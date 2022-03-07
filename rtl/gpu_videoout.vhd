@@ -61,7 +61,6 @@ architecture arch of gpu_videoout is
 
    signal DisplayOffsetX            : unsigned( 9 downto 0) := (others => '0'); 
    signal DisplayOffsetY            : unsigned( 8 downto 0) := (others => '0'); 
-   signal DisplayWidth              : unsigned( 9 downto 0) := (others => '0');
          
    -- muxing      
    signal videoout_reports_s        : tvideoout_reports;
@@ -205,18 +204,6 @@ begin
    process (clk2x)
    begin
       if rising_edge(clk2x) then
-      
-         if (videoout_settings.GPUSTAT_HorRes2 = '1') then
-            DisplayWidth  <= to_unsigned(368, 10);
-         else
-            case (videoout_settings.GPUSTAT_HorRes1) is
-               when "00" => DisplayWidth <= to_unsigned(256, 10);
-               when "01" => DisplayWidth <= to_unsigned(320, 10);
-               when "10" => DisplayWidth <= to_unsigned(512, 10);
-               when "11" => DisplayWidth <= to_unsigned(640, 10);
-               when others => null;
-            end case;
-         end if;
          
          if (reset = '1') then
          
@@ -246,9 +233,9 @@ begin
                         fillAddr(8) <= videoout_request_clk2x.lineInNext(1);
                      end if;
                      if (videoout_settings.GPUSTAT_ColorDepth24 = '1') then
-                        reqSize <= resize(DisplayWidth, 11) + resize(DisplayWidth(9 downto 1), 11);
+                        reqSize <= resize(videoout_request_clk2x.fetchsize, 11) + resize(videoout_request_clk2x.fetchsize(9 downto 1), 11);
                      else
-                        reqSize <= '0' & DisplayWidth;
+                        reqSize <= '0' & videoout_request_clk2x.fetchsize;
                      end if;
                   end if;
 
@@ -391,8 +378,8 @@ begin
    );
 
    -- Map gun coordinates (0-255 X, Y) to screen positions
-   Gun1X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * Gun1X), 18) (17 downto 8)); -- DisplayWidth is async!, shouldn't matter here
-   Gun2X_screen <= to_integer(to_unsigned(to_integer(DisplayWidth * Gun2X), 18) (17 downto 8));
+   Gun1X_screen <= to_integer(to_unsigned(to_integer(videoout_out.DisplayWidth * Gun1X), 18) (17 downto 8));
+   Gun2X_screen <= to_integer(to_unsigned(to_integer(videoout_out.DisplayWidth * Gun2X), 18) (17 downto 8));
 
    Gun1Y_screen <= '0' & Gun1Y_scanlines when videoout_settings.GPUSTAT_VerRes = '0' else Gun1Y_scanlines & '0';
    Gun2Y_screen <= '0' & Gun2Y_scanlines when videoout_settings.GPUSTAT_VerRes = '0' else Gun2Y_scanlines & '0';

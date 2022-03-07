@@ -845,7 +845,7 @@ begin
             requestOnFly <= requestOnFlyNew;
             
             -- fifo Out
-            if (ram_reqprocessed = '1') then
+            if (ram_done = '1') then
                ramwrite_pending <= '0';
             end if;
             
@@ -900,7 +900,7 @@ begin
       Empty    => fifoIn_Empty   
    );
    
-   fifoOut_Rd <= ce when (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_reqprocessed = '1')) else '0';
+   fifoOut_Rd <= ce when (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_done = '1')) else '0';
    
    DMAfifoOut: entity mem.SyncFifoFallThrough
    generic map
