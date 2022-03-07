@@ -17,7 +17,7 @@ entity gpu_videoout_sync is
       videoout_settings       : in  tvideoout_settings;
       videoout_reports        : out tvideoout_reports;
 
-      videoout_request        : out tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
+      videoout_request        : out tvideoout_request := ('0', (others => '0'), (others => '0'), 0, (others => '0'));
       
       videoout_readAddr       : out unsigned(10 downto 0) := (others => '0');
       videoout_pixelRead      : in  std_logic_vector(15 downto 0);
@@ -81,6 +81,8 @@ begin
    videoout_ss_out.activeLineLSB          <= videoout_reports.activeLineLSB;                          
    videoout_ss_out.GPUSTAT_InterlaceField <= videoout_reports.GPUSTAT_InterlaceField;
    videoout_ss_out.GPUSTAT_DrawingOddline <= videoout_reports.GPUSTAT_DrawingOddline;
+
+   videoout_request.fetchsize <= videoout_out.DisplayWidth;
 
    process (clk1x)
       variable mode480i                  : std_logic;

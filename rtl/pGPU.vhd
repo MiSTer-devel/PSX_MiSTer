@@ -50,6 +50,7 @@ package pGPU is
    
    type tvideoout_request is record
       fetch                   : std_logic;
+      fetchsize               : unsigned(9 downto 0);
       lineInNext              : unsigned(8 downto 0);
       xpos                    : integer range 0 to 1023;
       lineDisp                : unsigned(8 downto 0);
