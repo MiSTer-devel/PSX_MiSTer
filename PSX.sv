@@ -1190,28 +1190,28 @@ video_freak video_freak
 // 640  4   +64
 
 localparam reg [23:0] aspect_ratio_lut_ntsc[64] = '{
-	24'hF89951, 24'hB6B6E2, 24'hE678BA, 24'hB006B3, 24'h40F27C, 24'h20013B, 24'h71D466, 24'h58036B,
-	24'h7B34CF, 24'hB2F705, 24'h041029, 24'hB006F9, 24'hF719D6, 24'hF3D9C1, 24'hF7B9F5, 24'h2C01C7,
-	24'h400299, 24'hE2D940, 24'h097063, 24'hB0073F, 24'h521365, 24'hB61791, 24'h86D5A1, 24'h5803B1,
-	24'hD038C6, 24'hFAEA9F, 24'h7114CF, 24'h1000AF, 24'hE5D9DD, 24'hE119B4, 24'hED5A47, 24'h1600F5,
-	24'hDEB9BB, 24'hF31AAB, 24'hDAB9A4, 24'hB007CB, 24'h3AF29F, 24'hEADA7D, 24'h4002DF, 24'h5803F7,
-	24'hBAD874, 24'hFFDBA0, 24'hFA3B6B, 24'hB00811, 24'hE05A53, 24'hF1AB2B, 24'hCDB98C, 24'h2C020D,
-	24'h43B32B, 24'h200181, 24'hF3FB83, 24'hB00857, 24'h67F4F2, 24'hE31AD9, 24'hF5BBC9, 24'h58043D,
-	24'hDA3A8D, 24'hF43BDB, 24'h6B1538, 24'hB0089D, 24'h400325, 24'hEF5BCE, 24'h916733, 24'h02C023
+	24'h6E0411, 24'h2DF1B5, 24'h44D292, 24'h1160A7, 24'hB4F6D4, 24'hD49810, 24'hD057F1, 24'h91B595,
+	24'hB006C7, 24'hF959A6, 24'hE338D6, 24'hC1378D, 24'hC557C0, 24'hF579B0, 24'h7E1500, 24'hABD6D9,
+	24'hFE3A2E, 24'hD3D886, 24'h54736A, 24'hFF3A5E, 24'hE19935, 24'hF42A03, 24'h356233, 24'hFEBA8B,
+	24'h957637, 24'hEFAA03, 24'h43F2DA, 24'hA6F70A, 24'h20015B, 24'h24D191, 24'h72E4E9, 24'hC1E853,
+	24'hDC097D, 24'hD09909, 24'hFE8B13, 24'hD5E959, 24'hFEFB31, 24'h2B81EB, 24'h8A5620, 24'h2B91F0,
+	24'h2AF1EB, 24'hD3F982, 24'hED9AB4, 24'h163101, 24'h724531, 24'hDCBA12, 24'hC50907, 24'hFB7B92,
+	24'h580411, 24'hFDDBC7, 24'hAA77F1, 24'hD259D7, 24'h2ED233, 24'h2431B5, 24'hC1992B, 24'h20F191,
+	24'h7665A7, 24'h42D334, 24'hD09A0A, 24'hF17BAB, 24'hFFFC6B, 24'h6B653B, 24'h5153FA, 24'hFD9C73
 };
 
 localparam reg [23:0] aspect_ratio_lut_pal[64] = '{
-	24'hCCB660, 24'h45422B, 24'h23E121, 24'h9FB50D, 24'hD536C7, 24'h800417, 24'h0B505D, 24'h07A03F,
-	24'hD9670D, 24'h7853EC, 24'hB3F5E5, 24'hCA56A9, 24'hEFF7F0, 24'hE947C1, 24'hDFF77B, 24'h5892F9,
-	24'h629353, 24'hF74861, 24'hE907EF, 24'h43F253, 24'h4E32B0, 24'h1270A3, 24'hD13742, 24'hB1A631,
-	24'h6833A6, 24'h5482F9, 24'hF3889B, 24'hC006D1, 24'hBAC6A9, 24'hC4D70D, 24'hAA5621, 24'hCA374F,
-	24'hD14799, 24'h5132F6, 24'h981592, 24'hE29856, 24'h94F581, 24'hCF77B3, 24'h9DD5E2, 24'hCB979F,
-	24'hD307EF, 24'hB066A9, 24'hDFA87B, 24'hE618C3, 24'h4852C4, 24'h2BF1B0, 24'h4C12EF, 24'hB006D1,
-	24'hA7F688, 24'hF01960, 24'h26C185, 24'h06403F, 24'h7FC50D, 24'hFB59FA, 24'hEA2955, 24'hFACA09,
-	24'hA5C6A9, 24'h67542B, 24'h7EA521, 24'h89F59C, 24'h72D4B0, 24'hD16895, 24'hEF89DB, 24'h21015D
+	24'h2C015D, 24'hCCB660, 24'h45422B, 24'h23E121, 24'h9FB50D, 24'hD536C7, 24'h800417, 24'h0B505D,
+	24'h07A03F, 24'hD9670D, 24'h7853EC, 24'hB3F5E5, 24'hCA56A9, 24'hEFF7F0, 24'hE947C1, 24'hDFF77B,
+	24'h5892F9, 24'h629353, 24'hF74861, 24'hE907EF, 24'h43F253, 24'h4E32B0, 24'h1270A3, 24'hD13742,
+	24'hB1A631, 24'h6833A6, 24'h5482F9, 24'hF3889B, 24'hC006D1, 24'hBAC6A9, 24'hC4D70D, 24'hAA5621,
+	24'hCA374F, 24'hD14799, 24'h5132F6, 24'h981592, 24'hE29856, 24'h94F581, 24'hCF77B3, 24'h9DD5E2,
+	24'hCB979F, 24'hD307EF, 24'hB066A9, 24'hDFA87B, 24'hE618C3, 24'h4852C4, 24'h2BF1B0, 24'h4C12EF,
+	24'hB006D1, 24'hA7F688, 24'hF01960, 24'h26C185, 24'h06403F, 24'h7FC50D, 24'hFB59FA, 24'hEA2955,
+	24'hFACA09, 24'hA5C6A9, 24'h67542B, 24'h7EA521, 24'h89F59C, 24'h72D4B0, 24'hD16895, 24'hEF89DB
 };
 
-logic [11:0] h_pos, v_pos, v_total;
+logic [11:0] h_pos, v_pos, vb_pos, v_total;
 logic [11:0] hb_start_lut[8];
 logic [11:0] hb_end_lut[8];
 logic [11:0] hb_start, hb_end;
@@ -1226,7 +1226,8 @@ always_comb begin
 end
 
 always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
-	logic old_hs, old_vs;
+	logic old_vb;
+	old_vb <= vbl;
 	video.hs <= hs;
 	video.vs <= vs;
 	video.vb <= vbl;
@@ -1237,22 +1238,30 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 	{aspect_x, aspect_y} <= video_isPal ? aspect_ratio_lut_pal[v_total] : aspect_ratio_lut_ntsc[v_total];
 
 	h_pos <= h_pos + 1'd1;
+	if (~old_vb && vbl)
+		vb_pos <= 0;
+
 	if (video.hs && ~hs) begin
 		h_pos <= 0;
 		if (~vbl)
 			v_pos <= v_pos + 1'd1;
+		else
+			vb_pos <= vb_pos + 1'd1;
 	end
 	
 	if (~video.vs && vs) begin
 		v_pos <= 0;
 
-		if (v_pos < 194)
+		if (v_pos < 192)
 			v_total <= 6'd0;
-		else if (v_pos > 256)
+		else if (v_pos > 255)
 			v_total <= 6'd63;
 		else
-			v_total <= v_pos - 8'd194;
+			v_total <= v_pos - 8'd192;
 	end
+	
+	if (vb_pos > (video_isPal ? 97 : 71))
+		video.vb <= 0;
 
 	if (h_pos == hb_start)
 		video.hb <= 0;
