@@ -9,6 +9,7 @@ entity sdram_model3x is
    generic
    (
       DOREFRESH         : std_logic := '0';
+      SLOWWRITE         : std_logic := '0';
       INITFILE          : string := "NONE";
       SCRIPTLOADING     : std_logic := '0';
       FILELOADING       : std_logic := '0'
@@ -201,7 +202,11 @@ begin
                if (be(0) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 0) := to_integer(unsigned(di( 7 downto  0))); end if;
                req_buffer      <= '0';
                rnw_128_buffer  <= '0';
-               done_3x         <= '1';
+               if (SLOWWRITE = '1') then
+                  reqprocessed_3x <= '1';
+               else
+                  done_3x         <= '1';
+               end if;
                state           <= STATE_WAIT;
                
             elsif ((req = '1' or req_buffer = '1') and rnw = '1') then
@@ -226,6 +231,9 @@ begin
          
          when STATE_RW2 => 
             state   <= STATE_IDLE_2;
+            if (SLOWWRITE = '1') then
+               done_3x         <= '1';
+            end if;
          
          when STATE_IDLE_9 => state <= STATE_IDLE_8;
          when STATE_IDLE_8 => state <= STATE_IDLE_7;

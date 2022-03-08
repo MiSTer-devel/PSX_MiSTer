@@ -182,7 +182,7 @@ begin
 
    dmaOn <= '1' when (dmaState /= OFF) else '0';
 
-   ram_refresh <= '1' when ((reset = '1') or (dmaState = WAITING and cpuPaused = '1' and waitcnt = 9)) else '0';
+   ram_refresh <= '1' when (reset = '1') else '0';
    ram_be      <= "1111";
    ram_128     <= '1';
 
@@ -217,6 +217,9 @@ begin
    DMA_SPU_write     <= fifoIn_Dout(15 downto 0) when fifoIn_Valid = '1' else fifoIn_Dout(31 downto 16);
 
    readStall <= '1' when (activeChannel = 2 and toDevice = '0' and gpu_dmaRequest = '0') else '0';
+
+   chopsize     <= to_unsigned(1, 8) sll to_integer(dmaSettings.D_CHCR(18 downto 16));
+   chopwaittime <= to_unsigned(1, 8) sll to_integer(dmaSettings.D_CHCR(22 downto 20));
 
    gSSout: for i in 0 to 6 generate
    begin
@@ -421,7 +424,7 @@ begin
                dmaArray(triggerchannel).channelOn       <= '1';
                
                dmaState      <= WAITING;
-               waitcnt       <= 9;
+               waitcnt       <= 8;
                isOn          <= '1';
                activeChannel <= triggerchannel;
                REP_target    <= 32;
@@ -477,11 +480,6 @@ begin
                when WAITING =>
                   if (waitcnt > 0 and cpuPaused = '1') then
                      waitcnt <= waitcnt - 1;
-                  end if;
-                  
-                  if (waitcnt = 9) then
-                     chopsize     <= to_unsigned(1, 8) sll to_integer(dmaSettings.D_CHCR(18 downto 16));
-                     chopwaittime <= to_unsigned(1, 8) sll to_integer(dmaSettings.D_CHCR(22 downto 20));
                   end if;
                   
                   if (waitcnt = 8) then
@@ -600,7 +598,7 @@ begin
                         autoread <= '0';
                      else
                         if (DMABLOCKATONCE = '1' and gpu_dmaRequest = '1') then
-                           waitcnt   <= 9;
+                           waitcnt   <= 8;
                            dmaState  <= WAITING;
                            autoread  <= '0';
                         else
@@ -714,7 +712,7 @@ begin
                               else
                                  if (DMABLOCKATONCE = '1' and gpu_dmaRequest = '1') then
                                     dmaState <= WAITING;
-                                    waitcnt  <= 10;
+                                    waitcnt  <= 8;
                                     autoread <= '0';
                                  else
                                     dmaState <= PAUSING;
@@ -804,6 +802,9 @@ begin
                      when "10" => -- linked list
                         wordcount      <= "0" & x"00" & unsigned(ram_dataRead(31 downto 24)); 
                         requiredDwords <= to_integer(unsigned(ram_dataRead(31 downto 24))) + 1;
+                        if (ram_dataRead(31 downto 24) = x"00") then
+                           autoread <= '0';
+                        end if;
                      
                      when others => null;
                   end case;

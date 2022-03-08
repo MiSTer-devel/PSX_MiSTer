@@ -13,6 +13,7 @@ entity psx_mister is
       clk2x                 : in  std_logic;  
       clkvid                : in  std_logic;  
       reset                 : in  std_logic;
+      isPaused              : out std_logic;
       -- commands 
       pause                 : in  std_logic;
       loadExe               : in  std_logic;
@@ -217,6 +218,7 @@ begin
       clk2x                 => clk2x,          
       clkvid                => clkvid,          
       reset                 => reset, 
+      isPaused              => isPaused, 
       -- commands 
       pause                 => pause,
       loadExe               => loadExe,

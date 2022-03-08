@@ -15,6 +15,8 @@ entity gpu_videoout_async is
       reset_1x                : in  std_logic;
       softReset_1x            : in  std_logic;
       
+      allowunpause1x          : out std_logic;
+      
       videoout_settings_1x    : in  tvideoout_settings;
       videoout_reports_1x     : out tvideoout_reports;
 
@@ -44,6 +46,7 @@ architecture arch of gpu_videoout_async is
    signal ce_s2                : std_logic;        
    signal ce_s1                : std_logic;        
    signal ce                   : std_logic;        
+   signal ce_1                 : std_logic;        
    
    signal reset_s2             : std_logic;        
    signal reset_s1             : std_logic;        
@@ -58,6 +61,10 @@ architecture arch of gpu_videoout_async is
    signal videoout_reports_s1  : tvideoout_reports;
    signal videoout_reports     : tvideoout_reports;
    
+   signal allowunpause         : std_logic;
+   signal allowunpause_s1      : std_logic;
+   signal allowunpause_s2      : std_logic;
+   
    -- clkvid -> clk2x
    
    signal videoout_request_s2  : tvideoout_request := ('0', (others => '0'), (others => '0'), 0, (others => '0'));
@@ -70,11 +77,16 @@ architecture arch of gpu_videoout_async is
    signal vpos             : integer range 0 to 511;
    signal vsyncCount       : integer range 0 to 511;
    
+   signal nextHCount_pause : integer range 0 to 4095;
+   signal vpos_pause       : integer range 0 to 511;
+   signal unpauseCnt       : integer range 0 to 3 := 0;
+   
    signal htotal           : integer range 3406 to 3413;
    signal vtotal           : integer range 263 to 314;
    signal vDisplayStart    : integer range 0 to 314;
    signal vDisplayEnd      : integer range 0 to 314;
    signal vDisplayOffset   : integer range 0 to 314;
+   signal shiftpal         : integer range 0 to 16;
    
    -- output   
    type tState is
@@ -146,7 +158,11 @@ begin
    
          videoout_reports_s1  <= videoout_reports;
          videoout_reports_s2  <= videoout_reports_s1;
-         videoout_reports_1x  <= videoout_reports_s2;         
+         videoout_reports_1x  <= videoout_reports_s2;   
+
+         allowunpause_s1      <= allowunpause;   
+         allowunpause_s2      <= allowunpause_s1;   
+         allowunpause1x       <= allowunpause_s2;   
 
       end if;
    end process;
@@ -163,7 +179,7 @@ begin
    
       end if;
    end process;
-
+   
    -- video timing
    videoout_ss_out.interlacedDisplayField <= videoout_reports.interlacedDisplayField;                 
    videoout_ss_out.nextHCount             <= std_logic_vector(to_unsigned(nextHCount, 12));                             
@@ -203,9 +219,31 @@ begin
             videoout_reports.activeLineLSB            <= videoout_ss_in.activeLineLSB;
             videoout_reports.GPUSTAT_InterlaceField   <= videoout_ss_in.GPUSTAT_InterlaceField;
             videoout_reports.GPUSTAT_DrawingOddline   <= videoout_ss_in.GPUSTAT_DrawingOddline;
-                  
-         elsif (ce = '1') then
+            
+            allowunpause     <= '1';
+            unpauseCnt       <= 3;
+            nextHCount_pause <= 1;
+            vpos_pause       <= 0;
+            
+         else
          
+            ce_1 <= ce;
+            if (ce_1 = '1' and ce = '0') then
+               nextHCount_pause <= nextHCount;
+               vpos_pause       <= vpos;
+            end if;
+            
+            if (unpauseCnt > 0) then
+               unpauseCnt <= unpauseCnt - 1;
+            else
+               allowunpause <= '0';
+            end if;
+            
+            if (vpos_pause = vpos and nextHCount_pause = nextHCount) then
+               allowunpause <= '1';
+               unpauseCnt   <= 3;
+            end if;
+            
             --gpu timing calc
             if (videoout_settings.GPUSTAT_PalVideoMode = '1' and videoout_settings.pal60 = '0') then
                htotal <= 3406;
@@ -219,6 +257,19 @@ begin
             
             if (videoout_settings.vDisplayRange( 9 downto  0) < 314) then vDisplayStart <= to_integer(videoout_settings.vDisplayRange( 9 downto  0)); else vDisplayStart <= 314; end if;
             if (videoout_settings.vDisplayRange(19 downto 10) < 314) then vDisplayEnd   <= to_integer(videoout_settings.vDisplayRange(19 downto 10)); else vDisplayEnd   <= 314; end if;
+            
+            shiftpal <= 0;
+            if (videoout_out.isPal = '1') then
+               if (videoout_settings.GPUSTAT_VerRes = '1') then
+                  if ((vDisplayEnd - vDisplayStart) > 240) then
+                     shiftpal <= 256 - (vDisplayEnd - vDisplayStart);
+                  else
+                     shiftpal <= 0;
+                  end if;
+               else
+                  shiftpal <= 16;
+               end if;
+            end if;
             
             if ((vDisplayEnd - vDisplayStart) > 240) then
                vDisplayOffset <= 0;
@@ -313,7 +364,7 @@ begin
                      else
                         videoout_request.lineInNext <= to_unsigned(vposNew - vDisplayStart, 9);
                      end if;
-                     videoout_request.fetch      <= '1';
+                     videoout_request.fetch      <= ce;
                   end if;
                else  
                   if (vposNew = vtotal) then
@@ -322,7 +373,7 @@ begin
                      else
                         videoout_request.lineInNext <= to_unsigned(0, 9);
                      end if;
-                     videoout_request.fetch      <= '1';
+                     videoout_request.fetch      <= ce;
                   elsif (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
                         if (videoout_reports.activeLineLSB = '1') then
@@ -333,7 +384,7 @@ begin
                      else
                         videoout_request.lineInNext <= to_unsigned(vposNew - vDisplayStart, 9);
                      end if;
-                     videoout_request.fetch      <= '1';
+                     videoout_request.fetch      <= ce;
                   end if;
                end if;
               
@@ -402,7 +453,7 @@ begin
             videoout_request.lineDisp  <= (others => '0');
             readstate                  <= IDLE;
          
-         elsif (ce = '1') then
+         else
             
             if (clkCnt < (clkDiv - 1)) then
                clkCnt <= clkCnt + 1;
@@ -447,7 +498,7 @@ begin
                         videoout_out.r      <= overlay_data( 7 downto 0);
                         videoout_out.g      <= overlay_data(15 downto 8);
                         videoout_out.b      <= overlay_data(23 downto 16);
-                     elsif (videoout_settings.GPUSTAT_DisplayDisable = '1') then
+                     elsif (videoout_settings.GPUSTAT_DisplayDisable = '1' or ce = '0') then
                         videoout_out.r      <= (others => '0');
                         videoout_out.g      <= (others => '0');
                         videoout_out.b      <= (others => '0');
@@ -524,7 +575,7 @@ begin
             if (nextHCount = hsync_start) then 
                hsync_end <= 252;
                videoout_out.hsync <= '1'; 
-               if (vsyncCount = 4 + vDisplayOffset) then 
+               if (vsyncCount = 4 + vDisplayOffset + shiftpal) then 
                   videoout_out.vsync <= '1';
                end if;
             end if;
@@ -533,7 +584,7 @@ begin
                hsync_end <= hsync_end - 1;
                if (hsync_end = 1) then 
                   videoout_out.hsync <= '0';
-                  if (vsyncCount = 7 + vDisplayOffset) then 
+                  if (vsyncCount = 7 + vDisplayOffset + shiftpal) then 
                      videoout_out.vsync <= '0';
                   end if;
                end if;

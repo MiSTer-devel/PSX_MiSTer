@@ -25,8 +25,10 @@ architecture arch of etb is
    signal clk33       : std_logic := '1';
    signal clk66       : std_logic := '1';
    signal clk100      : std_logic := '1';
+   signal clkvid      : std_logic := '1';
    
    signal reset       : std_logic;
+   signal pause       : std_logic := '0';
    
    signal command_in  : std_logic;
    signal command_out : std_logic;
@@ -204,12 +206,23 @@ begin
    
    reset  <= not psx_on(0);
    
+   -- NTSC 53.693175 mhz => 18624.340989ps
+   clkvid <= not clkvid after 9312 ps;
+      
+   -- PAL  53.203425 mhz => 18795.782414ps
+   
+   -- sync  = 2x => 67.7376 mhz
+   --clkvid <= not clkvid  after 7500 ps;
+   
    -- registers
    iReg_psx_on            : entity procbus.eProcReg generic map (Reg_psx_on)        port map (clk100, proc_bus_in, psx_on        , psx_on);      
    iReg_psx_LoadExe       : entity procbus.eProcReg generic map (Reg_psx_LoadExe)   port map (clk100, proc_bus_in, psx_LoadExe   , psx_LoadExe); 
    iReg_psx_SaveState     : entity procbus.eProcReg generic map (Reg_psx_SaveState) port map (clk100, proc_bus_in, psx_SaveState , psx_SaveState);      
    iReg_psx_LoadState     : entity procbus.eProcReg generic map (Reg_psx_LoadState) port map (clk100, proc_bus_in, psx_LoadState , psx_LoadState);   
-     
+   
+   pause <= '0';
+   --pause <= not pause after 1 ms;
+
    ipsx_mister : entity psx.psx_mister
    generic map
    (
@@ -219,21 +232,24 @@ begin
    (
       clk1x                 => clk33,          
       clk2x                 => clk66, 
+      clkvid                => clkvid,
       reset                 => reset,
       -- commands 
-      pause                 => '0',
+      pause                 => pause,
       loadExe               => psx_LoadExe(0),
-      fastboot              => '0',
+      fastboot              => '1',
       FASTMEM               => '0',
-      REPRODUCIBLEGPUTIMING => '1',
-      REPRODUCIBLEDMATIMING => '1',
+      REPRODUCIBLEGPUTIMING => '0',
+      REPRODUCIBLEDMATIMING => '0',
       DMABLOCKATONCE        => '0',
       multitrack            => multitrack,
-      INSTANTSEEK           => '1',
+      INSTANTSEEK           => '0',
       ditherOff             => '0',
       fpscountOn            => '0',
       errorOn               => '0',
+      PATCHSERIAL           => '0',
       noTexture             => '0',
+      syncVideoOut          => '0',
       SPUon                 => '1',
       SPUSDRAM              => '1',
       REVERBOFF             => '0',
@@ -405,7 +421,8 @@ begin
    generic map
    (
       DOREFRESH     => '1',
-      SCRIPTLOADING => '1'
+      SCRIPTLOADING => '1',
+      SLOWWRITE     => '0'
    )
    port map
    (
@@ -710,7 +727,7 @@ begin
    iframebuffer : entity work.framebuffer
    port map
    (
-      clk               => clk66,     
+      clk               => clkvid,     
       hblank            => hblank,  
       vblank            => vblank,  
       video_ce          => video_ce,

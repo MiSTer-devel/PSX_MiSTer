@@ -14,6 +14,8 @@ entity gpu_videoout is
       ce                         : in  std_logic;
       reset                      : in  std_logic;
       softReset                  : in  std_logic;
+      
+      allowunpause               : out std_logic;
             
       videoout_settings          : in  tvideoout_settings;
       videoout_reports           : out tvideoout_reports;
@@ -78,6 +80,8 @@ architecture arch of gpu_videoout is
          
    signal videoout_readAddr_s       : unsigned(10 downto 0);
    signal videoout_readAddr_a       : unsigned(10 downto 0);
+   
+   signal allowunpause_a            : std_logic;
     
    -- data fetch
    signal videoout_request_clk2x    : tvideoout_request;
@@ -140,6 +144,8 @@ begin
    videoout_request_clk2x  <= videoout_request_s  when (syncVideoOut = '1') else videoout_request_as; 
    videoout_request_clkvid <= videoout_request_s  when (syncVideoOut = '1') else videoout_request_aa; 
 
+   allowunpause            <= '1'                 when (syncVideoOut = '1') else allowunpause_a;
+
    igpu_videoout_sync : entity work.gpu_videoout_sync
    port map
    (
@@ -174,6 +180,8 @@ begin
       ce_1x                   => ce,   
       reset_1x                => reset,
       softReset_1x            => softReset,
+               
+      allowunpause1x          => allowunpause_a,
                
       videoout_settings_1x    => videoout_settings,
       videoout_reports_1x     => videoout_reports_a,                 

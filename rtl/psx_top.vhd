@@ -18,6 +18,7 @@ entity psx_top is
       clk2x                 : in  std_logic;   
       clkvid                : in  std_logic;   
       reset                 : in  std_logic; 
+      isPaused              : out std_logic;
       -- commands 
       pause                 : in  std_logic;
       loadExe               : in  std_logic;
@@ -182,6 +183,7 @@ architecture arch of psx_top is
    signal clk2xIndex             : std_logic := '0';
    
    signal pausing                : std_logic := '0';
+   signal allowunpause           : std_logic;
    
    -- ddr3 arbiter
    type tddr3State is
@@ -626,6 +628,8 @@ begin
    -- ce generation
    canDMA <= memMuxIdle and not stallNext;
    
+   isPaused <= pausing;
+   
    process (clk1x)
    begin
       if rising_edge(clk1x) then
@@ -642,7 +646,7 @@ begin
                pausing <= '1';
             end if;
             
-            if (pause = '0' and savestate_pause = '0' and memcard1_pause = '0' and memcard2_pause = '0') then
+            if (pause = '0' and savestate_pause = '0' and memcard1_pause = '0' and memcard2_pause = '0' and allowunpause = '1') then
                pausing <= '0';
             end if;
          
@@ -1249,6 +1253,8 @@ begin
       clkvid               => clkvid,
       ce                   => ce,   
       reset                => reset_intern,
+      
+      allowunpause         => allowunpause,
       
       ditherOff            => ditherOff,
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,

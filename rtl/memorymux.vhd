@@ -197,6 +197,13 @@ architecture arch of memorymux is
    signal exe_file_size    : unsigned(31 downto 0);
    signal exe_stackpointer : unsigned(31 downto 0);
    
+   -- debug
+   signal stallcountRead   : integer;
+   signal stallcountWrite  : integer;
+   signal stallcountWriteF : integer;
+   signal stallcountIntBus : integer;
+   
+   signal addressDataF     : std_logic := '0';
    
 begin 
 
@@ -794,6 +801,53 @@ begin
                when others => null;
             end case;
 
+         end if;
+      end if;
+   end process;
+   
+--##############################################################
+--############################### debug
+--##############################################################
+
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         if (reset = '1') then
+         
+            stallcountRead    <= 0;
+            stallcountWrite   <= 0;
+            stallcountWriteF  <= 0;
+            stallcountIntBus  <= 0;
+      
+         elsif (ce = '1') then
+         
+            if (stallcountRead = 0 and stallcountWrite = 0 and stallcountIntBus = 0 and stallcountWriteF = 0) then
+               stallcountRead <= 0;
+            end if;
+            
+            if (readram = '1') then
+               stallcountRead <= stallcountRead + 1;
+            end if;            
+            
+            if (writeram = '1') then
+               stallcountWrite <= stallcountWrite + 1;
+               if (addressDataF = '1') then
+                  stallcountWriteF <= stallcountWriteF + 1;
+               end if;
+            end if;
+            
+            if (mem_request = '1') then
+               addressDataF <= '0';
+               if (mem_addressData(30) = '0' and mem_rnw = '0' and mem_addressData(28 downto 0) < 16#800000#) then
+                  addressDataF <= '1';
+               end if;
+            end if;
+            
+            if (state = BUSACTION or state = SPU_WRITE or state = SPU_READ or state = SPU_READ_WAIT or state = CD_READ or state = CD_READ_WAIT or state = CD_WRITE) then
+               stallcountIntBus <= stallcountIntBus + 1;
+            end if;
+            
          end if;
       end if;
    end process;

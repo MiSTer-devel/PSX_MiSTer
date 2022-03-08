@@ -16,6 +16,8 @@ entity gpu is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      allowunpause         : out std_logic;
+      
       ditherOff            : in  std_logic;
       REPRODUCIBLEGPUTIMING: in  std_logic;
       videoout_on          : in  std_logic;
@@ -1495,6 +1497,8 @@ begin
       ce                         => ce,   
       reset                      => reset,
       softReset                  => softReset,
+               
+      allowunpause               => allowunpause,
                
       videoout_settings          => videoout_settings,
       videoout_reports           => videoout_reports,

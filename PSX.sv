@@ -176,7 +176,7 @@ module emu
 	input         OSD_STATUS
 );
 
-assign HDMI_FREEZE = 0;
+assign HDMI_FREEZE = isPaused;
 
 assign ADC_BUS  = 'Z;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
@@ -711,7 +711,7 @@ savestate_ui savestate_ui
 	.joyUp          (joy_unmod[3]  ),
 	.joyStart       (joy_unmod[9]  ),
 	.joyRewind      (0             ),
-	.rewindEnable   (status[27]    ), 
+	.rewindEnable   (0             ), 
 	.status_slot    (status[38:37] ),
 	.OSD_saveload   (status[18:17] ),
 	.ss_save        (ss_save       ),
@@ -721,7 +721,7 @@ savestate_ui savestate_ui
 	.statusUpdate   (statusUpdate  ),
 	.selected_slot  (ss_slot       )
 );
-defparam savestate_ui.INFO_TIMEOUT_BITS = 27;
+defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 
 ////////////////////////////  PAD  ///////////////////////////////////
 
@@ -750,6 +750,7 @@ wire PadPortNeGcon2 = (status[50:48] == 3'b101);
 reg paused = 0;
 reg [9:0] unpause = 0;
 reg status1_1;
+wire isPaused;
 
 always @(posedge clk_1x) begin
 
@@ -776,6 +777,7 @@ psx
    .clk2x(clk_2x),
    .clkvid(clk_vid),
    .reset(reset),
+   .isPaused(isPaused),
    // commands 
    .pause(paused),
    .loadExe(loadExe),

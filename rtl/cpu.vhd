@@ -389,6 +389,7 @@ architecture arch of cpu is
    signal stallcount1                  : integer;
    signal stallcount3                  : integer;
    signal stallcount4                  : integer;
+   signal stallcountDMA                : integer;
    
    -- export
 -- synthesis translate_off
@@ -2539,6 +2540,7 @@ begin
             stallcount1       <= 0;
             stallcount3       <= 0;
             stallcount4       <= 0;
+            stallcountDMA     <= 0;
       
          elsif (ce = '1') then
          
@@ -2558,7 +2560,7 @@ begin
                error        <= '1';
             end if;
             
-            if (stallcountNo = 0 and stallcount4 = 0 and stallcount3 = 0 and stallcount1 = 0) then
+            if (stallcountNo = 0 and stallcount4 = 0 and stallcount3 = 0 and stallcount1 = 0 and stallcountDMA = 0) then
                stallcountNo <= 0;
             end if;
             
@@ -2572,6 +2574,10 @@ begin
             elsif (stall1 = '1') then
                stallcount1 <= stallcount1 + 1;
             end if;
+            
+         else
+            
+            stallcountDMA <= stallcountDMA + 1;
             
          end if;
       end if;
