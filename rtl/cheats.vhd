@@ -73,6 +73,8 @@ architecture arch of cheats is
    signal cheat_valid : std_logic := '0';
    signal cheat_in_1  : std_logic_vector(127 downto 0);
 
+   signal vsync_1     : std_logic := '0';
+
    signal fifo_Dout   : std_logic_vector(127 downto 0);
    signal fifo_Rd     : std_logic := '0';
    signal fifo_Empty  : std_logic;
@@ -128,6 +130,8 @@ begin
          if (cheat_on = '1' and cheat_on_1 = '0') then
             cheat_valid <= '1';
          end if;
+         
+         vsync_1 <= vsync;
    
          if (reset = '1') then
             
@@ -142,7 +146,7 @@ begin
                   if (cheat_clear = '1') then
                      state      <= RESET_CLEAR;
                      cheatindex <= 0;
-                  elsif (cheats_enabled = '1' and vsync = '1') then
+                  elsif (cheats_enabled = '1' and vsync = '1' and vsync_1 = '0') then
                      state        <= WAIT_DMAIDLE;
                      cheatindex   <= 0;
                      skip_next    <= '0';

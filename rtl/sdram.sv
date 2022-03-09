@@ -138,7 +138,7 @@ always @(posedge clk_base) begin
    clk1xToggle <= !clk1xToggle;
       
    ram_idleNext <= 0;
-   if (state == STATE_IDLE || state == STATE_IDLE_1 || state == STATE_IDLE_2 || state == STATE_RW1 || state == STATE_RW2) begin
+   if (state == STATE_IDLE || state == STATE_IDLE_1 || state == STATE_IDLE_2 || (state == STATE_RW1 && saved_wr) || state == STATE_RW2) begin
       if (refresh_count < (cycles_per_refresh - 14'd16) && !ch1_rq && !ch2_rq && !ch3_rq) begin
          ram_idleNext <= 1;
       end
@@ -167,11 +167,11 @@ reg ch1_addr_0 = 0;
 reg  [3:0] state = STATE_STARTUP;
 
 reg ch1_rq, ch2_rq, ch3_rq, refreshForce_req;
+reg saved_wr;
 
 always @(posedge clk) begin
 	reg [CAS_LATENCY+BURST_LENGTH:0] data_ready_delay1, data_ready_delay2, data_ready_delay3;
 
-	reg        saved_wr;
 	reg [12:0] cas_addr;
 	reg [31:0] saved_data;
 	reg  [3:0] saved_be;
