@@ -27,6 +27,7 @@ entity memorymux is
       ram_ena              : out std_logic := '0';
       ram_128              : out std_logic := '0';
       ram_done             : in  std_logic;
+      ram_idle             : in  std_logic;
       
       mem_request          : in  std_logic;
       mem_rnw              : in  std_logic; 
@@ -172,6 +173,8 @@ architecture arch of memorymux is
    
    signal readram          : std_logic := '0';
    signal writeram         : std_logic := '0';
+   signal maskram          : std_logic := '0';
+   signal instantwrite     : std_logic := '0';
    
    signal addressData_buf  : unsigned(31 downto 0);
    signal dataWrite_buf    : std_logic_vector(31 downto 0);
@@ -370,8 +373,9 @@ begin
   
    mem_dataRead   <= ram_dataRead32 when (readram = '1' and ram_done = '1') else mem_dataRead_buf;
                      
-   mem_done       <= '1'            when (readram = '1'  and ram_done = '1') else 
-                     '1'            when (writeram = '1' and ram_done = '1') else 
+   mem_done       <= '1'            when (instantwrite = '1') else
+                     '1'            when (readram = '1'  and ram_done = '1' and maskram = '0') else 
+                     '1'            when (writeram = '1' and ram_done = '1' and maskram = '0') else 
                      mem_done_buf;
   
    mem_dataCache  <= ram_dataRead;
@@ -396,16 +400,19 @@ begin
          end if;
          
          if (ram_done = '1') then
-            readram <= '0';
+            maskram  <= '0';
+            if (maskram = '0') then
+               readram  <= '0';
+               writeram <= '0';
+            end if;
          end if;
          
-         if (ram_done = '1') then
-            writeram <= '0';
-         end if;
+         instantwrite <= '0';
       
          if (reset = '1') then
 
             state   <= IDLE;
+            maskram <= '0';
 
          elsif (ce = '1') then
          
@@ -480,7 +487,12 @@ begin
                               readram <= '1';
                            else
                               state    <= IDLE;
-                              writeram <= '1';
+                              if (ram_idle = '1') then
+                                 instantwrite <= '1'; 
+                                 maskram      <= '1';
+                              else
+                                 writeram <= '1';
+                              end if;
                            end if;
                            ram_be        <= mem_writeMask;
                            ram_dataWrite <= mem_dataWrite;
@@ -527,7 +539,7 @@ begin
                   end if;                  
                   
                when READBIOS =>
-                  if (ram_done = '1') then
+                  if (ram_done = '1' and maskram = '0') then
                      if (fastboot = '1' and to_integer(addressBIOS_buf) >= 16#18000# and to_integer(addressBIOS_buf) <= 16#18013#) then
                         case (to_integer(addressBIOS_buf(4 downto 2))) is
                            when 0 => biosPatch := x"3C011F80";
@@ -564,7 +576,7 @@ begin
                   end if;
                   
                when READBIOSCACHE =>
-                  if (ram_done = '1') then
+                  if (ram_done = '1' and maskram = '0') then
                      state    <= WAITING;
                   end if; 
                   
@@ -830,7 +842,7 @@ begin
                stallcountRead <= stallcountRead + 1;
             end if;            
             
-            if (writeram = '1') then
+            if (writeram = '1' or instantwrite = '1') then
                stallcountWrite <= stallcountWrite + 1;
                if (addressDataF = '1') then
                   stallcountWriteF <= stallcountWriteF + 1;

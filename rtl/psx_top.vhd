@@ -50,6 +50,7 @@ entity psx_top is
       ram_ena               : out std_logic;
       ram_128               : out std_logic;
       ram_done              : in  std_logic;
+      ram_idle              : in  std_logic;
       ram_reqprocessed      : in  std_logic;
       -- vram/savestate interface
       ddr3_BUSY             : in  std_logic;                    
@@ -1501,6 +1502,7 @@ begin
       ram_ena              => ram_cpu_ena,      
       ram_128              => ram_cpu_128,      
       ram_done             => ram_cpu_done,     
+      ram_idle             => ram_idle,     
       
       mem_request          => mem_request,  
       mem_rnw              => mem_rnw,      

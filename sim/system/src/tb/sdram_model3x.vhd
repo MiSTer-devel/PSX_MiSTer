@@ -39,6 +39,11 @@ architecture arch of sdram_model3x is
    constant cycles_per_refresh   : integer := 780; 
    constant BURST_LENGTH         : integer := 8;
    constant CAS_LATENCY          : integer := 2;
+   
+   signal clk1xToggle            : std_logic := '0';
+   signal clk1xToggle3X          : std_logic := '0';
+   signal clk1xToggle3X_1        : std_logic := '0';
+   signal clk3xIndex             : std_logic := '0';
 
    -- not full size, because of memory required
    type t_data is array(0 to (2**27)-1) of integer;
@@ -87,8 +92,17 @@ begin
    begin
       wait until rising_edge(clk);
       
+      clk1xToggle  <= not clk1xToggle;
+      
       done         <= done_3x;
       reqprocessed <= reqprocessed_3x;
+      
+      ram_idle <= '0';
+      if (state = STATE_IDLE or state = STATE_IDLE_1 or state = STATE_IDLE_2 or state = STATE_RW1 or state = STATE_RW2) then
+         if (refreshcnt < (cycles_per_refresh - 16) and req_buffer = '0') then
+            ram_idle <= '1';
+         end if;
+      end if;
       
       if (done_3x = '1') then
          if (addr_buffer(0) = '1') then
@@ -99,8 +113,6 @@ begin
       end if;
    
    end process;
-   
-   ram_idle <= '1' when (state = STATE_IDLE) else '0';
 
    process
    
@@ -147,6 +159,13 @@ begin
    begin
       wait until rising_edge(clk3x);
       
+      clk1xToggle3x   <= clk1xToggle;
+      clk1xToggle3X_1 <= clk1xToggle3X;
+      clk3xIndex    <= '0';
+      if (clk1xToggle3X_1 = clk1xToggle) then
+         clk3xIndex <= '1';
+      end if;
+      
       if (done = '1') then
          done_3x <= '0';
       end if;
@@ -155,8 +174,12 @@ begin
          reqprocessed_3x <= '0';
       end if;
       
-      req_1 <= req;
-      if (req = '1' and req_1 = '0') then
+      --req_1 <= req;
+      --if (req = '1' and req_1 = '0') then
+      --   req_buffer <= '1';
+      --end if;
+      
+      if (clk3xIndex = '1' and req = '1') then
          req_buffer <= '1';
       end if;
       

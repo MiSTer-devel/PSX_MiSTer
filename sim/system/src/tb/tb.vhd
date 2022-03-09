@@ -84,6 +84,7 @@ architecture arch of etb is
    signal ram_done            : std_logic;   
    signal ram_reqprocessed    : std_logic;   
    signal ram_refresh         : std_logic;   
+   signal ram_idle            : std_logic;   
    
    -- ddrram
    signal DDRAM_CLK           : std_logic;
@@ -265,6 +266,7 @@ begin
       ram_ena               => ram_ena,      
       ram_128               => ram_128,      
       ram_done              => ram_done,
+      ram_idle              => ram_idle,
       ram_reqprocessed      => ram_reqprocessed,
       -- vram/ddr3 interface
       DDRAM_BUSY            => DDRAM_BUSY,      
@@ -440,7 +442,7 @@ begin
       do32         => ram_dataRead32,
       done         => ram_done,
       reqprocessed => ram_reqprocessed,
-      ram_idle     => open
+      ram_idle     => ram_idle
    );
    
    ispu_ram : entity work.sdram_model3x 

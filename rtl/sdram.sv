@@ -39,7 +39,7 @@ module sdram
 	output             SDRAM_CLK,   // clock for chip
 
 	input              refreshForce,                   
-	output             ram_idle,                   
+	output             ram_idle,    // used to tell the core a write command on ch2 will be accepted instantly               
 
 	input      [26:0]  ch1_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
 	output reg [127:0] ch1_dout,    // data output to cpu
@@ -118,6 +118,14 @@ localparam STATE_IDLE_8  = 12;
 localparam STATE_IDLE_9  = 13;
 localparam STATE_RFSH    = 14;
 
+reg clk1xToggle     = 0;
+reg clk1xToggle3X   = 0;
+reg clk1xToggle3X_1 = 0;
+reg clk3xIndex      = 0;
+
+reg ram_idleNext    = 0;
+
+assign ram_idle = ram_idleNext && !ch3_req;
 
 always @(posedge clk_base) begin
 
@@ -126,6 +134,15 @@ always @(posedge clk_base) begin
 	ch3_ready <= ch3_ready_ramclock;
 
 	ch1_reqprocessed <= ch1_reqprocessed_ramclock;
+   
+   clk1xToggle <= !clk1xToggle;
+      
+   ram_idleNext <= 0;
+   if (state == STATE_IDLE || state == STATE_IDLE_1 || state == STATE_IDLE_2 || state == STATE_RW1 || state == STATE_RW2) begin
+      if (refresh_count < (cycles_per_refresh - 14'd16) && !ch1_rq && !ch2_rq && !ch3_rq) begin
+         ram_idleNext <= 1;
+      end
+   end
    
    if (ch1_ready_ramclock) begin
       if (ch1_addr_0) begin
@@ -139,9 +156,6 @@ end
 reg ch1_ready_ramclock = 0;
 reg ch2_ready_ramclock = 0;
 reg ch3_ready_ramclock = 0;
-reg ch1_req_1 = 0;
-reg ch2_req_1 = 0;
-reg ch3_req_1 = 0;
 reg refreshForce_1 = 0;
 
 reg ch1_reqprocessed_ramclock = 0;
@@ -152,7 +166,7 @@ reg ch1_addr_0 = 0;
 
 reg  [3:0] state = STATE_STARTUP;
 
-assign ram_idle = (state == STATE_IDLE);
+reg ch1_rq, ch2_rq, ch3_rq, refreshForce_req;
 
 always @(posedge clk) begin
 	reg [CAS_LATENCY+BURST_LENGTH:0] data_ready_delay1, data_ready_delay2, data_ready_delay3;
@@ -163,16 +177,15 @@ always @(posedge clk) begin
 	reg  [3:0] saved_be;
 	reg [15:0] dq_reg;
 
-	reg       ch1_rq, ch2_rq, ch3_rq, refreshForce_req;
 	reg [1:0] ch;
+   
+   clk1xToggle3X   <= clk1xToggle;
+   clk1xToggle3X_1 <= clk1xToggle3X;
+   clk3xIndex      <= clk1xToggle3X_1 == clk1xToggle;
 	
-	ch1_req_1 <= ch1_req;
-	ch2_req_1 <= ch2_req;
-	ch3_req_1 <= ch3_req;
-
-	ch1_rq <= ch1_rq | (ch1_req & ~ch1_req_1);
-	ch2_rq <= ch2_rq | (ch2_req & ~ch2_req_1);
-	ch3_rq <= ch3_rq | (ch3_req & ~ch3_req_1);
+	ch1_rq <= ch1_rq | (ch1_req & clk3xIndex);
+	ch2_rq <= ch2_rq | (ch2_req & clk3xIndex);
+	ch3_rq <= ch3_rq | (ch3_req & clk3xIndex);
 	
 	if (ch1_ready) ch1_ready_ramclock <= 0;
 	if (ch2_ready) ch2_ready_ramclock <= 0;
