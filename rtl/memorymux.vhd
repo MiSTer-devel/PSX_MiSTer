@@ -202,6 +202,7 @@ architecture arch of memorymux is
    
    -- debug
    signal stallcountRead   : integer;
+   signal stallcountReadC  : integer;
    signal stallcountWrite  : integer;
    signal stallcountWriteF : integer;
    signal stallcountIntBus : integer;
@@ -828,18 +829,22 @@ begin
          if (reset = '1') then
          
             stallcountRead    <= 0;
+            stallcountReadC    <= 0;
             stallcountWrite   <= 0;
             stallcountWriteF  <= 0;
             stallcountIntBus  <= 0;
       
          elsif (ce = '1') then
          
-            if (stallcountRead = 0 and stallcountWrite = 0 and stallcountIntBus = 0 and stallcountWriteF = 0) then
+            if (stallcountRead = 0 and stallcountReadC = 0 and stallcountWrite = 0 and stallcountIntBus = 0 and stallcountWriteF = 0) then
                stallcountRead <= 0;
             end if;
             
             if (readram = '1') then
                stallcountRead <= stallcountRead + 1;
+               if (ram_128 = '1') then
+                  stallcountReadC <= stallcountReadC + 1;
+               end if;
             end if;            
             
             if (writeram = '1' or instantwrite = '1') then

@@ -183,7 +183,6 @@ architecture arch of cpu is
    signal blockIRQCnt                  : integer range 0 to 10;
    signal fetchReady                   : std_logic := '0';
    signal cacheHit                     : std_logic := '0';
-   signal cacheUpdate                  : std_logic := '0';
                
    -- wires          
    signal mem1_request                 : std_logic := '0';
@@ -196,7 +195,6 @@ architecture arch of cpu is
    signal fetchReadyNext               : std_logic := '0';
    signal fetchReadyNow                : std_logic := '0';
    signal cacheHitNext                 : std_logic := '0';
-   signal cacheUpdateNext              : std_logic := '0';
    signal blockIRQNext                 : std_logic := '0';
    signal blockIRQCntNext              : integer range 0 to 10;
             
@@ -618,7 +616,7 @@ begin
    mem1_address    <= FetchAddr;
 
    process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, branch, PCbranch, mem4_request, mem_done, mem_dataRead, memoryMuxStage, PC, fetchReady, stall1, exceptionNew, opcode0, mem_dataCache, reset, FetchAddr, 
-            cacheUpdate, tagValid, tag_q_b, blockirqCnt, FetchLastAddr)
+            tagValid, tag_q_b, blockirqCnt, FetchLastAddr)
       variable request : std_logic;
    begin
       request         := '0';
@@ -627,7 +625,6 @@ begin
       fetchReadyNow   <= '0';
       stallNew1       <= stall1;
       opcodeNext      <= opcode0;
-      cacheUpdateNext <= '0';
       blockirqNext    <= blockirq;
       blockirqCntNext <= blockirqCnt;
       
@@ -701,7 +698,17 @@ begin
             case (to_integer(unsigned(FetchLastAddr(31 downto 29)))) is
             
                when 0 | 4 => -- cached
-                  cacheUpdateNext <= '1';
+                  stallNew1      <= '0';
+                  PCnext         <= PC + 4;
+                  fetchReadyNext <= '1';
+                  fetchReadyNow  <= '1';
+                  case (FetchLastAddr(3 downto 2)) is
+                     when "00" => opcodeNext <= unsigned(mem_dataCache( 31 downto  0));
+                     when "01" => opcodeNext <= unsigned(mem_dataCache( 63 downto 32));
+                     when "10" => opcodeNext <= unsigned(mem_dataCache( 95 downto 64));
+                     when "11" => opcodeNext <= unsigned(mem_dataCache(127 downto 96));
+                  when others => null;
+               end case;
                   
                when 5 =>
                   stallNew1      <= '0';
@@ -728,7 +735,7 @@ begin
       
       cacheHitNext      <= '0';
       
-      if ((cacheUpdate = '1' or request = '1') and reset = '0') then
+      if (request = '1' and reset = '0') then
       
          case (to_integer(unsigned(FetchAddr(31 downto 29)))) is
             
@@ -780,7 +787,6 @@ begin
             PCold0         <= unsigned(ss_in(19));
             
             cacheHit       <= '0';
-            cacheUpdate    <= '0';
             cacheHitLast   <= '0';
          
          elsif (ce = '1') then
@@ -793,7 +799,6 @@ begin
             blockirqCnt    <= blockirqCntNext;
             
             cacheHit       <= cacheHitNext;
-            cacheUpdate    <= cacheUpdateNext;
             if (cacheHit = '1' and stall > 0) then
                cacheHitLast   <= '1';
                case (PCold0(3 downto 2)) is
