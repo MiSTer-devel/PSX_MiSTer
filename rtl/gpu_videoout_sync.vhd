@@ -77,6 +77,7 @@ begin
    videoout_ss_out.interlacedDisplayField <= videoout_reports.interlacedDisplayField;                 
    videoout_ss_out.nextHCount             <= std_logic_vector(to_unsigned(nextHCount, 12));                             
    videoout_ss_out.vpos                   <= std_logic_vector(to_unsigned(vpos, 9));                            
+   videoout_ss_out.vdisp                  <= std_logic_vector(to_unsigned(vpos, 9));                            
    videoout_ss_out.inVsync                <= videoout_reports.inVsync;                                
    videoout_ss_out.activeLineLSB          <= videoout_reports.activeLineLSB;                          
    videoout_ss_out.GPUSTAT_InterlaceField <= videoout_reports.GPUSTAT_InterlaceField;

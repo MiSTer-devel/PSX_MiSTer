@@ -19,6 +19,7 @@ entity psx_mister is
       loadExe               : in  std_logic;
       fastboot              : in  std_logic;
       FASTMEM               : in  std_logic;
+      DATACACHEON           : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
@@ -26,6 +27,7 @@ entity psx_mister is
       INSTANTSEEK           : in  std_logic;
       ditherOff             : in  std_logic;
       fpscountOn            : in  std_logic;
+      cdslowOn              : in  std_logic;
       errorOn               : in  std_logic;
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
@@ -225,6 +227,7 @@ begin
       loadExe               => loadExe,
       fastboot              => fastboot,
       FASTMEM               => FASTMEM,
+      DATACACHEON           => DATACACHEON,
       REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING,
       REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING,
       DMABLOCKATONCE        => DMABLOCKATONCE,
@@ -232,6 +235,7 @@ begin
       INSTANTSEEK           => INSTANTSEEK,
       ditherOff             => ditherOff,
       fpscountOn            => fpscountOn,
+      cdslowOn              => cdslowOn,
       errorOn               => errorOn,
       PATCHSERIAL           => PATCHSERIAL,
       noTexture             => noTexture,

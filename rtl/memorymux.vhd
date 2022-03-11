@@ -6,6 +6,7 @@ entity memorymux is
    port 
    (
       clk1x                : in  std_logic;
+      clk2x                : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
@@ -15,6 +16,7 @@ entity memorymux is
       fastboot             : in  std_logic;
       NOMEMWAIT            : in  std_logic;
       PATCHSERIAL          : in  std_logic;
+      DATACACHEON          : in  std_logic;
       
       isIdle               : out std_logic;
       
@@ -41,6 +43,11 @@ entity memorymux is
       mem_dataRead         : out std_logic_vector(31 downto 0); 
       mem_dataCache        : out std_logic_vector(127 downto 0); 
       mem_done             : out std_logic;
+      
+      dma_Adr              : in  std_logic_vector(20 downto 0);
+      dma_data             : in  std_logic_vector(31 downto 0);
+      dma_rnw              : in  std_logic;
+      dma_ena              : in  std_logic;
       
       --bus_exp1_addr        : out unsigned(22 downto 0); 
       --bus_exp1_dataWrite   : out std_logic_vector(31 downto 0);
@@ -163,55 +170,74 @@ architecture arch of memorymux is
       EXECOPYREAD,
       EXECOPYWRITE
    );
-   signal state            : tState := IDLE;
+   signal state               : tState := IDLE;
+      
+   signal byteStep            : unsigned(1 downto 0);
+   signal waitcnt             : integer range 0 to 127;
+      
+   signal mem_dataRead_buf    : std_logic_vector(31 downto 0);
+   signal mem_done_buf        : std_logic := '0';
+      
+   signal readram             : std_logic := '0';
+   signal writeram            : std_logic := '0';
+   signal maskram             : std_logic := '0';
+   signal instantwrite        : std_logic := '0';
+      
+   signal data_ram            : std_logic_vector(31 downto 0);
+   signal data_ram_rotate     : std_logic_vector(31 downto 0);
+   signal ram_rotate_bits     : std_logic_vector(1 downto 0);
+      
+   signal addressData_buf     : unsigned(31 downto 0);
+   signal dataWrite_buf       : std_logic_vector(31 downto 0);
+   signal reqsize_buf         : unsigned(1 downto 0);   
+   signal writeMask_buf       : std_logic_vector(3 downto 0);
+      
+   signal addressBIOS_buf     : unsigned(18 downto 0);
+      
+   signal dataFromBusses      : std_logic_vector(31 downto 0);
+   signal rotate32            : std_logic;
+   signal rotate16            : std_logic;
+      
+   signal data_cd             : std_logic_vector(31 downto 0);
+   signal data_spu            : std_logic_vector(31 downto 0);
+      
+   -- EXE handling   
+   signal loadExe_latched     : std_logic := '0';
+   signal exestep             : integer range 0 to 8;
+   signal execopycnt          : unsigned(31 downto 0);
+   signal exe_initial_pc      : unsigned(31 downto 0);
+   signal exe_initial_gp      : unsigned(31 downto 0);
+   signal exe_load_address    : unsigned(31 downto 0);
+   signal exe_file_size       : unsigned(31 downto 0);
+   signal exe_stackpointer    : unsigned(31 downto 0);
    
-   signal byteStep         : unsigned(1 downto 0);
-   signal waitcnt          : integer range 0 to 127;
-   
-   signal mem_dataRead_buf : std_logic_vector(31 downto 0);
-   signal mem_done_buf     : std_logic := '0';
-   
-   signal readram          : std_logic := '0';
-   signal writeram         : std_logic := '0';
-   signal maskram          : std_logic := '0';
-   signal instantwrite     : std_logic := '0';
-   
-   signal addressData_buf  : unsigned(31 downto 0);
-   signal dataWrite_buf    : std_logic_vector(31 downto 0);
-   signal reqsize_buf      : unsigned(1 downto 0);   
-   signal writeMask_buf    : std_logic_vector(3 downto 0);
-   
-   signal addressBIOS_buf  : unsigned(18 downto 0);
-   
-   signal dataFromBusses   : std_logic_vector(31 downto 0);
-   signal rotate32         : std_logic;
-   signal rotate16         : std_logic;
-   
-   signal data_cd          : std_logic_vector(31 downto 0);
-   signal data_spu         : std_logic_vector(31 downto 0);
-   
-   -- EXE handling
-   signal loadExe_latched  : std_logic := '0';
-   signal exestep          : integer range 0 to 8;
-   signal execopycnt       : unsigned(31 downto 0);
-   signal exe_initial_pc   : unsigned(31 downto 0);
-   signal exe_initial_gp   : unsigned(31 downto 0);
-   signal exe_load_address : unsigned(31 downto 0);
-   signal exe_file_size    : unsigned(31 downto 0);
-   signal exe_stackpointer : unsigned(31 downto 0);
-   
-   -- debug
-   signal stallcountRead   : integer;
-   signal stallcountReadC  : integer;
-   signal stallcountWrite  : integer;
-   signal stallcountWriteF : integer;
-   signal stallcountIntBus : integer;
-   
-   signal addressDataF     : std_logic := '0';
+   -- data cache
+   signal dcache_read_enable  : std_logic := '0';
+   signal dcache_read_addr    : std_logic_vector(18 downto 0) := (others => '0');
+   signal dcache_read_hit     : std_logic;
+   signal dcache_read_hit_A1  : std_logic;
+   signal dcache_read_data    : std_logic_vector(31 downto 0);
+
+   signal dcache_hit_next     : std_logic := '0';
+
+   signal dcache_write_enable : std_logic := '0';
+   signal dcache_write_clear  : std_logic := '0';
+   signal dcache_write_addr   : std_logic_vector(18 downto 0) := (others => '0');
+   signal dcache_write_data   : std_logic_vector(31 downto 0) := (others => '0');
+      
+      
+   -- debug 
+   signal stallcountRead      : integer;
+   signal stallcountReadC     : integer;
+   signal stallcountWrite     : integer;
+   signal stallcountWriteF    : integer;
+   signal stallcountIntBus    : integer;
+      
+   signal addressDataF        : std_logic := '0';
    
 begin 
 
-   isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0') else '0';
+   isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0' and maskram = '0' and dcache_hit_next = '0') else '0';
 
    process (state, mem_request, mem_rnw, mem_isData, mem_addressData, mem_reqsize, mem_writeMask, mem_dataWrite, ce)
       variable address : unsigned(28 downto 0);
@@ -368,33 +394,44 @@ begin
 
    end process;
    
-   dataFromBusses <= bus_exp1_dataRead or bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_memc2_dataRead or bus_irq_dataRead or 
-                     bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or bus_exp2_dataRead or bus_exp3_dataRead or
-                     data_cd or data_spu;
+   dataFromBusses    <= bus_exp1_dataRead or bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_memc2_dataRead or bus_irq_dataRead or 
+                        bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or bus_exp2_dataRead or bus_exp3_dataRead or
+                        data_cd or data_spu;
+   
+   data_ram          <= dcache_read_data when (dcache_hit_next = '1') else ram_dataRead32;
   
-   mem_dataRead   <= ram_dataRead32 when (readram = '1' and ram_done = '1') else mem_dataRead_buf;
-                     
-   mem_done       <= '1'            when (instantwrite = '1') else
-                     '1'            when (readram = '1'  and ram_done = '1' and maskram = '0') else 
-                     '1'            when (writeram = '1' and ram_done = '1' and maskram = '0') else 
-                     mem_done_buf;
-  
-   mem_dataCache  <= ram_dataRead;
+   data_ram_rotate   <= data_ram                            when ram_rotate_bits(1 downto 0) = "00" else
+                        x"00" & data_ram(31 downto 8)       when ram_rotate_bits(1 downto 0) = "01" else
+                        x"0000" & data_ram(31 downto 16)    when ram_rotate_bits(1 downto 0) = "10" else
+                        x"000000" & data_ram(31 downto 24);
+      
+   mem_dataRead      <= data_ram_rotate when ((dcache_hit_next = '1') or (readram = '1' and ram_done = '1')) else 
+                        mem_dataRead_buf;
+                        
+   mem_done          <= '1'            when (dcache_hit_next = '1') else
+                        '1'            when (instantwrite = '1')    else
+                        '1'            when (readram = '1'  and ram_done = '1' and maskram = '0') else 
+                        '1'            when (writeram = '1' and ram_done = '1' and maskram = '0') else 
+                        mem_done_buf;
+   
+   mem_dataCache     <= ram_dataRead;
   
    process (clk1x)
       variable biosPatch  : std_logic_vector(31 downto 0);
    begin
       if rising_edge(clk1x) then
       
-         ram_ena        <= '0';
-         mem_done_buf   <= '0';
-         reset_exe      <= '0';
+         ram_ena              <= '0';
+         mem_done_buf         <= '0';
+         reset_exe            <= '0';
+               
+         bus_cd_read          <= '0';
+         bus_cd_write         <= '0';         
+               
+         bus_SPU_read         <= '0';
+         bus_SPU_write        <= '0';
          
-         bus_cd_read    <= '0';
-         bus_cd_write   <= '0';         
-         
-         bus_SPU_read   <= '0';
-         bus_SPU_write  <= '0';
+         dcache_hit_next      <= '0';
          
          if (loadExe = '1') then
             loadExe_latched <= '1';
@@ -407,7 +444,7 @@ begin
                writeram <= '0';
             end if;
          end if;
-         
+
          instantwrite <= '0';
       
          if (reset = '1') then
@@ -482,10 +519,16 @@ begin
                            ram_ena <= '1';
                            ram_128 <= '0';
                            ram_rnw <= mem_rnw;
-                           ram_Adr <= "00" & std_logic_vector(mem_addressData(20 downto 0));
+                           ram_Adr <= "00" & std_logic_vector(mem_addressData(20 downto 2)) & "00";
+                           ram_rotate_bits <= std_logic_vector(mem_addressData(1 downto 0));
                            if (mem_rnw = '1') then
                               state   <= IDLE;
-                              readram <= '1';
+                              if (dcache_read_hit = '1') then
+                                 dcache_hit_next <= '1';
+                                 ram_ena         <= '0';
+                              else
+                                 readram <= '1';
+                              end if;
                            else
                               state    <= IDLE;
                               if (ram_idle = '1') then
@@ -817,6 +860,54 @@ begin
          end if;
       end if;
    end process;
+   
+--##############################################################
+--############################### datacache
+--##############################################################
+   
+   
+   dcache_write_enable <= DATACACHEON when (ram_done = '1' and maskram = '0' and readram = '1') else 
+                          DATACACHEON when (ce = '1' and mem_request = '1' and mem_isData = '1' and mem_rnw = '0' and mem_addressData(28 downto 0) < 16#800000#) else 
+                          DATACACHEON when (dma_ena = '1' and dma_rnw = '0') else
+                          '0';
+                          
+   dcache_write_clear  <=  '1' when (ce = '1' and mem_request = '1' and mem_isData = '1' and mem_rnw = '0' and mem_writeMask /= "1111") else '0';
+                          
+   dcache_write_addr   <= ram_Adr(20 downto 2) when (readram = '1') else
+                          dma_Adr(20 downto 2) when (dma_ena = '1') else
+                          std_logic_vector(mem_addressData(20 downto 2));
+
+   dcache_write_data   <= ram_dataRead32 when (readram = '1') else
+                          dma_data       when (dma_ena = '1') else
+                          mem_dataWrite;
+
+
+   dcache_read_enable  <= ce when (state = IDLE and mem_request = '1' and mem_isData = '1' and mem_rnw = '1' and mem_addressData(28 downto 0) < 16#800000#) else '0';
+   dcache_read_addr    <= std_logic_vector(mem_addressData(20 downto 2));
+
+   idatacache : entity work.datacache
+   generic map
+   (
+      SIZE              => 16384,
+      SIZEBASEBITS      => 19,
+      BITWIDTH          => 32
+   )
+   port map
+   (
+      clk1x             => clk1x,
+      clk2x             => clk2x,
+      reset             => reset,
+                        
+      read_enable       => dcache_read_enable, 
+      read_addr         => dcache_read_addr,   
+      read_hit          => dcache_read_hit,   
+      read_data         => dcache_read_data,   
+
+      write_enable      => dcache_write_enable,
+      write_clear       => dcache_write_clear,
+      write_addr        => dcache_write_addr,  
+      write_data        => dcache_write_data 
+   );
    
 --##############################################################
 --############################### debug

@@ -451,6 +451,7 @@ begin
    ss_timing_out(3)(24 downto 16)  <= videoout_ss_out.vpos;      
    ss_timing_out(4)(17)            <= videoout_ss_out.inVsync;      
    ss_timing_out(4)(20)            <= videoout_ss_out.activeLineLSB;
+   ss_timing_out(4)(29 downto 21)  <= videoout_ss_out.vdisp;
 
    process (clk1x)
       variable cmdNew                    : unsigned(7 downto 0);
@@ -477,7 +478,7 @@ begin
             GPUSTAT_HorRes2         <= ss_gpu_in(1)(16);
             GPUSTAT_HorRes1         <= ss_gpu_in(1)(18 downto 17);
             GPUSTAT_VerRes          <= ss_gpu_in(1)(19);
-            GPUSTAT_PalVideoMode    <= isPal; --ss_gpu_in(1)(20); --;
+            GPUSTAT_PalVideoMode    <= ss_gpu_in(1)(20); --isPal;
             GPUSTAT_ColorDepth24    <= ss_gpu_in(1)(21);
             GPUSTAT_VertInterlace   <= ss_gpu_in(1)(22);
             GPUSTAT_DisplayDisable  <= ss_gpu_in(1)(23);
@@ -1483,6 +1484,7 @@ begin
    videoout_ss_in.interlacedDisplayField  <= ss_timing_in(4)(19);
    videoout_ss_in.nextHCount              <= ss_timing_in(4)(11 downto 0);
    videoout_ss_in.vpos                    <= ss_timing_in(3)(24 downto 16);
+   videoout_ss_in.vdisp                   <= ss_timing_in(4)(29 downto 21);
    videoout_ss_in.inVsync                 <= ss_timing_in(4)(17);
    videoout_ss_in.activeLineLSB           <= ss_timing_in(4)(20);
    videoout_ss_in.GPUSTAT_InterlaceField  <= ss_gpu_in(1)(13);

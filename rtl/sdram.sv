@@ -145,11 +145,7 @@ always @(posedge clk_base) begin
    end
    
    if (ch1_ready_ramclock) begin
-      if (ch1_addr_0) begin
-         ch1_dout32 <= { 8'b0, ch1_dout[31:8] };
-      end else begin
-         ch1_dout32 <= ch1_dout[31:0];
-      end
+      ch1_dout32 <= ch1_dout[31:0];
    end
 end
 
@@ -161,8 +157,6 @@ reg refreshForce_1 = 0;
 reg ch1_reqprocessed_ramclock = 0;
 
 reg req128    = 0;
-
-reg ch1_addr_0 = 0;
 
 reg  [3:0] state = STATE_STARTUP;
 
@@ -313,7 +307,6 @@ always @(posedge clk) begin
                state      <= STATE_WAIT;
                req128     <= ch1_128;
                ch1_reqprocessed_ramclock <= ch1_rnw;
-               ch1_addr_0 <= ch1_addr[0];
             end else if(ch2_req | ch2_rq) begin
                {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch2_be[1:0], ch2_rnw, ch2_addr[25:1]};
                chip       <= ch2_addr[26];

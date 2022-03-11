@@ -351,7 +351,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXX    XX
+// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXX  XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -385,6 +385,7 @@ parameter CONF_STR = {
 	"-;",
 	"OS,FPS Overlay,Off,On;",
 	"OT,Error Overlay,On,Off;",
+	"oR,CD Slow Overlay,Off,On;",
 	"-;",
 
 	"P1,Video & Audio;",
@@ -415,6 +416,7 @@ parameter CONF_STR = {
 	"P3OU,Sound,On,Off;",
 	"P3oA,SPU Reverb,On,Off;",
 	"P3OV,Fast Memory,Off,On;",
+	"P3oQ,Data Cache(Cheats Off),Off,On;",
 	"P3OJ,RepTimingGPU,Off,On;",
 	"P3OK,RepTimingDMA,Off,On;",
 	"P3oB,RepTimingSPUDMA,Off,On;",
@@ -783,6 +785,7 @@ psx
    .loadExe(loadExe),
    .fastboot(status[16]),
    .FASTMEM(status[31]),
+   .DATACACHEON(status[58]),
    .REPRODUCIBLEGPUTIMING(status[19]),
    .REPRODUCIBLEDMATIMING(status[20]),
    .DMABLOCKATONCE(status[26]),
@@ -790,6 +793,7 @@ psx
    .INSTANTSEEK(status[21]),
    .ditherOff(status[22]),
    .fpscountOn(status[28]),
+   .cdslowOn(status[59]),
    .errorOn(~status[29]),
    .PATCHSERIAL(status[54]),
    .noTexture(status[27]),
@@ -945,7 +949,7 @@ psx
    .rewind_active         (0), //(status[27] & joy[15]),
    //cheats
    .cheat_clear(gg_reset),
-   .cheats_enabled(~status[6]),
+   .cheats_enabled(~status[6] && ~status[58]),
    .cheat_on(gg_valid),
    .cheat_in(gg_code),
    .cheats_active(gg_active),

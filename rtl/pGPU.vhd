@@ -42,6 +42,7 @@ package pGPU is
       interlacedDisplayField  : std_logic;
       nextHCount              : std_logic_vector(11 downto 0);
       vpos                    : std_logic_vector(8 downto 0);
+      vdisp                   : std_logic_vector(8 downto 0);
       inVsync                 : std_logic;
       activeLineLSB           : std_logic;
       GPUSTAT_InterlaceField  : std_logic;

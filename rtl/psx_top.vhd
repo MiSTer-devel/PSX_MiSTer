@@ -24,6 +24,7 @@ entity psx_top is
       loadExe               : in  std_logic;
       fastboot              : in  std_logic;
       FASTMEM               : in  std_logic;
+      DATACACHEON           : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
@@ -31,6 +32,7 @@ entity psx_top is
       INSTANTSEEK           : in  std_logic;
       ditherOff             : in  std_logic;
       fpscountOn            : in  std_logic;
+      cdslowOn              : in  std_logic;
       errorOn               : in  std_logic;
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
@@ -440,6 +442,7 @@ architecture arch of psx_top is
 
    -- overlay + error codes
    signal cdSlow                 : std_logic;
+   signal cdslowEna              : std_logic;
    signal errorEna               : std_logic;
    signal errorCode              : unsigned(3 downto 0);
    
@@ -1245,6 +1248,8 @@ begin
       SS_Idle              => SS_Idle_cd
    );
 
+   cdslowEna <= cdSlow and cdslowOn;
+
    igpu : entity work.gpu
    port map
    (
@@ -1275,7 +1280,7 @@ begin
       Gun2X                => Gun2X,
       Gun2Y_scanlines      => Gun2Y_scanlines,
 
-      cdSlow               => cdSlow,
+      cdSlow               => cdslowEna,
       
       errorOn              => errorOn,  
       errorEna             => errorEna, 
@@ -1481,6 +1486,7 @@ begin
    port map
    (
       clk1x                => clk1x,
+      clk2x                => clk2x,
       ce                   => ce_cpu,   
       reset                => reset_intern,
       
@@ -1491,6 +1497,7 @@ begin
       
       fastboot             => fastboot,
       NOMEMWAIT            => FASTMEM,
+      DATACACHEON          => DATACACHEON,
       PATCHSERIAL          => PATCHSERIAL,
             
       ram_dataWrite        => ram_cpu_dataWrite,
@@ -1516,6 +1523,11 @@ begin
       mem_dataRead         => mem_dataRead, 
       mem_dataCache        => mem_dataCache, 
       mem_done             => mem_done,
+      
+      dma_Adr              => ram_dma_Adr(20 downto 0),
+      dma_data             => ram_dma_dataWrite,
+      dma_rnw              => ram_dma_rnw,
+      dma_ena              => ram_dma_ena,
 
       --bus_exp1_addr        => bus_exp1_addr,   
       --bus_exp1_dataWrite   => bus_exp1_dataWrite,
