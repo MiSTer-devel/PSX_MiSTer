@@ -41,12 +41,6 @@ entity cd_top is
       dma_read             : in  std_logic;
       dma_readdata         : out std_logic_vector(7 downto 0);
       
-      cd_req               : out std_logic := '0';
-      cd_addr              : out std_logic_vector(26 downto 0) := (others => '0');
-      cd_data              : in  std_logic_vector(31 downto 0);
-      cd_done              : in  std_logic;
-      
-      cd_hps_on            : in  std_logic;
       cd_hps_req           : out std_logic := '0';
       cd_hps_lba           : out std_logic_vector(31 downto 0);
       cd_hps_lba_sim       : out std_logic_vector(31 downto 0);
@@ -250,7 +244,6 @@ architecture arch of cd_top is
       SFETCH_IDLE,
       SFETCH_DELAY,
       SFETCH_START,
-      SFETCH_DATA,
       SFETCH_HPSACK,
       SFETCH_HPSWORD,
       SFETCH_HPSDATA
@@ -2066,7 +2059,6 @@ begin
       if (rising_edge(clk1x)) then
 
          FifoData_Wr  <= '0';
-         cd_req       <= '0';
          
          sectorBuffer_wrenA  <= '0';
          sectorBuffers_wrenA <= '0';
@@ -2157,7 +2149,7 @@ begin
                   end if;
                   
                when SFETCH_DELAY => -- delay to give processing a head start with copy and wait for HPS ack before new request
-                  if (cd_hps_on = '0' or cd_hps_ack = '0') then
+                  if (cd_hps_ack = '0') then
                      if (fetchDelay > 0) then
                         fetchDelay <= fetchDelay - 1;
                      elsif (trackSearchState = TRACKSEARCH_IDLE) then
@@ -2171,28 +2163,18 @@ begin
                   end if;
                   
                when SFETCH_START =>
-                  if (cd_hps_on = '1') then
-                     sectorFetchState <= SFETCH_HPSACK;
-                     cd_hps_req       <= '1';
-                     if (positionInIndex >= 0) then
-                        cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(positionInIndex, 24));
-                        cd_hps_lba_sim   <= x"00" & std_logic_vector(to_unsigned(positionInIndex, 24));
-                     else
-                        cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(0, 24));
-                        cd_hps_lba_sim   <= x"00" & std_logic_vector(to_unsigned(0, 24));
-                     end if;
-                     if (multitrack = '1') then
-                        cd_hps_lba                   <= std_logic_vector(to_unsigned(lastReadSector, 32));
-                        cd_hps_lba_sim(30 downto 24) <= trackNumber;
-                     end if;
+                  sectorFetchState <= SFETCH_HPSACK;
+                  cd_hps_req       <= '1';
+                  if (positionInIndex >= 0) then
+                     cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(positionInIndex, 24));
+                     cd_hps_lba_sim   <= x"00" & std_logic_vector(to_unsigned(positionInIndex, 24));
                   else
-                     sectorFetchState <= SFETCH_DATA;
-                     if (positionInIndex >= 0) then
-                        cd_addr <= std_logic_vector(to_unsigned(positionInIndex * 2352, 27)); -- needs more bits for real CD
-                     else
-                        cd_addr <= std_logic_vector(to_unsigned(0 * 2352, 27));
-                     end if;
-                     cd_req  <= '1';
+                     cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(0, 24));
+                     cd_hps_lba_sim   <= x"00" & std_logic_vector(to_unsigned(0, 24));
+                  end if;
+                  if (multitrack = '1') then
+                     cd_hps_lba                   <= std_logic_vector(to_unsigned(lastReadSector, 32));
+                     cd_hps_lba_sim(30 downto 24) <= trackNumber;
                   end if;
                   
                   readSubchannel <= '1';
@@ -2216,30 +2198,6 @@ begin
                       (libcryptKey(0)  = '1' and (lastReadSector = 16167 or lastReadSector = 16172))
                   ) then
                       readSubchannel <= '0';
-                  end if;
-               
-               when SFETCH_DATA =>
-                  if (cd_done = '1') then
-                     sectorBuffer_addrA <= std_logic_vector(to_unsigned(fetchCount, 10));
-                     sectorBuffer_wrenA <= '1';
-                     if (positionInIndex >= 0) then
-                        checkData := cd_data;
-                     else
-                        checkData := (others => '0');
-                     end if;
-                     sectorBuffer_DataA <= checkData;
-                     
-                     if (fetchCount = 587) then
-                        sectorFetchState  <= SFETCH_IDLE;
-                     else
-                        fetchCount  <= fetchCount + 1;
-                        cd_addr     <= std_logic_vector(unsigned(cd_addr) + 4);
-                        cd_req      <= '1';
-                     end if;
-                     
-                     if (fetchCount = 0) then headerIsData <= '1'; headerDataSector <= '1'; headerDataCheck <= '1'; end if;
-                     if (fetchcount = 3 and checkData(31 downto 24) /= x"02") then headerDataCheck <= '0'; headerDataSector <= '0'; end if;
-                     if (fetchcount = 4 and checkData(22) = '1' and checkData(18) = '1' and headerDataCheck = '1') then headerIsData <= '0'; end if;
                   end if;
                   
                when SFETCH_HPSACK => 

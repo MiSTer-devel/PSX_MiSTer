@@ -27,6 +27,7 @@ entity gpu is
       noTexture            : in  std_logic;
       debugmodeOn          : in  std_logic;
       syncVideoOut         : in  std_logic;
+      syncInterlace        : in  std_logic;
 
       Gun1CrosshairOn      : in  std_logic;
       Gun1X                : in  unsigned(7 downto 0);
@@ -1480,6 +1481,7 @@ begin
    videoout_settings.hDisplayRange           <= hDisplayRange;
    videoout_settings.vDisplayRange           <= vDisplayRange;
    videoout_settings.pal60                   <= pal60;
+   videoout_settings.syncInterlace           <= syncInterlace;
    
    videoout_ss_in.interlacedDisplayField  <= ss_timing_in(4)(19);
    videoout_ss_in.nextHCount              <= ss_timing_in(4)(11 downto 0);

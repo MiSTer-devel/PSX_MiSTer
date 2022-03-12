@@ -37,6 +37,7 @@ entity psx_top is
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
       syncVideoOut          : in  std_logic;
+      syncInterlace         : in  std_logic;
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
@@ -75,11 +76,6 @@ entity psx_top is
       trackinfo_addr        : in std_logic_vector(8 downto 0);
       trackinfo_write       : in std_logic;
       cd_Size               : in  unsigned(29 downto 0);
-      cd_req                : out std_logic := '0';
-      cd_addr               : out std_logic_vector(26 downto 0) := (others => '0');
-      cd_data               : in  std_logic_vector(31 downto 0);
-      cd_done               : in  std_logic;
-      cd_hps_on             : in  std_logic;
       cd_hps_req            : out std_logic := '0';
       cd_hps_lba            : out std_logic_vector(31 downto 0);
       cd_hps_lba_sim        : out std_logic_vector(31 downto 0);
@@ -1221,13 +1217,7 @@ begin
       dma_read             => DMA_CD_readEna,
       dma_readdata         => DMA_CD_read,
       
-      cdSize               => cd_Size,
-      cd_req               => cd_req, 
-      cd_addr              => cd_addr,
-      cd_data              => cd_data,
-      cd_done              => cd_done,
-      
-      cd_hps_on            => cd_hps_on,   
+      cdSize               => cd_Size, 
       cd_hps_req           => cd_hps_req,  
       cd_hps_lba           => cd_hps_lba,
       cd_hps_lba_sim       => cd_hps_lba_sim,
@@ -1271,6 +1261,7 @@ begin
       noTexture            => noTexture,
       debugmodeOn          => debugmodeOn,
       syncVideoOut         => syncVideoOut,
+      syncInterlace        => syncInterlace,
       
       Gun1CrosshairOn      => Gun1CrosshairOn,
       Gun1X                => Gun1X,

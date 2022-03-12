@@ -50,7 +50,7 @@ architecture arch of tb_savestates is
       ( 12288,     8),    -- SIO          11
       ( 31744,   256),    -- Scratchpad   12   
       ( 32768, 16384),    -- CDROM        13
-      (131072,     2),    -- SPURAM       14  -- size should be 131072
+      (131072,131072),    -- SPURAM       14
       (262144,262144),    -- VRAM         15
       (524288,524288)     -- RAM          16
    );
@@ -110,7 +110,7 @@ begin
       
          if (LOADSTATE = '1') then
 
-            for savetype in 0 to 14 loop
+            for savetype in 0 to 13 loop
                for i in 0 to (savetypes(savetype).size - 1) loop
                   SS_DataWrite( 7 downto  0) <= std_logic_vector(to_unsigned(data((savetypes(savetype).offset + i) * 4 + 0), 8));
                   SS_DataWrite(15 downto  8) <= std_logic_vector(to_unsigned(data((savetypes(savetype).offset + i) * 4 + 1), 8));
@@ -121,6 +121,23 @@ begin
                   wait until rising_edge(clk);
                   SS_wren(savetype) <= '0';
                end loop;
+            end loop;
+            
+            -- special handling for SPU ram
+            for i in 0 to (savetypes(14).size - 1) loop
+               SS_DataWrite( 7 downto  0) <= std_logic_vector(to_unsigned(data((savetypes(14).offset + i) * 4 + 0), 8));
+               SS_DataWrite(15 downto  8) <= std_logic_vector(to_unsigned(data((savetypes(14).offset + i) * 4 + 1), 8));
+               SS_wren(14) <= '1';
+               SS_Adr      <= to_unsigned(i * 4 + 0, 19);
+               wait until rising_edge(clk);
+               SS_wren(14) <= '0';
+               
+               SS_DataWrite( 7 downto  0) <= std_logic_vector(to_unsigned(data((savetypes(14).offset + i) * 4 + 2), 8));
+               SS_DataWrite(15 downto  8) <= std_logic_vector(to_unsigned(data((savetypes(14).offset + i) * 4 + 3), 8));
+               SS_wren(14) <= '1';
+               SS_Adr      <= to_unsigned(i * 4 + 2, 19);
+               wait until rising_edge(clk);
+               SS_wren(14) <= '0';
             end loop;
             
          end if;

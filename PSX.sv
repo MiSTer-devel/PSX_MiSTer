@@ -343,7 +343,7 @@ always @(posedge clk_1x) begin : ffwd
 	fast_forward <= (FFrequest | ff_latch);
 end
 
-wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd_download;
+wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download;
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
@@ -351,14 +351,13 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download | cd
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXX  XX
+// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXx XX
 
 `include "build_id.v"
 parameter CONF_STR = {
 	"PSX;SS3E000000:400000;",
 	"S1,CUECHD,Load CD;",
 	"F1,EXE,Load Exe;",
-	//"h1FS2,ISOBIN,Load to SDRAM2;",
 	"-;",
 	"oJ,CD Lid,Closed,Open;",
 	"-;",
@@ -396,6 +395,7 @@ parameter CONF_STR = {
 	"P1oU,Fixed HBlank,On,Off;",
 	"P1OM,Dithering,On,Off;",
 	"P1o9,Deinterlacing,Weave,Bob;",
+	"P1oS,Sync 480i for HDMI,Off,On;",
 	"P1-;",
 	"d1P1oC,SPU RAM select,DDR3,SDRAM2;",
 	"P1O78,Stereo Mix,None,25%,50%,100%;",
@@ -560,11 +560,10 @@ assign sd_wr[1] = 0;
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
-reg bios_download, cart_download, cd_download, sbi_download, cdinfo_download, code_download;
+reg bios_download, cart_download, sbi_download, cdinfo_download, code_download;
 always @(posedge clk_1x) begin
 	bios_download    <= ioctl_download & (ioctl_index == 0);
 	cart_download    <= ioctl_download & (ioctl_index == 1);
-	cd_download      <= ioctl_download & (ioctl_index[5:0] == 2);
 	sbi_download     <= ioctl_download & (ioctl_index == 250);
 	cdinfo_download  <= ioctl_download & (ioctl_index == 251);
 	code_download    <= ioctl_download & (ioctl_index == 255);
@@ -572,7 +571,7 @@ end
 
 reg cart_loaded = 0;
 always @(posedge clk_1x) begin
-	if (cart_download || cd_download || img_mounted[1]) begin
+	if (cart_download || img_mounted[1]) begin
 		cart_loaded <= 1;
 	end
 end
@@ -589,9 +588,7 @@ reg        hasCD = 0;
 reg        newCD = 0;
 
 reg cart_download_1 = 0;
-reg cd_download_1 = 0;
 reg loadExe = 0;
-reg cd_hps_on = 0;
 
 reg sd_mounted2 = 0;
 reg sd_mounted3 = 0;
@@ -614,13 +611,12 @@ reg [15:0] libcryptKey;
 
 always @(posedge clk_1x) begin
 	ramdownload_wr <= 0;
-	if(cart_download | bios_download | cd_download | cdinfo_download) begin
+	if(cart_download | bios_download | cdinfo_download) begin
       if (ioctl_wr) begin
          if(~ioctl_addr[1]) begin
             ramdownload_wrdata[15:0] <= ioctl_dout;
             if (bios_download)         ramdownload_wraddr  <= ioctl_addr[26:0] + BIOS_START[26:0];
-            else if (cart_download)    ramdownload_wraddr  <= ioctl_addr[26:0] + EXE_START[26:0];                          
-            else if (cd_download)      ramdownload_wraddr  <= ioctl_addr[26:0];      
+            else if (cart_download)    ramdownload_wraddr  <= ioctl_addr[26:0] + EXE_START[26:0];                              
             else if (cdinfo_download)  ramdownload_wraddr  <= ioctl_addr[26:0];      
          end else begin
             ramdownload_wrdata[31:16] <= ioctl_dout;
@@ -636,13 +632,6 @@ always @(posedge clk_1x) begin
    cart_download_1 <= cart_download;
    loadExe         <= cart_download_1 & ~cart_download;   
    
-   cd_download_1 <= cd_download;
-   if (cd_download_1 & ~cd_download) begin
-      cd_Size   <= ioctl_addr;
-      cd_hps_on <= 0;
-      hasCD     <= 1;
-   end
-   
    if (sbi_download && ioctl_wr) begin
       libcryptKey <= ioctl_dout;
    end
@@ -651,7 +640,6 @@ always @(posedge clk_1x) begin
    if (img_mounted[1]) begin
       if (img_size > 0) begin
          cd_Size     <= img_size[29:0];
-         cd_hps_on   <= 1;
          hasCD       <= 1;
          newCD       <= 1;
       end else begin
@@ -798,6 +786,7 @@ psx
    .PATCHSERIAL(status[54]),
    .noTexture(status[27]),
    .syncVideoOut(syncVideoOut),
+   .syncInterlace(status[60]),
    .SPUon(~status[30]),
    .SPUSDRAM(status[44] & SDRAM2_EN),
    .REVERBOFF(status[42]),
@@ -836,11 +825,6 @@ psx
    .trackinfo_addr  (ramdownload_wraddr[10:2]),
    .trackinfo_write (ramdownload_wr && cdinfo_download),
    .cd_Size         (cd_Size),
-   .cd_req          (cd_req),
-   .cd_addr         (cd_addr),
-   .cd_data         (cd_data),
-   .cd_done         (cd_done),
-   .cd_hps_on       (cd_hps_on),   
    .cd_hps_req      (sd_rd[1]),  
    .cd_hps_lba      (sd_lba1),  
    .cd_hps_ack      (sd_ack[1]),
@@ -1047,11 +1031,6 @@ sdram sdram
 	.ch3_ready(cheats_done)
 );
 
-wire        cd_req;
-wire [26:0] cd_addr;
-wire [31:0] cd_data;
-wire        cd_done;
-
 wire [31:0] spuram_dataWrite;
 wire [18:0] spuram_Adr;
 wire  [3:0] spuram_be;
@@ -1059,9 +1038,6 @@ wire        spuram_rnw;
 wire        spuram_ena;
 wire [31:0] spuram_dataRead;
 wire        spuram_done;
-
-assign cd_data = sdr_sdram_dout2[31:0];
-assign cd_done = 0; //sdram_readack2;
 
 assign spuram_dataRead = sdr_sdram_dout2[31:0];
 assign spuram_done     = sdram_readack2 | sdram_writeack2;

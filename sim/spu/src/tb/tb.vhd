@@ -129,7 +129,7 @@ begin
       reset                => reset_out,
       
       SPUon                => '1',
-      useSDRAM             => '0',
+      useSDRAM             => '1',
       REPRODUCIBLESPUIRQ   => '1',
       REPRODUCIBLESPUDMA   => '0',
       REVERBOFF            => '0',
@@ -175,7 +175,14 @@ begin
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(8 downto 0),
       SS_wren              => SS_wren(9),
-      SS_rden              => '0'
+      SS_rden              => '0',
+      
+      SS_RAM_dataWrite     => SS_DataWrite(15 downto 0),
+      SS_RAM_Adr           => std_logic_vector(SS_Adr),      
+      SS_RAM_request       => SS_wren(14),  
+      SS_RAM_rnw           => '0',      
+      SS_RAM_dataRead      => open, 
+      SS_RAM_done          => open     
    );
    
    itb_savestates : entity work.tb_savestates

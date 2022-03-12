@@ -32,6 +32,7 @@ entity psx_mister is
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
       syncVideoOut          : in  std_logic;
+      syncInterlace         : in  std_logic;
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
@@ -70,11 +71,6 @@ entity psx_mister is
       trackinfo_addr        : in std_logic_vector(8 downto 0);
       trackinfo_write       : in std_logic;
       cd_Size               : in  unsigned(29 downto 0);
-      cd_req                : out std_logic := '0';
-      cd_addr               : out std_logic_vector(26 downto 0) := (others => '0');
-      cd_data               : in  std_logic_vector(31 downto 0);
-      cd_done               : in  std_logic;
-      cd_hps_on             : in  std_logic;
       cd_hps_req            : out std_logic := '0';
       cd_hps_lba            : out std_logic_vector(31 downto 0);
       cd_hps_lba_sim        : out std_logic_vector(31 downto 0);
@@ -240,6 +236,7 @@ begin
       PATCHSERIAL           => PATCHSERIAL,
       noTexture             => noTexture,
       syncVideoOut          => syncVideoOut,
+      syncInterlace         => syncInterlace,
       SPUon                 => SPUon,
       SPUSDRAM              => SPUSDRAM,
       REVERBOFF             => REVERBOFF,
@@ -277,12 +274,7 @@ begin
       trackinfo_data        => trackinfo_data,
       trackinfo_addr        => trackinfo_addr, 
       trackinfo_write       => trackinfo_write,
-      cd_Size               => cd_Size,
-      cd_req                => cd_req, 
-      cd_addr               => cd_addr,
-      cd_data               => cd_data,
-      cd_done               => cd_done,
-      cd_hps_on             => cd_hps_on,   
+      cd_Size               => cd_Size, 
       cd_hps_req            => cd_hps_req,  
       cd_hps_lba            => cd_hps_lba,  
       cd_hps_lba_sim        => cd_hps_lba_sim,  

@@ -247,7 +247,7 @@ begin
             --gpu timing calc
             if (videoout_settings.GPUSTAT_PalVideoMode = '1' and videoout_settings.pal60 = '0') then
                htotal <= 3406;
-               if (videoout_settings.GPUSTAT_VertInterlace = '0') then
+               if (videoout_settings.GPUSTAT_VertInterlace = '0' or videoout_settings.syncInterlace = '1') then
                   vtotal <= 314;
                elsif (videoout_reports.GPUSTAT_InterlaceField = '0') then
                   vtotal <= 313;
@@ -257,7 +257,7 @@ begin
                videoout_out.isPal <= '1';
             else
                htotal <= 3413;
-               if (videoout_settings.GPUSTAT_VertInterlace = '0' or videoout_reports.GPUSTAT_InterlaceField = '0') then
+               if (videoout_settings.GPUSTAT_VertInterlace = '0' or videoout_reports.GPUSTAT_InterlaceField = '0' or videoout_settings.syncInterlace = '1') then
                   vtotal <= 263;
                else
                   vtotal <= 262;
@@ -581,7 +581,7 @@ begin
 
             vsync_hstart := hsync_start;
             vsync_vstart := 242;
-            if (videoout_settings.GPUSTAT_VertInterlace = '1' and videoout_reports.GPUSTAT_InterlaceField = '0') then
+            if (videoout_settings.GPUSTAT_VertInterlace = '1' and videoout_reports.GPUSTAT_InterlaceField = '0' and videoout_settings.syncInterlace = '0') then
                -- half line later
                vsync_hstart := 32 + 3413/2;
                vsync_vstart := vsync_vstart + 1;

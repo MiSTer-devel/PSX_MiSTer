@@ -122,6 +122,7 @@ architecture arch of mdec is
    signal idct_x              : integer range 0 to 7;
    signal idct_y              : integer range 0 to 7;
    signal idct_u              : integer range 0 to 7;
+   signal idct_u1             : integer range 0 to 7;
    signal idct_sum            : signed(48 downto 0);
    signal idct_done           : std_logic := '0';
    
@@ -642,6 +643,7 @@ begin
                         idct_x      <= 0;
                         idct_y      <= 0;
                         idct_u      <= 0;
+                        idct_u1     <= 1;
                      else
                         if (unsigned(FifoRL_Dout(19 downto 14)) = 0) then
                            idct_block <= to_integer(unsigned(FifoRL_Dout(13 downto 11)));
@@ -656,16 +658,18 @@ begin
                   idct_calc0_stage   <= '0';
                   idct_calc0_mul11   <= resize(idct_input(idct_u * 8 + idct_x), idct_calc0_mul11'length);
                   idct_calc0_mul12   <= scaleTable(idct_u * 8 + idct_y);
-                  idct_calc0_mul21   <= resize(idct_input((idct_u + 1) * 8 + idct_x), idct_calc0_mul11'length);
-                  idct_calc0_mul22   <= scaleTable((idct_u + 1) * 8 + idct_y);
+                  idct_calc0_mul21   <= resize(idct_input(idct_u1 * 8 + idct_x), idct_calc0_mul11'length);
+                  idct_calc0_mul22   <= scaleTable(idct_u1 * 8 + idct_y);
                   idct_calc0_target1 <= idct_x + idct_y * 8;
                   if (idct_u = 0) then idct_calc0_first <= '1'; else idct_calc0_first <= '0'; end if;
                   if (idct_u = 6) then idct_calc0_last  <= '1'; else idct_calc0_last  <= '0'; end if;
                   
                   if (idct_u < 6) then 
-                     idct_u <= idct_u + 2; 
+                     idct_u  <= idct_u  + 2; 
+                     idct_u1 <= idct_u1 + 2;
                   else 
-                     idct_u <= 0; 
+                     idct_u  <= 0; 
+                     idct_u1 <= 1;
                      if (idct_y < 7) then 
                         idct_y <= idct_y + 1; 
                      else 
@@ -684,16 +688,18 @@ begin
                   idct_calc0_stage   <= '1';
                   idct_calc0_mul11   <= idct_temp(idct_u + idct_y * 8);
                   idct_calc0_mul12   <= scaleTable(idct_u * 8 + idct_x);
-                  idct_calc0_mul21   <= idct_temp(idct_u + 1 + idct_y * 8);
-                  idct_calc0_mul22   <= scaleTable((idct_u + 1) * 8 + idct_x);
+                  idct_calc0_mul21   <= idct_temp(idct_u1 + idct_y * 8);
+                  idct_calc0_mul22   <= scaleTable(idct_u1 * 8 + idct_x);
                   idct_calc0_target2 <= idct_x + idct_y * 8 + idct_block * 64;
                   if (idct_u = 0) then idct_calc0_first <= '1'; else idct_calc0_first <= '0'; end if;
                   if (idct_u = 6) then idct_calc0_last  <= '1'; else idct_calc0_last  <= '0'; end if;
                
                   if (idct_u < 6) then 
-                     idct_u <= idct_u + 2; 
+                     idct_u  <= idct_u  + 2; 
+                     idct_u1 <= idct_u1 + 2;
                   else 
-                     idct_u <= 0; 
+                     idct_u  <= 0; 
+                     idct_u1 <= 1;
                      if (idct_y < 7) then 
                         idct_y <= idct_y + 1; 
                      else 

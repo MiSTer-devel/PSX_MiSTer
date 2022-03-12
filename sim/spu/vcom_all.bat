@@ -9,7 +9,9 @@ vcom -93 -quiet -work  sim/mem ^
 ../../rtl/SyncRam.vhd
 
 vcom -2008 -quiet -work sim/psx ^
+../../rtl/dpram.vhd ^
 ../../rtl/spu_ram.vhd ^
+../../rtl/spu_gauss.vhd ^
 ../../rtl/spu.vhd
 
 vcom -93 -quiet -work sim/mem ^

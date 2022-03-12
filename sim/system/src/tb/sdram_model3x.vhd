@@ -105,7 +105,11 @@ begin
       end if;
       
       if (done_3x = '1') then
-         do32 <= do(31 downto 0);
+         if (addr_buffer(0) = '1') then
+            do32 <= x"00" & do(31 downto 8);
+         else
+            do32 <= do(31 downto 0);
+         end if;
       end if;
    
    end process;
