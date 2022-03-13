@@ -168,6 +168,9 @@ entity psx_mister is
       MouseRight            : in  std_logic;
       MouseX                : in  signed(8 downto 0);
       MouseY                : in  signed(8 downto 0);
+      RumbleDataP1          : out std_logic_vector(15 downto 0);
+      RumbleDataP2          : out std_logic_vector(15 downto 0);
+
 
       -- sound                          
       sound_out_left        : out std_logic_vector(15 downto 0) := (others => '0');
@@ -358,6 +361,7 @@ begin
       joypad1.Analog1Y      => Analog1YP1,
       joypad1.Analog2X      => Analog2XP1,
       joypad1.Analog2Y      => Analog2YP1,
+      joypad1_rumble        => RumbleDataP1,
 
       joypad2.PadPortEnable => PadPortEnable2,
       joypad2.PadPortAnalog => PadPortAnalog2,
@@ -385,6 +389,7 @@ begin
       joypad2.Analog1Y      => Analog1YP2,
       joypad2.Analog2X      => Analog2XP2,
       joypad2.Analog2Y      => Analog2YP2,
+			joypad2_rumble        => RumbleDataP2,
 
       MouseEvent            => MouseEvent,
       MouseLeft             => MouseLeft,

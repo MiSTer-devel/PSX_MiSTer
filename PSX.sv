@@ -493,6 +493,8 @@ wire [15:0] joystick_analog_r1;
 
 wire [24:0] mouse;
 
+wire [15:0] joystick1_rumble;
+wire [15:0] joystick2_rumble;
 wire [32:0] RTC_time;
 
 wire [63:0] status_in = cart_download ? {status[63:39],ss_slot,status[36:17],1'b0,status[15:0]} : {status[63:39],ss_slot,status[36:0]};
@@ -548,7 +550,10 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
    .joystick_r_analog_0(joystick_analog_r0),  
    .joystick_l_analog_1(joystick_analog_l1),
    .joystick_r_analog_1(joystick_analog_r1),
-   .ps2_mouse(mouse)
+   .ps2_mouse(mouse),
+   .joystick_0_rumble(paused ? 16'h0000 : joystick1_rumble),
+   .joystick_1_rumble(paused ? 16'h0000 : joystick2_rumble)
+
 );
 
 assign joy = joy_unmod[16] ? 16'b0 : joy_unmod;
@@ -915,6 +920,8 @@ psx
    .Analog1YP2(joystick_analog_l1[15:8]),       
    .Analog2XP2(joystick_analog_r1[7:0]),           
    .Analog2YP2(joystick_analog_r1[15:8]),           
+   .RumbleDataP1(joystick1_rumble),
+   .RumbleDataP2(joystick2_rumble),
    .MouseEvent(mouse[24]),
    .MouseLeft(mouse[0]),
    .MouseRight(mouse[1]),
