@@ -53,8 +53,7 @@ module emu
 	output        VGA_F1,
 	output [1:0]  VGA_SL,
 	output        VGA_SCALER, // Force VGA scaler
-
-   input         DIRECT_VIDEO,
+	output        VGA_DISABLE, // analog out is off
 
 	input  [11:0] HDMI_WIDTH,
 	input  [11:0] HDMI_HEIGHT,
@@ -256,17 +255,9 @@ pll_cfg pll_cfg
 );
 
 
-`ifdef MISTER_DUAL_SDRAM
 wire FFrequest = joy[17] && ~FB_LL && ~DIRECT_VIDEO;
 wire syncVideoOut = status[57] && ~FB_LL && ~DIRECT_VIDEO;
 wire syncVideoClock = status[56] && ~FB_LL && ~DIRECT_VIDEO;
-`endif
-
-`ifndef MISTER_DUAL_SDRAM
-wire FFrequest = 0;
-wire syncVideoOut = 0;
-wire syncVideoClock = 0;
-`endif
 
 always @(posedge CLK_50M) begin : cfg_block
 	reg pald = 0, pald2 = 0;
@@ -501,6 +492,7 @@ wire [32:0] RTC_time;
 wire [63:0] status_in = cart_download ? {status[63:39],ss_slot,status[36:0]} : {status[63:39],ss_slot,status[36:0]};
 
 wire bk_pending;
+wire DIRECT_VIDEO;
 
 hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
 (
@@ -553,8 +545,9 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
    .joystick_r_analog_1(joystick_analog_r1),
    .ps2_mouse(mouse),
    .joystick_0_rumble(paused ? 16'h0000 : joystick1_rumble),
-   .joystick_1_rumble(paused ? 16'h0000 : joystick2_rumble)
-
+   .joystick_1_rumble(paused ? 16'h0000 : joystick2_rumble),
+   
+   .direct_video(DIRECT_VIDEO)
 );
 
 assign joy = joy_unmod[16] ? 16'b0 : joy_unmod;
@@ -1245,6 +1238,8 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 	video.green <= (vbl || hbl) ? 8'd0 : g;
 	video.blue <= (vbl || hbl) ? 8'd0 : b;
 	{aspect_x, aspect_y} <= video_isPal ? aspect_ratio_lut_pal[v_total] : aspect_ratio_lut_ntsc[v_total];
+
+	VGA_DISABLE <= fast_forward;
 
 	h_pos <= h_pos + 1'd1;
 	if (~old_vb && vbl)
