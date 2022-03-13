@@ -18,11 +18,13 @@ entity joypad is
       
       joypad1              : in  joypad_t;
       joypad2              : in  joypad_t;
+      joypad1_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
+      joypad2_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
+
       
       memcard1_available   : in  std_logic;
       memcard2_available   : in  std_logic;
       
-      rumbleOn             : out std_logic := '0';
       
       irqRequest           : out std_logic := '0';
       
@@ -108,6 +110,7 @@ architecture arch of joypad is
    signal selectedPort1       : std_logic;
    signal selectedPort2       : std_logic;
    signal selectedPort        : std_logic;
+	 signal selectedPort1_p     : std_logic;
       
    signal ack                 : std_logic;
    signal ackPad              : std_logic;
@@ -125,6 +128,8 @@ architecture arch of joypad is
    signal receiveValidMem2    : std_logic;
 
    signal joypad_selected     : joypad_t;
+   signal rumble_selected     : std_logic_vector(15 downto 0);
+   signal rumble_previous     : std_logic_vector(15 downto 0);
    signal GunX                : unsigned(7 downto 0);
    signal GunY_scanlines      : unsigned(8 downto 0);
    signal GunAimOffscreen     : std_logic;
@@ -165,6 +170,9 @@ begin
    ss_out(4)(18)           <= waitAck;        
 
    process (clk1x)
+     variable p1_rumble    : std_logic_vector(15 downto 0);
+     variable p2_rumble    : std_logic_vector(15 downto 0);
+
    begin
       if rising_edge(clk1x) then
       
@@ -325,8 +333,17 @@ begin
                   end if;
                end if;
             end if;
-            
             JOY_CTRL_13_1 <= JOY_CTRL(13);
+            selectedPort1_p <= selectedPort1; 
+            if (selectedPort1_p /= selectedPort1) then
+              if (selectedPort1) then
+                 p2_rumble := rumble_selected;
+                 joypad2_rumble <= p2_rumble;
+              else
+                 p1_rumble := rumble_selected;
+                 joypad1_rumble <= p1_rumble;
+              end if;
+          end if;
          end if;
       end if;
    end process;
@@ -351,6 +368,7 @@ begin
       reset                => reset,    
        
       joypad               => joypad_selected,
+      rumble               => rumble_selected,
       isPal                => isPal,
 
       selected             => selectedPort,
@@ -365,7 +383,6 @@ begin
       receiveBuffer        => receiveBufferPad,
       ack                  => ackPad,
 
-      rumbleOn             => rumbleOn,
 
       MouseEvent           => MouseEvent,
       MouseLeft            => MouseLeft,

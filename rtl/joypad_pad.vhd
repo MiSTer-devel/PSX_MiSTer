@@ -12,6 +12,7 @@ entity joypad_pad is
       reset                : in  std_logic;
       
       joypad               : in  joypad_t;
+	    rumble               : out std_logic_vector(15 downto 0);
 
       isPal                : in  std_logic;
       
@@ -26,8 +27,6 @@ entity joypad_pad is
       receiveValid         : out std_logic;
       receiveBuffer        : out std_logic_vector(7 downto 0);
       ack                  : out std_logic;
-
-      rumbleOn             : out std_logic := '0';
 
       MouseEvent           : in  std_logic;
       MouseLeft            : in  std_logic;
@@ -113,7 +112,7 @@ begin
          
             controllerState <= IDLE;
             isActive        <= '0';
-            rumbleOn        <= '0';
+            rumble          <= (others => '0');
             mouseAccX       <= (others => '0');
             mouseAccY       <= (others => '0');
 
@@ -362,7 +361,7 @@ begin
                            ack              <= '1';
                            receiveValid     <= '1';
                            rumbleOnFirst    <= '0';
-                           if (analogPadSave = '1' and transmitValue(7 downto 6) = "01") then
+                           if (analogPadSave = '1' and (transmitValue(7) = '1' or  transmitValue(6) = '1')) then
                               rumbleOnFirst <= '1';
                            end if;
                            
@@ -383,9 +382,9 @@ begin
                            else
                               controllerState <= IDLE;
                            end if;
-                           rumbleOn <= '0';
-                           if (analogPadSave = '1' and transmitValue(0) = '1' and rumbleOnFirst = '1') then
-                              rumbleOn <= '1';
+                           rumble <= X"0000";
+                           if (analogPadSave = '1' and (transmitValue(0) = '1' or rumbleOnFirst = '1')) then
+                              rumble <= X"FFFF";
                            end if;
                            
                         when ANALOGRIGHTX => 

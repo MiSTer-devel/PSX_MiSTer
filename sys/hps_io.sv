@@ -158,6 +158,15 @@ module hps_io #(parameter CONF_STR, CONF_STR_BRAM=1, PS2DIV=0, WIDE=0, VDNUM=1, 
 
 	inout      [21:0] gamma_bus,
 
+	input      [15:0] joystick_0_rumble, // 15:8 - 'large' rumble motor magnitude, 7:0 'small' rumble motor magnitude
+	input      [15:0] joystick_1_rumble,
+	input      [15:0] joystick_2_rumble,
+	input      [15:0] joystick_3_rumble,
+	input      [15:0] joystick_4_rumble,
+	input      [15:0] joystick_5_rumble,
+
+
+
 	// for core-specific extensions
 	inout      [35:0] EXT_BUS
 );
@@ -330,6 +339,12 @@ always@(posedge clk_sys) begin : uio_block
 				  'h39: io_dout <= 1;
 				  'h3C: if(upload_req) begin io_dout <= {ioctl_upload_index, 8'd1}; upload_req <= 0; end
 				  'h3E: io_dout <= 1; // shadow mask
+				  'h3F: io_dout <= joystick_0_rumble;
+				  'h40: io_dout <= joystick_1_rumble;
+				  'h41: io_dout <= joystick_2_rumble;
+				  'h42: io_dout <= joystick_3_rumble;
+				  'h43: io_dout <= joystick_4_rumble;
+				  'h44: io_dout <= joystick_5_rumble;
 			endcase
 
 			sd_buff_addr <= 0;
