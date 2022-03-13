@@ -337,14 +337,12 @@ always@(posedge clk_sys) begin : uio_block
 				  'h39: io_dout <= 1;
 				  'h3C: if(upload_req) begin io_dout <= {ioctl_upload_index, 8'd1}; upload_req <= 0; end
 				  'h3E: io_dout <= 1; // shadow mask
-				'h0X3F: case(io_dout[11:8])
-								0: io_dout <= joystick_0_rumble;
-								1: io_dout <= joystick_1_rumble;
-								2: io_dout <= joystick_2_rumble;
-								3: io_dout <= joystick_3_rumble;
-								4: io_dout <= joystick_4_rumble;
-								5: io_dout <= joystick_5_rumble;
-						  endcase
+				'h003F: io_dout <= joystick_0_rumble;
+				'h013F: io_dout <= joystick_1_rumble;
+				'h023F: io_dout <= joystick_2_rumble;
+				'h033F: io_dout <= joystick_3_rumble;
+				'h043F: io_dout <= joystick_4_rumble;
+				'h053F: io_dout <= joystick_5_rumble;
 			endcase
 
 			sd_buff_addr <= 0;
