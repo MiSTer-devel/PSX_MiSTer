@@ -42,6 +42,7 @@ entity psx_top is
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
       REPRODUCIBLESPUDMA    : in  std_logic;
+      WIDESCREEN            : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -138,13 +139,11 @@ entity psx_top is
       joypad1_rumble        : out std_logic_vector(15 downto 0);
       joypad2_rumble        : out std_logic_vector(15 downto 0);
 
-
       MouseEvent            : in  std_logic;
       MouseLeft             : in  std_logic;
       MouseRight            : in  std_logic;
       MouseX                : in  signed(8 downto 0);
       MouseY                : in  signed(8 downto 0);
-
       -- sound                            
       sound_out_left        : out std_logic_vector(15 downto 0) := (others => '0');
       sound_out_right       : out std_logic_vector(15 downto 0) := (others => '0');
@@ -910,7 +909,6 @@ begin
       joypad1_rumble       => joypad1_rumble,
       joypad2_rumble       => joypad2_rumble,
 
-      
       memcard1_available   => memcard1_available,
       memcard2_available   => memcard2_available,
       
@@ -1685,6 +1683,8 @@ begin
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
       reset                => reset_intern,     
+      
+      WIDESCREEN           => WIDESCREEN,
       
       gte_busy             => gte_busy,     
       gte_readAddr         => gte_readAddr, 

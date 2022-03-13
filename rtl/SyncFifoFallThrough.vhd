@@ -33,7 +33,7 @@ architecture arch of SyncFifoFallThrough is
    constant SIZEBITS : integer := integer(ceil(log2(real(SIZE))));
 
    type t_memory is array(0 to SIZE - 1) of std_logic_vector(DATAWIDTH - 1 downto 0);
-   signal memory : t_memory;  
+   signal memory : t_memory := (others => (others => '0'));  
 
    signal wrcnt   : unsigned(SIZEBITS - 1 downto 0) := (others => '0');
    signal rdcnt   : unsigned(SIZEBITS - 1 downto 0) := (others => '0');

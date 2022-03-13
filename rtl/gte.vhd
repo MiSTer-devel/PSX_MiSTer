@@ -14,6 +14,8 @@ entity gte is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      WIDESCREEN           : in  std_logic;
+      
       gte_busy             : out std_logic;
       gte_readAddr         : in  unsigned(5 downto 0);
       gte_readData         : out unsigned(31 downto 0);
@@ -128,6 +130,9 @@ architecture arch of gte is
    signal REG_ZSF3  : signed(15 downto 0);
    signal REG_ZSF4  : signed(15 downto 0);
    signal REG_FLAG  : unsigned(31 downto 0);
+   
+   -- widescreen
+   signal IR1aspect : signed(16 downto 0);
   
    -- calculation
    type tstate is
@@ -261,6 +266,12 @@ begin
       variable colorNewB     : unsigned(7 downto 0);
    begin
       if rising_edge(clk2x) then
+      
+         if (WIDESCREEN = '1') then
+            IR1aspect <= (REG_IR1 & '0' + REG_IR1) / 4;
+         else
+            IR1aspect <= resize(REG_IR1, 17);
+         end if;
       
          if (reset = '1' and loading_savestate = '0') then
          
@@ -630,7 +641,7 @@ begin
                         REG_SZ0 <= REG_SZ1; REG_SZ1 <= REG_SZ2; REG_SZ2 <= REG_SZ3;
 
                               --             mul1                       mul2                    add         sub  swap useIR IRs cOvf uRes trigger
-                     when 12 => MAC0req <= (resize(REG_IR1, 17), '0' & signed(div_result), signed(REG_OFX), '0', '0', '0', '0', '1', '0', '1'); 
+                     when 12 => MAC0req <= (          IR1aspect, '0' & signed(div_result), signed(REG_OFX), '0', '0', '0', '0', '1', '0', '1'); 
                      when 13 => MAC0req <= (resize(REG_IR2, 17), '0' & signed(div_result), signed(REG_OFY), '0', '0', '0', '0', '1', '0', '1'); 
                      when 15 => -- push SXY
                         if (mac0Last(34 downto 16) < -1024) then

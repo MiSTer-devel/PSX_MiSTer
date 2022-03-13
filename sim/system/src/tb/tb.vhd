@@ -258,6 +258,7 @@ begin
       SPUSDRAM              => '1',
       REVERBOFF             => '0',
       REPRODUCIBLESPUDMA    => '0',
+      WIDESCREEN            => '0',
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,

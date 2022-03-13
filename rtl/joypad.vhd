@@ -21,10 +21,8 @@ entity joypad is
       joypad1_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
       joypad2_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
 
-      
       memcard1_available   : in  std_logic;
       memcard2_available   : in  std_logic;
-      
       
       irqRequest           : out std_logic := '0';
       
@@ -110,7 +108,7 @@ architecture arch of joypad is
    signal selectedPort1       : std_logic;
    signal selectedPort2       : std_logic;
    signal selectedPort        : std_logic;
-	 signal selectedPort1_p     : std_logic;
+   signal selectedPort_1      : std_logic;
       
    signal ack                 : std_logic;
    signal ackPad              : std_logic;
@@ -170,9 +168,6 @@ begin
    ss_out(4)(18)           <= waitAck;        
 
    process (clk1x)
-     variable p1_rumble    : std_logic_vector(15 downto 0);
-     variable p2_rumble    : std_logic_vector(15 downto 0);
-
    begin
       if rising_edge(clk1x) then
       
@@ -334,16 +329,16 @@ begin
                end if;
             end if;
             JOY_CTRL_13_1 <= JOY_CTRL(13);
-            selectedPort1_p <= selectedPort1; 
-            if (selectedPort1_p /= selectedPort1) then
-              if (selectedPort1) then
-                 p2_rumble := rumble_selected;
-                 joypad2_rumble <= p2_rumble;
-              else
-                 p1_rumble := rumble_selected;
-                 joypad1_rumble <= p1_rumble;
-              end if;
-          end if;
+            
+            selectedPort_1 <= selectedPort1; 
+            if (selectedPort_1 /= selectedPort1) then
+               if (selectedPort1) then
+                  joypad2_rumble <= rumble_selected;
+               else
+                  joypad1_rumble <= rumble_selected;
+               end if;
+            end if;
+          
          end if;
       end if;
    end process;

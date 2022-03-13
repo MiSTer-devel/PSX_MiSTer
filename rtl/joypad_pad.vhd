@@ -12,7 +12,7 @@ entity joypad_pad is
       reset                : in  std_logic;
       
       joypad               : in  joypad_t;
-	    rumble               : out std_logic_vector(15 downto 0);
+      rumble               : out std_logic_vector(15 downto 0);
 
       isPal                : in  std_logic;
       
@@ -364,7 +364,6 @@ begin
                            if (analogPadSave = '1' and (transmitValue(7) = '1' or  transmitValue(6) = '1')) then
                               rumbleOnFirst <= '1';
                            end if;
-                           
                            
                         when BUTTONMSB => 
                            receiveBuffer(0) <= not joypad.KeyL2;

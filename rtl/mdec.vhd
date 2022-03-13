@@ -70,9 +70,12 @@ architecture arch of mdec is
    signal RamYUVwrite         : std_logic := '0';     
    signal RamYUVaddrB         : unsigned(6 downto 0) := (others => '0');
    signal RamYUVdataB         : std_logic_vector(7 downto 0); 
+
+   signal scaleT1_address_b   : std_logic_vector(5 downto 0) := (others => '0');
+   signal scaleT1_data_b      : std_logic_vector(15 downto 0);   
    
-   type tscaleTable is array(0 to 63) of signed(15 downto 0);
-   signal scaleTable : tscaleTable;
+   signal scaleT2_address_b   : std_logic_vector(5 downto 0) := (others => '0');
+   signal scaleT2_data_b      : std_logic_vector(15 downto 0);
   
    -- RL decoding
    signal decodeDone          : std_logic := '0';
@@ -114,9 +117,26 @@ architecture arch of mdec is
       IDCT_STAGE2
    );
    signal idctState           : tidctState := IDCT_IDLE;
-  
+   
+   -- synthesis translate_off
    type tidct_input is array(0 to 63) of signed(10 downto 0);
    signal idct_input          : tidct_input;
+   -- synthesis translate_on
+   
+   signal IDCTi_address_a    : std_logic_vector(5 downto 0) := (others => '0');
+   signal IDCTi_data_a       : std_logic_vector(10 downto 0) := (others => '0');
+   signal IDCTi_wren_a       : std_logic := '0';
+   signal IDCTi_wren_b       : std_logic := '0';
+   signal IDCTi_address_b    : std_logic_vector(5 downto 0) := (others => '0');
+   signal IDCTi_dataO_a      : std_logic_vector(10 downto 0) := (others => '0');
+   signal IDCTi_dataO_b      : std_logic_vector(10 downto 0) := (others => '0');
+   
+   signal scaleT_address_a   : std_logic_vector(5 downto 0) := (others => '0');
+   signal scaleT_address_Wr  : std_logic_vector(5 downto 0) := (others => '0');
+   signal scaleT_data_a      : std_logic_vector(15 downto 0) := (others => '0');
+   signal scaleT_data_aFirst : std_logic_vector(15 downto 0) := (others => '0');
+   signal scaleT_data_aNext  : std_logic_vector(15 downto 0) := (others => '0');
+   signal scaleT_wren_a      : std_logic := '0';
       
    signal idct_block          : integer range 0 to 5;
    signal idct_x              : integer range 0 to 7;
@@ -126,8 +146,17 @@ architecture arch of mdec is
    signal idct_sum            : signed(48 downto 0);
    signal idct_done           : std_logic := '0';
    
-   type tidct_temp is array(0 to 63) of signed(29 downto 0);
-   signal idct_temp           : tidct_temp;
+   --type tidct_temp is array(0 to 63) of signed(29 downto 0);
+   --signal idct_temp           : tidct_temp;
+   
+   signal IDCTt_address_a    : std_logic_vector(5 downto 0) := (others => '0');
+   signal IDCTt_data_a       : std_logic_vector(29 downto 0) := (others => '0');
+   signal IDCTt_wren_a       : std_logic := '0';
+   signal IDCTt_wren_b       : std_logic := '0';
+   signal IDCTt_address_b1   : std_logic_vector(5 downto 0) := (others => '0');
+   signal IDCTt_address_b2   : std_logic_vector(5 downto 0) := (others => '0');
+   signal IDCTt_dataO_b1     : std_logic_vector(29 downto 0) := (others => '0');
+   signal IDCTt_dataO_b2     : std_logic_vector(29 downto 0) := (others => '0');
   
    signal idct_calc0_ena      : std_logic := '0';
    signal idct_calc0_stage    : std_logic := '0';
@@ -314,6 +343,7 @@ begin
          RamSSwrite        <= '0';
          calcNextRL        <= '0';
          currentBlockDone  <= '0';
+         scaleT_wren_a     <= '0';
       
          if (reset = '1') then
          
@@ -343,8 +373,10 @@ begin
             end if;
             
             if (SS_Adr >= 64 and SS_Adr < 96) then
-               scaleTable(((to_integer(SS_Adr) - 64) * 2) + 0) <= signed(SS_DataWrite(15 downto  0));
-               scaleTable(((to_integer(SS_Adr) - 64) * 2) + 1) <= signed(SS_DataWrite(31 downto 16));
+               scaleT_address_Wr  <= std_logic_vector(SS_Adr(4 downto 0)) & '0';
+               scaleT_data_aFirst <= SS_DataWrite(15 downto  0);
+               scaleT_data_aNext  <= SS_DataWrite(31 downto 16);
+               scaleT_wren_a      <= '1';
                RamSSaddrA  <= '1' & resize(SS_Adr - 64, 5);
                RamSSdataA  <= SS_DataWrite;
                RamSSwrite  <= '1';
@@ -424,8 +456,10 @@ begin
                   
                when RECEIVE_SCALE =>
                   if (FifoIn_Empty = '0') then
-                     scaleTable(to_integer(recCount) * 2 + 0) <= signed(FifoIn_Dout(15 downto  0));
-                     scaleTable(to_integer(recCount) * 2 + 1) <= signed(FifoIn_Dout(31 downto 16));
+                     scaleT_address_Wr  <= std_logic_vector(recCount) & '0';
+                     scaleT_data_aFirst <= FifoIn_Dout(15 downto  0);
+                     scaleT_data_aNext  <= FifoIn_Dout(31 downto 16);
+                     scaleT_wren_a      <= '1';
                      RamSSaddrA  <= '1' & recCount;
                      RamSSdataA  <= FifoIn_Dout;
                      RamSSwrite  <= '1';
@@ -617,8 +651,121 @@ begin
    );
    
    FifoRL_Rd <= '1' when (idctState = IDCT_IDLE and FifoRL_Empty = '0' and FifoOut_Empty = '1') else '0';
-   
+
    -- IDCT
+   IDCTi_address_a <= std_logic_vector(to_unsigned(idct_u  * 8 + idct_x, 6)) when (idctState = IDCT_STAGE1) else FifoRL_Dout(19 downto 14);
+   IDCTi_address_b <= std_logic_vector(to_unsigned(idct_u1 * 8 + idct_x, 6)) when (idctState = IDCT_STAGE1) else std_logic_vector(to_unsigned(idct_x * 8 + idct_y, 6));
+   
+   IDCTi_wren_a    <= ce when (idctState = IDCT_IDLE and FifoRL_Empty = '0' and FifoOut_Empty = '1' and FifoRL_Dout(20) = '0') else '0';
+   IDCTi_wren_b    <= ce when (idctState = IDCT_STAGE2) else '0';
+   
+   IDCTi_data_a    <= FifoRL_Dout(10 downto 0);
+   
+   iIDCTiTable: entity work.dpram
+   generic map ( addr_width => 6, data_width => 11)
+   port map
+   (
+      clock_a     => clk2x,
+      address_a   => IDCTi_address_a,
+      data_a      => IDCTi_data_a,
+      wren_a      => IDCTi_wren_a,
+      q_a         => IDCTi_dataO_a,
+      
+      clock_b     => clk2x,
+      address_b   => IDCTi_address_b,
+      data_b      => (10 downto 0 => '0'),
+      wren_b      => IDCTi_wren_b,
+      q_b         => IDCTi_dataO_b
+   );
+   
+-------------------------
+   
+   scaleT_address_a <= scaleT_address_WR(5 downto 1) & '1' when (clk2xIndex = '1') else scaleT_address_WR(5 downto 1) & '0';
+   scaleT_data_a    <= scaleT_data_aNext                   when (clk2xIndex = '1') else scaleT_data_aFirst;
+   
+   iscaleTable1: entity work.dpram
+   generic map ( addr_width => 6, data_width => 16)
+   port map
+   (
+      clock_a     => clk2x,
+      address_a   => scaleT_address_a,
+      data_a      => scaleT_data_a,
+      wren_a      => scaleT_wren_a,
+      
+      clock_b     => clk2x,
+      address_b   => scaleT1_address_b,
+      data_b      => x"0000",
+      wren_b      => '0',
+      q_b         => scaleT1_data_b
+   );
+   
+   iscaleTable2: entity work.dpram
+   generic map ( addr_width => 6, data_width => 16)
+   port map
+   (
+      clock_a     => clk2x,
+      address_a   => scaleT_address_a,
+      data_a      => scaleT_data_a,
+      wren_a      => scaleT_wren_a,
+      
+      clock_b     => clk2x,
+      address_b   => scaleT2_address_b,
+      data_b      => x"0000",
+      wren_b      => '0',
+      q_b         => scaleT2_data_b
+   );
+   
+   scaleT1_address_b <= std_logic_vector(to_unsigned(idct_u  * 8 + idct_y, 6)) when (idctState = IDCT_STAGE1) else std_logic_vector(to_unsigned(idct_u  * 8 + idct_x, 6));
+   scaleT2_address_b <= std_logic_vector(to_unsigned(idct_u1 * 8 + idct_y, 6)) when (idctState = IDCT_STAGE1) else std_logic_vector(to_unsigned(idct_u1 * 8 + idct_x, 6));
+   idct_calc0_mul12  <= signed(scaleT1_data_b);
+   idct_calc0_mul22  <= signed(scaleT2_data_b);
+   
+-------------------------
+   
+   IDCTt_address_a <= std_logic_vector(to_unsigned(idct_calc2_target1, 6));
+   IDCTt_wren_a    <= ce when (idct_calc2_ena = '1' and idct_calc2_last = '1' and idct_calc2_stage = '0') else '0';
+   IDCTt_data_a    <= std_logic_vector(resize(idct_sum, 30));
+   
+   iIDCTtTable1: entity work.dpram
+   generic map ( addr_width => 6, data_width => 30)
+   port map
+   (
+      clock_a     => clk2x,
+      address_a   => IDCTt_address_a,
+      data_a      => IDCTt_data_a,
+      wren_a      => IDCTt_wren_a,
+      
+      clock_b     => clk2x,
+      address_b   => IDCTt_address_b1,
+      data_b      => (29 downto 0 => '0'),
+      wren_b      => '0',
+      q_b         => IDCTt_dataO_b1
+   );
+   
+   iIDCTtTable2: entity work.dpram
+   generic map ( addr_width => 6, data_width => 30)
+   port map
+   (
+      clock_a     => clk2x,
+      address_a   => IDCTt_address_a,
+      data_a      => IDCTt_data_a,
+      wren_a      => IDCTt_wren_a,
+      
+      clock_b     => clk2x,
+      address_b   => IDCTt_address_b2,
+      data_b      => (29 downto 0 => '0'),
+      wren_b      => '0',
+      q_b         => IDCTt_dataO_b2
+   );
+   
+   IDCTt_address_b1 <= std_logic_vector(to_unsigned(idct_u  + idct_y * 8, 6));
+   IDCTt_address_b2 <= std_logic_vector(to_unsigned(idct_u1 + idct_y * 8, 6));
+   
+-------------------------
+
+   idct_calc0_mul11 <= resize(signed(IDCTi_dataO_a), idct_calc0_mul11'length) when (idct_calc0_stage = '0') else signed(IDCTt_dataO_b1);
+   idct_calc0_mul21 <= resize(signed(IDCTi_dataO_b), idct_calc0_mul11'length) when (idct_calc0_stage = '0') else signed(IDCTt_dataO_b2);
+   
    process (clk2x)
       variable shifted : signed(16 downto 0);
    begin
@@ -647,19 +794,20 @@ begin
                      else
                         if (unsigned(FifoRL_Dout(19 downto 14)) = 0) then
                            idct_block <= to_integer(unsigned(FifoRL_Dout(13 downto 11)));
-                           idct_input <= (others => (others => '0'));
                         end if;
+                        -- synthesis translate_off
                         idct_input(to_integer(unsigned(FifoRL_Dout(19 downto 14)))) <= signed(FifoRL_Dout(10 downto 0));
+                        -- synthesis translate_on
                      end if;
                   end if;
                
                when IDCT_STAGE1 =>
                   idct_calc0_ena     <= '1';
                   idct_calc0_stage   <= '0';
-                  idct_calc0_mul11   <= resize(idct_input(idct_u * 8 + idct_x), idct_calc0_mul11'length);
-                  idct_calc0_mul12   <= scaleTable(idct_u * 8 + idct_y);
-                  idct_calc0_mul21   <= resize(idct_input(idct_u1 * 8 + idct_x), idct_calc0_mul11'length);
-                  idct_calc0_mul22   <= scaleTable(idct_u1 * 8 + idct_y);
+                  --idct_calc0_mul11   <= resize(idct_input(idct_u * 8 + idct_x), idct_calc0_mul11'length);
+                  --idct_calc0_mul12   <= scaleTable(idct_u * 8 + idct_y);
+                  --idct_calc0_mul21   <= resize(idct_input(idct_u1 * 8 + idct_x), idct_calc0_mul11'length);
+                  --idct_calc0_mul22   <= scaleTable(idct_u1 * 8 + idct_y);
                   idct_calc0_target1 <= idct_x + idct_y * 8;
                   if (idct_u = 0) then idct_calc0_first <= '1'; else idct_calc0_first <= '0'; end if;
                   if (idct_u = 6) then idct_calc0_last  <= '1'; else idct_calc0_last  <= '0'; end if;
@@ -686,10 +834,10 @@ begin
                when IDCT_STAGE2 =>
                   idct_calc0_ena     <= '1';
                   idct_calc0_stage   <= '1';
-                  idct_calc0_mul11   <= idct_temp(idct_u + idct_y * 8);
-                  idct_calc0_mul12   <= scaleTable(idct_u * 8 + idct_x);
-                  idct_calc0_mul21   <= idct_temp(idct_u1 + idct_y * 8);
-                  idct_calc0_mul22   <= scaleTable(idct_u1 * 8 + idct_x);
+                  --idct_calc0_mul11   <= idct_temp(idct_u + idct_y * 8);
+                  --idct_calc0_mul12   <= scaleTable(idct_u * 8 + idct_x);
+                  --idct_calc0_mul21   <= idct_temp(idct_u1 + idct_y * 8);
+                  --idct_calc0_mul22   <= scaleTable(idct_u1 * 8 + idct_x);
                   idct_calc0_target2 <= idct_x + idct_y * 8 + idct_block * 64;
                   if (idct_u = 0) then idct_calc0_first <= '1'; else idct_calc0_first <= '0'; end if;
                   if (idct_u = 6) then idct_calc0_last  <= '1'; else idct_calc0_last  <= '0'; end if;
@@ -715,10 +863,14 @@ begin
                         end if;
                      end if;
                   end if;
+                  
+                  -- synthesis translate_off
+                  idct_input(idct_x * 8 + idct_y) <= (others => '0'); -- clear table here for next usage
+                  -- synthesis translate_on
                
             end case;
             
-            -- calculation pipeline -> pipeline delay can be ingored as following stages don't read last written value early
+            -- calculation pipeline -> pipeline delay can be ignored as following stages don't read last written value early
             -- stage 0 multiply
             idct_calc1_ena     <= idct_calc0_ena;
             idct_calc1_stage   <= idct_calc0_stage;
@@ -746,7 +898,7 @@ begin
             -- stage 2 write
             if (idct_calc2_ena = '1' and idct_calc2_last = '1') then
                if (idct_calc2_stage = '0') then
-                  idct_temp(idct_calc2_target1) <= resize(idct_sum, 30);
+                  --idct_temp(idct_calc2_target1) <= resize(idct_sum, 30);
                else
                   idct_target <= to_unsigned(idct_calc2_target2, 9);
                   idct_write  <= '1';

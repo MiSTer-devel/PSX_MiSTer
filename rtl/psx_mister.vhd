@@ -37,6 +37,7 @@ entity psx_mister is
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
       REPRODUCIBLESPUDMA    : in  std_logic;
+      WIDESCREEN            : in  std_logic;
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
@@ -170,8 +171,6 @@ entity psx_mister is
       MouseY                : in  signed(8 downto 0);
       RumbleDataP1          : out std_logic_vector(15 downto 0);
       RumbleDataP2          : out std_logic_vector(15 downto 0);
-
-
       -- sound                          
       sound_out_left        : out std_logic_vector(15 downto 0) := (others => '0');
       sound_out_right       : out std_logic_vector(15 downto 0) := (others => '0');
@@ -244,6 +243,7 @@ begin
       SPUSDRAM              => SPUSDRAM,
       REVERBOFF             => REVERBOFF,
       REPRODUCIBLESPUDMA    => REPRODUCIBLESPUDMA,
+      WIDESCREEN            => WIDESCREEN,
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
@@ -389,7 +389,7 @@ begin
       joypad2.Analog1Y      => Analog1YP2,
       joypad2.Analog2X      => Analog2XP2,
       joypad2.Analog2Y      => Analog2YP2,
-			joypad2_rumble        => RumbleDataP2,
+      joypad2_rumble        => RumbleDataP2,
 
       MouseEvent            => MouseEvent,
       MouseLeft             => MouseLeft,
