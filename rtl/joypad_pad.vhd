@@ -88,18 +88,19 @@ architecture arch of joypad_pad is
    signal gunConX_8MHz    : std_logic_vector(8 downto 0) := (others => '0');
    signal gunConY         : std_logic_vector(8 downto 0) := (others => '0');
   
+   signal analogLarge     : std_logic_vector(7 downto 0);
+  
 begin 
 
   
    process (clk1x)
-
-   variable mouseIncX            : signed(9 downto 0) := (others => '0');
-   variable mouseIncY            : signed(9 downto 0) := (others => '0');
-   variable newMouseAccX         : signed(9 downto 0) := (others => '0');
-   variable newMouseAccY         : signed(9 downto 0) := (others => '0');
-   variable newMouseAccClippedX  : signed(9 downto 0) := (others => '0');
-   variable newMouseAccClippedY  : signed(9 downto 0) := (others => '0');
-
+      variable mouseIncX            : signed(9 downto 0) := (others => '0');
+      variable mouseIncY            : signed(9 downto 0) := (others => '0');
+      variable newMouseAccX         : signed(9 downto 0) := (others => '0');
+      variable newMouseAccY         : signed(9 downto 0) := (others => '0');
+      variable newMouseAccClippedX  : signed(9 downto 0) := (others => '0');
+      variable newMouseAccClippedY  : signed(9 downto 0) := (others => '0');
+      variable newAnalog            : signed(8 downto 0) := (others => '0');
    begin
       if rising_edge(clk1x) then
       
@@ -107,6 +108,24 @@ begin
          receiveBuffer  <= x"00";
       
          ack <= '0';
+         
+         -- increase analog values by 1/8 and convert from -127..127 to 0..255
+         newAnalog := resize(joypad.Analog2X, 9);
+         case (controllerState) is
+            when ANALOGRIGHTX => newAnalog := resize(joypad.Analog2X, 9);
+            when ANALOGRIGHTY => newAnalog := resize(joypad.Analog2Y, 9);
+            when ANALOGLEFTX  => newAnalog := resize(joypad.Analog1X, 9);
+            when ANALOGLEFTY  => newAnalog := resize(joypad.Analog1Y, 9);
+            when others => null;
+         end case;
+         
+         newAnalog := newAnalog + newAnalog / 8;
+
+         if    (newAnalog > 127) then newAnalog := to_signed(127, 9); 
+         elsif (newAnalog < -128) then newAnalog := to_signed(-128, 9); 
+         end if;
+         
+         analogLarge <= std_logic_vector(to_unsigned(to_integer(newAnalog) + 128, 8));
       
          if (reset = '1') then
          
@@ -387,25 +406,25 @@ begin
                            end if;
                            
                         when ANALOGRIGHTX => 
-                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(joypad.Analog2X) + 128, 8));
+                           receiveBuffer   <= analogLarge;
                            receiveValid    <= '1';
                            controllerState <= ANALOGRIGHTY;
                            ack             <= '1';
                         
                         when ANALOGRIGHTY => 
-                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(joypad.Analog2Y) + 128, 8));
+                           receiveBuffer   <= analogLarge;
                            receiveValid    <= '1';
                            controllerState <= ANALOGLEFTX;
                            ack             <= '1';
                         
                         when ANALOGLEFTX =>
-                           receiveBuffer   <=std_logic_vector(to_unsigned(to_integer(joypad.Analog1X) + 128, 8));
+                           receiveBuffer   <= analogLarge;
                            receiveValid    <= '1';
                            controllerState <= ANALOGLEFTY;
                            ack             <= '1';
                         
                         when ANALOGLEFTY =>
-                           receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(joypad.Analog1Y) + 128, 8));
+                           receiveBuffer   <= analogLarge;
                            receiveValid    <= '1';
                            controllerState <= IDLE;
 

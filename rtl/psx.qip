@@ -34,6 +34,7 @@ set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gte_mac123
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gte_UNRDivide.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gte.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) mdec.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) cd_xa_zigzag.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) cd_xa.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) cd_top.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) memctrl.vhd ]

@@ -9,6 +9,8 @@ entity timer is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      error                : out std_logic;
+      
       dotclock             : in  std_logic;
       hblank               : in  std_logic;
       vblank               : in  std_logic;
@@ -93,6 +95,8 @@ begin
    begin
       if rising_edge(clk1x) then
       
+         error <= '0';
+      
          if (reset = '1') then
          
             timerArray(0).T_CURRENT <= unsigned(ss_in(0)(15 downto 0));
@@ -130,6 +134,7 @@ begin
             newTick := "000";
             if (timerArray(0).T_MODE(8) = '1') then
                newTick(0) := dotclock;
+               error      <= '1';
             else
                newTick(0) := '1';
             end if;

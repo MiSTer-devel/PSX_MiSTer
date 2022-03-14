@@ -446,6 +446,7 @@ architecture arch of psx_top is
    
    signal errorCD                : std_logic;
    signal errorCPU               : std_logic;
+   signal errorCPU2              : std_logic;
    signal errorLINE              : std_logic;
    signal errorRECT              : std_logic;
    signal errorPOLY              : std_logic;
@@ -456,6 +457,7 @@ architecture arch of psx_top is
    signal errorSPUTIME           : std_logic;
    signal errorDMACPU            : std_logic;
    signal errorDMAFIFO           : std_logic;
+   signal errorTimer             : std_logic;
    
    signal debugmodeOn            : std_logic;
 
@@ -704,6 +706,8 @@ begin
                if (errorSPUTIME = '1') then errorEna  <= '1'; errorCode <= x"A"; end if;
                if (errorDMACPU  = '1') then errorEna  <= '1'; errorCode <= x"B"; end if;
                if (errorDMAFIFO = '1') then errorEna  <= '1'; errorCode <= x"C"; end if;
+               if (errorCPU2    = '1') then errorEna  <= '1'; errorCode <= x"D"; end if;
+               if (errorTimer   = '1') then errorEna  <= '1'; errorCode <= x"E"; end if;
             end if;
             
             if (errorEna = '0' or errorCode = x"3") then
@@ -1158,6 +1162,8 @@ begin
       clk1x                => clk1x,
       ce                   => ce,   
       reset                => reset_intern,
+      
+      error                => errorTimer,
       
       dotclock             => '0', -- todo
       hblank               => hblank_tmr,
@@ -1630,6 +1636,7 @@ begin
       irqRequest        => irqRequest,
       
       error             => errorCPU,
+      error2            => errorCPU2,
          
       mem_request       => mem_request,  
       mem_rnw           => mem_rnw,      

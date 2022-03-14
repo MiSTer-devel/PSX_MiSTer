@@ -52,6 +52,7 @@ set_global_assignment -name PLACEMENT_EFFORT_MULTIPLIER 1.0
 set_global_assignment -name SEED 1
 
 set_global_assignment -name VERILOG_MACRO "MISTER_FB=1"
+set_global_assignment -name VERILOG_MACRO "MISTER_DOWNSCALE_NN=1"
 
 source sys/sys.tcl
 source sys/sys_dual_sdram.tcl

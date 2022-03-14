@@ -19,6 +19,7 @@ entity cpu is
       irqRequest            : in  std_logic;
       
       error                 : out std_logic := '0';
+      error2                : out std_logic := '0';
       
       mem_request           : out std_logic;
       mem_rnw               : out std_logic; 
@@ -723,7 +724,7 @@ begin
             
          end if;
          
-         if (mem_done = '1' and memoryMuxStage = 4 and fetchReady = '0' and exception = 0) then
+         if (mem_done = '1' and memoryMuxStage = 4 and fetchReady = '0' and exception(4) = '0') then
             request := '1';
          end if;
       
@@ -2533,7 +2534,8 @@ begin
    begin
       if (rising_edge(clk1x)) then
       
-         error <= '0';
+         error  <= '0';
+         error2 <= '0';
       
          if (reset = '1') then
          
@@ -2560,9 +2562,13 @@ begin
                debug300exception <= '1';
             end if;
             
-            if (debugStallcounter(7) = '1' or debug300exception = '1') then
+            if (debug300exception = '1') then
                debugTrigger <= '1';
                error        <= '1';
+            end if;            
+            
+            if (debugStallcounter(7) = '1') then
+               error2       <= '1';
             end if;
             
             if (stallcountNo = 0 and stallcount4 = 0 and stallcount3 = 0 and stallcount1 = 0 and stallcountDMA = 0) then
