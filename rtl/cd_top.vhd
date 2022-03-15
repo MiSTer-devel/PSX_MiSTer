@@ -665,7 +665,9 @@ begin
             if (ackRead = '1' or ackRead_data = '1') then
                if (CDROM_IRQFLAG = "00001") then -- irq for sector still pending, sector missed
                   -- todo: nothing can be done?
-               elsif (CDROM_IRQFLAG /= "00000") then
+               end if;
+               
+               if (CDROM_IRQFLAG /= "00000") then
                   pendingDriveIRQ      <= "00001";
                   pendingDriveResponse <= internalStatus;
                else
@@ -855,7 +857,7 @@ begin
                   if ((driveBusy = '0' or driveDelay > 100) and (working = '0' or workDelay > 100)) then
                      cmd_delay <= cmd_delay - 1;
                   end if;
-               else
+               elsif (sectorFetchState = SFETCH_IDLE) then
                   handleCommand <= '1';
                   cmd_busy      <= '0';
                end if;
@@ -2174,6 +2176,7 @@ begin
                   end if;
                   if (multitrack = '1') then
                      cd_hps_lba                   <= std_logic_vector(to_unsigned(lastReadSector, 32));
+                     cd_hps_lba_sim(23 downto 0)  <= std_logic_vector(to_unsigned(lastReadSector - startLBA, 24));
                      cd_hps_lba_sim(30 downto 24) <= trackNumber;
                   end if;
                   
@@ -2887,7 +2890,7 @@ begin
    
    begin
       process
-         constant WRITETIME            : std_logic := '0';
+         constant WRITETIME            : std_logic := '1';
          
          file outfile                  : text;
          variable f_status             : FILE_OPEN_STATUS;

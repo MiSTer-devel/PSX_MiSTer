@@ -28,9 +28,6 @@ architecture arch of etb is
    
    signal fullyIdle           : std_logic;
    
-   signal cd_req              : std_logic;
-   signal cd_addr             : std_logic_vector(26 downto 0) := (others => '0');
-   
    signal cd_hps_req          : std_logic := '0';
    signal cd_hps_lba          : std_logic_vector(31 downto 0);
    signal cd_hps_ack          : std_logic := '0';
@@ -55,7 +52,7 @@ architecture arch of etb is
    signal trackinfo_addr      : std_logic_vector(8 downto 0);
    signal trackinfo_write     : std_logic := '0';
    
-   signal multitrack          : std_logic := '0';
+   signal multitrack          : std_logic := '1';
    
    -- savestates
    signal reset_in            : std_logic;
@@ -105,14 +102,9 @@ begin
       dma_read             => dma_read,     
       dma_readdata         => dma_readdata,
       
-      cd_req               => cd_req,
-      cd_addr              => cd_addr,
-      cd_data              => x"00000000",
-      cd_done              => '0',
-      
-      cd_hps_on            => '1',
       cd_hps_req           => cd_hps_req,  
-      cd_hps_lba           => cd_hps_lba,  
+      --cd_hps_lba           => cd_hps_lba,  
+      cd_hps_lba_sim       => cd_hps_lba,  
       cd_hps_ack           => cd_hps_ack,  
       cd_hps_write         => cd_hps_write,
       cd_hps_data          => cd_hps_data, 
@@ -173,17 +165,19 @@ begin
       variable count       : integer;
    begin
 
-      file_open(f_status, infile, "R:\cdtracks.txt", read_mode);
-
-      count := 1;
-      while (not endfile(infile)) loop
-         readline(infile,inLine);
-         tracknames(count) <= (others => ' ');
-         tracknames(count)(1 to inLine'length) <= inLine(1 to inLine'length); 
-         count := count + 1;
-      end loop;
-      
-      file_close(infile);
+      if (multitrack = '1') then
+         file_open(f_status, infile, "R:\cdtracks.txt", read_mode);
+   
+         count := 1;
+         while (not endfile(infile)) loop
+            readline(infile,inLine);
+            tracknames(count) <= (others => ' ');
+            tracknames(count)(1 to inLine'length) <= inLine(1 to inLine'length); 
+            count := count + 1;
+         end loop;
+         
+         file_close(infile);
+      end if;
       
       wait;
    end process;

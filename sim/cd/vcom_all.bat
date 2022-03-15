@@ -9,6 +9,7 @@ vcom -93 -quiet -work  sim/mem ^
 
 vcom -2008 -quiet -work sim/psx ^
 ../../rtl/dpram.vhd ^
+../../rtl/cd_xa_zigzag.vhd ^
 ../../rtl/cd_xa.vhd ^
 ../../rtl/cd_top.vhd
 
