@@ -279,7 +279,7 @@ begin
                if (vpos + 1 = vtotal) then
                   vpos <= 0;
                   if (videoout_settings.GPUSTAT_VertInterlace = '1') then
-                     InterlaceFieldN <= not videoout_reports.GPUSTAT_InterlaceField;
+                     InterlaceFieldN <= not InterlaceFieldN;
                   else
                      InterlaceFieldN <= '0';
                   end if;
