@@ -487,6 +487,7 @@ begin
                            ram_Adr <= "00" & std_logic_vector(mem_addressInstr(20 downto 0));
                            state   <= IDLE;
                            readram <= '1';
+                           ram_rotate_bits <= "00";
                            if (mem_isCache = '1') then
                               ram_Adr(3 downto 0) <= (others => '0');
                               ram_128             <= '1';
