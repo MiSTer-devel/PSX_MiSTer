@@ -259,6 +259,10 @@ begin
                videoout_reports.GPUSTAT_InterlaceField <= '1';
                videoout_reports.GPUSTAT_DrawingOddline <= '0';
                videoout_reports.irq_VBLANK             <= '0';
+               
+               vpos                      <= 0;
+               nextHCount                <= htotal;
+               videoout_reports.inVsync  <= '0';
             end if;
 
          end if;
