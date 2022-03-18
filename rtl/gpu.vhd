@@ -122,6 +122,7 @@ end entity;
 architecture arch of gpu is
   
    signal softReset                 : std_logic := '0';
+   signal drawer_reset              : std_logic := '0';
    
    signal videoout_settings         : tvideoout_settings;
    signal videoout_reports          : tvideoout_reports;
@@ -462,6 +463,8 @@ begin
          fifoIn_reset  <= '0';
          fifoOut_reset <= '0';
          
+         drawer_reset  <= '0';
+         
          vblank_tmr <= videoout_reports.inVsync;
 
          if (reset = '1') then
@@ -515,11 +518,14 @@ begin
                   
                   case (to_integer(unsigned(bus_dataWrite(29 downto 24)))) is
                      when 16#00# => -- reset
-                        softReset <= '1';
+                        softReset    <= '1';
+                        -- reset fifo + proc_idle ? 
                         
                      when 16#01# => -- clear fifo
                         fifoIn_reset <= '1';   
+                        drawer_reset <= '1';
                         -- todo: must reset drawing units to idle? -> ridge racer triggers that in the middle of a rectangle command clearing the screen
+                        -- reset CLUT cache?
                         
                      when 16#02# => -- ack irq
                         GPUSTAT_IRQRequest <= '0';
@@ -874,7 +880,8 @@ begin
       clk2x                => clk2x,     
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
-      reset                => softreset or SS_reset,     
+      reset                => softreset or SS_reset,    
+      drawer_reset         => drawer_reset,
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       SetMask              => GPUSTAT_SetMask,
@@ -941,6 +948,7 @@ begin
       clk2x                => clk2x,     
       ce                   => ce,        
       reset                => softreset or SS_reset,   
+      drawer_reset         => drawer_reset,
 
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING, 
 

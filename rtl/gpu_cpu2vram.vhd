@@ -9,6 +9,7 @@ entity gpu_cpu2vram is
       clk2xIndex           : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
+      drawer_reset         : in  std_logic;
       
       DrawPixelsMask       : in  std_logic;
       SetMask              : in  std_logic;
@@ -142,6 +143,13 @@ begin
                   end if;
             
             end case;
+            
+            if (drawer_reset = '1') then
+               state <= IDLE;
+               if (state /= IDLE) then
+                  done  <= '1'; 
+               end if;
+            end if;
          
          end if;
          

@@ -13,6 +13,7 @@ entity gpu_vram2cpu is
       clk2x                : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
+      drawer_reset         : in  std_logic;
       
       REPRODUCIBLEGPUTIMING: in  std_logic;
       
@@ -218,6 +219,13 @@ begin
                   done        <= '1';
             
             end case;
+            
+            if (drawer_reset = '1') then
+               state <= IDLE;
+               if (state /= IDLE) then
+                  done  <= '1'; 
+               end if;
+            end if;
          
          end if;
          

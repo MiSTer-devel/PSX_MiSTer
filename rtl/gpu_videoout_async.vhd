@@ -219,8 +219,6 @@ begin
             videoout_reports.activeLineLSB            <= videoout_ss_in.activeLineLSB;
             videoout_reports.GPUSTAT_DrawingOddline   <= videoout_ss_in.GPUSTAT_DrawingOddline;
             
-            InterlaceFieldN                           <= videoout_ss_in.GPUSTAT_InterlaceField;
-            
             vdisp            <= to_integer(unsigned(videoout_ss_in.vdisp));
 
             allowunpause     <= '1';
@@ -278,11 +276,6 @@ begin
                vpos <= vpos + 1;
                if (vpos + 1 = vtotal) then
                   vpos <= 0;
-                  if (videoout_settings.GPUSTAT_VertInterlace = '1') then
-                     InterlaceFieldN <= not InterlaceFieldN;
-                  else
-                     InterlaceFieldN <= '0';
-                  end if;
                end if;               
                
                -- todo: timer 1
@@ -387,7 +380,6 @@ begin
             end if;
             
             if (softReset = '1') then
-               InterlaceFieldN                         <= '1';
                videoout_reports.GPUSTAT_DrawingOddline <= '0';
                videoout_reports.irq_VBLANK             <= '0';
                
@@ -457,6 +449,7 @@ begin
             readstate                  <= IDLE;
             
             videoout_reports.GPUSTAT_InterlaceField <= videoout_ss_in.GPUSTAT_InterlaceField;
+            InterlaceFieldN                         <= videoout_ss_in.GPUSTAT_InterlaceField;
          
          else
             
@@ -589,6 +582,10 @@ begin
                end if;
             end if;
 
+            if (vpos = 214) then
+               InterlaceFieldN <= videoout_reports.GPUSTAT_InterlaceField;
+            end if;
+
             vsync_hstart := hsync_start;
             vsync_vstart := 242;
             if (videoout_settings.GPUSTAT_VertInterlace = '1' and InterlaceFieldN = '0' and videoout_settings.syncInterlace = '0') then
@@ -611,6 +608,7 @@ begin
             
             if (softReset = '1') then
                videoout_reports.GPUSTAT_InterlaceField <= '1';
+               InterlaceFieldN                         <= '1';
             end if;
          
          end if;
