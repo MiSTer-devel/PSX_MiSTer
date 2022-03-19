@@ -43,10 +43,10 @@ architecture arch of gpu_fillVram is
    signal color   : std_logic_vector(14 downto 0);
    signal x1      : unsigned(9 downto 0);
    signal y1      : unsigned(8 downto 0);   
-   signal widt    : unsigned(9 downto 0);
+   signal widt    : unsigned(10 downto 0);
    signal heig    : unsigned(8 downto 0);
    
-   signal x       : unsigned(9 downto 0);
+   signal x       : unsigned(10 downto 0);
    signal y       : unsigned(8 downto 0);
    
    signal timer   : integer;
@@ -59,7 +59,7 @@ begin
    -- fill VRAM
    process (clk2x)
       variable row     : unsigned(8 downto 0);
-      variable col     : unsigned(9 downto 0);
+      variable col     : unsigned(10 downto 0);
       variable lineEnd : std_logic;
    begin
       if rising_edge(clk2x) then
@@ -97,7 +97,7 @@ begin
                when REQUESTWORD3 =>
                   if (fifo_Valid = '1') then
                      state <= WRITING;
-                     widt  <= unsigned(fifo_data( 9 downto  0)) + 15;
+                     widt  <= resize(unsigned(fifo_data( 9 downto  0)), 11) + 15;
                      widt(3 downto 0) <= x"0";
                      heig  <= unsigned(fifo_data(24 downto 16));
                      x     <= (others => '0');
@@ -121,7 +121,7 @@ begin
                         col := x1 + x;
       
                         pixelWrite <= '1';
-                        pixelAddr  <= row & col & '0';
+                        pixelAddr  <= row & col(9 downto 0) & '0';
                         pixelColor <= '0' & color;
                         
                         if (x + 4 < widt) then
