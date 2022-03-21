@@ -55,6 +55,7 @@ entity gpu is
       bus_read             : in  std_logic;
       bus_write            : in  std_logic;
       bus_dataRead         : out std_logic_vector(31 downto 0);
+      bus_stall            : out std_logic := '0';
       
       dmaOn                : in  std_logic;
       gpu_dmaRequest       : out std_logic;
@@ -239,6 +240,7 @@ architecture arch of gpu is
    signal vram2cpu_Fifo_Dout        : std_logic_vector(31 downto 0);
    signal vram2cpu_Fifo_Rd          : std_logic;
    signal vram2cpu_Fifo_Empty       : std_logic;
+   signal vram2cpu_Fifo_ready       : std_logic;
    
    signal line_requestFifo          : std_logic; 
    signal line_done                 : std_logic;
@@ -365,6 +367,7 @@ architecture arch of gpu is
    signal reqVRAMYPos               : unsigned(8 downto 0);
    signal reqVRAMSize               : unsigned(10 downto 0);
    signal reqVRAMremain             : unsigned(7 downto 0);
+   signal reqVRAMwrap               : unsigned(7 downto 0);
    signal reqVRAMnext               : unsigned(7 downto 0);
    signal reqVRAMaddr               : unsigned(7 downto 0) := (others => '0');
    signal reqVRAMStore              : std_logic;        
@@ -470,6 +473,7 @@ begin
          if (reset = '1') then
                
             softReset               <= not loading_savestate;
+            bus_stall               <= '0';
             
             fifoIn_reset            <= '1';
             fifoOut_reset           <= '1';
@@ -498,17 +502,29 @@ begin
             -- bus read
             if (bus_read = '1') then
                if (bus_addr(3 downto 2) = "00") then
+               
                   if (vram2cpu_Fifo_Empty = '0') then
                      bus_dataRead <= vram2cpu_Fifo_Dout;
                      GPUREAD      <= vram2cpu_Fifo_Dout;
                   else
                      bus_dataRead <= GPUREAD;
                   end if;
+                  
+                  if (vram2cpu_Fifo_ready = '0') then
+                     bus_stall <= '1';
+                  end if;
+                  
                elsif (bus_addr(3 downto 2) = "01") then
                   bus_dataRead <= GPUSTAT;
                else
                   bus_dataRead <= x"FFFFFFFF";
                end if;
+            end if;
+            
+            if (bus_stall = '1' and vram2cpu_Fifo_ready = '1') then
+               bus_dataRead <= vram2cpu_Fifo_Dout;
+               GPUREAD      <= vram2cpu_Fifo_Dout;
+               bus_stall    <= '0';
             end if;
 
             -- bus write
@@ -938,9 +954,12 @@ begin
    
    vram2cpu_Fifo_Rd <= '1' when (vram2cpu_Fifo_Empty = '0' and clk2xIndex = '0' and DMA_GPU_readEna = '1') else
                        '1' when (vram2cpu_Fifo_Empty = '0' and clk2xIndex = '0' and bus_read = '1' and bus_addr(3 downto 2) = "00") else
+                       '1' when (vram2cpu_Fifo_Empty = '0' and clk2xIndex = '0' and bus_stall = '1') else
                        '0';
    
    DMA_GPU_read <= vram2cpu_Fifo_Dout when (vram2cpu_Fifo_Empty = '0') else (others => '1');
+   
+   GPUSTAT_ReadySendVRAM <= not vram2cpu_Fifo_Empty;
    
    igpu_vram2cpu : entity work.gpu_vram2cpu
    port map
@@ -972,7 +991,7 @@ begin
       Fifo_Dout            => vram2cpu_Fifo_Dout, 
       Fifo_Rd              => vram2cpu_Fifo_Rd,   
       Fifo_Empty           => vram2cpu_Fifo_Empty,
-      Fifo_ready           => GPUSTAT_ReadySendVRAM
+      Fifo_ready           => vram2cpu_Fifo_ready
    );
    
    igpu_line : entity work.gpu_line
@@ -1417,6 +1436,12 @@ begin
                            reqVRAMremain <= reqVRAMSizeRounded(9 downto 2) - 1;
                            reqVRAMnext   <= (others => '0');
                         end if;
+                        reqVRAMwrap <= (others => '0');
+                        if (vram2vram_reqVRAMEnable = '1' or vram2cpu_reqVRAMEnable = '1') then
+                           if (reqVRAMXPos + reqVRAMSizeRounded > 1024) then
+                              reqVRAMwrap <= resize(((reqVRAMXPos + reqVRAMSizeRounded) - 1024) / 4, 8);
+                           end if;
+                        end if;
                      elsif (fifoOut_Empty = '0') then
                         vram_WE       <= '1';
                         vram_ADDR     <= fifoOut_Dout(80 downto 64) & "000";
@@ -1438,6 +1463,18 @@ begin
                            vram_BURSTCNT <= std_logic_vector(reqVRAMnext);
                            reqVRAMnext   <= (others => '0');
                            reqVRAMremain <= (reqVRAMnext - 1);
+                        elsif (reqVRAMwrap > 0) then
+                           vram_ADDR(10 downto 0) <= (others => '0');
+                           vram_RD       <= '1';
+                           vram_BURSTCNT <= std_logic_vector(reqVRAMwrap);
+                           reqVRAMwrap   <= (others => '0');
+                           reqVRAMaddr   <= (others => '0');
+                           reqVRAMremain <= (reqVRAMwrap - 1);
+                           if (reqVRAMwrap > 128) then
+                              vram_BURSTCNT <= x"80";
+                              reqVRAMremain <= x"80" - 1;
+                              reqVRAMnext   <= reqVRAMwrap - 128;
+                           end if;
                         else
                            vramState   <= IDLE;
                            reqVRAMDone <= '1';

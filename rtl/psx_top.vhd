@@ -300,6 +300,7 @@ architecture arch of psx_top is
    signal bus_gpu_read           : std_logic;
    signal bus_gpu_write          : std_logic;
    signal bus_gpu_dataRead       : std_logic_vector(31 downto 0);
+   signal bus_gpu_stall          : std_logic;
    
    signal bus_mdec_addr          : unsigned(3 downto 0); 
    signal bus_mdec_dataWrite     : std_logic_vector(31 downto 0);
@@ -1299,6 +1300,7 @@ begin
       bus_read             => bus_gpu_read,     
       bus_write            => bus_gpu_write,    
       bus_dataRead         => bus_gpu_dataRead, 
+      bus_stall            => bus_gpu_stall, 
       
       dmaOn                => dmaOn,
       gpu_dmaRequest       => gpu_dmaRequest,  
@@ -1591,6 +1593,7 @@ begin
       bus_gpu_read         => bus_gpu_read,     
       bus_gpu_write        => bus_gpu_write,    
       bus_gpu_dataRead     => bus_gpu_dataRead,
+      bus_gpu_stall        => bus_gpu_stall,
       
       bus_mdec_addr        => bus_mdec_addr,     
       bus_mdec_dataWrite   => bus_mdec_dataWrite,

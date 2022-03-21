@@ -110,6 +110,7 @@ entity memorymux is
       bus_gpu_read         : out std_logic;
       bus_gpu_write        : out std_logic;
       bus_gpu_dataRead     : in  std_logic_vector(31 downto 0);
+      bus_gpu_stall        : in  std_logic;
       
       bus_mdec_addr        : out unsigned(3 downto 0); 
       bus_mdec_dataWrite   : out std_logic_vector(31 downto 0);
@@ -194,6 +195,7 @@ architecture arch of memorymux is
       
    signal addressBIOS_buf     : unsigned(18 downto 0);
       
+   signal bus_stall           : std_logic;
    signal dataFromBusses      : std_logic_vector(31 downto 0);
    signal rotate32            : std_logic;
    signal rotate16            : std_logic;
@@ -393,6 +395,8 @@ begin
       end if;
 
    end process;
+   
+   bus_stall         <= bus_gpu_stall;
    
    dataFromBusses    <= bus_exp1_dataRead or bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_memc2_dataRead or bus_irq_dataRead or 
                         bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or bus_exp2_dataRead or bus_exp3_dataRead or
@@ -626,25 +630,27 @@ begin
                   end if; 
                   
                when BUSACTION =>
-                  if (rotate32 = '1') then
-                     case (addressData_buf(1 downto 0)) is
-                        when "00" => mem_dataRead_buf <= dataFromBusses;
-                        when "01" => mem_dataRead_buf <= x"00" & dataFromBusses(31 downto 8);
-                        when "10" => mem_dataRead_buf <= x"0000" & dataFromBusses(31 downto 16);
-                        when "11" => mem_dataRead_buf <= x"000000" & dataFromBusses(31 downto 24);
-                        when others => null;
-                     end case;
-                  elsif (rotate16 = '1') then
-                     if (addressData_buf(0) = '1') then
-                        mem_dataRead_buf <= x"00" & dataFromBusses(31 downto 8);
+                  if (bus_stall = '0') then
+                     if (rotate32 = '1') then
+                        case (addressData_buf(1 downto 0)) is
+                           when "00" => mem_dataRead_buf <= dataFromBusses;
+                           when "01" => mem_dataRead_buf <= x"00" & dataFromBusses(31 downto 8);
+                           when "10" => mem_dataRead_buf <= x"0000" & dataFromBusses(31 downto 16);
+                           when "11" => mem_dataRead_buf <= x"000000" & dataFromBusses(31 downto 24);
+                           when others => null;
+                        end case;
+                     elsif (rotate16 = '1') then
+                        if (addressData_buf(0) = '1') then
+                           mem_dataRead_buf <= x"00" & dataFromBusses(31 downto 8);
+                        else
+                           mem_dataRead_buf <= dataFromBusses;
+                        end if;
                      else
                         mem_dataRead_buf <= dataFromBusses;
                      end if;
-                  else
-                     mem_dataRead_buf <= dataFromBusses;
+                     mem_done_buf <= '1';
+                     state        <= IDLE;
                   end if;
-                  mem_done_buf <= '1';
-                  state        <= IDLE;
                   
                -- CD
                when CD_WRITE =>

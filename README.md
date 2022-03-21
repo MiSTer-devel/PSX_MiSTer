@@ -41,8 +41,6 @@ In Framebuffer mode you can choose to view:
 - normal drawing area without any overscan cutoff
 - full VRAM as 1024x512 pixel image (debug mode)
 
-Analog out is not supported yet. It requires either direct video or seperate build and is very experimental and buggy. Use at your own risks, no bug reports please.
-
 ## Libcrypt
 
 Some games are secured with Libcrypt and will not work if it's not circumvented.
@@ -56,7 +54,7 @@ If there is a recognized problem, an overlay is displayed, showing which error h
 You can hide these messages with an OSD option, by default they are on.
 
 List of Errors:
-- E2     - CPU exception
+- E2     - CPU exception(only relevant if game shows issues)
 - E3..E6 - GPU hangs (e.g. corrupt display list)
 - E7     - CPU2VRAM with mask-AND enabled
 - E8     - DMA chopping enabled
@@ -64,6 +62,8 @@ List of Errors:
 - EA     - SPU timeout
 - EB     - DMA and CPU interlock error 
 - EC     - DMA FIFO overflow
+- ED     - CPU Data/Bus request timeout
+- EE     - Dotclock used as timer report(only relevant if game shows issues)
 
 ## Debug Options
 
@@ -105,11 +105,9 @@ Work in progress, don't report any bugs!
 CPU    : 90%
 - exception for read in invalid instruction and data area missing
 
-GPU    : 80%
+GPU    : 90%
 - mask bits not implemented for cpu2vram
-- vram2vram and vram2cpu line wraparound not implemented
 - vram2vram read/modify/write race condition when copying to same line
-- videoout using original, asynchronous timings not implemented
 
 Memory : 80%
 - rotate register not done for all busses

@@ -52,13 +52,16 @@ architecture arch of gpu_vram2cpu is
       WAITREAD,
       WAITIMING,
       WRITING,
-      FINISH
+      FINISH,
+      WAITLAST1,
+      WAITLAST2
    );
    signal state : tState := IDLE;
    
    signal srcX          : unsigned(9 downto 0);
    signal srcY          : unsigned(8 downto 0);     
    signal widt          : unsigned(10 downto 0);
+   signal widtVram      : unsigned(10 downto 0);
    signal heig          : unsigned(9 downto 0);
                         
    signal xSrc          : unsigned(9 downto 0);
@@ -71,7 +74,6 @@ architecture arch of gpu_vram2cpu is
    signal Fifo_Din         : std_logic_vector(31 downto 0);
    signal Fifo_Wr          : std_logic; 
    signal Fifo_NearFull    : std_logic;
-   signal Fifo_NearEmpty   : std_logic;
    signal Fifo_Reset       : std_logic;
       
    signal Fifo_wordhalf    : std_logic;
@@ -80,15 +82,15 @@ begin
 
    requestFifo <= '1' when (state = REQUESTWORD2 or state = REQUESTWORD3) else '0';
    
-   requestVRAMEnable <= '1'  when (state = READVRAM and requestVRAMIdle = '1' and Fifo_NearFull = '0') else '0';
-   requestVRAMXPos   <= srcX when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
-   requestVRAMYPos   <= srcY when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
-   requestVRAMSize   <= widt when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
+   requestVRAMEnable <= '1'      when (state = READVRAM and requestVRAMIdle = '1' and Fifo_NearFull = '0') else '0';
+   requestVRAMXPos   <= srcX     when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
+   requestVRAMYPos   <= srcY     when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
+   requestVRAMSize   <= widtVram when (state = READVRAM and requestVRAMIdle = '1')                         else (others => '0');
    
    vramLineEna       <= '1'  when (state = WRITING or state = WAITREAD or state = WAITIMING) else '0';
    vramLineAddr      <= xSrc when (state = WRITING or state = WAITREAD or state = WAITIMING) else (others => '0');
    
-   Fifo_ready <= '1' when (Fifo_NearEmpty = '0' or (state = IDLE and Fifo_Empty = '0')) else '0';
+   Fifo_ready        <= '1' when (Fifo_Empty = '0' or state = IDLE) else '0';
    
    -- fifo has size of two full lines. Filling can start whenever at least a full line fits in.
    ififo: entity mem.SyncFifoFallThrough
@@ -112,7 +114,7 @@ begin
       Dout        => Fifo_Dout,    
       Rd          => Fifo_Rd,      
       Empty       => Fifo_Empty,
-      NearEmpty   => Fifo_NearEmpty      
+      NearEmpty   => open      
    );
    
    
@@ -157,9 +159,20 @@ begin
                   if (fifo_Valid = '1') then
                      state      <= READVRAM;
                      widt       <= '0' & unsigned(fifo_data( 9 downto  0));
+                     widtVram   <= '0' & unsigned(fifo_data( 9 downto  0));
                      heig       <= '0' & unsigned(fifo_data(24 downto 16));
-                     if (unsigned(fifo_data( 9 downto  0)) = 0) then widt <= to_unsigned(16#400#, 11); end if;
-                     if (unsigned(fifo_data(24 downto 16)) = 0) then heig <= to_unsigned(16#200#, 10); end if;
+                     
+                     if (fifo_data(0) = '1') then
+                        widtVram <= resize(unsigned(fifo_data(9 downto 0)), 11) + 1;
+                     end if;
+                     
+                     if (unsigned(fifo_data( 9 downto  0)) = 0) then 
+                        widt       <= to_unsigned(16#400#, 11); 
+                        widtVram   <= to_unsigned(16#400#, 11); 
+                     end if;
+                     if (unsigned(fifo_data(24 downto 16)) = 0) then 
+                        heig <= to_unsigned(16#200#, 10); 
+                     end if;
                   end if;
                   
                when READVRAM =>
@@ -211,10 +224,16 @@ begin
                   
                when FINISH =>
                   if (Fifo_wordhalf = '1') then
-                     Fifo_Din(31 downto 16) <= x"0000";
+                     Fifo_Din(31 downto 16) <= vramLineData;
                      Fifo_wordhalf          <= '0';
                      Fifo_Wr                <= '1';
                   end if;
+                  state       <= WAITLAST1;
+                  
+               when WAITLAST1 =>
+                  state       <= WAITLAST2;
+                  
+               when WAITLAST2 =>
                   state       <= IDLE;
                   done        <= '1';
             
