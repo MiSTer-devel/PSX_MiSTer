@@ -57,6 +57,7 @@ entity gpu_poly is
       fifo_data            : in  std_logic_vector(31 downto 0);
       requestFifo          : out std_logic := '0';
       done                 : out std_logic := '0';
+      CmdDone              : out std_logic := '0';
       
       requestVRAMEnable    : out std_logic;
       requestVRAMXPos      : out unsigned(9 downto 0);
@@ -362,6 +363,7 @@ begin
          elsif (ce = '1') then
          
             done                 <= '0';
+            CmdDone              <= '0';
 
             drawModeNew          <= '0';
             
@@ -470,7 +472,8 @@ begin
                      if (rec_texture = '1') then
                         state    <= REQUESTTEXTURE;  
                      elsif ((rec_quad = '1' and rec_index = 3) or (rec_quad = '0' and rec_index = 2)) then
-                        state    <= ISSUE;  
+                        state    <= ISSUE; 
+                        CmdDone  <= '1';                        
                      else
                         rec_index <= rec_index +1;
                         if (rec_shading = '1') then
@@ -502,6 +505,7 @@ begin
                      
                      if ((rec_quad = '1' and rec_index = 3) or (rec_quad = '0' and rec_index = 2)) then
                         state    <= ISSUE;  
+                        CmdDone  <= '1'; 
                      else
                         rec_index <= rec_index +1;
                         if (rec_shading = '1') then

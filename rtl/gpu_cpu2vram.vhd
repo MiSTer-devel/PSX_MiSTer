@@ -20,6 +20,7 @@ entity gpu_cpu2vram is
       fifo_data            : in  std_logic_vector(31 downto 0);
       requestFifo          : out std_logic := '0';
       done                 : out std_logic := '0';
+      CmdDone              : out std_logic := '0';
       
       pixelStall           : in  std_logic;
       pixelColor           : out std_logic_vector(15 downto 0);
@@ -52,7 +53,9 @@ architecture arch of gpu_cpu2vram is
   
 begin 
 
-   requestFifo <= '1' when (state = REQUESTWORD2 or state = REQUESTWORD3 or (state = WRITING and pixelStall = '0' and fifo_Valid = '0')) else '0';
+   requestFifo <= '1' when (state = REQUESTWORD2 or state = REQUESTWORD3 ) else
+                  '1' when (state = WRITING and pixelStall = '0' and fifo_Valid = '0' and ((x + 1 < copySizeX) or (y + 1 < copySizeY) or fifo_Valid_1 = '0')) else 
+                  '0';
 
    process (clk2x)
       variable row : unsigned(8 downto 0);
@@ -76,6 +79,7 @@ begin
             pixelWrite   <= '0';
             
             done         <= '0';
+            CmdDone      <= '0';
             
             fifo_Valid_1 <= '0';
          
@@ -96,6 +100,7 @@ begin
             
                when REQUESTWORD3 =>
                   if (fifo_Valid = '1') then
+                     CmdDone    <= '1';
                      state      <= WRITING;
                      copySizeX  <= '0' & unsigned(fifo_data( 9 downto  0));
                      copySizeY  <= '0' & unsigned(fifo_data(24 downto 16));

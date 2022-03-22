@@ -20,6 +20,7 @@ entity gpu_fillVram is
       fifo_data            : in  std_logic_vector(31 downto 0);
       requestFifo          : out std_logic := '0';
       done                 : out std_logic := '0';
+      CmdDone              : out std_logic := '0';
       
       pixelStall           : in  std_logic;
       pixelColor           : out std_logic_vector(15 downto 0);
@@ -63,7 +64,7 @@ begin
       variable lineEnd : std_logic;
    begin
       if rising_edge(clk2x) then
-         
+
          if (reset = '1') then
          
             state <= IDLE;
@@ -75,6 +76,7 @@ begin
             pixelWrite <= '0';
             
             done       <= '0';
+            CmdDone    <= '0';
          
             case (state) is
             
@@ -96,12 +98,13 @@ begin
             
                when REQUESTWORD3 =>
                   if (fifo_Valid = '1') then
-                     state <= WRITING;
-                     widt  <= resize(unsigned(fifo_data( 9 downto  0)), 11) + 15;
+                     CmdDone <= '1';
+                     state   <= WRITING;
+                     widt    <= resize(unsigned(fifo_data( 9 downto  0)), 11) + 15;
                      widt(3 downto 0) <= x"0";
-                     heig  <= unsigned(fifo_data(24 downto 16));
-                     x     <= (others => '0');
-                     y     <= (others => '0');
+                     heig    <= unsigned(fifo_data(24 downto 16));
+                     x       <= (others => '0');
+                     y       <= (others => '0');
                      if (unsigned(fifo_data( 9 downto  0)) = 0 or unsigned(fifo_data(24 downto 16)) = 0) then
                         state <= IDLE;
                         done  <= '1';

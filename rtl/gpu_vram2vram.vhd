@@ -24,6 +24,7 @@ entity gpu_vram2vram is
       fifo_data            : in  std_logic_vector(31 downto 0);
       requestFifo          : out std_logic := '0';
       done                 : out std_logic := '0';
+      CmdDone              : out std_logic := '0';
       
       requestVRAMEnable    : out std_logic;
       requestVRAMXPos      : out unsigned(9 downto 0);
@@ -105,6 +106,7 @@ begin
             pixelWrite        <= '0';
             
             done              <= '0';
+            CmdDone           <= '0';
             
             if (state /= IDLE) then
                drawTiming <= drawTiming + 1;
@@ -142,6 +144,7 @@ begin
                   end if;
                   
                   if (fifo_Valid = '1') then
+                     CmdDone    <= '1';
                      state      <= READVRAM;
                      widt       <= '0' & unsigned(fifo_data( 9 downto  0));
                      heig       <= '0' & unsigned(fifo_data(24 downto 16));

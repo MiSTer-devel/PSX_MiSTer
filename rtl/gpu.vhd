@@ -187,6 +187,7 @@ architecture arch of gpu is
    -- Processing  
    signal proc_idle                 : std_logic;
    signal proc_done                 : std_logic;
+   signal proc_CmdDone              : std_logic;
    signal proc_requestFifo          : std_logic;
    signal timeout                   : integer range 0 to 67108863 := 0;
    
@@ -207,18 +208,21 @@ architecture arch of gpu is
    
    signal vramFill_requestFifo      : std_logic; 
    signal vramFill_done             : std_logic; 
+   signal vramFill_CmdDone          : std_logic; 
    signal vramFill_pixelColor       : std_logic_vector(15 downto 0);
    signal vramFill_pixelAddr        : unsigned(19 downto 0);
    signal vramFill_pixelWrite       : std_logic;   
       
    signal cpu2vram_requestFifo      : std_logic; 
    signal cpu2vram_done             : std_logic; 
+   signal cpu2vram_CmdDone          : std_logic; 
    signal cpu2vram_pixelColor       : std_logic_vector(15 downto 0);
    signal cpu2vram_pixelAddr        : unsigned(19 downto 0);
    signal cpu2vram_pixelWrite       : std_logic;
       
    signal vram2vram_requestFifo     : std_logic; 
    signal vram2vram_done            : std_logic; 
+   signal vram2vram_CmdDone         : std_logic; 
    signal vram2vram_pixelColor      : std_logic_vector(15 downto 0);
    signal vram2vram_pixelAddr       : unsigned(19 downto 0);
    signal vram2vram_pixelWrite      : std_logic;
@@ -231,6 +235,7 @@ architecture arch of gpu is
    
    signal vram2cpu_requestFifo      : std_logic; 
    signal vram2cpu_done             : std_logic; 
+   signal vram2cpu_CmdDone          : std_logic; 
    signal vram2cpu_reqVRAMEnable    : std_logic;
    signal vram2cpu_reqVRAMXPos      : unsigned(9 downto 0);
    signal vram2cpu_reqVRAMYPos      : unsigned(8 downto 0);
@@ -244,6 +249,7 @@ architecture arch of gpu is
    
    signal line_requestFifo          : std_logic; 
    signal line_done                 : std_logic;
+   signal line_CmdDone              : std_logic;
    signal line_div                  : t_div_array;
    signal line_pipeline_new         : std_logic;
    signal line_pipeline_transparent : std_logic;
@@ -261,6 +267,7 @@ architecture arch of gpu is
    
    signal rect_requestFifo          : std_logic; 
    signal rect_done                 : std_logic;
+   signal rect_CmdDone              : std_logic;
    signal rect_pipeline_new         : std_logic;
    signal rect_pipeline_texture     : std_logic;
    signal rect_pipeline_transparent : std_logic;
@@ -284,6 +291,7 @@ architecture arch of gpu is
    
    signal poly_requestFifo          : std_logic; 
    signal poly_done                 : std_logic;
+   signal poly_CmdDone              : std_logic;
    signal poly_div                  : t_div_array;
    signal poly_pipeline_new         : std_logic;
    signal poly_pipeline_texture     : std_logic;
@@ -778,7 +786,6 @@ begin
                   
                   proc_idle           <= '0';
                   GPUSTAT_ReadyRecCmd <= '0';
-                  GPUSTAT_ReadyRecDMA <= '0';
                   
                elsif (cmdNew = 16#01#) then -- clear cache
                   pipeline_clearCache <= '1';
@@ -822,15 +829,19 @@ begin
             
             end if;
             
+            if (proc_CmdDone = '1') then
+               GPUSTAT_ReadyRecDMA  <= '0';
+            end if;
+            
             if (proc_done = '1') then
 -- synthesis translate_off
                export_gobj          <= export_gobj + 1;
 -- synthesis translate_on
                proc_idle            <= '1';
                GPUSTAT_ReadyRecCmd  <= '1';
-               if (fifoIn_Empty = '1') then
+               --if (fifoIn_Empty = '1') then
                   GPUSTAT_ReadyRecDMA  <= '1';
-               end if;
+               --end if;
             end if;
             
             if (fifoIn_Empty = '1' and (cpu2vram_requestFifo = '1' or (fifoIn_Valid = '0' and proc_idle = '1'))) then
@@ -858,6 +869,7 @@ begin
    end process; 
    
    proc_done        <= vramFill_done        or cpu2vram_done        or vram2vram_done        or vram2cpu_done        or line_done        or rect_done        or poly_done       ;
+   proc_CmdDone     <= vramFill_CmdDone     or cpu2vram_CmdDone     or vram2vram_CmdDone     or vram2cpu_CmdDone     or line_CmdDone     or rect_CmdDone     or poly_CmdDone    ;
    proc_requestFifo <= vramFill_requestFifo or cpu2vram_requestFifo or vram2vram_requestFifo or vram2cpu_requestFifo or line_requestFifo or rect_requestFifo or poly_requestFifo;
    
    pixelStall <= fifoOut_NearFull;
@@ -883,6 +895,7 @@ begin
       fifo_data            => fifoIn_Dout,
       requestFifo          => vramFill_requestFifo,
       done                 => vramFill_done,
+      CmdDone              => vramFill_CmdDone,
       
       pixelStall           => pixelStall,
       pixelColor           => vramFill_pixelColor,
@@ -908,6 +921,7 @@ begin
       fifo_data            => fifoIn_Dout,
       requestFifo          => cpu2vram_requestFifo,
       done                 => cpu2vram_done,
+      CmdDone              => cpu2vram_CmdDone,
       
       pixelStall           => pixelStall,
       pixelColor           => cpu2vram_pixelColor,
@@ -933,6 +947,7 @@ begin
       fifo_data            => fifoIn_Dout,
       requestFifo          => vram2vram_requestFifo,
       done                 => vram2vram_done,
+      CmdDone              => vram2vram_CmdDone,
       
       requestVRAMEnable    => vram2vram_reqVRAMEnable,
       requestVRAMXPos      => vram2vram_reqVRAMXPos,  
@@ -976,6 +991,7 @@ begin
       fifo_data            => fifoIn_Dout,
       requestFifo          => vram2cpu_requestFifo,
       done                 => vram2cpu_done,
+      CmdDone              => vram2cpu_CmdDone,
       
       requestVRAMEnable    => vram2cpu_reqVRAMEnable,
       requestVRAMXPos      => vram2cpu_reqVRAMXPos,  
@@ -1038,6 +1054,7 @@ begin
       fifo_data            => fifoIn_Dout,
       requestFifo          => line_requestFifo,
       done                 => line_done,
+      CmdDone              => line_CmdDone,
       
       requestVRAMEnable    => line_reqVRAMEnable,
       requestVRAMXPos      => line_reqVRAMXPos,  
@@ -1091,6 +1108,7 @@ begin
       fifo_data            => fifoIn_Dout,
       requestFifo          => rect_requestFifo,
       done                 => rect_done,
+      CmdDone              => rect_CmdDone,
       
       requestVRAMEnable    => rect_reqVRAMEnable,
       requestVRAMXPos      => rect_reqVRAMXPos,  
@@ -1159,6 +1177,7 @@ begin
       fifo_data            => fifoIn_Dout,
       requestFifo          => poly_requestFifo,
       done                 => poly_done,
+      CmdDone              => poly_CmdDone,
       
       requestVRAMEnable    => poly_reqVRAMEnable,
       requestVRAMXPos      => poly_reqVRAMXPos,  

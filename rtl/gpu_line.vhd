@@ -49,6 +49,7 @@ entity gpu_line is
       fifo_data            : in  std_logic_vector(31 downto 0);
       requestFifo          : out std_logic := '0';
       done                 : out std_logic := '0';
+      CmdDone              : out std_logic := '0';
       
       requestVRAMEnable    : out std_logic;
       requestVRAMXPos      : out unsigned(9 downto 0);
@@ -176,6 +177,7 @@ begin
          elsif (ce = '1') then
          
             done         <= '0';
+            CmdDone      <= '0';
             fifoLine_Wr  <= '0';
             swap12       <= '0';
          
@@ -234,7 +236,8 @@ begin
                      rec_color2     <= fifo_data(23 downto 0);
                      recstate       <= REQUESTPOS2;  
                      if (checkEnd = '1' and rec_shading = '1' and fifo_data(31 downto 28) = x"5" and fifo_data(15 downto 12) = x"5") then
-                        recstate  <= REQUESTWAITDONE;  
+                        recstate  <= REQUESTWAITDONE; 
+                        CmdDone   <= '1';                        
                      end if;
                   end if;
             
@@ -246,7 +249,8 @@ begin
                      if (rec_polyline = '1') then
                         checkEnd    <= '1';
                         if (checkEnd = '1' and rec_shading = '0' and fifo_data(31 downto 28) = x"5" and fifo_data(15 downto 12) = x"5") then
-                           recstate  <= REQUESTWAITDONE;  
+                           recstate  <= REQUESTWAITDONE; 
+                           CmdDone   <= '1';                           
                         else
                            fifoLine_Wr  <= '1';
                            targetTiming <= targetTiming + 1000;
@@ -260,6 +264,7 @@ begin
                         targetTiming <= targetTiming + 1000; 
                         fifoLine_Wr <= '1';
                         recstate    <= REQUESTWAITDONE;  
+                        CmdDone     <= '1';
                      end if;
                   end if;
                   

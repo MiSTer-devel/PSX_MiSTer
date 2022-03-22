@@ -45,6 +45,7 @@ entity gpu_rect is
       fifo_data            : in  std_logic_vector(31 downto 0);
       requestFifo          : out std_logic := '0';
       done                 : out std_logic := '0';
+      CmdDone              : out std_logic := '0';
       
       requestVRAMEnable    : out std_logic;
       requestVRAMXPos      : out unsigned(9 downto 0);
@@ -136,6 +137,7 @@ begin
          elsif (ce = '1') then
          
             done                 <= '0';
+            CmdDone              <= '0';
             
             pipeline_new         <= '0';
             pipeline_texture     <= '0';
@@ -211,6 +213,7 @@ begin
                         state    <= REQUESTSIZE;  
                      else
                         state    <= CHECKPOS;
+                        CmdDone  <= '1'; 
                      end if;
                   end if;
                   
@@ -226,6 +229,7 @@ begin
                         state    <= REQUESTSIZE;  
                      else
                         state    <= CHECKPOS;
+                        CmdDone  <= '1'; 
                      end if;
                   end if;
             
@@ -234,6 +238,7 @@ begin
                      rec_sizex   <= unsigned(fifo_data(9 downto  0));
                      rec_sizey   <= unsigned(fifo_data(24 downto 16));
                      state       <= CHECKPOS;
+                     CmdDone     <= '1'; 
                   end if;
                   
                when CHECKPOS =>

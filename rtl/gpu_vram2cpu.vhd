@@ -22,6 +22,7 @@ entity gpu_vram2cpu is
       fifo_data            : in  std_logic_vector(31 downto 0);
       requestFifo          : out std_logic := '0';
       done                 : out std_logic := '0';
+      CmdDone              : out std_logic := '0';
       
       requestVRAMEnable    : out std_logic;
       requestVRAMXPos      : out unsigned(9 downto 0);
@@ -124,6 +125,7 @@ begin
          
          Fifo_Wr    <= '0';
          Fifo_Reset <= '0';
+        
          
          if (reset = '1') then
          
@@ -133,6 +135,7 @@ begin
          elsif (ce = '1') then
             
             done        <= '0';
+            CmdDone     <= '0';
          
             if (state /= IDLE) then
                drawTiming <= drawTiming + 1;
@@ -157,6 +160,7 @@ begin
             
                when REQUESTWORD3 =>
                   if (fifo_Valid = '1') then
+                     CmdDone    <= '1';
                      state      <= READVRAM;
                      widt       <= '0' & unsigned(fifo_data( 9 downto  0));
                      widtVram   <= '0' & unsigned(fifo_data( 9 downto  0));

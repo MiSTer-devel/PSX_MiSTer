@@ -101,9 +101,9 @@ architecture arch of gpu_pixelpipeline is
   
    signal clearCacheBuffer    : std_logic;
    
-   signal textPalReq          : std_logic;
-   signal textPalReqX         : unsigned(9 downto 0);   
-   signal textPalReqY         : unsigned(8 downto 0);
+   signal textPalReq          : std_logic := '0';
+   signal textPalReqX         : unsigned(9 downto 0) := (others => '0');  
+   signal textPalReqY         : unsigned(8 downto 0) := (others => '0'); 
   
    signal textPalFetched      : std_logic := '0';
    signal textPalX            : unsigned(9 downto 0) := (others => '0');   
