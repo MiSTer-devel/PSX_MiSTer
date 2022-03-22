@@ -450,13 +450,13 @@ begin
                            ack             <= '1';
 
                         when NEGCONANALOGI =>
-                           if ( to_integer(joypad.Analog2Y) < 0) then
+                           if (joypad.KeyCross = '1' or joypad.KeyR2 = '1') then
+                              -- Buttons are Buttons and full throttle
+                              receiveBuffer   <= "11111111";
+                           elsif ( to_integer(joypad.Analog2Y) < 0) then
                               -- Buttons are right stick up
                               -- Due to half resolution of the stick its range of -128 to 1 is mapped to 0x03 to 0xFF
                               receiveBuffer   <= std_logic_vector(1 + shift_left(not to_unsigned(to_integer(joypad.Analog2Y),8),1));
-                           elsif (joypad.KeyCross = '1' or joypad.KeyR2 = '1') then
-                              -- Buttons are Buttons and full throttle
-                              receiveBuffer   <= "11111111";
                            else
                               receiveBuffer   <= "00000000";
                            end if;
@@ -465,13 +465,15 @@ begin
                            ack             <= '1';
 
                         when NEGCONANALOGII =>
-                           if ( to_integer(joypad.Analog2Y) > 0) then
+                           if (joypad.KeySquare = '1' or joypad.KeyL2 = '1') then
+                              -- Buttons are Buttons and full throttle
+                              receiveBuffer   <= "11111111";
+                           elsif ( to_integer(joypad.Analog2Y) > 0) then
                               -- Buttons are right stick down
                               -- Due to half resolution of the stick its range of 1 to 127 is mapped to 0x03 to 0xFF
                               receiveBuffer   <= std_logic_vector(1 + shift_left(to_unsigned(to_integer(joypad.Analog2Y),8),1));
-                           elsif (joypad.KeySquare = '1' or joypad.KeyL2 = '1') then
-                              -- Buttons are Buttons and full throttle
-                              receiveBuffer   <= "11111111";
+                           else
+                              receiveBuffer   <= "00000000";
                            end if;
                            receiveValid    <= '1';
                            controllerState <= NEGCONANALOGL;
