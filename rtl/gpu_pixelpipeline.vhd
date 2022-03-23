@@ -99,7 +99,7 @@ architecture arch of gpu_pixelpipeline is
    
    signal CLUTDataB_S         : std_logic_vector(15 downto 0) := (others => '0');
   
-   signal clearCacheBuffer    : std_logic;
+   signal clearCacheBuffer    : std_logic := '0';
    
    signal textPalReq          : std_logic := '0';
    signal textPalReqX         : unsigned(9 downto 0) := (others => '0');  
@@ -454,7 +454,7 @@ begin
                end if;
             end if;
             
-            if (textPalInNew = '1' and drawMode_in(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY)) then
+            if (textPalInNew = '1' and drawMode_in(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY or textPalReq = '1')) then
                textPalReq  <= not noTexture;
                textPalReqX <= textPalInX;
                textPalReqY <= textPalInY;

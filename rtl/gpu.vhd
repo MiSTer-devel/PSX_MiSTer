@@ -839,12 +839,12 @@ begin
 -- synthesis translate_on
                proc_idle            <= '1';
                GPUSTAT_ReadyRecCmd  <= '1';
-               --if (fifoIn_Empty = '1') then
+               if (fifoIn_Empty = '1') then
                   GPUSTAT_ReadyRecDMA  <= '1';
-               --end if;
+               end if;
             end if;
             
-            if (fifoIn_Empty = '1' and (cpu2vram_requestFifo = '1' or (fifoIn_Valid = '0' and proc_idle = '1'))) then
+            if (fifoIn_Empty = '1' and (proc_requestFifo = '1' or (fifoIn_Valid = '0' and proc_idle = '1'))) then
                GPUSTAT_ReadyRecDMA <= '1';
             end if;
             
