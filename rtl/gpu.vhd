@@ -187,7 +187,7 @@ architecture arch of gpu is
    -- Processing  
    signal proc_idle                 : std_logic;
    signal proc_done                 : std_logic;
-   signal proc_CmdDone              : std_logic;
+   --signal proc_CmdDone              : std_logic;
    signal proc_requestFifo          : std_logic;
    signal timeout                   : integer range 0 to 67108863 := 0;
    
@@ -828,10 +828,8 @@ begin
             
             
             end if;
-            
-            if (proc_CmdDone = '1') then
-               GPUSTAT_ReadyRecDMA  <= '0';
-            end if;
+
+            GPUSTAT_ReadyRecDMA <= fifoIn_Empty;
             
             if (proc_done = '1') then
 -- synthesis translate_off
@@ -839,13 +837,6 @@ begin
 -- synthesis translate_on
                proc_idle            <= '1';
                GPUSTAT_ReadyRecCmd  <= '1';
-               if (fifoIn_Empty = '1') then
-                  GPUSTAT_ReadyRecDMA  <= '1';
-               end if;
-            end if;
-            
-            if (fifoIn_Empty = '1' and (proc_requestFifo = '1' or (fifoIn_Valid = '0' and proc_idle = '1'))) then
-               GPUSTAT_ReadyRecDMA <= '1';
             end if;
             
             if (softReset = '1') then
@@ -869,7 +860,7 @@ begin
    end process; 
    
    proc_done        <= vramFill_done        or cpu2vram_done        or vram2vram_done        or vram2cpu_done        or line_done        or rect_done        or poly_done       ;
-   proc_CmdDone     <= vramFill_CmdDone     or cpu2vram_CmdDone     or vram2vram_CmdDone     or vram2cpu_CmdDone     or line_CmdDone     or rect_CmdDone     or poly_CmdDone    ;
+   --proc_CmdDone     <= vramFill_CmdDone     or cpu2vram_CmdDone     or vram2vram_CmdDone     or vram2cpu_CmdDone     or line_CmdDone     or rect_CmdDone     or poly_CmdDone    ;
    proc_requestFifo <= vramFill_requestFifo or cpu2vram_requestFifo or vram2vram_requestFifo or vram2cpu_requestFifo or line_requestFifo or rect_requestFifo or poly_requestFifo;
    
    pixelStall <= fifoOut_NearFull;
