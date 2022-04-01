@@ -142,6 +142,7 @@ architecture arch of etb is
    --cd
    type ttracknames is array(0 to 99) of string(1 to 255);
    signal tracknames : ttracknames;
+   signal trackcount : integer;
    
    type filetype is file of integer;
    type t_data is array(0 to (2**28)-1) of integer;
@@ -240,7 +241,7 @@ begin
       loadExe               => psx_LoadExe(0),
       fastboot              => '1',
       FASTMEM               => '0',
-      DATACACHEON           => '1',
+      DATACACHEON           => '0',
       REPRODUCIBLEGPUTIMING => '0',
       REPRODUCIBLEDMATIMING => '0',
       DMABLOCKATONCE        => '0',
@@ -489,6 +490,7 @@ begin
             tracknames(count)(1 to inLine'length) <= inLine(1 to inLine'length); 
             count := count + 1;
          end loop;
+         trackcount <= count;
          
          file_close(infile);
       end if;
@@ -587,18 +589,22 @@ begin
             
             targetpos := 0;
             
-            while (not endfile(infile)) loop
-               
-               read(infile, next_int);  
-               
-               data(targetpos) := next_int;
-               targetpos       := targetpos + 1;
-   
-            end loop;
+            if (unsigned(cd_hps_lba(31 downto 24)) > 0 and unsigned(cd_hps_lba(31 downto 24)) < trackcount) then 
             
-            file_close(infile);
-            cdSize <= to_unsigned(targetpos * 4, 30);
+               while (not endfile(infile)) loop
+                  
+                  read(infile, next_int);  
+                  
+                  data(targetpos) := next_int;
+                  targetpos       := targetpos + 1;
+      
+               end loop;
+               
+               file_close(infile);
+               cdSize <= to_unsigned(targetpos * 4, 30);
             
+            end if;
+
          end if;
       end if;
       
@@ -613,7 +619,11 @@ begin
          wait until rising_edge(clk33);
          
          for i in 0 to 587 loop
-            cdData := std_logic_vector(to_signed(data(to_integer(unsigned(cd_hps_lba(23 downto 0))) * (2352 / 4) + i), 32));
+            if (unsigned(cd_hps_lba(31 downto 24)) > 0 and unsigned(cd_hps_lba(31 downto 24)) < trackcount) then 
+               cdData := std_logic_vector(to_signed(data(to_integer(unsigned(cd_hps_lba(23 downto 0))) * (2352 / 4) + i), 32));
+            else
+               cdData := (others => '0');
+            end if;
             
             cd_hps_data  <= cdData(15 downto 0);
             cd_hps_write <= '1';

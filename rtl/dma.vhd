@@ -133,7 +133,7 @@ architecture arch of dma is
    signal chopsize            : unsigned(7 downto 0);
    signal chopwaittime        : unsigned(7 downto 0);
    
-   signal dmaEndWait          : unsigned(3 downto 0) := (others => '0');
+   signal dmaEndWait          : unsigned(2 downto 0) := (others => '0');
          
    signal autoread            : std_logic := '0';
    signal firstword           : std_logic := '0';
@@ -396,7 +396,7 @@ begin
             -- trigger
             triggerNew     := '0';
             triggerPrio    := "111";
-            if (dmaState = OFF and dmaEndWait(3) = '1' and bus_write = '0' and bus_read = '0') then
+            if (dmaState = OFF and dmaEndWait(2) = '1' and bus_write = '0' and bus_read = '0') then
                for i in 0 to 6 loop
                   if (triggerDMA(i) = '1' and dmaArray(i).chopwaiting = '0') then
                      if ((DPCR((i * 4) + 3) = '1' and dmaArray(i).D_CHCR(24) = '1') or dmaArray(i).channelOn = '1') then -- enable + start or already on(retrigger after busy)
@@ -413,7 +413,7 @@ begin
             end if;
             dmaRequest <= triggerNew;
             
-            if (dmaEndWait(3) = '0') then
+            if (dmaEndWait(2) = '0') then
                dmaEndWait <= dmaEndWait + 1;
             end if;
             

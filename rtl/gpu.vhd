@@ -543,7 +543,7 @@ begin
                   case (to_integer(unsigned(bus_dataWrite(29 downto 24)))) is
                      when 16#00# => -- reset
                         softReset    <= '1';
-                        -- reset fifo + proc_idle ? 
+                        fifoIn_reset <= '1'; 
                         
                      when 16#01# => -- clear fifo
                         fifoIn_reset <= '1';   
@@ -765,7 +765,7 @@ begin
             
          elsif (ce = '1') then
          
-            fifoIn_Valid <= fifoIn_Rd;
+            fifoIn_Valid <= fifoIn_Rd and not fifoIn_reset;
             
             pipeline_clearCache <= '0';
          
@@ -840,6 +840,7 @@ begin
             end if;
             
             if (softReset = '1') then
+               proc_idle              <= '1';
                drawMode               <= (others => '0');
                GPUSTAT_TextPageX      <= "0000";
                GPUSTAT_TextPageY      <= '0';

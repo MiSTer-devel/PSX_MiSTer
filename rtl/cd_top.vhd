@@ -2654,7 +2654,7 @@ begin
                   elsif (trackNumberBCD = x"99") then
                      trackSearchState <= TRACKSEARCH_IDLE;
                      trackNumberBCD   <= x"AA";
-                     trackNumber      <= std_logic_vector(to_unsigned(1, 7)); -- todo: what to do here?
+                     trackNumber      <= std_logic_vector(to_unsigned(0, 7));
                   else
                      trackSearchState <= TRACKSEARCH_READ;
                      trackInfo_addrB  <= std_logic_vector(unsigned(trackInfo_addrB) + 1);
