@@ -164,8 +164,6 @@ architecture arch of etb is
    signal trackinfo_addr      : std_logic_vector(8 downto 0);
    signal trackinfo_write     : std_logic := '0';
    
-   signal multitrack          : std_logic := '1';
-   
    -- spu
    signal spuram_dataWrite    : std_logic_vector(31 downto 0);
    signal spuram_Adr          : std_logic_vector(18 downto 0);
@@ -245,7 +243,6 @@ begin
       REPRODUCIBLEGPUTIMING => '0',
       REPRODUCIBLEDMATIMING => '0',
       DMABLOCKATONCE        => '0',
-      multitrack            => multitrack,
       INSTANTSEEK           => '0',
       ditherOff             => '0',
       fpscountOn            => '0',
@@ -480,20 +477,18 @@ begin
       variable count       : integer;
    begin
 
-      if (multitrack = '1') then
-         file_open(f_status, infile, "R:\cdtracks.txt", read_mode);
+      file_open(f_status, infile, "R:\cdtracks.txt", read_mode);
    
-         count := 1;
-         while (not endfile(infile)) loop
-            readline(infile,inLine);
-            tracknames(count) <= (others => ' ');
-            tracknames(count)(1 to inLine'length) <= inLine(1 to inLine'length); 
-            count := count + 1;
-         end loop;
-         trackcount <= count;
-         
-         file_close(infile);
-      end if;
+      count := 1;
+      while (not endfile(infile)) loop
+         readline(infile,inLine);
+         tracknames(count) <= (others => ' ');
+         tracknames(count)(1 to inLine'length) <= inLine(1 to inLine'length); 
+         count := count + 1;
+      end loop;
+      trackcount <= count;
+      
+      file_close(infile);
       
       wait;
    end process;
@@ -540,7 +535,7 @@ begin
       end;
    begin
       
-      if (cdLoaded = '0' and multitrack = '1') then
+      if (cdLoaded = '0') then
       
          file_open(f_status, infile, "R:\\cuedata.bin", read_mode);
          
@@ -572,20 +567,15 @@ begin
    
    
       wait until rising_edge(clk33);
-      if (cd_hps_req = '1' or (multitrack = '0' and cdLoaded = '0')) then
+      if (cd_hps_req = '1') then
       
          -- load new track if required
-         if ((multitrack = '1' and cdTrack /= cd_hps_lba(31 downto 24)) or (multitrack = '0' and cdLoaded = '0')) then
+         if (cdTrack /= cd_hps_lba(31 downto 24)) then
          
-            if (multitrack = '1') then
-               cdTrack <= cd_hps_lba(31 downto 24);
-               report "Loading new File";
-               report tracknames(to_integer(unsigned(cd_hps_lba(31 downto 24))));
-               file_open(f_status, infile, tracknames(to_integer(unsigned(cd_hps_lba(31 downto 24)))), read_mode);
-            else
-               cdLoaded <= '1';
-               file_open(f_status, infile, "C:\Projekte\psx\WipEout (Europe) (Track 01).bin", read_mode);
-            end if;
+            cdTrack <= cd_hps_lba(31 downto 24);
+            report "Loading new File";
+            report tracknames(to_integer(unsigned(cd_hps_lba(31 downto 24))));
+            file_open(f_status, infile, tracknames(to_integer(unsigned(cd_hps_lba(31 downto 24)))), read_mode);
             
             targetpos := 0;
             

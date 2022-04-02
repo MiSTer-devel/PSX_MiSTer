@@ -23,7 +23,6 @@ entity psx_mister is
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
-      multitrack            : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       ditherOff             : in  std_logic;
       fpscountOn            : in  std_logic;
@@ -229,7 +228,6 @@ begin
       REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING,
       REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING,
       DMABLOCKATONCE        => DMABLOCKATONCE,
-      multitrack            => multitrack,
       INSTANTSEEK           => INSTANTSEEK,
       ditherOff             => ditherOff,
       fpscountOn            => fpscountOn,

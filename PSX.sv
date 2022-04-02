@@ -342,7 +342,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXX XXXXXXXXXXXXXX XXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+// XXXXX XXX XXXXXXXXXXXXXX XXXXXX  XXXXXXXXXX XXXXXXXXXX  XXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -406,19 +406,16 @@ parameter CONF_STR = {
 	"P3oP,Sync Video Out,Off,On;",
 	"P3oO,Sync Video Clock,Off,On;",
 	"P3OU,Sound,On,Off;",
-	"P3oA,SPU Reverb,On,Off;",
-	"P3OV,Fast Memory,Off,On;",
 	"P3oQ,Data Cache(Cheats Off),Off,On;",
 	"P3OJ,RepTimingGPU,Off,On;",
 	"P3OK,RepTimingDMA,Off,On;",
 	"P3oB,RepTimingSPUDMA,Off,On;",
 	"P3OQ,DMAinBLOCKs,Off,On;",
-	"P3oL,CD Singletrack,Off,On;",
 	"P3OL,CD Instant Seek,Off,On;",
 	"P3oK,CD Inserted,Yes,No;",
 	"P3OF,Force 60Hz PAL,Off,On;",
 	"P3OR,Textures,On,Off;",
-	"P3oM,Patch TTY,Off,On;",
+	//"P3oM,Patch TTY,Off,On;",
 	"P3T1,Advance Pause;",
 
 	"- ;",
@@ -771,24 +768,23 @@ psx
    .pause(paused),
    .loadExe(loadExe),
    .fastboot(status[16]),
-   .FASTMEM(status[31]),
+   .FASTMEM(0),
    .DATACACHEON(status[58]),
    .REPRODUCIBLEGPUTIMING(status[19]),
    .REPRODUCIBLEDMATIMING(status[20]),
    .DMABLOCKATONCE(status[26]),
-   .multitrack(~status[53]),
    .INSTANTSEEK(status[21]),
    .ditherOff(status[22]),
    .fpscountOn(status[28]),
    .cdslowOn(status[59]),
    .errorOn(~status[29]),
-   .PATCHSERIAL(status[54]),
+   .PATCHSERIAL(0), //.PATCHSERIAL(status[54]),
    .noTexture(status[27]),
    .syncVideoOut(syncVideoOut),
    .syncInterlace(status[60]),
    .SPUon(~status[30]),
    .SPUSDRAM(status[44] & SDRAM2_EN),
-   .REVERBOFF(status[42]),
+   .REVERBOFF(0),
    .REPRODUCIBLESPUDMA(status[43]),
    .WIDESCREEN(status[61]),
    // RAM/BIOS interface      

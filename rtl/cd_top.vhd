@@ -12,7 +12,6 @@ entity cd_top is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
-      multitrack           : in  std_logic;
       INSTANTSEEK          : in  std_logic;
       hasCD                : in  std_logic;
       newCD                : in  std_logic;
@@ -43,7 +42,7 @@ entity cd_top is
       
       cd_hps_req           : out std_logic := '0';
       cd_hps_lba           : out std_logic_vector(31 downto 0);
-      cd_hps_lba_sim       : out std_logic_vector(31 downto 0);
+      cd_hps_lba_sim       : out std_logic_vector(31 downto 0) := (others => '0');
       cd_hps_ack           : in  std_logic;
       cd_hps_write         : in  std_logic;
       cd_hps_data          : in  std_logic_vector(15 downto 0);
@@ -398,17 +397,7 @@ architecture arch of cd_top is
       TRACKSEARCH_CHECK
 	);
    signal trackSearchState          : ttrackSearchState := TRACKSEARCH_IDLE;
-      
-   -- size calculation
-   signal lbaCount                  : integer range 0 to 524287; 
-   signal cdSize_work               : unsigned(29 downto 0);
-   signal lbaCount_work             : integer range 0 to 524287; 
-   signal cd_SecondsHigh            : unsigned(3 downto 0); 
-   signal cd_SecondsLow             : unsigned(3 downto 0); 
-   signal cd_MinutesHigh            : unsigned(3 downto 0); 
-   signal cd_MinutesLow             : unsigned(3 downto 0);
-   signal writeSingletrack          : std_logic := '0';
-      
+
    -- savestates
    type t_ssarray is array(0 to 127) of std_logic_vector(31 downto 0);
    signal ss_in   : t_ssarray := (others => (others => '0'));
@@ -2167,18 +2156,12 @@ begin
                when SFETCH_START =>
                   sectorFetchState <= SFETCH_HPSACK;
                   cd_hps_req       <= '1';
-                  if (positionInIndex >= 0) then
-                     cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(positionInIndex, 24));
-                     cd_hps_lba_sim   <= x"00" & std_logic_vector(to_unsigned(positionInIndex, 24));
-                  else
-                     cd_hps_lba       <= x"00" & std_logic_vector(to_unsigned(0, 24));
-                     cd_hps_lba_sim   <= x"00" & std_logic_vector(to_unsigned(0, 24));
-                  end if;
-                  if (multitrack = '1') then
-                     cd_hps_lba                   <= std_logic_vector(to_unsigned(lastReadSector, 32));
-                     cd_hps_lba_sim(23 downto 0)  <= std_logic_vector(to_unsigned(lastReadSector - startLBA, 24));
-                     cd_hps_lba_sim(30 downto 24) <= trackNumber;
-                  end if;
+                  cd_hps_lba       <= std_logic_vector(to_unsigned(lastReadSector, 32));
+                  cd_hps_lba_sim   <= (others => '0'); 
+                  -- synthesis translate_off
+                  cd_hps_lba_sim(23 downto 0)  <= std_logic_vector(to_unsigned(lastReadSector - startLBA, 24));
+                  cd_hps_lba_sim(31 downto 24) <= '0' & trackNumber;
+                  -- synthesis translate_on
                   
                   readSubchannel <= '1';
                   
@@ -2716,22 +2699,6 @@ begin
             end if;
             
          end if;
-         
-         if (writeSingletrack = '1') then
-            trackNumber     <= "0000001";
-            trackcountBCD   <= x"01";
-            isAudioCD       <= '0';
-            totalSecondsBCD <= std_logic_vector(cd_SecondsHigh & cd_SecondsLow);
-            totalMinutesBCD <= std_logic_vector(cd_MinutesHigh & cd_MinutesLow);
-            
-            trackInfo_DataA(18 downto 0)  <= (others => '0');
-            trackInfo_DataA(37 downto 19) <= std_logic_vector(to_unsigned(lbaCount - 1, 19));
-            trackInfo_DataA(45 downto 38) <= x"02";
-            trackInfo_DataA(53 downto 46) <= x"00";
-            trackInfo_DataA(54)           <= '0';
-            trackInfo_addrA <= "0000001";
-            trackInfo_wrenA <= '1';
-         end if;
 
       end if;
    end process;
@@ -2763,64 +2730,6 @@ begin
       wren_b      => '0',
       q_b         => trackInfo_DataOutB
    );
-   
-   -- size calculation
-   process(clk1x)
-   begin
-      if (rising_edge(clk1x)) then
-      
-         writeSingletrack <= '0';
-      
-         if (newCD = '1') then
-            cdSize_work    <= cdSize;
-            lbaCount       <= 0;
-            lbaCount_work  <= 0;
-            cd_SecondsHigh <= (others => '0');
-            cd_SecondsLow  <= (others => '0');
-            cd_MinutesHigh <= (others => '0');
-            cd_MinutesLow  <= (others => '0');
-         else
-
-            if (lbaCount_work >= FRAMES_PER_SECOND) then
-               lbaCount_work <= lbaCount_work - FRAMES_PER_SECOND;
-            
-               if (cd_SecondsLow < 9) then
-                  cd_SecondsLow <= cd_SecondsLow + 1;
-               else
-                  cd_SecondsLow <= (others => '0');
-                  if (cd_SecondsHigh < 5) then
-                     cd_SecondsHigh <= cd_SecondsHigh + 1;
-                  else
-                     cd_SecondsHigh <= (others => '0');
-                     if (cd_MinutesLow < 9) then
-                        cd_MinutesLow <= cd_MinutesLow + 1;
-                     else
-                        cd_MinutesLow  <= (others => '0');
-                        cd_MinutesHigh <= cd_MinutesHigh + 1;
-                     end if;
-                  end if;
-               end if;
-            else
-               lbaCount_work <= 0;
-            end if;
-            
-            if (lbaCount_work > 0 and lbaCount_work <= FRAMES_PER_SECOND) then
-               writeSingletrack <= not multitrack; 
-            end if;
-            
-            if (cdSize_work > 0) then
-               lbaCount <= lbaCount + 1;
-               if (cdSize_work > RAW_SECTOR_SIZE) then
-                  cdSize_work <= cdSize_work - RAW_SECTOR_SIZE;
-               else
-                  cdSize_work      <= (others => '0');
-                  lbaCount_work    <= lbaCount + 1;
-               end if;
-            end if;
-            
-         end if;   
-      end if;
-   end process;
    
 --##############################################################
 --############################### savestates

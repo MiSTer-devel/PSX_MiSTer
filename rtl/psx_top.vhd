@@ -28,7 +28,6 @@ entity psx_top is
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
-      multitrack            : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       ditherOff             : in  std_logic;
       fpscountOn            : in  std_logic;
@@ -1201,7 +1200,6 @@ begin
       ce                   => ce,   
       reset                => reset_intern,
      
-      multitrack           => multitrack,
       INSTANTSEEK          => INSTANTSEEK,
       hasCD                => hasCD,
       newCD                => newCD,
