@@ -184,7 +184,7 @@ assign USER_OUT = '1;
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = status[8:7];
 
-assign LED_USER  = cart_download | bk_pending;
+assign LED_USER  = exe_download | bk_pending;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign BUTTONS   = 0;
@@ -334,7 +334,7 @@ always @(posedge clk_1x) begin : ffwd
 	fast_forward <= (FFrequest | ff_latch);
 end
 
-wire reset = RESET | buttons[1] | status[0] | bios_download | cart_download;
+wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download;
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
@@ -486,7 +486,7 @@ wire [15:0] joystick1_rumble;
 wire [15:0] joystick2_rumble;
 wire [32:0] RTC_time;
 
-wire [63:0] status_in = cart_download ? {status[63:39],ss_slot,status[36:0]} : {status[63:39],ss_slot,status[36:0]};
+wire [63:0] status_in = {status[63:39],ss_slot,status[36:0]};
 
 wire bk_pending;
 wire DIRECT_VIDEO;
@@ -505,7 +505,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
 
 	.status(status),
 	.status_in(status_in),
-	.status_set(cart_download | statusUpdate),
+	.status_set(statusUpdate),
 	.status_menumask(status_menumask),
 	.info_req(ss_info_req),
 	.info(ss_info),
@@ -556,10 +556,10 @@ assign sd_wr[1] = 0;
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
-reg bios_download, cart_download, sbi_download, cdinfo_download, code_download;
+reg bios_download, exe_download, sbi_download, cdinfo_download, code_download;
 always @(posedge clk_1x) begin
 	bios_download    <= ioctl_download & (ioctl_index == 0);
-	cart_download    <= ioctl_download & (ioctl_index == 1);
+	exe_download     <= ioctl_download & (ioctl_index == 1);
 	sbi_download     <= ioctl_download & (ioctl_index == 250);
 	cdinfo_download  <= ioctl_download & (ioctl_index == 251);
 	code_download    <= ioctl_download & (ioctl_index == 255);
@@ -567,7 +567,7 @@ end
 
 reg cart_loaded = 0;
 always @(posedge clk_1x) begin
-	if (cart_download || img_mounted[1]) begin
+	if (exe_download || img_mounted[1]) begin
 		cart_loaded <= 1;
 	end
 end
@@ -583,7 +583,7 @@ reg[29:0]  cd_Size;
 reg        hasCD = 0;
 reg        newCD = 0;
 
-reg cart_download_1 = 0;
+reg exe_download_1 = 0;
 reg loadExe = 0;
 
 reg sd_mounted2 = 0;
@@ -607,12 +607,12 @@ reg [15:0] libcryptKey;
 
 always @(posedge clk_1x) begin
 	ramdownload_wr <= 0;
-	if(cart_download | bios_download | cdinfo_download) begin
+	if(exe_download | bios_download | cdinfo_download) begin
       if (ioctl_wr) begin
          if(~ioctl_addr[1]) begin
             ramdownload_wrdata[15:0] <= ioctl_dout;
             if (bios_download)         ramdownload_wraddr  <= ioctl_addr[26:0] + BIOS_START[26:0];
-            else if (cart_download)    ramdownload_wraddr  <= ioctl_addr[26:0] + EXE_START[26:0];                              
+            else if (exe_download)     ramdownload_wraddr  <= ioctl_addr[26:0] + EXE_START[26:0];                              
             else if (cdinfo_download)  ramdownload_wraddr  <= ioctl_addr[26:0];      
          end else begin
             ramdownload_wrdata[31:16] <= ioctl_dout;
@@ -621,12 +621,12 @@ always @(posedge clk_1x) begin
             if (cdinfo_download) ioctl_wait <= 0;
          end
       end
-      if(sdram_writeack | sdram_writeack2) ioctl_wait <= 0;
+      if(sdramCh3_done) ioctl_wait <= 0;
    end else begin 
       ioctl_wait <= 0;
 	end
-   cart_download_1 <= cart_download;
-   loadExe         <= cart_download_1 & ~cart_download;   
+   exe_download_1  <= exe_download;
+   loadExe         <= exe_download_1 & ~exe_download;   
    
    if (sbi_download && ioctl_wr) begin
       libcryptKey <= ioctl_dout;
@@ -931,7 +931,7 @@ psx
    .rewind_active         (0), //(status[27] & joy[15]),
    //cheats
    .cheat_clear(gg_reset),
-   .cheats_enabled(~status[6] && ~status[58]),
+   .cheats_enabled(~status[6] && ~status[58] && ~ioctl_download),
    .cheat_on(gg_valid),
    .cheat_in(gg_code),
    .cheats_active(gg_active),
@@ -942,7 +942,7 @@ psx
    .Cheats_BusWriteData(cheats_dout),
    .Cheats_Bus_ena(cheats_ena),
    .Cheats_BusReadData(cheats_din),
-   .Cheats_BusDone(cheats_done)
+   .Cheats_BusDone(sdramCh3_done)
 );
 
 ////////////////////////////  MEMORY  ///////////////////////////////////
@@ -976,7 +976,7 @@ wire [3:0] cheats_be;
 wire [31:0] cheats_dout;
 wire cheats_ena;
 wire [31:0] cheats_din;
-wire cheats_done;
+wire sdramCh3_done;
 
 assign sdram_ack = sdram_readack | sdram_writeack;
 
@@ -1012,21 +1012,21 @@ sdram sdram
 	.ch1_ready(sdram_readack),
 	.ch1_reqprocessed(sdram_reqprocessed),
 
-	.ch2_addr ((cart_download | bios_download) ? ramdownload_wraddr : sdram_addr),
-	.ch2_din  ((cart_download | bios_download) ? ramdownload_wrdata : sdr_sdram_din),
+	.ch2_addr (sdram_addr),
+	.ch2_din  (sdr_sdram_din),
 	.ch2_dout (),
-	.ch2_req  ((cart_download | bios_download) ? ramdownload_wr     : (sdram_req & ~sdram_rnw)),
+	.ch2_req  (sdram_req & ~sdram_rnw),
 	.ch2_rnw  (1'b0),
-   .ch2_be   ((cart_download | bios_download) ? 4'b1111            : sdram_be),
+	.ch2_be   (sdram_be),
 	.ch2_ready(sdram_writeack),
 
-	.ch3_addr(cheats_addr),
-	.ch3_din(cheats_dout),
-	.ch3_dout(cheats_din),
-	.ch3_req(cheats_ena),
-	.ch3_rnw(cheats_rnw),
-	.ch3_be(cheats_be),
-	.ch3_ready(cheats_done)
+	.ch3_addr ((exe_download | bios_download) ? ramdownload_wraddr : cheats_addr),
+	.ch3_din  ((exe_download | bios_download) ? ramdownload_wrdata : cheats_dout),
+	.ch3_dout (cheats_din),
+	.ch3_req  ((exe_download | bios_download) ? ramdownload_wr     : cheats_ena),
+	.ch3_rnw  (cheats_rnw),
+	.ch3_be   ((exe_download | bios_download) ? 4'b1111            : cheats_be),
+	.ch3_ready(sdramCh3_done)
 );
 
 wire [31:0] spuram_dataWrite;

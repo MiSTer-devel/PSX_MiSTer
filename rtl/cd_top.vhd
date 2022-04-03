@@ -2538,7 +2538,7 @@ begin
       if (rising_edge(clk1x)) then
          
          if (spu_tick = '1') then
-            if ((modeReg(0) = '1' or (modeReg(6) = '1' and xa_muted = '0')) and muted = '0') then
+            if ((driveState = DRIVE_PLAYING or (driveState = DRIVE_READING and modeReg(0) = '1') or (modeReg(6) = '1' and xa_muted = '0')) and muted = '0') then
                cd_volume_step <= 0;
             else
                cd_left  <= (others => '0');

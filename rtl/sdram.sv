@@ -127,6 +127,12 @@ reg ram_idleNext    = 0;
 
 assign ram_idle = ram_idleNext && !ch3_req;
 
+// ch3 buffered for timing closure
+reg [26:0]  ch3buf_addr;
+reg [31:0]  ch3buf_din; 
+reg         ch3buf_rnw; 
+reg [3:0]   ch3buf_be;
+
 always @(posedge clk_base) begin
 
    ch1_ready <= ch1_ready_ramclock;
@@ -180,6 +186,11 @@ always @(posedge clk) begin
 	ch1_rq <= ch1_rq | (ch1_req & clk3xIndex);
 	ch2_rq <= ch2_rq | (ch2_req & clk3xIndex);
 	ch3_rq <= ch3_rq | (ch3_req & clk3xIndex);
+   
+   ch3buf_addr <= ch3_addr;
+   ch3buf_din  <= ch3_din;
+   ch3buf_rnw  <= ch3_rnw;
+   ch3buf_be   <= ch3_be;
 	
 	if (ch1_ready) ch1_ready_ramclock <= 0;
 	if (ch2_ready) ch2_ready_ramclock <= 0;
@@ -319,11 +330,11 @@ always @(posedge clk) begin
                state      <= STATE_WAIT;
                ch2_ready_ramclock <= 1;
             end else if(ch3_rq) begin
-               {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch3_be[1:0], ch3_rnw, ch3_addr[25:1]};
-               chip       <= ch3_addr[26];
-               saved_data <= ch3_din;
-               saved_wr   <= ~ch3_rnw;
-               saved_be   <= ch3_be;
+               {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch3buf_be[1:0], ch3buf_rnw, ch3buf_addr[25:1]};
+               chip       <= ch3buf_addr[26];
+               saved_data <= ch3buf_din;
+               saved_wr   <= ~ch3buf_rnw;
+               saved_be   <= ch3buf_be;
                ch         <= 2;
                ch3_rq     <= 0;
                command    <= CMD_ACTIVE;

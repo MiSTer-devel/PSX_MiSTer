@@ -42,6 +42,7 @@ architecture arch of etb is
    -- hps emulation
    type ttracknames is array(0 to 99) of string(1 to 255);
    signal tracknames : ttracknames;
+   signal trackcount : integer;
    
    type filetype is file of integer;
    type t_data is array(0 to (2**28)-1) of integer;
@@ -51,9 +52,7 @@ architecture arch of etb is
    signal trackinfo_data      : std_logic_vector(31 downto 0);
    signal trackinfo_addr      : std_logic_vector(8 downto 0);
    signal trackinfo_write     : std_logic := '0';
-   
-   signal multitrack          : std_logic := '1';
-   
+
    -- savestates
    signal reset_in            : std_logic;
    signal reset_out           : std_logic := '1';
@@ -79,7 +78,6 @@ begin
       ce                   => '1',        
       reset                => reset_out,  
 
-      multitrack           => multitrack,
       INSTANTSEEK          => '1',
       hasCD                => '1',
       newCD                => reset_out,
@@ -125,11 +123,7 @@ begin
    (
       LOADSTATE         => '1',
       --FILENAME          => "C:\Users\FPGADev\Desktop\savestates_psxcore\Suikoden II (USA)_1.ss"
-      --FILENAME          => "C:\Projekte\psx\FPSXApp\Rayman (USA)_beforeplay2.sst"
-      --FILENAME          => "C:\Projekte\psx\FPSXApp\Rayman (USA)_endtrack2.sst"
-      --FILENAME          => "C:\Projekte\psx\FPSXApp\Rayman (USA)_restart.sst"
-      --FILENAME          => "C:\Projekte\psx\FPSXApp\Rayman (USA)_music.sst"
-      FILENAME          => "C:\Projekte\psx\FPSXApp\Rayman (USA)_music_all.sst"
+      FILENAME          => "C:\Projekte\psx\FPSXApp\Die Hard Trilogy (USA) (Rev 1).sst"
    )
    port map
    (
@@ -165,19 +159,18 @@ begin
       variable count       : integer;
    begin
 
-      if (multitrack = '1') then
-         file_open(f_status, infile, "R:\cdtracks.txt", read_mode);
+      file_open(f_status, infile, "R:\cdtracks.txt", read_mode);
    
-         count := 1;
-         while (not endfile(infile)) loop
-            readline(infile,inLine);
-            tracknames(count) <= (others => ' ');
-            tracknames(count)(1 to inLine'length) <= inLine(1 to inLine'length); 
-            count := count + 1;
-         end loop;
-         
-         file_close(infile);
-      end if;
+      count := 1;
+      while (not endfile(infile)) loop
+         readline(infile,inLine);
+         tracknames(count) <= (others => ' ');
+         tracknames(count)(1 to inLine'length) <= inLine(1 to inLine'length); 
+         count := count + 1;
+      end loop;
+      trackcount <= count;
+      
+      file_close(infile);
       
       wait;
    end process;
@@ -224,7 +217,7 @@ begin
       end;
    begin
       
-      if (cdLoaded = '0' and multitrack = '1') then
+      if (cdLoaded = '0') then
       
          file_open(f_status, infile, "R:\\cuedata.bin", read_mode);
          
@@ -256,35 +249,34 @@ begin
    
    
       wait until rising_edge(clk1x);
-      if (cd_hps_req = '1' or (multitrack = '0' and cdLoaded = '0')) then
+      if (cd_hps_req = '1') then
       
          -- load new track if required
-         if ((multitrack = '1' and cdTrack /= cd_hps_lba(31 downto 24)) or (multitrack = '0' and cdLoaded = '0')) then
+         if (cdTrack /= cd_hps_lba(31 downto 24)) then
          
-            if (multitrack = '1') then
-               cdTrack <= cd_hps_lba(31 downto 24);
-               report "Loading new File";
-               report tracknames(to_integer(unsigned(cd_hps_lba(31 downto 24))));
-               file_open(f_status, infile, tracknames(to_integer(unsigned(cd_hps_lba(31 downto 24)))), read_mode);
-            else
-               cdLoaded <= '1';
-               file_open(f_status, infile, "C:\Projekte\psx\Croc - Legend of the Gobbos (Europe) (Demo).bin", read_mode);
-            end if;
+            cdTrack <= cd_hps_lba(31 downto 24);
+            report "Loading new File";
+            report tracknames(to_integer(unsigned(cd_hps_lba(31 downto 24))));
+            file_open(f_status, infile, tracknames(to_integer(unsigned(cd_hps_lba(31 downto 24)))), read_mode);
             
             targetpos := 0;
             
-            while (not endfile(infile)) loop
-               
-               read(infile, next_int);  
-               
-               data(targetpos) := next_int;
-               targetpos       := targetpos + 1;
-   
-            end loop;
+            if (unsigned(cd_hps_lba(31 downto 24)) > 0 and unsigned(cd_hps_lba(31 downto 24)) < trackcount) then 
             
-            file_close(infile);
-            cdSize <= to_unsigned(targetpos * 4, 30);
+               while (not endfile(infile)) loop
+                  
+                  read(infile, next_int);  
+                  
+                  data(targetpos) := next_int;
+                  targetpos       := targetpos + 1;
+      
+               end loop;
+               
+               file_close(infile);
+               cdSize <= to_unsigned(targetpos * 4, 30);
             
+            end if;
+
          end if;
       end if;
       
@@ -299,7 +291,11 @@ begin
          wait until rising_edge(clk1x);
          
          for i in 0 to 587 loop
-            cdData := std_logic_vector(to_signed(data(to_integer(unsigned(cd_hps_lba(23 downto 0))) * (2352 / 4) + i), 32));
+            if (unsigned(cd_hps_lba(31 downto 24)) > 0 and unsigned(cd_hps_lba(31 downto 24)) < trackcount) then 
+               cdData := std_logic_vector(to_signed(data(to_integer(unsigned(cd_hps_lba(23 downto 0))) * (2352 / 4) + i), 32));
+            else
+               cdData := (others => '0');
+            end if;
             
             cd_hps_data  <= cdData(15 downto 0);
             cd_hps_write <= '1';
