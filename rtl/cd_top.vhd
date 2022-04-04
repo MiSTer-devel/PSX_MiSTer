@@ -1758,11 +1758,9 @@ begin
                            driveBusy    <= '1';
                            currentLBA   <= lastReadSector;
                            -- todo: physical lba position?
-                           if (isAudio = '0') then
-                              for i in 0 to 11 loop
-                                 subdata(i) <= nextSubdata(i);
-                              end loop;
-                           end if;
+                           for i in 0 to 11 loop
+                              subdata(i) <= nextSubdata(i);
+                           end loop;
                            readOnDisk   <= '1';
                         end if;
                      end if;
@@ -1791,13 +1789,13 @@ begin
                end case;
             end if;
             
+            seekLBA <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
+            
             if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1' or seekOnDiskPlay = '1') then
                if (seekOnDiskPlay = '1') then
-                  seekLBA <= playLBA;
                   readLBA <= playLBA;
                else
-                  seekLBA <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
-                  readLBA <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
+                  readLBA <= seekLBA;
                end if;
                readOnDisk            <= '1';
                if (seekOnDiskCmd = '1') then

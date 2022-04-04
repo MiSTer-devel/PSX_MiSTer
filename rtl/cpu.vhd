@@ -1405,7 +1405,7 @@ begin
                            EXEresultWriteEnable <= '1';
                            EXEresultData        <= gte_readData;
                            EXElastreadCOP       <= '1';
-                           if (gte_busy = '1' or gte_cmdEna = '1' or execute_gte_cmdEna = '1') then
+                           if (gte_busy = '1' or gte_cmdEna = '1' or execute_gte_cmdEna = '1' or gte_writeEna = '1') then --gte_cmdEna not needed as will be busy on new request anyway?
                               stallNew3    <= '1';
                               EXEstalltype <= EXESTALLTYPE_GTE;
                            else
@@ -1416,7 +1416,7 @@ begin
                            EXEresultWriteEnable <= '1';
                            EXEresultData        <= gte_readData;
                            EXElastreadCOP       <= '1';
-                           if (gte_busy = '1' or gte_cmdEna = '1' or execute_gte_cmdEna = '1') then
+                           if (gte_busy = '1' or gte_cmdEna = '1' or execute_gte_cmdEna = '1' or gte_writeEna = '1') then --gte_cmdEna not needed as will be busy on new request anyway?
                               stallNew3    <= '1';
                               EXEstalltype <= EXESTALLTYPE_GTE;
                            else
@@ -1584,7 +1584,7 @@ begin
                else
                   EXEMemWriteEnable <= '1';
                   EXEMemWriteData   <= gte_readData;
-                  if (gte_busy = '1' or execute_gte_cmdEna = '1') then
+                  if (gte_busy = '1' or execute_gte_cmdEna = '1' or gte_writeEna = '1') then
                      stallNew3    <= '1';
                      EXEstalltype <= EXESTALLTYPE_GTE;
                   else
