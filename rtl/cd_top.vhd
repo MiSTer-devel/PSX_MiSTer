@@ -124,6 +124,7 @@ architecture arch of cd_top is
    signal softReset                 : std_logic := '0';
    signal ackPendingIRQNext         : std_logic := '0';
    signal cmdResetXa                : std_logic := '0';
+   signal updatePhysicalPosition    : std_logic := '0';
    signal muted                     : std_logic;
          
    signal setLocActive              : std_logic := '0';
@@ -207,6 +208,7 @@ architecture arch of cd_top is
    signal pause_cmd                 : std_logic := '0';
          
    signal currentLBA                : integer range 0 to 524287;        
+   signal physicalLBA               : integer range 0 to 524287;        
    signal seekLBA                   : integer range 0 to 524287; 
    signal playLBA                   : integer range 0 to 524287; 
    signal currentTrackBCD           : std_logic_vector(7 downto 0);
@@ -237,6 +239,22 @@ architecture arch of cd_top is
    signal writeSectorPointer        : unsigned(2 downto 0) := (others => '0');
    signal readSectorPointer         : unsigned(2 downto 0) := (others => '0');
    
+   type tphysicalUpdateState is
+   (
+      PHYSICALUPDATE_IDLE,
+      PHYSICALUPDATE_START,
+      PHYSICALUPDATE_CHECK,
+      PHYSICALUPDATE_CALC1,
+      PHYSICALUPDATE_CALC2,
+      PHYSICALUPDATE_CALCDONE,
+      PHYSICALUPDATE_READSUBCHANNEL
+   );
+   signal physicalUpdateState : tphysicalUpdateState := PHYSICALUPDATE_IDLE;
+   
+   signal phy_base                 : integer range 0 to 524287;
+   signal phy_oldOffset            : integer range 0 to 31;
+   signal phy_newOffset            : integer range 0 to 31;
+   
    -- sector fetch
    type tsectorFetch is
    (
@@ -257,6 +275,7 @@ architecture arch of cd_top is
       
    signal positionInIndex           : integer range -524288 to 524287; 
    signal lastReadSector            : integer range 0 to 524287; 
+   signal subchannelSector          : integer range 0 to 524287; 
    signal fetchCount                : integer range 0 to 588;
    signal fetchDelay                : integer range 0 to 15;
       
@@ -270,12 +289,16 @@ architecture arch of cd_top is
    type treadSubchannelState is
    (
       SSUB_IDLE,
+      SSUB_START,
       SSUB_CALCPOS,
       SSUB_CALCSECTOR
    );
    signal readSubchannelState       : treadSubchannelState := SSUB_IDLE;
    
    signal readSubchannel            : std_logic := '0';
+   signal triggerUpdateSubchannel   : std_logic := '0';
+   signal UpdateSubchannel          : std_logic := '0';
+   signal UpdateSubchannelDone      : std_logic := '0';
    signal subchannelLBAwork         : integer range 0 to 524287;  
    signal sub_SecondsHigh           : unsigned(3 downto 0); 
    signal sub_SecondsLow            : unsigned(3 downto 0); 
@@ -814,6 +837,7 @@ begin
             errorResponseCmd_new    <= '0';
             errorResponseNext_new   <= '0';
             ClearXACurrentSet       <= '0';
+            updatePhysicalPosition  <= '0';
          
             -- receive new command request or decrease wait timer on pending command
             if (beginCommand = '1') then
@@ -834,6 +858,15 @@ begin
                   when x"1F" => paramCount <= 6; --VideoCD
                   when others => paramCount <= 0;
                end case;
+               
+               if (driveState = DRIVE_IDLE and internalStatus(1) = '1' and nextCmd = x"11") then
+                  updatePhysicalPosition <= '1';
+               end if;
+               
+               if (CDROM_IRQFLAG /= "00000") then
+                  cmd_busy  <= '0';
+               end if;
+               
             elsif (pause_cmd = '1') then
                cmd_busy  <= '0';
                if (cmd_busy = '1') then
@@ -1538,6 +1571,7 @@ begin
    ss_out(13)( 7 downto  0) <= internalStatus;       
    ss_out(13)(15 downto  8) <= modeReg;                   
    ss_out( 3)(19 downto  0) <= std_logic_vector(to_unsigned(currentLBA, 20));           
+   ss_out( 7)(19 downto  0) <= std_logic_vector(to_unsigned(physicalLBA, 20));           
    ss_out(18)(5)            <= readAfterSeek;        
    ss_out(18)(6)            <= playAfterSeek;        
    ss_out(18)(8)            <= lastSectorHeaderValid;
@@ -1552,7 +1586,8 @@ begin
    
    -- drive
    process(clk1x)
-      variable skipreading : std_logic;
+      variable skipreading     : std_logic;
+      variable physicalLBANew  : integer range 0 to 524287;
    begin
       if (rising_edge(clk1x)) then
 
@@ -1577,6 +1612,7 @@ begin
             modeReg                 <= ss_in(13)(15 downto 8); -- x"20"; -- read_raw_sector set
                      
             currentLBA              <= to_integer(unsigned(ss_in(3)(19 downto 0))); -- 0
+            physicalLBA             <= to_integer(unsigned(ss_in(7)(19 downto 0))); -- 0
             
             readAfterSeek           <= ss_in(18)(5); -- '0'
             playAfterSeek           <= ss_in(18)(6); -- '0';
@@ -1645,6 +1681,7 @@ begin
             processCDDASector       <= '0';
             processSeekHeader       <= '0';
             clearSectorBuffers      <= '0';
+            triggerUpdateSubchannel <= '0';
          
             startMotor   <= '0'; 
             
@@ -1683,7 +1720,7 @@ begin
                      end if;
                       
                      currentLBA   <= lastReadSector;
-                     -- todo: physical lba position?
+                     physicalLBA  <= lastReadSector;
                       
                   end if;
                   
@@ -1757,7 +1794,7 @@ begin
                            driveDelay   <= driveDelayNext;
                            driveBusy    <= '1';
                            currentLBA   <= lastReadSector;
-                           -- todo: physical lba position?
+                           physicalLBA  <= lastReadSector;
                            for i in 0 to 11 loop
                               subdata(i) <= nextSubdata(i);
                            end loop;
@@ -1970,6 +2007,58 @@ begin
                end if;
             end if;
             
+            -- updatePhysicalPosition triggered from GetLocP only - todo: trigger constantly when motor on and not seeking/reading?
+            case (physicalUpdateState) is
+            
+               when PHYSICALUPDATE_IDLE =>
+                  if (updatePhysicalPosition = '1') then
+                     physicalUpdateState <= PHYSICALUPDATE_START;
+                  end if;
+            
+               when PHYSICALUPDATE_START =>
+                  physicalUpdateState <= PHYSICALUPDATE_CHECK;
+                  -- todo: if (!lastSectorHeaderValid) -> different base position and different sectors per track?
+                  -- todo: fixed 32 sectorPerTrack, should be 7.0f + 2.811844405f * std::log((float)(currentLBA / 4500) + 1);
+                  if (currentlba < 32) then
+                     phy_base <= currentlba;
+                  else
+                     phy_base <= currentlba - 31;
+                  end if;
+                  
+               when PHYSICALUPDATE_CHECK =>
+                  physicalUpdateState <= PHYSICALUPDATE_CALC1;
+                  if (physicalLBA < phy_base) then
+                     physicalLBA <= phy_base;
+                  end if;
+                  
+               when PHYSICALUPDATE_CALC1 =>
+                  physicalUpdateState <= PHYSICALUPDATE_CALC2;
+                  phy_oldOffset <= physicalLBA - phy_base;
+                  
+               when PHYSICALUPDATE_CALC2 =>  
+                  physicalUpdateState <= PHYSICALUPDATE_CALCDONE;
+                  phy_newOffset <= (phy_oldOffset + 1) mod 32;
+            
+               when PHYSICALUPDATE_CALCDONE =>
+                  physicalLBANew := phy_base + phy_newOffset;
+                  physicalLBA    <= physicalLBANew; 
+                  if (physicalLBA /= physicalLBANew) then
+                     physicalUpdateState     <= PHYSICALUPDATE_READSUBCHANNEL;
+                     triggerUpdateSubchannel <= '1';
+                  else
+                     physicalUpdateState     <= PHYSICALUPDATE_IDLE;
+                  end if;
+            
+               when PHYSICALUPDATE_READSUBCHANNEL =>
+                  if (UpdateSubchannelDone = '1') then
+                     physicalUpdateState     <= PHYSICALUPDATE_IDLE;
+                     for i in 0 to 11 loop
+                        subdata(i) <= nextSubdata(i);
+                     end loop;
+                  end if;
+            
+            end case;
+            
             --modeReg(1) <= '0'; -- debug autopause
             
          end if; -- ce
@@ -2122,7 +2211,8 @@ begin
          else
          
             if (ce = '1') then
-               ackRead_data   <= '0';
+               ackRead_data         <= '0';
+               UpdateSubchannelDone <= '0';
             end if;
             
             readSubchannel <= '0';
@@ -2236,28 +2326,30 @@ begin
             
             case (readSubchannelState) is
             
-               when SSUB_IDLE => -- todo: maybe replace with sbi
-                  if (readSubchannel = '1') then
-                     nextSubdata(0)       <= '0' & (not isAudio) & "000000"; -- index control bits
-                     nextSubdata(1)       <= std_logic_vector(trackNumberBCD); 
+               when SSUB_IDLE =>
+                  null;
+                  
+               when SSUB_START =>
+                  nextSubdata(0)       <= '0' & (not isAudio) & "000000"; -- index control bits
+                  nextSubdata(1)       <= std_logic_vector(trackNumberBCD); 
 
-                     if ((lastReadSector - startLBA) >= PREGAPSIZE) then
-                        nextSubdata(2)       <= x"01"; -- index number
-                        if (isAudio = '0') then
-                           subchannelLBAwork    <= lastReadSector - startLBA;
-                        else
-                           subchannelLBAwork    <= lastReadSector - startLBA - PREGAPSIZE;
-                        end if;
+                  if ((subchannelSector - startLBA) >= PREGAPSIZE) then
+                     nextSubdata(2)       <= x"01"; -- index number
+                     if (isAudio = '0') then
+                        subchannelLBAwork    <= subchannelSector - startLBA;
                      else
-                        nextSubdata(2)       <= x"00"; -- index number
-                        subchannelLBAwork    <= PREGAPSIZE - (lastReadSector - startLBA) - 1;
+                        subchannelLBAwork    <= subchannelSector - startLBA - PREGAPSIZE;
                      end if;
-                     readSubchannelState  <= SSUB_CALCPOS;
-                     sub_SecondsHigh      <= (others => '0');
-                     sub_SecondsLow       <= (others => '0');
-                     sub_MinutesHigh      <= (others => '0');
-                     sub_MinutesLow       <= (others => '0');
+                  else
+                     nextSubdata(2)       <= x"00"; -- index number
+                     subchannelLBAwork    <= PREGAPSIZE - (subchannelSector - startLBA) - 1;
                   end if;
+                  readSubchannelState  <= SSUB_CALCPOS;
+                  sub_SecondsHigh      <= (others => '0');
+                  sub_SecondsLow       <= (others => '0');
+                  sub_MinutesHigh      <= (others => '0');
+                  sub_MinutesLow       <= (others => '0');
+                  
                
                when SSUB_CALCPOS | SSUB_CALCSECTOR =>
                   if (subchannelLBAwork >= FRAMES_PER_SECOND) then
@@ -2284,7 +2376,7 @@ begin
                      subchannelLBAwork <= 0;
                      if (readSubchannelState = SSUB_CALCPOS) then
                         readSubchannelState        <= SSUB_CALCSECTOR;
-                        subchannelLBAwork          <= lastReadSector; 
+                        subchannelLBAwork          <= subchannelSector; 
                         nextSubdata(3)             <= std_logic_vector(sub_MinutesHigh & sub_MinutesLow);
                         nextSubdata(4)             <= std_logic_vector(sub_SecondsHigh & sub_SecondsLow);
                         nextSubdata(5)(7 downto 4) <= std_logic_vector(resize(frameLeft / 10, 4));
@@ -2294,7 +2386,9 @@ begin
                         sub_MinutesHigh            <= (others => '0');
                         sub_MinutesLow             <= (others => '0');
                      else
-                        readSubchannelState  <= SSUB_IDLE;
+                        readSubchannelState        <= SSUB_IDLE;
+                        UpdateSubchannelDone       <= UpdateSubchannel;
+                        UpdateSubchannel           <= '0';
                         nextSubdata(7)             <= std_logic_vector(sub_MinutesHigh & sub_MinutesLow);
                         nextSubdata(8)             <= std_logic_vector(sub_SecondsHigh & sub_SecondsLow);
                         nextSubdata(9)(7 downto 4) <= std_logic_vector(resize(frameLeft / 10, 4));
@@ -2303,6 +2397,16 @@ begin
                   end if;
                
             end case;
+            
+            if (readSubchannel = '1' or triggerUpdateSubchannel = '1') then
+               readSubchannelState <= SSUB_START;
+               if (triggerUpdateSubchannel = '1') then
+                  subchannelSector <= physicalLBA;
+                  UpdateSubchannel <= '1';
+               else
+                  subchannelSector <= lastReadSector;
+               end if;
+            end if;
             
             case (sectorProcessState) is
             

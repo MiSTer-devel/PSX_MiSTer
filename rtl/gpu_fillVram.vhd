@@ -118,10 +118,10 @@ begin
                   
                      lineEnd := '0';
                   
-                     if (interlacedDrawing = '0' or (activeLineLSB /= y(0))) then
+                     row := y1 + y;
+                     col := x1 + x;
                      
-                        row := y1 + y;
-                        col := x1 + x;
+                     if (interlacedDrawing = '0' or (activeLineLSB /= row(0))) then
       
                         pixelWrite <= '1';
                         pixelAddr  <= row & col(9 downto 0) & '0';
