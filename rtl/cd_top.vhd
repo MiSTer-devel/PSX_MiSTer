@@ -14,9 +14,7 @@ entity cd_top is
       
       INSTANTSEEK          : in  std_logic;
       hasCD                : in  std_logic;
-      newCD                : in  std_logic;
       LIDopen              : in  std_logic;
-      cdSize               : in  unsigned(29 downto 0);
       fastCD               : in  std_logic;
       region               : in  std_logic_vector(1 downto 0);
       libcryptKey          : in  std_logic_vector(15 downto 0);
@@ -2272,6 +2270,11 @@ begin
                       (libcryptKey(0)  = '1' and (lastReadSector = 16167 or lastReadSector = 16172))
                   ) then
                       readSubchannel <= '0';
+                  end if;
+                  
+                  if (hasCD = '0') then
+                     cd_hps_req       <= '0';
+                     sectorFetchState <= SFETCH_IDLE;
                   end if;
                   
                when SFETCH_HPSACK => 

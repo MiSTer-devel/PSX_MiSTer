@@ -579,9 +579,7 @@ reg [26:0] ramdownload_wraddr;
 reg [31:0] ramdownload_wrdata;
 reg        ramdownload_wr;
 
-reg[29:0]  cd_Size;
 reg        hasCD = 0;
-reg        newCD = 0;
 
 reg exe_download_1 = 0;
 reg loadExe = 0;
@@ -632,12 +630,9 @@ always @(posedge clk_1x) begin
       libcryptKey <= ioctl_dout;
    end
      
-   newCD <= 0;
    if (img_mounted[1]) begin
       if (img_size > 0) begin
-         cd_Size     <= img_size[29:0];
          hasCD       <= 1;
-         newCD       <= 1;
       end else begin
          hasCD     <= 0;
       end
@@ -813,14 +808,12 @@ psx
    // cd
    .region          (status[40:39]),
    .hasCD           (hasCD && ~status[52]),
-   .newCD           (newCD),
    .LIDopen         (status[51]),
    .fastCD          (0),
    .libcryptKey     (libcryptKey),
    .trackinfo_data  (ramdownload_wrdata),
    .trackinfo_addr  (ramdownload_wraddr[10:2]),
    .trackinfo_write (ramdownload_wr && cdinfo_download),
-   .cd_Size         (cd_Size),
    .cd_hps_req      (sd_rd[1]),  
    .cd_hps_lba      (sd_lba1),  
    .cd_hps_ack      (sd_ack[1]),

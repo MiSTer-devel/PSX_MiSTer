@@ -68,14 +68,12 @@ entity psx_top is
       -- cd
       region                : in  std_logic_vector(1 downto 0);
       hasCD                 : in  std_logic;
-      newCD                 : in  std_logic;
       fastCD                : in  std_logic;
       LIDopen               : in  std_logic;
       libcryptKey           : in  std_logic_vector(15 downto 0);
       trackinfo_data        : in std_logic_vector(31 downto 0);
       trackinfo_addr        : in std_logic_vector(8 downto 0);
       trackinfo_write       : in std_logic;
-      cd_Size               : in  unsigned(29 downto 0);
       cd_hps_req            : out std_logic := '0';
       cd_hps_lba            : out std_logic_vector(31 downto 0);
       cd_hps_lba_sim        : out std_logic_vector(31 downto 0);
@@ -1202,7 +1200,6 @@ begin
      
       INSTANTSEEK          => INSTANTSEEK,
       hasCD                => hasCD,
-      newCD                => newCD,
       fastCD               => fastCD,
       LIDopen              => LIDopen,
       region               => region,
@@ -1226,7 +1223,6 @@ begin
       dma_read             => DMA_CD_readEna,
       dma_readdata         => DMA_CD_read,
       
-      cdSize               => cd_Size, 
       cd_hps_req           => cd_hps_req,  
       cd_hps_lba           => cd_hps_lba,
       cd_hps_lba_sim       => cd_hps_lba_sim,

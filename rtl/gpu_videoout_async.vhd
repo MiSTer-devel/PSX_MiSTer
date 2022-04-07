@@ -86,6 +86,8 @@ architecture arch of gpu_videoout_async is
    signal vtotal           : integer range 262 to 314;
    signal vDisplayStart    : integer range 0 to 314;
    signal vDisplayEnd      : integer range 0 to 314;
+   signal vDisplayCnt      : integer range 0 to 314 := 0;
+   signal vDisplayMax      : integer range 0 to 314 := 239;
    
    signal InterlaceFieldN  : std_logic := '0';  
    
@@ -206,6 +208,12 @@ begin
    begin
       if rising_edge(clkvid) then
       
+         if (videoout_out.isPal = '1') then
+            vDisplayMax <= 256;
+         else
+            vDisplayMax <= 240;
+         end if;
+      
          if (nextHCount <   3) then videoout_reports.hblank_tmr <= '1'; else videoout_reports.hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
                 
          if (reset = '1') then
@@ -290,10 +298,15 @@ begin
 
                vdisp <= vdispNew;
 
+               if (vDisplayCnt < vDisplayMax) then
+                  vDisplayCnt <= vDisplayCnt + 1;
+               end if;
+
                isVsync := videoout_reports.inVsync;
                if (vdispNew = vDisplayStart) then
-                  isVsync := '0';
-               elsif (vdispNew = vDisplayEnd) then
+                  isVsync     := '0';
+                  vDisplayCnt <= 0;
+               elsif (vdispNew = vDisplayEnd or vdispNew = 0) then
                   isVsync := '1';
                end if;
 
@@ -334,7 +347,7 @@ begin
                   if (videoout_settings.vramRange(10) = '1' and interlacedDisplayFieldNew = '0') then videoout_reports.activeLineLSB <= '1'; end if;
                
                   if (videoout_settings.vramRange(10) = '0' and isVsync = '0' and interlacedDisplayFieldNew = '1') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
-                  if (videoout_settings.vramRange(10) = '1' and isVsync = '1' and interlacedDisplayFieldNew = '0') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+                  if (videoout_settings.vramRange(10) = '1' and isVsync = '0' and interlacedDisplayFieldNew = '0') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
                else
                   if (videoout_settings.vramRange(10) = '0' and (vdispNew mod 2) = 1) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
                   if (videoout_settings.vramRange(10) = '1' and (vdispNew mod 2) = 0) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
@@ -345,7 +358,7 @@ begin
                if (vDisplayStart > 0) then
                   if (vdispNew >= vDisplayStart and vdispNew < vDisplayEnd) then
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
-                        if (videoout_reports.activeLineLSB = '1') then
+                        if ((videoout_reports.activeLineLSB xor videoout_settings.vramRange(10)) = '1') then
                            videoout_request.lineInNext <= to_unsigned(((vdispNew - vDisplayStart) * 2) + 1, 9);
                         else
                            videoout_request.lineInNext <= to_unsigned((vdispNew - vDisplayStart) * 2, 9);
@@ -365,7 +378,7 @@ begin
                      videoout_request.fetch      <= ce;
                   elsif (vdispNew >= vDisplayStart and vdispNew < vDisplayEnd) then
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
-                        if (videoout_reports.activeLineLSB = '1') then
+                        if ((videoout_reports.activeLineLSB xor videoout_settings.vramRange(10)) = '1') then
                            videoout_request.lineInNext <= to_unsigned(((vdispNew - vDisplayStart) * 2) + 1, 9);
                         else
                            videoout_request.lineInNext <= to_unsigned((vdispNew - vDisplayStart) * 2, 9);
@@ -394,7 +407,7 @@ begin
    end process;
    
    -- timing generation reading
-   videoout_out.vblank         <= videoout_reports.inVsync;
+   videoout_out.vblank         <= videoout_reports.inVsync when vDisplayCnt < vDisplayMax else '1';
    videoout_out.interlace      <= videoout_settings.GPUSTAT_VerRes and videoout_reports.interlacedDisplayField;
 
    videoout_out.DisplayOffsetX <= videoout_settings.vramRange(9 downto 0);

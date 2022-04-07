@@ -63,14 +63,12 @@ entity psx_mister is
       -- cd
       region                : in  std_logic_vector(1 downto 0);
       hasCD                 : in  std_logic;
-      newCD                 : in  std_logic;
       LIDopen               : in  std_logic;
       fastCD                : in  std_logic;
       libcryptKey           : in  std_logic_vector(15 downto 0);
       trackinfo_data        : in std_logic_vector(31 downto 0);
       trackinfo_addr        : in std_logic_vector(8 downto 0);
       trackinfo_write       : in std_logic;
-      cd_Size               : in  unsigned(29 downto 0);
       cd_hps_req            : out std_logic := '0';
       cd_hps_lba            : out std_logic_vector(31 downto 0);
       cd_hps_lba_sim        : out std_logic_vector(31 downto 0);
@@ -268,14 +266,12 @@ begin
       -- cd
       region                => region,
       hasCD                 => hasCD,
-      newCD                 => newCD,
       LIDopen               => LIDopen,
       fastCD                => fastCD,
       libcryptKey           => libcryptKey,
       trackinfo_data        => trackinfo_data,
       trackinfo_addr        => trackinfo_addr, 
       trackinfo_write       => trackinfo_write,
-      cd_Size               => cd_Size, 
       cd_hps_req            => cd_hps_req,  
       cd_hps_lba            => cd_hps_lba,  
       cd_hps_lba_sim        => cd_hps_lba_sim,  

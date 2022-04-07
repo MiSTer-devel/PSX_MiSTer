@@ -63,6 +63,7 @@ architecture arch of gpu_videoout is
 
    signal DisplayOffsetX            : unsigned( 9 downto 0) := (others => '0'); 
    signal DisplayOffsetY            : unsigned( 8 downto 0) := (others => '0'); 
+   signal vDisplayStart             : unsigned( 9 downto 0) := (others => '0'); 
          
    -- muxing      
    signal videoout_reports_s        : tvideoout_reports;
@@ -207,11 +208,33 @@ begin
    requestVRAMSize   <= reqSize when (state = REQUEST and requestVRAMIdle = '1') else (others => '0');
    
    DisplayOffsetX <= videoout_settings.vramRange(9 downto 0);
-   DisplayOffsetY <= videoout_settings.vramRange(18 downto 10);
+   
+   vDisplayStart  <= videoout_settings.vDisplayRange(9 downto 0);
    
    process (clk2x)
    begin
       if rising_edge(clk2x) then
+         
+         -- display offset is adjusted if display start is below typical line for CRTs
+         DisplayOffsetY <= videoout_settings.vramRange(18 downto 10);
+         if (videoout_settings.GPUSTAT_PalVideoMode = '1' and videoout_settings.pal60 = '0') then
+            if (vDisplayStart < 20) then
+               if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_settings.GPUSTAT_VertInterlace = '1') then
+                  DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + ((20 - vDisplayStart) * 2), 9);
+               else
+                  DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + (20 - vDisplayStart), 9);
+               end if;
+            end if;
+         else
+            if (vDisplayStart < 16) then
+               if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_settings.GPUSTAT_VertInterlace = '1') then
+                  DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + ((16 - vDisplayStart) * 2), 9);
+               else
+                  DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + (16 - vDisplayStart), 9);
+               end if;
+            end if;
+         end if;
+         
          
          if (reset = '1') then
          
