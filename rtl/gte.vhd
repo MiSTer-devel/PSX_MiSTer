@@ -14,7 +14,7 @@ entity gte is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
-      WIDESCREEN           : in  std_logic;
+      WIDESCREEN           : in  std_logic_vector(1 downto 0);
       
       gte_busy             : out std_logic;
       gte_readAddr         : in  unsigned(5 downto 0);
@@ -267,11 +267,12 @@ begin
    begin
       if rising_edge(clk2x) then
       
-         if (WIDESCREEN = '1') then
-            IR1aspect <= (REG_IR1 & '0' + REG_IR1) / 4;
-         else
-            IR1aspect <= resize(REG_IR1, 17);
-         end if;
+         case (WIDESCREEN) is
+            when "01"   => IR1aspect <= resize((resize(REG_IR1 & "000", 21)  + resize(REG_IR1 & "00", 21)  + resize(REG_IR1 & '0', 21) ) / 16, 17);   -- * (8 + 4 + 2) / 16 -> ~3:2
+            when "10"   => IR1aspect <= resize((resize(REG_IR1 & "000", 21)  + resize(REG_IR1 & "00", 21)  + resize(REG_IR1      , 21) ) / 16, 17);   -- * (8 + 4 + 1) / 16 -> ~5:3
+            when "11"   => IR1aspect <= resize((resize(REG_IR1 & "000", 21)  + resize(REG_IR1 & "00", 21)                              ) / 16, 17);   -- * (8 + 4)     / 16 -> 16:9
+            when others => IR1aspect <= resize(REG_IR1, 17);
+         end case;
       
          if (reset = '1' and loading_savestate = '0') then
          

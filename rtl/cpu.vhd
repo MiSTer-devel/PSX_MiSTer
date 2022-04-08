@@ -645,7 +645,7 @@ begin
       end if;
       
       
-      if (blockirq = '0' and cop0_SR(0) = '1' and (cop0_SR(10 downto 8) and cop0_CAUSE(10 downto 8)) /= "000") then
+      if (exception = 0 and blockirq = '0' and cop0_SR(0) = '1' and (cop0_SR(10 downto 8) and cop0_CAUSE(10 downto 8)) /= "000") then
       
          if (stall = 0) then
             blockirqNext    <= '1';

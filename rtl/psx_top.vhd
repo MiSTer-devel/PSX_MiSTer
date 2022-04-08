@@ -41,7 +41,7 @@ entity psx_top is
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
       REPRODUCIBLESPUDMA    : in  std_logic;
-      WIDESCREEN            : in  std_logic;
+      WIDESCREEN            : in  std_logic_vector(1 downto 0);
       -- RAM/BIOS interface      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);

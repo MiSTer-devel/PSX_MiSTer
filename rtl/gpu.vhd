@@ -501,6 +501,8 @@ begin
             GPUSTAT_IRQRequest      <= ss_gpu_in(1)(24);
             GPUSTAT_DMADirection    <= ss_gpu_in(1)(30 downto 29);
             GPUREAD                 <= ss_gpu_in(0);       
+            
+            fpscountBCD_next        <= (others => '0');
 
          elsif (ce = '1') then
          

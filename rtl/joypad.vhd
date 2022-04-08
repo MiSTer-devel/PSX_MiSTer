@@ -310,11 +310,14 @@ begin
                   receiveFilled  <= '1';
                   transmitting   <= '0';
                   if (ack = '1') then
-                     waitAck <= '1';
+                     waitAck <= '1';                            
+                     -- ack delay and initial low phase of ~100 clock cycles(hardware bug) not implemented
+                     -- current logic assumes delayless long ack duration
+                     -- measurements and values from @JaCzekanski, psx-sps and duckstation
                      if (ackMem1 = '1') then
-                        baudCnt <= to_unsigned(1502, 21);
+                        baudCnt <= to_unsigned(1502, 21); -- todo: should be ~5us + duration 9.98us => 500 clock cycles?
                      else
-                        baudCnt <= to_unsigned(452, 21);
+                        baudCnt <= to_unsigned(752, 21); -- ACK delay is between 6.8us-13.7us + duration 9.98us => 566 - 833 clock cycles
                      end if;
                   end if;
                elsif (waitAck = '1') then

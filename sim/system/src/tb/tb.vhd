@@ -157,8 +157,6 @@ architecture arch of etb is
    signal cd_hps_ack          : std_logic := '0';
    signal cd_hps_write        : std_logic := '0';
    signal cd_hps_data         : std_logic_vector(15 downto 0);
-
-   signal cdSize              : unsigned(29 downto 0);
    
    signal trackinfo_data      : std_logic_vector(31 downto 0);
    signal trackinfo_addr      : std_logic_vector(8 downto 0);
@@ -256,7 +254,7 @@ begin
       SPUSDRAM              => '1',
       REVERBOFF             => '0',
       REPRODUCIBLESPUDMA    => '0',
-      WIDESCREEN            => '0',
+      WIDESCREEN            => "00",
       -- RAM/BIOS interface        
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
@@ -283,14 +281,12 @@ begin
       -- cd
       region                => "00",
       hasCD                 => '1',
-      newCD                 => reset,
       LIDopen               => '0',
       fastCD                => '0',
       libcryptKey           => x"0000",
       trackinfo_data        => trackinfo_data,
       trackinfo_addr        => trackinfo_addr, 
       trackinfo_write       => trackinfo_write,
-      cd_Size               => cdSize,
       cd_hps_req            => cd_hps_req,  
       cd_hps_lba_sim        => cd_hps_lba,  
       cd_hps_ack            => cd_hps_ack,  
@@ -400,7 +396,7 @@ begin
    iddrram_model : entity tb.ddrram_model
    generic map
    (
-      SLOWTIMING => 15
+      SLOWTIMING => 20
    )
    port map
    (
@@ -591,7 +587,6 @@ begin
                end loop;
                
                file_close(infile);
-               cdSize <= to_unsigned(targetpos * 4, 30);
             
             end if;
 

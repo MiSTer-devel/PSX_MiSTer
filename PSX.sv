@@ -342,7 +342,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXX XXXXXXXXXXXXXX XXXXXX  XXXXXXXXXX XXXXXXXXXX  XXXXXXXXX
+// XXXXX XXX XXXXXXXXXXXXXX XXXXXX  XXXXXXXXXX XXXXXXXXXXXXXXXXXX XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -387,7 +387,7 @@ parameter CONF_STR = {
 	"P1OM,Dithering,On,Off;",
 	"P1o9,Deinterlacing,Weave,Bob;",
 	"P1oS,Sync 480i for HDMI,Off,On;",
-	"P1oT,Widescreen Hack,Off,On;",
+	"P1oLM,Widescreen Hack,Off,16:11,16:10,16:9;",
 	"P1-;",
 	"d1P1oC,SPU RAM select,DDR3,SDRAM2;",
 	"P1O78,Stereo Mix,None,25%,50%,100%;",
@@ -781,7 +781,7 @@ psx
    .SPUSDRAM(status[44] & SDRAM2_EN),
    .REVERBOFF(0),
    .REPRODUCIBLESPUDMA(status[43]),
-   .WIDESCREEN(status[61]),
+   .WIDESCREEN(status[54:53]),
    // RAM/BIOS interface      
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),
@@ -1150,8 +1150,8 @@ video_freak video_freak
 	.VGA_DE_IN(VGA_DE),
 	.VGA_DE(),
 
-	.ARX((!ar) ? (status[61] ? 16 : status[11] ? 12'd2 : aspect_x) : (ar - 1'd1)),
-	.ARY((!ar) ? (status[61] ?  9 : status[11] ? 12'd1 : aspect_y) : 12'd0),
+	.ARX((!ar) ? ((status[54:53] == 1) ? 3 : (status[54:53] == 2) ? 5 : (status[54:53] == 3) ? 16 : status[11] ? 12'd2 : aspect_x) : (ar - 1'd1)),
+	.ARY((!ar) ? ((status[54:53] == 1) ? 2 : (status[54:53] == 2) ? 3 : (status[54:53] == 3) ?  9 : status[11] ? 12'd1 : aspect_y) : 12'd0),
 	.CROP_SIZE(0),
 	.CROP_OFF(0),
 	.SCALE(status[35:34])
@@ -1260,7 +1260,7 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 		video.hb <= 0;
 	if (h_pos == hb_end)
 		video.hb <= 1;
-	if (status[62])
+	if (status[62] || (status[54:53] > 0))
 		video.hb <= hbl;
 	
 end
