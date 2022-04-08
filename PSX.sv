@@ -387,7 +387,7 @@ parameter CONF_STR = {
 	"P1OM,Dithering,On,Off;",
 	"P1o9,Deinterlacing,Weave,Bob;",
 	"P1oS,Sync 480i for HDMI,Off,On;",
-	"P1oLM,Widescreen Hack,Off,16:11,16:10,16:9;",
+	"P1oLM,Widescreen Hack,Off,3:2,5:3,16:9;",
 	"P1-;",
 	"d1P1oC,SPU RAM select,DDR3,SDRAM2;",
 	"P1O78,Stereo Mix,None,25%,50%,100%;",
