@@ -108,6 +108,7 @@ architecture arch of gpu_pixelpipeline is
    signal textPalFetched      : std_logic := '0';
    signal textPalX            : unsigned(9 downto 0) := (others => '0');   
    signal textPalY            : unsigned(8 downto 0) := (others => '0'); 
+   signal textPalFetchNext    : integer range 0 to 3;
   
    type tState is
    (
@@ -384,13 +385,19 @@ begin
                   if (textPalReq = '1' and pipeline_busy = '0') then
                      textPalReq     <= '0';
                      state          <= REQUESTPALETTE;
+                     CLUTaddrA      <= (others => '0');
                      textPalFetched <= '1';
                      textPalX       <= textPalReqX;
                      textPalY       <= textPalReqY;
                      reqVRAMXPos    <= textPalReqX;
                      reqVRAMYPos    <= textPalReqY;
                      if (drawMode_in(7) = '1') then
-                        reqVRAMSize <= to_unsigned(256, 11); 
+                        case to_integer(textPalReqX) is
+                           when 960    => reqVRAMSize <= to_unsigned( 64, 11); textPalFetchNext <= 3;
+                           when 896    => reqVRAMSize <= to_unsigned(128, 11); textPalFetchNext <= 2;
+                           when 832    => reqVRAMSize <= to_unsigned(192, 11); textPalFetchNext <= 1;
+                           when others => reqVRAMSize <= to_unsigned(256, 11); textPalFetchNext <= 0;
+                        end case;
                      else
                         reqVRAMSize <= to_unsigned(16, 11);
                      end if;
@@ -432,11 +439,21 @@ begin
                   if (requestVRAMIdle = '1') then
                      state       <= WAITPALETTE;
                   end if;
-                  CLUTaddrA <= (others => '0');
  
                when WAITPALETTE =>
                   if (requestVRAMDone = '1') then
-                     state <= IDLE;
+                     textPalFetchNext <= 0;
+                     if (textPalFetchNext > 0) then
+                        case (textPalFetchNext) is
+                           when 3      => reqVRAMSize <= to_unsigned(192, 11);
+                           when 2      => reqVRAMSize <= to_unsigned(128, 11);
+                           when others => reqVRAMSize <= to_unsigned( 64, 11);
+                        end case;
+                        state          <= REQUESTPALETTE;
+                        reqVRAMXPos    <= (others => '0');
+                     else
+                        state <= IDLE;
+                     end if;
                   end if;
                   if (vram_DOUT_READY = '1') then
                      CLUTaddrA <= CLUTaddrA + 1;

@@ -1966,10 +1966,6 @@ begin
       
       scratchpad_wren_a    <= "0000";
       
-      if (SS_wren_SCP = '1') then
-         scratchpad_wren_a <= "1111";
-      end if;
-      
       if (exception(4 downto 3) = 0 and stall = 0) then
       
          if (executeMemWriteEnable = '1') then
@@ -2034,6 +2030,14 @@ begin
          
          end if;
          
+      end if;
+      
+      if (SS_wren_SCP = '1') then
+         scratchpad_wren_a <= "1111";
+      end if;
+      
+      if (SS_rden_SCP = '1') then
+         scratchpad_wren_a <= "0000";
       end if;
       
    end process;
