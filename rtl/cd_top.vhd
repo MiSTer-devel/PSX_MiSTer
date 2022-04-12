@@ -204,11 +204,15 @@ architecture arch of cd_top is
    signal seekOnDiskPlay            : std_logic := '0';
    signal ackRead                   : std_logic := '0';
    signal pause_cmd                 : std_logic := '0';
+   signal calcSeekTime              : std_logic := '0';
+   signal addSeekTime               : std_logic := '0';
          
    signal currentLBA                : integer range 0 to 524287;        
    signal physicalLBA               : integer range 0 to 524287;        
    signal seekLBA                   : integer range 0 to 524287; 
    signal playLBA                   : integer range 0 to 524287; 
+   signal diffLBA                   : integer range 0 to 524287; 
+   signal seekTimeMul               : integer range 0 to 127; 
    signal currentTrackBCD           : std_logic_vector(7 downto 0);
    signal nextTrack                 : std_logic_vector(7 downto 0);
    
@@ -675,9 +679,7 @@ begin
             if (ackRead = '1' or ackRead_data = '1') then
                if (CDROM_IRQFLAG = "00001") then -- irq for sector still pending, sector missed
                   -- todo: nothing can be done?
-               end if;
-               
-               if (CDROM_IRQFLAG /= "00000") then
+               elsif (CDROM_IRQFLAG /= "00000") then -- todo: store failed sector read as additional irq? duckstation does it, THPS2 expects it to not happen
                   pendingDriveIRQ      <= "00001";
                   pendingDriveResponse <= internalStatus;
                else
@@ -1630,6 +1632,9 @@ begin
                startMotor <= '1';
             end if;
             
+            calcSeekTime <= '0';
+            addSeekTime  <= '0';
+            
          elsif (softReset = '1') then
          
             modeReg        <= x"20"; -- read_raw_sector set
@@ -1680,6 +1685,8 @@ begin
             processSeekHeader       <= '0';
             clearSectorBuffers      <= '0';
             triggerUpdateSubchannel <= '0';
+            calcSeekTime            <= '0';
+            addSeekTime             <= '0';
          
             startMotor   <= '0'; 
             
@@ -1829,8 +1836,10 @@ begin
             if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1' or seekOnDiskPlay = '1') then
                if (seekOnDiskPlay = '1') then
                   readLBA <= playLBA;
+                  if (playLBA > currentLBA) then diffLBA <= playLBA - currentLBA; else diffLBA <= currentLBA - playLBA; end if;
                else
                   readLBA <= seekLBA;
+                  if (seekLBA > currentLBA) then diffLBA <= seekLBA - currentLBA; else diffLBA <= currentLBA - seekLBA; end if;
                end if;
                readOnDisk            <= '1';
                if (seekOnDiskCmd = '1') then
@@ -1841,12 +1850,11 @@ begin
                internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                internalStatus(1)          <= '1'; -- motor on
                internalStatus(6)          <= '1'; -- seeking
-               if (INSTANTSEEK = '1') then
-                  driveDelay     <= 19999 - 2;
-                  driveDelayNext <= 19999 - 2;
-               else
-                  driveDelay     <= READSPEED2X - 2; -- todo: real seek time
-                  driveDelayNext <= READSPEED2X - 2; -- todo: real seek time
+               driveDelay     <= READSPEED2X - 2;
+               driveDelayNext <= READSPEED2X - 2;
+               
+               if (INSTANTSEEK = '0') then
+                  calcSeekTime <= '1';
                end if;
                driveBusy      <= '1';
                if (nextCmd = x"15") then
@@ -1854,6 +1862,30 @@ begin
                else
                   driveState  <= DRIVE_SEEKPHYSICAL;
                end if;
+            end if;
+            
+            if (calcSeekTime = '1') then
+               if (diffLBA > 0) then -- don't update if diff = 0 -> leave as minimum
+                  addSeekTime <= '1';
+                  
+                  -- todo: research more accurate values
+                  if (diffLBA < 5) then
+                     seekTimeMul <= diffLBA;
+                  elsif (diffLBA < 32) then
+                     seekTimeMul <= 5;
+                  elsif (diffLBA < 75) then
+                     seekTimeMul <= 5 + diffLBA / 8; -- 5 .. 14
+                  elsif (diffLBA < 4500) then
+                     seekTimeMul <= 14 + diffLBA / 256; -- 14 .. 31
+                  else
+                     seekTimeMul <= 31 + diffLBA / 8192; -- 31 .. 73
+                  end if;
+               end if;
+            end if;
+            
+            if (addSeekTime = '1') then
+               driveDelay     <= driveDelay + READSPEED2X * seekTimeMul;
+               driveDelayNext <= driveDelay + READSPEED2X * seekTimeMul;
             end if;
             
             if (readSN = '1') then
@@ -1897,54 +1929,62 @@ begin
             if (startReading = '1') then
                clearSectorBuffers <= '1';
                --todo: check for setLocActive needed when coming from readSN?
-               --todo: check for seekstate required? should never end here when still in seek?
-               internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
-               internalStatus(1)          <= '1'; -- motor on
-               if (fastCD = '1') then
-                  driveDelay         <= 9999 - 2;
-                  driveDelayNext     <= 9999 - 2;
+               if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                  readAfterSeek     <= '1';
+                  playAfterSeek     <= '0';
                else
-                  if (modeReg(7) = '1') then
-                     driveDelay      <= READSPEED2X - 2;
-                     driveDelayNext  <= READSPEED2X - 2;
+                  internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+                  internalStatus(1)          <= '1'; -- motor on
+                  if (fastCD = '1') then
+                     driveDelay         <= 9999 - 2;
+                     driveDelayNext     <= 9999 - 2;
                   else
-                     driveDelay      <= READSPEED1X - 2;
-                     driveDelayNext  <= READSPEED1X - 2;
+                     if (modeReg(7) = '1') then
+                        driveDelay      <= READSPEED2X - 2;
+                        driveDelayNext  <= READSPEED2X - 2;
+                     else
+                        driveDelay      <= READSPEED1X - 2;
+                        driveDelayNext  <= READSPEED1X - 2;
+                     end if;
                   end if;
+                  driveBusy          <= '1';
+                  driveState         <= DRIVE_READING;
+                  writeSectorPointer <= (others => '0');
+                  readSectorPointer  <= (others => '0');
+                  readOnDisk         <= '1';
+                  readLBA            <= currentLBA;
                end if;
-               driveBusy          <= '1';
-               driveState         <= DRIVE_READING;
-               writeSectorPointer <= (others => '0');
-               readSectorPointer  <= (others => '0');
-               readOnDisk         <= '1';
-               readLBA            <= currentLBA;
             end if;
             
             if (startPlaying = '1') then
                clearSectorBuffers <= '1';
                --todo: check for setLocActive needed when coming from readSN?
-               --todo: check for seekstate required? should never end here when still in seek?
-               internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
-               internalStatus(1)          <= '1'; -- motor on
-               internalStatus(7)          <= '1'; -- playing_cdda
-               if (fastCD = '1') then
-                  driveDelay         <= 9999 - 2;
-                  driveDelayNext     <= 9999 - 2;
+               if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                  readAfterSeek     <= '0';
+                  playAfterSeek     <= '1';
                else
-                  if (modeReg(7) = '1') then
-                     driveDelay      <= READSPEED2X - 2;
-                     driveDelayNext  <= READSPEED2X - 2;
+                  internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+                  internalStatus(1)          <= '1'; -- motor on
+                  internalStatus(7)          <= '1'; -- playing_cdda
+                  if (fastCD = '1') then
+                     driveDelay         <= 9999 - 2;
+                     driveDelayNext     <= 9999 - 2;
                   else
-                     driveDelay      <= READSPEED1X - 2;
-                     driveDelayNext  <= READSPEED1X - 2;
+                     if (modeReg(7) = '1') then
+                        driveDelay      <= READSPEED2X - 2;
+                        driveDelayNext  <= READSPEED2X - 2;
+                     else
+                        driveDelay      <= READSPEED1X - 2;
+                        driveDelayNext  <= READSPEED1X - 2;
+                     end if;
                   end if;
+                  driveBusy          <= '1';
+                  driveState         <= DRIVE_PLAYING;
+                  writeSectorPointer <= (others => '0');
+                  readSectorPointer  <= (others => '0');
+                  readOnDisk         <= '1';
+                  readLBA            <= currentLBA;
                end if;
-               driveBusy          <= '1';
-               driveState         <= DRIVE_PLAYING;
-               writeSectorPointer <= (others => '0');
-               readSectorPointer  <= (others => '0');
-               readOnDisk         <= '1';
-               readLBA            <= currentLBA;
             end if;
             
             if (cmdStop = '1') then
@@ -1996,7 +2036,7 @@ begin
                      -- todo: add time? for now just set new time, it's very long anyway
                      if (newMode(7) = '1') then
                         driveDelay     <= 27095040; -- 80%
-                        driveDelayNext <= 27095040; -- 80%%
+                        driveDelayNext <= 27095040; -- 80%
                      else
                         driveDelay     <= 33868800; -- 44100 * 0x300; -- 100%
                         driveDelayNext <= 33868800; -- 44100 * 0x300; -- 100%
@@ -2232,7 +2272,7 @@ begin
                      elsif (trackSearchState = TRACKSEARCH_IDLE) then
                         sectorFetchState <= SFETCH_START;
                         if (trackNumberBCD = "01" and isAudio = '0') then
-                           positionInIndex <= lastReadSector - startLBA - PREGAPSIZE;
+                           positionInIndex <= lastReadSector - startLBA - PREGAPSIZE;  -- not in simulation?
                         else
                            positionInIndex <= lastReadSector - startLBA;
                         end if;

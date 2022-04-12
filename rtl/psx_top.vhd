@@ -721,7 +721,6 @@ begin
          if (REPRODUCIBLEGPUTIMING = '1') then debugmodeOn <= '1'; end if;
          if (REPRODUCIBLEDMATIMING = '1') then debugmodeOn <= '1'; end if;
          if (DMABLOCKATONCE        = '1') then debugmodeOn <= '1'; end if;
-         if (INSTANTSEEK           = '1') then debugmodeOn <= '1'; end if;
          if (noTexture             = '1') then debugmodeOn <= '1'; end if;
          if (SPUon                 = '0') then debugmodeOn <= '1'; end if;
          if (REVERBOFF             = '1') then debugmodeOn <= '1'; end if;

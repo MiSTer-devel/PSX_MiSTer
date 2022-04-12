@@ -342,7 +342,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXX XXXXXXXXXXXXXX XXXXXX  XXXXXXXXXX XXXXXXXXXXXXXXXXXX XX
+// XXXXX XXX XXXXXXXXXXXXXX XXXXXX  XXXXXXXXXX XXXXXXXXX XXXXXXXX XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -396,6 +396,8 @@ parameter CONF_STR = {
 	"P2-;",
 	"P2OG,Fastboot,Off,On;",
 	"P2OP,Pause when OSD is open,Off,On;",
+	"P2OL,CD Fast Seek,Off,On;",
+	"P2oQ,Data Cache(Cheats Off),Off,On;",
 	"-;",
 
 	"P3,Debug;",
@@ -406,13 +408,10 @@ parameter CONF_STR = {
 	"P3oP,Sync Video Out,Off,On;",
 	"P3oO,Sync Video Clock,Off,On;",
 	"P3OU,Sound,On,Off;",
-	"P3oQ,Data Cache(Cheats Off),Off,On;",
 	"P3OJ,RepTimingGPU,Off,On;",
 	"P3OK,RepTimingDMA,Off,On;",
 	"P3oB,RepTimingSPUDMA,Off,On;",
 	"P3OQ,DMAinBLOCKs,Off,On;",
-	"P3OL,CD Instant Seek,Off,On;",
-	"P3oK,CD Inserted,Yes,No;",
 	"P3OF,Force 60Hz PAL,Off,On;",
 	"P3OR,Textures,On,Off;",
 	//"P3oM,Patch TTY,Off,On;",
@@ -807,7 +806,7 @@ psx
    .DDRAM_WE        (DDRAM_WE        ),
    // cd
    .region          (status[40:39]),
-   .hasCD           (hasCD && ~status[52]),
+   .hasCD           (hasCD),
    .LIDopen         (status[51]),
    .fastCD          (0),
    .libcryptKey     (libcryptKey),
