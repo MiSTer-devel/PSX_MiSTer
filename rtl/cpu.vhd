@@ -1946,7 +1946,8 @@ begin
    
    scratchpad_dataread <= unsigned(scratchpad_q_b);
    
-   process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask, SS_wren_SCP, 
+   process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask, 
+            SS_wren_SCP, SS_rden_SCP,
 	         executeCOP0WriteEnable, executeCOP0WriteDestination, executeCOP0WriteValue)
       variable skipmem : std_logic;
    begin

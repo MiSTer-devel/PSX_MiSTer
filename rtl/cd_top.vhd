@@ -423,6 +423,9 @@ architecture arch of cd_top is
 	);
    signal trackSearchState          : ttrackSearchState := TRACKSEARCH_IDLE;
 
+   signal newCDCounter              : unsigned(25 downto 0); -- ~2seconds
+   signal newCD                     : std_logic := '0';
+
    -- savestates
    type t_ssarray is array(0 to 127) of std_logic_vector(31 downto 0);
    signal ss_in   : t_ssarray := (others => (others => '0'));
@@ -2010,7 +2013,7 @@ begin
                end if;
             end if;
             
-            if (LIDopen = '1') then
+            if (LIDopen = '1' or newCD = '1') then
                internalStatus(4) <= '1';
             elsif (shell_close = '1') then
                internalStatus(4) <= '0';
@@ -2761,7 +2764,18 @@ begin
             trackInfo_addrB      <= ss_in(25)(14 downto 8); -- x"00";
             trackNumber          <= ss_in(25)(14 downto 8); -- x"00";
             
+            newCD                <= '0';
+            newCDCounter         <= (others => '0');
+            
          else  
+         
+            newCD <= '0';
+            if (ce = '1') then
+               if (newCDCounter > 0) then
+                  newCDCounter <= newCDCounter - 1;
+                  newCD        <= '1';
+               end if;
+            end if;
                
             case (trackSearchState) is
             
@@ -2797,6 +2811,8 @@ begin
             end case;
             
             if (trackinfo_write = '1') then
+            
+               newCDCounter <= (others => '1');
             
                -- header
                if (to_integer(unsigned(trackinfo_addr)) = 0) then
