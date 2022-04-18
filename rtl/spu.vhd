@@ -1371,16 +1371,6 @@ begin
                      reverbsumleft  <= (others => '0');
                      reverbsumright <= (others => '0');
                      
-                     cdProcStep     <= 0;
-                     if (cnt(0) = '1') then
-                        soundleft      <= resize(cd_next_left, 24);
-                        soundright     <= resize(cd_next_right,24);
-                        if (cnt(2) = '1') then
-                           reverbsumleft  <= resize(cd_next_left, 24);
-                           reverbsumright <= resize(cd_next_right,24);
-                        end if;
-                     end if;
-                     
                      if (stashedSamples > 0 and sampleticks /= 0) then
                         stashedSamples <= stashedSamples - 1;
                      end if;
@@ -1788,10 +1778,22 @@ begin
                      state <= RAM_WAIT;
                   end if;
                   
-               when RAM_WAIT =>
-                  if (index = 23 and cnt(14) = '0') then
+                  if (index = 23 and cnt(14) = '0') then -- mute voices
                      soundleft  <= (others => '0');
                      soundright <= (others => '0');
+                  end if;
+                  
+               when RAM_WAIT =>
+                  if (index = 23) then -- CD audio add
+                     cdProcStep     <= 0;
+                     if (cnt(0) = '1') then
+                        soundleft      <= soundleft  + resize(cd_next_left, 24);
+                        soundright     <= soundright + resize(cd_next_right,24);
+                        if (cnt(2) = '1') then
+                           reverbsumleft  <= reverbsumleft  + resize(cd_next_left, 24);
+                           reverbsumright <= reverbsumright + resize(cd_next_right,24);
+                        end if;
+                     end if;
                   end if;
                
                   if (voiceCounter >= 23 or useSDRAM = '0') then
