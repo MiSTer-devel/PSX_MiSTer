@@ -1092,7 +1092,7 @@ begin
                         
                      when x"10" => -- GetLocL
                         cmdPending        <= '0';
-                        if (hasCD = '0') then
+                        if (lastSectorHeaderValid = '0') then
                            errorResponseCmd_new    <= '1';
                            errorResponseCmd_error  <= x"01";
                            errorResponseCmd_reason <= x"80";
@@ -1387,14 +1387,14 @@ begin
                if (cmd_delay = 9 and FifoResponse_empty = '0') then 
                   FifoResponse_reset <= '1'; 
                end if;
-               if (cmd_delay = 8 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header( 7 downto  0); end if;
-               if (cmd_delay = 7 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(15 downto  8); end if;
-               if (cmd_delay = 6 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(23 downto 16); end if;
-               if (cmd_delay = 5 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(31 downto 24); end if;
-               if (cmd_delay = 4 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader( 7 downto  0); end if;
-               if (cmd_delay = 3 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(15 downto  8); end if;
-               if (cmd_delay = 2 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(23 downto 16); end if;
-               if (cmd_delay = 1 and hasCD = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(31 downto 24); end if;
+               if (cmd_delay = 8 and lastSectorHeaderValid = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header( 7 downto  0); end if;
+               if (cmd_delay = 7 and lastSectorHeaderValid = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(15 downto  8); end if;
+               if (cmd_delay = 6 and lastSectorHeaderValid = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(23 downto 16); end if;
+               if (cmd_delay = 5 and lastSectorHeaderValid = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= header(31 downto 24); end if;
+               if (cmd_delay = 4 and lastSectorHeaderValid = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader( 7 downto  0); end if;
+               if (cmd_delay = 3 and lastSectorHeaderValid = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(15 downto  8); end if;
+               if (cmd_delay = 2 and lastSectorHeaderValid = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(23 downto 16); end if;
+               if (cmd_delay = 1 and lastSectorHeaderValid = '1')  then FifoResponse_Wr <= '1'; FifoResponse_Din <= subheader(31 downto 24); end if;
             end if;
             
             -- long GetLocP response
@@ -1848,8 +1848,8 @@ begin
                if (seekOnDiskCmd = '1') then
                   readAfterSeek         <= '0';
                   playAfterSeek         <= '0';
-                  lastSectorHeaderValid <= '0';
                end if;
+               lastSectorHeaderValid      <= '0';
                internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                internalStatus(1)          <= '1'; -- motor on
                internalStatus(6)          <= '1'; -- seeking
@@ -2655,7 +2655,7 @@ begin
 --############################### Audio
 --##############################################################
    
-   XA_reset <= reset or softReset or startReading or startPlaying or cmdResetXa;
+   XA_reset <= reset or softReset or startReading or startPlaying or cmdResetXa or seekOnDiskDrive;
    
    icd_xa : entity work.cd_xa
    port map
@@ -3058,6 +3058,21 @@ begin
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
             end if;
+            
+            if (errorResponseCmd_new = '1') then
+               write(line_out, string'("RSPERROR: ")); 
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter));
+                  write(line_out, string'(" ")); 
+               end if;
+               write(line_out, to_hstring(nextCmd));
+               write(line_out, string'(" 00")); 
+               write(line_out, to_hstring(errorResponseCmd_reason));
+               write(line_out, to_hstring(errorResponseCmd_error));
+               write(line_out, to_hstring(internalStatus));
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if; 
             
             if (processDataSector = '1' and (modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
                write(line_out, string'("WPTR: "));
