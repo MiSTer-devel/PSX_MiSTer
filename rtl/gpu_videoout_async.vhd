@@ -209,7 +209,7 @@ begin
       if rising_edge(clkvid) then
       
          if (videoout_out.isPal = '1') then
-            vDisplayMax <= 256;
+            vDisplayMax <= 288;
          else
             vDisplayMax <= 240;
          end if;

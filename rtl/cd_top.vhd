@@ -174,16 +174,17 @@ architecture arch of cd_top is
     
    -- drive
    type tdrivestate is
-	(
-		DRIVE_IDLE,
-		DRIVE_SEEKPHYSICAL,
-		DRIVE_SEEKLOGICAL,
-		DRIVE_SEEKIMPLICIT,
-		DRIVE_READING,
-		DRIVE_PLAYING,
-		DRIVE_SPEEDCHANGEORTOCREAD,
-		DRIVE_SPINNINGUP,
-		DRIVE_CHANGESESSION
+   (
+      DRIVE_IDLE,
+      DRIVE_SEEKPHYSICAL,
+      DRIVE_SEEKLOGICAL,
+      DRIVE_SEEKIMPLICIT,
+      DRIVE_READING,
+      DRIVE_PLAYING,
+      DRIVE_SPEEDCHANGEORTOCREAD,
+      DRIVE_SPINNINGUP,
+      DRIVE_CHANGESESSION,
+      DRIVE_OPENING
 	);
    signal driveState                : tdrivestate := DRIVE_IDLE;
          
@@ -425,6 +426,7 @@ architecture arch of cd_top is
 
    signal newCDCounter              : unsigned(25 downto 0); -- ~2seconds
    signal newCD                     : std_logic := '0';
+   signal newCD_1                   : std_logic := '0';
 
    -- savestates
    type t_ssarray is array(0 to 127) of std_logic_vector(31 downto 0);
@@ -716,7 +718,8 @@ begin
             end if;   
                
             if (errorResponseNext_new = '1') then
-               CDROM_IRQFLAG <= "00101";
+               CDROM_IRQFLAG   <= "00101";
+               pendingDriveIRQ <= (others => '0');
                if (CDROM_IRQENA(2) = '1' or CDROM_IRQENA(0) = '1') then
                   irqOut <= '1';
                end if;
@@ -1528,6 +1531,13 @@ begin
                end if;
             end if;
             
+            if (newCD = '1' and newCD_1 = '0') then
+               FifoResponse_reset <= '1';
+               cmdPending         <= '0';
+               cmd_busy           <= '0';
+               cmd_delay          <= 0;
+            end if;
+            
             if (softReset = '1') then
                FifoParam_reset <= '1';
             end if;
@@ -1829,6 +1839,9 @@ begin
                      if (session = x"01") then --todo: multisession
                         ackDrive <= '1';
                      end if;
+                     
+                  when DRIVE_OPENING =>
+                     startMotor <= '1';
                   
                   when others => null;
                end case;
@@ -2099,6 +2112,17 @@ begin
                   end if;
             
             end case;
+            
+            newCD_1 <= newCD;
+            if (newCD = '1' and newCD_1 = '0') then
+               driveState                 <= DRIVE_OPENING;
+               driveDelay                 <= 25000000;
+               internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
+               internalStatus(1)          <= '0'; -- motor off
+               errorResponseDrive_new     <= '1';
+               errorResponseDrive_error   <= x"01";
+               errorResponseDrive_reason  <= x"08";
+            end if;
             
             --modeReg(1) <= '0'; -- debug autopause
             

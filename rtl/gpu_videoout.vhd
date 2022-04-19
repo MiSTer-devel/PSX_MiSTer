@@ -218,11 +218,11 @@ begin
          -- display offset is adjusted if display start is below typical line for CRTs
          DisplayOffsetY <= videoout_settings.vramRange(18 downto 10);
          if (videoout_settings.GPUSTAT_PalVideoMode = '1' and videoout_settings.pal60 = '0') then
-            if (vDisplayStart < 20) then
+            if (vDisplayStart < 19) then
                if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_settings.GPUSTAT_VertInterlace = '1') then
-                  DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + ((20 - vDisplayStart) * 2), 9);
+                  DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + ((19 - vDisplayStart) * 2), 9);
                else
-                  DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + (20 - vDisplayStart), 9);
+                  DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + (19 - vDisplayStart), 9);
                end if;
             end if;
          else
