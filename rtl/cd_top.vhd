@@ -849,7 +849,11 @@ begin
             if (beginCommand = '1') then
                cmdPending <= '1';
                cmd_busy   <= '1';
-               cmd_delay  <= 25000 - 2;
+               if (driveState = DRIVE_OPENING) then
+                  cmd_delay  <= 15000 - 2;
+               else
+                  cmd_delay  <= 25000 - 2;
+               end if;
                if (nextCmd = x"1C") then -- init
                   cmd_delay <= 120000 - 2;
                end if;
@@ -919,7 +923,7 @@ begin
                      when x"01" => -- Getstat
                         cmdAck         <= '1';
                         cmdPending     <= '0';
-                        if (hasCD = '1') then
+                        if (hasCD = '1' and driveState /= DRIVE_OPENING) then
                            shell_close <= '1';
                         end if;
                         
@@ -2026,13 +2030,10 @@ begin
                end if;
             end if;
             
-            if (LIDopen = '1' or newCD = '1') then
+            if (LIDopen = '1') then
                internalStatus(4) <= '1';
             elsif (shell_close = '1') then
                internalStatus(4) <= '0';
-               if (internalStatus(4) = '1') then
-                  internalStatus(1) <= '1'; -- motor on
-               end if;
             end if;
             
             if (ackRead_valid = '1' or ackPendingIRQ = '1') then
@@ -2116,9 +2117,15 @@ begin
             newCD_1 <= newCD;
             if (newCD = '1' and newCD_1 = '0') then
                driveState                 <= DRIVE_OPENING;
-               driveDelay                 <= 25000000;
+               driveBusy                  <= '1';
+               if (modeReg(7) = '1') then
+                  driveDelay              <= 25000000;
+               else
+                  driveDelay              <= 13000000;
+               end if;
                internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
-               internalStatus(1)          <= '0'; -- motor off
+               internalStatus(1)          <= '0';   -- motor off
+               internalStatus(4)          <= '1';   -- open LID
                errorResponseDrive_new     <= '1';
                errorResponseDrive_error   <= x"01";
                errorResponseDrive_reason  <= x"08";
@@ -3089,10 +3096,23 @@ begin
                   write(line_out, to_hstring(clkCounter));
                   write(line_out, string'(" ")); 
                end if;
-               write(line_out, to_hstring(nextCmd));
-               write(line_out, string'(" 00")); 
+               write(line_out, string'("00 00")); 
                write(line_out, to_hstring(errorResponseCmd_reason));
                write(line_out, to_hstring(errorResponseCmd_error));
+               write(line_out, to_hstring(internalStatus));
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if;             
+            
+            if (errorResponseDrive_new = '1') then
+               write(line_out, string'("RSPERROR: ")); 
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter));
+                  write(line_out, string'(" ")); 
+               end if;
+               write(line_out, string'("00 00")); 
+               write(line_out, to_hstring(errorResponseDrive_reason));
+               write(line_out, to_hstring(errorResponseDrive_error));
                write(line_out, to_hstring(internalStatus));
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
