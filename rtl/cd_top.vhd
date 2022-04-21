@@ -89,6 +89,7 @@ architecture arch of cd_top is
             
    signal beginCommand              : std_logic := '0';
    signal cmd_unpause               : std_logic := '0';
+   signal newCmd                    : std_logic_vector(7 downto 0);
    signal nextCmd                   : std_logic_vector(7 downto 0);
    
    signal pendingDriveIRQ           : std_logic_vector(4 downto 0);
@@ -482,7 +483,6 @@ begin
    ss_out(21)(12 downto  8) <= CDROM_IRQENA;
    ss_out(21)(20 downto 16) <= CDROM_IRQFLAG;
    ss_out(13)(28 downto 24) <= pendingDriveIRQ;
-   ss_out(13)(23 downto 16) <= nextCmd;
    ss_out(22)(17)           <= xa_muted;
    ss_out(23)( 7 downto  0) <= cdvol_next00;
    ss_out(23)(15 downto  8) <= cdvol_next01;
@@ -505,11 +505,12 @@ begin
       
          if (reset = '1') then
             
+            FifoData_reset <= '1';
+            
             CDROM_STATUS    <= ss_in(21)(7 downto 0); -- x"18";
             CDROM_IRQENA    <= ss_in(21)(12 downto 8); -- (others => '0');
             CDROM_IRQFLAG   <= ss_in(21)(20 downto 16); -- (others => '0');
             pendingDriveIRQ <= ss_in(13)(28 downto 24); -- (others => '0');
-            nextCmd         <= ss_in(13)(23 downto 16); -- '0';
             xa_muted        <= ss_in(22)(17); -- '0';
             
             cdvol_next00    <= ss_in(23)( 7 downto  0); -- x"80"
@@ -547,7 +548,7 @@ begin
                         case (bus_addr) is
                            when x"1" =>
                               beginCommand <= '1';
-                              nextCmd      <= bus_dataWrite;
+                              newCmd       <= bus_dataWrite;
                               
                            when x"2" =>
                               --todo: if (fifoParam.size() == 16) fifoParam.pop_front();
@@ -768,6 +769,7 @@ begin
    ss_out(18)(1)             <= cmdPending;   
    ss_out(18)(0)             <= cmd_busy;     
    ss_out(12)(16 downto  0)  <= std_logic_vector(to_unsigned(cmd_delay, 17)); 
+   ss_out(13)(23 downto 16)  <= nextCmd;
    ss_out(18)(2)             <= working;      
    ss_out( 0)(31 downto  0)  <= std_logic_vector(to_unsigned(workDelay, 32));    
    ss_out(14)(15 downto  8)  <= workCommand;  
@@ -784,6 +786,8 @@ begin
    
    -- command processing
    process(clk1x)
+      variable paramCountNew : integer range 0 to 6;
+      variable skipCmd       : std_logic;
    begin
       if (rising_edge(clk1x)) then
          
@@ -801,6 +805,7 @@ begin
             cmdPending              <= ss_in(18)(1); -- '0'
             cmd_busy                <= ss_in(18)(0); -- '0'
             cmd_delay               <= to_integer(unsigned(ss_in(12)(16 downto 0))); -- 0
+            nextCmd                 <= ss_in(13)(23 downto 16); -- '0';
             fifoParamCount          <= 0;
             working                 <= ss_in(18)(2); -- '0'
             workDelay               <= to_integer(unsigned(ss_in(0)(31 downto 0))); -- 0
@@ -847,34 +852,47 @@ begin
          
             -- receive new command request or decrease wait timer on pending command
             if (beginCommand = '1') then
-               cmdPending <= '1';
-               cmd_busy   <= '1';
-               if (driveState = DRIVE_OPENING) then
-                  cmd_delay  <= 15000 - 2;
-               else
-                  cmd_delay  <= 25000 - 2;
-               end if;
-               if (nextCmd = x"1C") then -- init
-                  cmd_delay <= 120000 - 2;
-               end if;
-               case (nextCmd) is
-                  when x"02" => paramCount <= 3; --Setloc
-                  when x"0D" => paramCount <= 2; --SetFilter
-                  when x"0E" => paramCount <= 1; --Setmode
-                  when x"12" => paramCount <= 1; --SetSession
-                  when x"14" => paramCount <= 1; --GetTD
-                  when x"19" => paramCount <= 1; --Test
-                  when x"1D" => paramCount <= 2; --GetQ
-                  when x"1F" => paramCount <= 6; --VideoCD
-                  when others => paramCount <= 0;
+            
+               skipCmd := '0';
+               case (newCmd) is
+                  when x"02"  => paramCountNew := 3; --Setloc
+                  when x"0D"  => paramCountNew := 2; --SetFilter
+                  when x"0E"  => paramCountNew := 1; --Setmode
+                  when x"12"  => paramCountNew := 1; --SetSession
+                  when x"14"  => paramCountNew := 1; --GetTD
+                  when x"19"  => paramCountNew := 1; --Test
+                  when x"1D"  => paramCountNew := 2; --GetQ
+                  when x"1F"  => paramCountNew := 6; --VideoCD
+                  when others => paramCountNew := 0;
                end case;
-               
-               if (driveState = DRIVE_IDLE and internalStatus(1) = '1' and nextCmd = x"11") then
-                  updatePhysicalPosition <= '1';
+            
+               if (cmdPending = '1' and paramCount > paramCountNew) then
+                  FifoParam_reset <= '1';
+                  skipCmd         := '1';
                end if;
-               
-               if (CDROM_IRQFLAG /= "00000") then
-                  cmd_busy  <= '0';
+            
+               if (skipCmd = '0') then
+                  cmdPending <= '1';
+                  cmd_busy   <= '1';
+                  if (driveState = DRIVE_OPENING) then
+                     cmd_delay  <= 15000 - 2;
+                  else
+                     cmd_delay  <= 25000 - 2;
+                  end if;
+                  if (newCmd = x"1C") then -- init
+                     cmd_delay <= 120000 - 2;
+                  end if;
+   
+                  nextCmd    <= newCmd;
+                  paramCount <= paramCountNew;
+                  
+                  if (driveState = DRIVE_IDLE and internalStatus(1) = '1' and newCmd = x"11") then
+                     updatePhysicalPosition <= '1';
+                  end if;
+                  
+                  if (CDROM_IRQFLAG /= "00000") then
+                     cmd_busy  <= '0';
+                  end if;
                end if;
                
             elsif (pause_cmd = '1') then
@@ -1199,6 +1217,10 @@ begin
                            errorResponseCmd_new    <= '1';
                            errorResponseCmd_error  <= x"01";
                            errorResponseCmd_reason <= x"80";
+                        elsif (isAudioCD = '1' and modeReg(0) = '0') then
+                           errorResponseCmd_new    <= '1';
+                           errorResponseCmd_error  <= x"01";
+                           errorResponseCmd_reason <= x"40";
                         else
                            -- todo: missing checks
                            cmdAck <= '1';
@@ -2306,7 +2328,10 @@ begin
                      elsif (trackSearchState = TRACKSEARCH_IDLE) then
                         sectorFetchState <= SFETCH_START;
                         if (trackNumberBCD = "01" and isAudio = '0') then
-                           positionInIndex <= lastReadSector - startLBA - PREGAPSIZE;  -- not in simulation?
+                           positionInIndex <= lastReadSector - startLBA - PREGAPSIZE;  
+-- synthesis translate_off
+                           positionInIndex <= lastReadSector - startLBA; -- pregap not present in simulation
+-- synthesis translate_on
                         else
                            positionInIndex <= lastReadSector - startLBA;
                         end if;
@@ -3034,7 +3059,7 @@ begin
                   write(line_out, to_hstring(clkCounter - 1));
                   write(line_out, string'(" ")); 
                end if;
-               write(line_out, to_hstring(nextCmd));
+               write(line_out, to_hstring(newCmd));
                write(line_out, string'(" 00000000")); 
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
@@ -3217,6 +3242,10 @@ begin
             
             if (reset = '1') then
                clkCounter <= x"00000000";
+               file_close(outfile);
+               file_open(f_status, outfile, "R:\\debug_cd_sim.txt", write_mode);
+               file_close(outfile);
+               file_open(f_status, outfile, "R:\\debug_cd_sim.txt", append_mode);
             end if;
            
          end loop;

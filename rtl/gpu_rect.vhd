@@ -104,7 +104,7 @@ architecture arch of gpu_rect is
 
    signal firstPixel          : std_logic;
    
-   signal timeout             : integer range 0 to 67108863 := 0;
+   signal timeout             : integer range 0 to 1048575 := 0;
 
 begin 
 
@@ -162,10 +162,12 @@ begin
             error <= '0';
             if (state = IDLE) then
                timeout <= 0;
-            elsif (timeout < 67108863) then
+            elsif (timeout < 1048575) then
                timeout  <= timeout + 1;
             else
                error <= '1';
+               state <= IDLE;
+               done  <= '1';
             end if;
          
             case (state) is
