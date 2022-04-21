@@ -101,6 +101,7 @@ begin
       variable newMouseAccClippedX  : signed(9 downto 0) := (others => '0');
       variable newMouseAccClippedY  : signed(9 downto 0) := (others => '0');
       variable newAnalog            : signed(8 downto 0) := (others => '0');
+      variable newPedal             : signed(7 downto 0) := (others => '0');
    begin
       if rising_edge(clk1x) then
       
@@ -407,24 +408,47 @@ begin
                            
                         when ANALOGRIGHTX => 
                            receiveBuffer   <= analogLarge;
+                           if (joypad.WheelMap) then
+                              receiveBuffer<= "10000000";
+                           end if;
                            receiveValid    <= '1';
                            controllerState <= ANALOGRIGHTY;
                            ack             <= '1';
                         
                         when ANALOGRIGHTY => 
                            receiveBuffer   <= analogLarge;
+                           if (joypad.WheelMap) then
+                              newPedal := (others => '0');
+                              if (to_integer(joypad.Analog2Y) < 0) then
+                                 newPedal := -joypad.Analog2Y;
+                                 if (newPedal(7) = '1') then
+                                    newPedal := "01111111"; -- workaround for -128
+                                 end if;
+                              end if;
+                              if (to_integer(joypad.Analog1Y) < 0) then
+                                 newPedal := newPedal + joypad.Analog1Y;
+                              end if;
+                              newPedal(7) := not newPedal(7);
+                              receiveBuffer <= std_logic_vector(newPedal);
+                           end if;
                            receiveValid    <= '1';
                            controllerState <= ANALOGLEFTX;
                            ack             <= '1';
                         
                         when ANALOGLEFTX =>
                            receiveBuffer   <= analogLarge;
+                           if (joypad.WheelMap) then
+                              receiveBuffer<= std_logic_vector(to_unsigned(to_integer(joypad.Analog1X) + 128, 8));
+                           end if;
                            receiveValid    <= '1';
                            controllerState <= ANALOGLEFTY;
                            ack             <= '1';
                         
                         when ANALOGLEFTY =>
                            receiveBuffer   <= analogLarge;
+                           if (joypad.WheelMap) then
+                              receiveBuffer<= "10000000";
+                           end if;
                            receiveValid    <= '1';
                            controllerState <= IDLE;
 
@@ -450,30 +474,36 @@ begin
                            ack             <= '1';
 
                         when NEGCONANALOGI =>
+                           receiveBuffer   <= "00000000";
                            if (joypad.KeyCross = '1' or joypad.KeyR2 = '1') then
                               -- Buttons are Buttons and full throttle
                               receiveBuffer   <= "11111111";
+                           elsif (joypad.WheelMap) then
+                              if (to_integer(joypad.Analog1Y) < 0) then
+                                 receiveBuffer   <= std_logic_vector(1 + shift_left(not to_unsigned(to_integer(joypad.Analog1Y),8),1));
+                              end if;
                            elsif ( to_integer(joypad.Analog2Y) < 0) then
                               -- Buttons are right stick up
                               -- Due to half resolution of the stick its range of -128 to 1 is mapped to 0x03 to 0xFF
                               receiveBuffer   <= std_logic_vector(1 + shift_left(not to_unsigned(to_integer(joypad.Analog2Y),8),1));
-                           else
-                              receiveBuffer   <= "00000000";
                            end if;
                            receiveValid    <= '1';
                            controllerState <= NEGCONANALOGII;
                            ack             <= '1';
 
                         when NEGCONANALOGII =>
+                           receiveBuffer   <= "00000000";
                            if (joypad.KeySquare = '1' or joypad.KeyL2 = '1') then
                               -- Buttons are Buttons and full throttle
                               receiveBuffer   <= "11111111";
+                           elsif (joypad.WheelMap) then
+                              if (to_integer(joypad.Analog2Y) < 0) then
+                                 receiveBuffer   <= std_logic_vector(1 + shift_left(not to_unsigned(to_integer(joypad.Analog2Y),8),1));
+                              end if;
                            elsif ( to_integer(joypad.Analog2Y) > 0) then
                               -- Buttons are right stick down
                               -- Due to half resolution of the stick its range of 1 to 127 is mapped to 0x03 to 0xFF
                               receiveBuffer   <= std_logic_vector(1 + shift_left(to_unsigned(to_integer(joypad.Analog2Y),8),1));
-                           else
-                              receiveBuffer   <= "00000000";
                            end if;
                            receiveValid    <= '1';
                            controllerState <= NEGCONANALOGL;
@@ -482,10 +512,13 @@ begin
                         when NEGCONANALOGL =>
                            -- Ran out of analog buttons, ideally analog triggers would be supported and a layout
                            -- R2->I, L2->II, AnalogR->L would be possible, enabling I/II being independent when analog and have analog L
+                           receiveBuffer   <= "00000000";
                            if (joypad.KeyL1 = '1') then
                               receiveBuffer   <= "11111111";
-                           else
-                              receiveBuffer   <= "00000000";
+                           elsif (joypad.WheelMap) then
+                              if (to_integer(joypad.Analog2X) < 0) then
+                                 receiveBuffer   <= std_logic_vector(1 + shift_left(not to_unsigned(to_integer(joypad.Analog2X),8),1));
+                              end if;
                            end if;
                            receiveValid    <= '1';
                            controllerState <= IDLE;

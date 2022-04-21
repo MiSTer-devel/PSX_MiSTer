@@ -368,8 +368,8 @@ parameter CONF_STR = {
 	"-;",
 	"o78,System Type,NTSC-U,NTSC-J,PAL;",
 	"-;",
-	"oDF,Pad1,Digital,Analog,Mouse,Off,GunCon,NeGcon;",
-	"oGI,Pad2,Digital,Analog,Mouse,Off,GunCon,NeGcon;",
+	"oDF,Pad1,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog;",
+	"oGI,Pad2,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog;",
 	"-;",
 	"OS,FPS Overlay,Off,On;",
 	"OT,Error Overlay,On,Off;",
@@ -713,17 +713,18 @@ defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 // 110..111 -> reserved
 
 wire PadPortEnable1 = (status[47:45] != 3'b011);
-wire PadPortAnalog1 = (status[47:45] == 3'b001);
+wire PadPortAnalog1 = (status[47:45] == 3'b001) || (status[47:45] == 3'b111);
 wire PadPortMouse1  = (status[47:45] == 3'b010);
 wire PadPortGunCon1 = (status[47:45] == 3'b100);
-wire PadPortNeGcon1 = (status[47:45] == 3'b101);
+wire PadPortNeGcon1 = (status[47:45] == 3'b101) || (status[47:45] == 3'b110);
+wire PadPortWheel1  = (status[47:45] == 3'b110) || (status[47:45] == 3'b111);
 
 wire PadPortEnable2 = (status[50:48] != 3'b011);
-wire PadPortAnalog2 = (status[50:48] == 3'b001);
+wire PadPortAnalog2 = (status[50:48] == 3'b001) || (status[50:48] == 3'b111);
 wire PadPortMouse2  = (status[50:48] == 3'b010);
 wire PadPortGunCon2 = (status[50:48] == 3'b100);
-wire PadPortNeGcon2 = (status[50:48] == 3'b101);
-
+wire PadPortNeGcon2 = (status[50:48] == 3'b101) || (status[50:48] == 3'b110);
+wire PadPortWheel2  = (status[50:48] == 3'b110) || (status[50:48] == 3'b111);
 
 ////////////////////////////  PAUSE  ///////////////////////////////////
 reg paused = 0;
@@ -873,11 +874,13 @@ psx
    .PadPortMouse1  (PadPortMouse1 ),
    .PadPortGunCon1 (PadPortGunCon1),
    .PadPortNeGcon1 (PadPortNeGcon1),
+   .PadPortWheel1  (PadPortWheel1),
    .PadPortEnable2 (PadPortEnable2),
    .PadPortAnalog2 (PadPortAnalog2),
    .PadPortMouse2  (PadPortMouse2 ),
    .PadPortGunCon2 (PadPortGunCon2),
    .PadPortNeGcon2 (PadPortNeGcon2),
+   .PadPortWheel2  (PadPortWheel2),
    .KeyTriangle({joy2[4], joy[4] }),    
    .KeyCircle  ({joy2[5] ,joy[5] }),       
    .KeyCross   ({joy2[6] ,joy[6] }),       

@@ -11,6 +11,8 @@ type joypad_t is record
    PadPortGunCon : std_logic;
    PadPortNeGcon : std_logic;
 
+   WheelMap    : std_logic;
+
    KeyTriangle : std_logic;
    KeyCircle   : std_logic;
    KeyCross    : std_logic;
