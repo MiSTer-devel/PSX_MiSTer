@@ -1495,9 +1495,9 @@ begin
 
             when 16#28# => -- SB
                case (to_integer(calcMemAddr(1 downto 0))) is 
-                  when 0 => EXEMemWriteMask <= "0001"; EXEMemWriteData <= x"000000" & value2(7 downto 0); 
-                  when 1 => EXEMemWriteMask <= "0010"; EXEMemWriteData <= x"0000" & value2(7 downto 0) & x"00";   
-                  when 2 => EXEMemWriteMask <= "0100"; EXEMemWriteData <= x"00" & value2(7 downto 0) & x"0000";   
+                  when 0 => EXEMemWriteMask <= "0001"; EXEMemWriteData <= value2; 
+                  when 1 => EXEMemWriteMask <= "0010"; EXEMemWriteData <= value2(23 downto 0) & x"00";   
+                  when 2 => EXEMemWriteMask <= "0100"; EXEMemWriteData <= value2(15 downto 0) & x"0000";   
                   when 3 => EXEMemWriteMask <= "1000"; EXEMemWriteData <= value2(7 downto 0) & x"000000";   
                   when others => null;
                end case;
@@ -1508,7 +1508,7 @@ begin
                   EXEMemWriteData <= value2(15 downto 0) & x"0000";
                   EXEMemWriteMask <= "1100";
                else
-                  EXEMemWriteData <= x"0000" & value2(15 downto 0);
+                  EXEMemWriteData <= value2;
                   EXEMemWriteMask <= "0011";
                end if;
                if (calcMemAddr(0) = '1') then
