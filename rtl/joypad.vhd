@@ -20,6 +20,7 @@ entity joypad is
       joypad2              : in  joypad_t;
       joypad1_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
       joypad2_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
+      padMode              : out std_logic_vector(1 downto 0);
 
       memcard1_available   : in  std_logic;
       memcard2_available   : in  std_logic;
@@ -109,6 +110,8 @@ architecture arch of joypad is
    signal selectedPort2       : std_logic;
    signal selectedPort        : std_logic;
    signal selectedPort_1      : std_logic;
+      
+   signal portNr              : integer range 0 to 1;
       
    signal ack                 : std_logic;
    signal ackPad              : std_logic;
@@ -357,6 +360,7 @@ begin
    GunX            <= Gun2X when selectedPort2 else Gun1X;
    GunY_scanlines  <= Gun2Y_scanlines when selectedPort2 else Gun1Y_scanlines;
    GunAimOffscreen <= Gun2AimOffscreen when selectedPort2 else Gun1AimOffscreen;
+   portNr          <= 0 when JOY_CTRL(13) = '0' else 1;
 
    ijoypad_pad : entity work.joypad_pad
    port map
@@ -367,6 +371,8 @@ begin
        
       joypad               => joypad_selected,
       rumble               => rumble_selected,
+      padMode              => padMode,
+      portNr               => portNr,
       isPal                => isPal,
 
       selected             => selectedPort,
@@ -389,7 +395,10 @@ begin
       MouseY               => MouseY,
       GunX                 => GunX,
       GunY_scanlines       => GunY_scanlines,
-      GunAimOffscreen      => GunAimOffscreen
+      GunAimOffscreen      => GunAimOffscreen,
+      
+      ss_in                => ss_in(7),
+      ss_out               => ss_out(7)
    );
    
    ijoypad_mem1 : entity work.joypad_mem
@@ -470,7 +479,7 @@ begin
       
          if (SS_reset = '1') then
          
-            for i in 0 to 1 loop
+            for i in 0 to 7 loop
                ss_in(i) <= (others => '0');
             end loop;
             

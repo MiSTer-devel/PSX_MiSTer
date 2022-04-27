@@ -45,6 +45,8 @@ begin
       joypad.PadPortGunCon => '0',
       joypad.PadPortNeGcon => '0',
       joypad.WheelMap      => '0',
+      joypad.PadPortDS     => '1',
+      joypad.PadPortDSA    => '0',
 
       joypad.KeyTriangle   => '0',
       joypad.KeyCircle     => '0',
@@ -68,6 +70,7 @@ begin
       joypad.Analog2Y      => x"00",
 
       rumble               => open,
+      portNr               => 0,
 
       isPal                => '0',
       
@@ -90,7 +93,10 @@ begin
       MouseY               => "000000000",
       GunX                 => "00000000",
       GunY_scanlines       => "000000000",
-      GunAimOffscreen      => '0'
+      GunAimOffscreen      => '0',
+      
+      ss_in                => x"00000000",
+      ss_out               => open
    );
    
    process

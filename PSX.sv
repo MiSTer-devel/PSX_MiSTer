@@ -342,7 +342,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXX XXXXXXXXXXXXXX XXXXXX  XXXXXXXXXX XXXXXXXXX XXXXXXXX XX
+// XXXXX XXX XXXXXXXXXXXXXX XXXXXX  XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -368,8 +368,8 @@ parameter CONF_STR = {
 	"-;",
 	"o78,System Type,NTSC-U,NTSC-J,PAL;",
 	"-;",
-	"oDF,Pad1,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog;",
-	"oGI,Pad2,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog;",
+	"oDG,Pad1,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,DS Forced Analog;",
+	"oHK,Pad2,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,DS Forced Analog;",
 	"-;",
 	"OS,FPS Overlay,Off,On;",
 	"OT,Error Overlay,On,Off;",
@@ -393,7 +393,7 @@ parameter CONF_STR = {
 	"P2,Miscellaneous;",
 	"P2-;",
 	"P2OG,Fastboot,Off,On;",
-	"P2oJ,CD Lid,Closed,Open;",
+	"P2oA,CD Lid,Closed,Open;",
 	"P2OP,Pause when OSD is open,Off,On;",
 	"P2OL,CD Fast Seek,Off,On;",
 	"P2oQ,Data Cache(Cheats Off),Off,On;",
@@ -434,7 +434,11 @@ parameter CONF_STR = {
 	"Restore state 3,",
 	"Save to state 4,",
 	"Restore state 4,",
-	"Rewinding...;",
+	"Rewinding...,",
+	"Slot 1 Analog,",
+	"Slot 1 Digital,",
+	"Slot 2 Analog,",
+	"Slot 2 Digital;",
 	"V,v",`BUILD_DATE
 };
 
@@ -505,8 +509,8 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
 	.status_in(status_in),
 	.status_set(statusUpdate),
 	.status_menumask(status_menumask),
-	.info_req(ss_info_req),
-	.info(ss_info),
+	.info_req(psx_info_req),
+	.info(psx_info),
 
 	.ioctl_addr(ioctl_addr),
 	.ioctl_dout(ioctl_dout),
@@ -704,27 +708,61 @@ defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 
 ////////////////////////////  PAD  ///////////////////////////////////
 
-// 000 -> digital
-// 000 -> analog
-// 000 -> mouse
-// 011 -> off
-// 100 -> Namco GunCon lightgun
-// 101 -> Namco NeGcon
-// 110..111 -> reserved
+// 0000 -> digital
+// 0000 -> analog
+// 0000 -> mouse
+// 0011 -> off
+// 0100 -> Namco GunCon lightgun
+// 0101 -> Namco NeGcon
+// 0110 -> Wheel Negcon
+// 0111 -> Wheel Analog
+// 1000 -> DualShock
+// 1001 -> DualShock forced Analog
+// 1001..1111 -> reserved
 
-wire PadPortEnable1 = (status[47:45] != 3'b011);
-wire PadPortAnalog1 = (status[47:45] == 3'b001) || (status[47:45] == 3'b111);
-wire PadPortMouse1  = (status[47:45] == 3'b010);
-wire PadPortGunCon1 = (status[47:45] == 3'b100);
-wire PadPortNeGcon1 = (status[47:45] == 3'b101) || (status[47:45] == 3'b110);
-wire PadPortWheel1  = (status[47:45] == 3'b110) || (status[47:45] == 3'b111);
+wire PadPortEnable1 = (status[48:45] != 4'b0011);
+wire PadPortAnalog1 = (status[48:45] == 4'b0001) || (status[48:45] == 4'b0111);
+wire PadPortMouse1  = (status[48:45] == 4'b0010);
+wire PadPortGunCon1 = (status[48:45] == 4'b0100);
+wire PadPortNeGcon1 = (status[48:45] == 4'b0101) || (status[48:45] == 4'b0110);
+wire PadPortWheel1  = (status[48:45] == 4'b0110) || (status[48:45] == 4'b0111);
+wire PadPortDS1     = (status[48:45] == 4'b1000) || (status[48:45] == 4'b1001);
+wire PadPortDSA1    = (status[48:45] == 4'b1001);
 
-wire PadPortEnable2 = (status[50:48] != 3'b011);
-wire PadPortAnalog2 = (status[50:48] == 3'b001) || (status[50:48] == 3'b111);
-wire PadPortMouse2  = (status[50:48] == 3'b010);
-wire PadPortGunCon2 = (status[50:48] == 3'b100);
-wire PadPortNeGcon2 = (status[50:48] == 3'b101) || (status[50:48] == 3'b110);
-wire PadPortWheel2  = (status[50:48] == 3'b110) || (status[50:48] == 3'b111);
+wire PadPortEnable2 = (status[52:49] != 4'b0011);
+wire PadPortAnalog2 = (status[52:49] == 4'b0001) || (status[52:49] == 4'b0111);
+wire PadPortMouse2  = (status[52:49] == 4'b0010);
+wire PadPortGunCon2 = (status[52:49] == 4'b0100);
+wire PadPortNeGcon2 = (status[52:49] == 4'b0101) || (status[52:49] == 4'b0110);
+wire PadPortWheel2  = (status[52:49] == 4'b0110) || (status[52:49] == 4'b0111);
+wire PadPortDS2     = (status[52:49] == 4'b1000) || (status[52:49] == 4'b1001);
+wire PadPortDSA2    = (status[52:49] == 4'b1001);
+
+wire [1:0] padMode;
+reg  [1:0] padMode_1;
+
+reg [7:0] psx_info;
+reg psx_info_req;
+
+always @(posedge clk_1x) begin
+
+   psx_info_req <= 0;
+   padMode_1    <= padMode;
+
+   if (ss_info_req) begin
+      psx_info_req <= 1;
+      psx_info     <= ss_info;
+   end else if (padMode_1[0] != padMode[0]) begin
+      psx_info_req <= 1;
+      if (padMode[0])  psx_info <= 8'd15;
+      if (!padMode[0]) psx_info <= 8'd16;
+   end else if (padMode_1[1] != padMode[1]) begin
+      psx_info_req <= 1;
+      if (padMode[1])  psx_info <= 8'd17;
+      if (!padMode[1]) psx_info <= 8'd18;
+   end
+
+end
 
 ////////////////////////////  PAUSE  ///////////////////////////////////
 reg paused = 0;
@@ -807,7 +845,7 @@ psx
    // cd
    .region          (status[40:39]),
    .hasCD           (hasCD),
-   .LIDopen         (status[51]),
+   .LIDopen         (status[42]),
    .fastCD          (0),
    .libcryptKey     (libcryptKey),
    .trackinfo_data  (ramdownload_wrdata),
@@ -875,12 +913,16 @@ psx
    .PadPortGunCon1 (PadPortGunCon1),
    .PadPortNeGcon1 (PadPortNeGcon1),
    .PadPortWheel1  (PadPortWheel1),
+   .PadPortDS1     (PadPortDS1),
+   .PadPortDSA1    (PadPortDSA1),
    .PadPortEnable2 (PadPortEnable2),
    .PadPortAnalog2 (PadPortAnalog2),
    .PadPortMouse2  (PadPortMouse2 ),
    .PadPortGunCon2 (PadPortGunCon2),
    .PadPortNeGcon2 (PadPortNeGcon2),
    .PadPortWheel2  (PadPortWheel2),
+   .PadPortDS2     (PadPortDS2),
+   .PadPortDSA2    (PadPortDSA2),
    .KeyTriangle({joy2[4], joy[4] }),    
    .KeyCircle  ({joy2[5] ,joy[5] }),       
    .KeyCross   ({joy2[6] ,joy[6] }),       
@@ -907,6 +949,7 @@ psx
    .Analog2YP2(joystick_analog_r1[15:8]),           
    .RumbleDataP1(joystick1_rumble),
    .RumbleDataP2(joystick2_rumble),
+   .padMode(padMode),
    .MouseEvent(mouse[24]),
    .MouseLeft(mouse[0]),
    .MouseRight(mouse[1]),
