@@ -25,6 +25,7 @@ entity gpu is
       pal60                : in  std_logic;
       fpscountOn           : in  std_logic;
       noTexture            : in  std_logic;
+      textureFilter        : in  std_logic;
       debugmodeOn          : in  std_logic;
       syncVideoOut         : in  std_logic;
       syncInterlace        : in  std_logic;
@@ -1128,6 +1129,7 @@ begin
       reset                => softreset or SS_reset,   
 
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,    
+      textureFilter        => textureFilter,
 
       error                => errorPOLY,
       
@@ -1143,6 +1145,7 @@ begin
       
       drawModeRec          => poly_drawModeRec,
       drawModeNew          => poly_drawModeNew,
+      drawmode_dithering   => drawMode(9),
       
       div1                 => poly_div(0), 
       div2                 => poly_div(1), 

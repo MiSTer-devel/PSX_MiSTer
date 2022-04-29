@@ -14,6 +14,7 @@ entity gpu_poly is
       reset                : in  std_logic;
       
       REPRODUCIBLEGPUTIMING: in  std_logic;
+      textureFilter        : in  std_logic;
       
       error                : out std_logic;
       
@@ -29,6 +30,7 @@ entity gpu_poly is
       
       drawModeRec          : out unsigned(11 downto 0);
       drawModeNew          : out std_logic := '0';
+      drawmode_dithering   : in  std_logic := '0';
       
       div1                 : inout div_type; 
       div2                 : inout div_type; 
@@ -229,6 +231,10 @@ architecture arch of gpu_poly is
 
    signal firstPixel          : std_logic;   
    
+   signal filter_on           : std_logic;
+   signal filter_maxU         : unsigned(7 downto 0);
+   signal filter_maxV         : unsigned(7 downto 0);
+   
    signal timeout             : integer range 0 to 1048575 := 0;
    
 begin 
@@ -353,6 +359,8 @@ begin
       variable calc4    : signed(44 downto 0);
       variable stop     : std_logic;
       variable skip     : std_logic; 
+      variable uFilter  : unsigned(20 downto 0);
+      variable vFilter  : unsigned(20 downto 0);
    begin
       if rising_edge(clk2x) then
          
@@ -428,6 +436,8 @@ begin
                   drawTiming   <= (others => '0');
                   targetTiming <= to_unsigned(500, 32);
                   firstPixel   <= '1';
+                  filter_maxU  <= x"00";
+                  filter_maxV  <= x"00";
                   if (proc_idle = '1' and fifo_Valid = '1' and fifo_data(31 downto 29) = "001") then
                      state             <= REQUESTPOS;
                      rec_index         <= 0;
@@ -491,6 +501,8 @@ begin
                   if (fifo_Valid = '1') then
                      rec_vertices(rec_index).u <= unsigned(fifo_data( 7 downto  0));
                      rec_vertices(rec_index).v <= unsigned(fifo_data(15 downto  8));
+                     if (unsigned(fifo_data( 7 downto  0)) > filter_maxU) then filter_maxU <= unsigned(fifo_data( 7 downto  0)); end if;
+                     if (unsigned(fifo_data(15 downto  8)) > filter_maxV) then filter_maxV <= unsigned(fifo_data(15 downto  8)); end if;
                      if (rec_index = 0) then
                         rec_textPalX  <= unsigned(fifo_data(21 downto 16)) & "0000";
                         rec_textPalY  <= unsigned(fifo_data(30 downto 22));
@@ -873,6 +885,11 @@ begin
                      end if;
                   end if;
                   
+                  filter_on <= '0';
+                  if (textureFilter = '1' and rec_dithering = '1' and drawmode_dithering = '1' and (dxV /= 0 or dyU /= 0)) then
+                     filter_on <= '1';
+                  end if;
+                  
                when PREPAREDECMODE =>
                   state  <= PREPARELINE;
                   yCoord <= yCoord - 1;
@@ -1055,6 +1072,18 @@ begin
                         pipeline_cb          <= work_B(19 downto 12);
                         pipeline_u           <= work_U(19 downto 12);
                         pipeline_v           <= work_V(19 downto 12);
+                        
+                        if (filter_on = '1') then
+                           if    (xPos(0) = '0' and yPos(0) = '0') then uFilter := resize(work_U(19 downto 0), 21) + 16#400#; vFilter := resize(work_V(19 downto 0), 21) + 16#000#;
+                           elsif (xPos(0) = '1' and yPos(0) = '0') then uFilter := resize(work_U(19 downto 0), 21) + 16#800#; vFilter := resize(work_V(19 downto 0), 21) + 16#C00#;
+                           elsif (xPos(0) = '0' and yPos(0) = '1') then uFilter := resize(work_U(19 downto 0), 21) + 16#C00#; vFilter := resize(work_V(19 downto 0), 21) + 16#800#;
+                           else                                         uFilter := resize(work_U(19 downto 0), 21) + 16#000#; vFilter := resize(work_V(19 downto 0), 21) + 16#400#;
+                           end if;
+                           
+                           if (uFilter(20 downto 12) <= ('0' & filter_maxU)) then pipeline_u <= uFilter(19 downto 12); end if;
+                           if (vFilter(20 downto 12) <= ('0' & filter_maxV)) then pipeline_v <= vFilter(19 downto 12); end if;
+                        end if;
+                        
                      end if;
                   end if;
                       

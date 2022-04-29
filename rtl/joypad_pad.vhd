@@ -484,7 +484,10 @@ begin
                            end if;
                            
                            if (portStates(portNr).dsRumbleMode = '1' and command = COMMAND_READ_INPUTS) then
-                              if (portStates(portNr).dsRumbleIndexS = 0) then portStates(portNr).rumble( 7 downto 0) <= transmitValue; end if;
+                              if (portStates(portNr).dsRumbleIndexS = 0) then 
+                                 portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                 if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                              end if;
                               if (portStates(portNr).dsRumbleIndexL = 0) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
                            end if;
 
@@ -506,7 +509,10 @@ begin
                            end if;
                            if (command = COMMAND_READ_INPUTS) then
                               if (portStates(portNr).dsRumbleMode = '1') then
-                                 if (portStates(portNr).dsRumbleIndexS = 1) then portStates(portNr).rumble( 7 downto 0) <= transmitValue; end if;
+                                 if (portStates(portNr).dsRumbleIndexS = 1) then 
+                                    portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                    if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                                 end if;
                                  if (portStates(portNr).dsRumbleIndexL = 1) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
                               else
                                  portStates(portNr).rumble <= X"0000";
@@ -526,7 +532,10 @@ begin
                            ack             <= '1';
                            
                            if (portStates(portNr).dsRumbleMode = '1' and command = COMMAND_READ_INPUTS) then
-                              if (portStates(portNr).dsRumbleIndexS = 2) then portStates(portNr).rumble( 7 downto 0) <= transmitValue; end if;
+                              if (portStates(portNr).dsRumbleIndexS = 2) then 
+                                 portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                 if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                              end if;
                               if (portStates(portNr).dsRumbleIndexL = 2) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
                            end if;
                         
@@ -551,7 +560,10 @@ begin
                            ack             <= '1';
                            
                            if (portStates(portNr).dsRumbleMode = '1' and command = COMMAND_READ_INPUTS) then
-                              if (portStates(portNr).dsRumbleIndexS = 3) then portStates(portNr).rumble( 7 downto 0) <= transmitValue; end if;
+                              if (portStates(portNr).dsRumbleIndexS = 3) then 
+                                 portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                 if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                              end if;
                               if (portStates(portNr).dsRumbleIndexL = 3) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
                            end if;
                         
@@ -565,7 +577,10 @@ begin
                            ack             <= '1';
                            
                            if (portStates(portNr).dsRumbleMode = '1' and command = COMMAND_READ_INPUTS) then
-                              if (portStates(portNr).dsRumbleIndexS = 4) then portStates(portNr).rumble( 7 downto 0) <= transmitValue; end if;
+                              if (portStates(portNr).dsRumbleIndexS = 4) then 
+                                 portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                 if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                              end if;
                               if (portStates(portNr).dsRumbleIndexL = 4) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
                            end if;
                         
@@ -578,7 +593,10 @@ begin
                            controllerState <= IDLE;
                            
                            if (portStates(portNr).dsRumbleMode = '1' and command = COMMAND_READ_INPUTS) then
-                              if (portStates(portNr).dsRumbleIndexS = 5) then portStates(portNr).rumble( 7 downto 0) <= transmitValue; end if;
+                              if (portStates(portNr).dsRumbleIndexS = 5) then 
+                                 portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                 if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                              end if;
                               if (portStates(portNr).dsRumbleIndexL = 5) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
                            end if;
                            

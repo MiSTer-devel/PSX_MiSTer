@@ -30,6 +30,7 @@ entity psx_mister is
       errorOn               : in  std_logic;
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
+      textureFilter         : in  std_logic;
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
       SPUon                 : in  std_logic;
@@ -240,6 +241,7 @@ begin
       errorOn               => errorOn,
       PATCHSERIAL           => PATCHSERIAL,
       noTexture             => noTexture,
+      textureFilter         => textureFilter,
       syncVideoOut          => syncVideoOut,
       syncInterlace         => syncInterlace,
       SPUon                 => SPUon,

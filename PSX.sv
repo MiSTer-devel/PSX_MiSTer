@@ -342,7 +342,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXX XXXXXXXXXXXXXX XXXXXX  XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
+// XXXXXXXXX XXXXXXXXXXXXXX XXXXXX  XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -386,6 +386,7 @@ parameter CONF_STR = {
 	"P1o9,Deinterlacing,Weave,Bob;",
 	"P1oS,Sync 480i for HDMI,Off,On;",
 	"P1oLM,Widescreen Hack,Off,3:2,5:3,16:9;",
+	"P1O5,Texture Filter,Off,On;",
 	"P1-;",
 	"d1P1oC,SPU RAM select,DDR3,SDRAM2;",
 	"P1O78,Stereo Mix,None,25%,50%,100%;",
@@ -812,6 +813,7 @@ psx
    .errorOn(~status[29]),
    .PATCHSERIAL(0), //.PATCHSERIAL(status[54]),
    .noTexture(status[27]),
+   .textureFilter(status[5]),
    .syncVideoOut(syncVideoOut),
    .syncInterlace(status[60]),
    .SPUon(~status[30]),
