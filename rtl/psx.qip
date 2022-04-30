@@ -18,6 +18,7 @@ set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_pixelp
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_overlay.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_videoout_async.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_videoout_sync.vhd ]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_crosshair.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu_videoout.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) gpu.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) irq.vhd ]

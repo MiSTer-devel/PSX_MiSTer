@@ -30,6 +30,7 @@ entity psx_top is
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       ditherOff             : in  std_logic;
+      showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
       errorOn               : in  std_logic;
@@ -461,7 +462,6 @@ architecture arch of psx_top is
    
    signal debugmodeOn            : std_logic;
 
-   signal showGunCrosshairs      : std_logic;
    signal Gun1CrosshairOn        : std_logic;
    signal Gun2CrosshairOn        : std_logic;
    signal Gun1X                  : unsigned(7 downto 0);
@@ -878,8 +878,6 @@ begin
    -- Gun coordinate mapping is toplevel so that the gun's
    -- coordinates can be passed to both joypad
    -- and GPU (for crosshair overlays)
-   showGunCrosshairs <= '1';
-   
    Gun1X <= to_unsigned(to_integer(joypad1.Analog1X + 128), 8);
    Gun2X <= to_unsigned(to_integer(joypad2.Analog1X + 128), 8);
 

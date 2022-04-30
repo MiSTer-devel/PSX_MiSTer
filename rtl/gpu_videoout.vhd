@@ -409,39 +409,61 @@ begin
    );
 
    -- Map gun coordinates (0-255 X, Y) to screen positions
-   Gun1X_screen <= to_integer(to_unsigned(to_integer(videoout_out.DisplayWidth * Gun1X), 18) (17 downto 8));
-   Gun2X_screen <= to_integer(to_unsigned(to_integer(videoout_out.DisplayWidth * Gun2X), 18) (17 downto 8));
-
-   Gun1Y_screen <= '0' & Gun1Y_scanlines when videoout_settings.GPUSTAT_VerRes = '0' else Gun1Y_scanlines & '0';
-   Gun2Y_screen <= '0' & Gun2Y_scanlines when videoout_settings.GPUSTAT_VerRes = '0' else Gun2Y_scanlines & '0';
-
-   -- Lightgun crosshairs (currently single pixel to save resources)
    process (clkvid)
    begin
       if rising_edge(clkvid) then
-         if (videoout_out.ce = '1') then
-            overlay_Gun1_ena <= '0';
-            overlay_Gun2_ena <= '0';
-
-            if (Gun1CrosshairOn = '1' and videoout_request_clkvid.xpos = Gun1X_screen and to_integer(videoout_request_clkvid.lineDisp) = Gun1Y_screen) then
-               overlay_Gun1_ena <= '1';
-            end if;
-
-            if (Gun2CrosshairOn = '1' and videoout_request_clkvid.xpos = Gun2X_screen and to_integer(videoout_request_clkvid.lineDisp) = Gun2Y_screen) then
-               overlay_Gun2_ena <= '1';
-            end if;
+         Gun1X_screen <= to_integer(to_unsigned(to_integer(videoout_out.DisplayWidth * Gun1X), 18) (17 downto 8));
+         Gun2X_screen <= to_integer(to_unsigned(to_integer(videoout_out.DisplayWidth * Gun2X), 18) (17 downto 8));
+         if (videoout_settings.GPUSTAT_VerRes = '1') then
+            Gun1Y_screen <= Gun1Y_scanlines & '0';
+            Gun2Y_screen <= Gun2Y_scanlines & '0';
+         else
+            Gun1Y_screen <= '0' & Gun1Y_scanlines;
+            Gun2Y_screen <= '0' & Gun2Y_scanlines;
          end if;
       end if;
    end process;
+  
+   gpu_crosshair1: entity work.gpu_crosshair
+   port map
+   (
+      clk            => clkvid,
+      ce             => videoout_out.ce,
+      vsync          => videoout_out.vsync,
+      hblank         => videoout_out.hblank,
+              
+      xpos_cross     => Gun1X_screen,
+      ypos_cross     => to_integer(Gun1Y_screen),
+      xpos_screen    => videoout_request_clkvid.xpos,
+      ypos_screen    => to_integer(videoout_request_clkvid.lineDisp),
+      
+      out_ena        => overlay_Gun1_ena
+   );
    
-   overlay_ena <= overlay_error_ena or overlay_cd_ena or overlay_fps_ena or debugtextDbg_ena or overlay_Gun1_ena or overlay_Gun2_ena;
+   gpu_crosshair2: entity work.gpu_crosshair
+   port map
+   (
+      clk            => clkvid,
+      ce             => videoout_out.ce,
+      vsync          => videoout_out.vsync,
+      hblank         => videoout_out.hblank,
+              
+      xpos_cross     => Gun2X_screen,
+      ypos_cross     => to_integer(Gun2Y_screen),
+      xpos_screen    => videoout_request_clkvid.xpos,
+      ypos_screen    => to_integer(videoout_request_clkvid.lineDisp),
+      
+      out_ena        => overlay_Gun2_ena
+   );
+   
+   overlay_ena <= overlay_error_ena or overlay_cd_ena or overlay_fps_ena or debugtextDbg_ena or (overlay_Gun1_ena and Gun1CrosshairOn) or (overlay_Gun2_ena and Gun2CrosshairOn);
    
    overlay_data <= overlay_error_data when (overlay_error_ena = '1') else
                    overlay_cd_data    when (overlay_cd_ena = '1') else
                    overlay_fps_data   when (overlay_fps_ena = '1') else
                    debugtextDbg_data  when (debugtextDbg_ena = '1') else
-                   x"0000FF"          when (overlay_Gun1_ena = '1') else
-                   x"FFFF00"          when (overlay_Gun2_ena = '1') else
+                   x"0000FF"          when (overlay_Gun1_ena = '1' and Gun1CrosshairOn = '1') else
+                   x"FFFF00"          when (overlay_Gun2_ena = '1' and Gun2CrosshairOn = '1') else
                    (others => '0');
 
 end architecture;

@@ -232,7 +232,7 @@ begin
                      portStates(0).dsAnalogMode <= not portStates(0).dsAnalogMode;
                      portStates(0).dsRumbleMode <= '0';
                   end if;
-                  if (joypad.PadPortDSA = '1' or (joypad.KeyL3 = '1' and joypad.KeyR3 = '1' and joypad.KeyUp = '1')) then 
+                  if (joypad.KeyL3 = '1' and joypad.KeyR3 = '1' and joypad.KeyUp = '1') then 
                      portStates(portNr).dsAnalogMode <= '1';
                      portStates(portNr).dsRumbleMode <= '0';
                   end if;
@@ -242,7 +242,13 @@ begin
                   end if;
                end if;
             else
-               portStates(portNr) <= ('0', '0', '0', '0', (others => '1'), (others => '0'), -1, -1);
+               portStates(portNr).dsConfigMode   <= '0';
+               portStates(portNr).dsRumbleMode   <= '0';
+               portStates(portNr).dsAnalogMode   <= '0';
+               portStates(portNr).dsAnalogLock   <= '0';
+               portStates(portNr).dsRumbleConfig <= (others => '0');
+               portStates(portNr).dsRumbleIndexS <= -1;
+               portStates(portNr).dsRumbleIndexL <= -1;
             end if;
             
             MouseLeft_1 <= MouseLeft;

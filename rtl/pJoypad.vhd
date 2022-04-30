@@ -11,7 +11,6 @@ type joypad_t is record
    PadPortGunCon : std_logic;
    PadPortNeGcon : std_logic;
    PadPortDS     : std_logic;
-   PadPortDSA    : std_logic;
 
    WheelMap    : std_logic;
 

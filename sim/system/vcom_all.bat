@@ -41,6 +41,7 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/gpu_overlay.vhd ^
 ../../rtl/gpu_videoout_async.vhd ^
 ../../rtl/gpu_videoout_sync.vhd ^
+../../rtl/gpu_crosshair.vhd ^
 ../../rtl/gpu_videoout.vhd ^
 ../../rtl/gpu.vhd ^
 ../../rtl/irq.vhd ^

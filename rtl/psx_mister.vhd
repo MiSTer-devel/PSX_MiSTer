@@ -25,6 +25,7 @@ entity psx_mister is
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       ditherOff             : in  std_logic;
+      showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
       errorOn               : in  std_logic;
@@ -134,7 +135,6 @@ entity psx_mister is
       PadPortneGcon1        : in  std_logic;
       PadPortWheel1         : in  std_logic;
       PadPortDS1            : in  std_logic;
-      PadPortDSA1           : in  std_logic;
       PadPortEnable2        : in  std_logic;
       PadPortAnalog2        : in  std_logic;
       PadPortMouse2         : in  std_logic;
@@ -142,7 +142,6 @@ entity psx_mister is
       PadPortneGcon2        : in  std_logic;
       PadPortWheel2         : in  std_logic;
       PadPortDS2            : in  std_logic;
-      PadPortDSA2           : in  std_logic;
       KeyTriangle           : in  std_logic_vector(1 downto 0); 
       KeyCircle             : in  std_logic_vector(1 downto 0); 
       KeyCross              : in  std_logic_vector(1 downto 0); 
@@ -236,6 +235,7 @@ begin
       DMABLOCKATONCE        => DMABLOCKATONCE,
       INSTANTSEEK           => INSTANTSEEK,
       ditherOff             => ditherOff,
+      showGunCrosshairs     => showGunCrosshairs,
       fpscountOn            => fpscountOn,
       cdslowOn              => cdslowOn,
       errorOn               => errorOn,
@@ -345,7 +345,6 @@ begin
       joypad1.PadPortNeGcon => PadPortNeGcon1,
       joypad1.WheelMap      => PadPortWheel1,
       joypad1.PadPortDS     => PadPortDS1,
-      joypad1.PadPortDSA    => PadPortDSA1,
 
       joypad1.KeyTriangle   => KeyTriangle(0),
       joypad1.KeyCircle     => KeyCircle(0),
@@ -376,7 +375,6 @@ begin
       joypad2.PadPortNeGcon => PadPortNeGcon2,
       joypad2.WheelMap      => PadPortWheel2,
       joypad2.PadPortDS     => PadPortDS2,
-      joypad2.PadPortDSA    => PadPortDSA2,
 
       joypad2.KeyTriangle   => KeyTriangle(1),
       joypad2.KeyCircle     => KeyCircle(1),
