@@ -135,6 +135,7 @@ entity psx_mister is
       PadPortneGcon1        : in  std_logic;
       PadPortWheel1         : in  std_logic;
       PadPortDS1            : in  std_logic;
+      PadPortJustif1        : in  std_logic;
       PadPortEnable2        : in  std_logic;
       PadPortAnalog2        : in  std_logic;
       PadPortMouse2         : in  std_logic;
@@ -142,6 +143,7 @@ entity psx_mister is
       PadPortneGcon2        : in  std_logic;
       PadPortWheel2         : in  std_logic;
       PadPortDS2            : in  std_logic;
+      PadPortJustif2        : in  std_logic;
       KeyTriangle           : in  std_logic_vector(1 downto 0); 
       KeyCircle             : in  std_logic_vector(1 downto 0); 
       KeyCross              : in  std_logic_vector(1 downto 0); 
@@ -343,6 +345,7 @@ begin
       joypad1.PadPortMouse  => PadPortMouse1,
       joypad1.PadPortGunCon => PadPortGunCon1,
       joypad1.PadPortNeGcon => PadPortNeGcon1,
+      joypad1.PadPortJustif => PadPortJustif1,
       joypad1.WheelMap      => PadPortWheel1,
       joypad1.PadPortDS     => PadPortDS1,
 
@@ -373,6 +376,7 @@ begin
       joypad2.PadPortMouse  => PadPortMouse2,
       joypad2.PadPortGunCon => PadPortGunCon2,
       joypad2.PadPortNeGcon => PadPortNeGcon2,
+      joypad2.PadPortJustif => PadPortJustif2,
       joypad2.WheelMap      => PadPortWheel2,
       joypad2.PadPortDS     => PadPortDS2,
 

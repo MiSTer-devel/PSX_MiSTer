@@ -31,10 +31,12 @@ entity gpu_videoout is
       Gun1CrosshairOn            : in  std_logic;
       Gun1X                      : in  unsigned(7 downto 0);
       Gun1Y_scanlines            : in  unsigned(8 downto 0);
+      Gun1IRQ10                  : out std_logic;
    
       Gun2CrosshairOn            : in  std_logic;
       Gun2X                      : in  unsigned(7 downto 0);
       Gun2Y_scanlines            : in  unsigned(8 downto 0);   
+      Gun2IRQ10                  : out std_logic;
             
       cdSlow                     : in  std_logic;
             
@@ -456,6 +458,38 @@ begin
       out_ena        => overlay_Gun2_ena
    );
    
+   justifier_sensor1: entity work.justifier_sensor
+   port map
+   (
+      clk            => clkvid,
+      ce             => videoout_out.ce,
+      vsync          => videoout_out.vsync,
+      hblank         => videoout_out.hblank,
+
+      xpos_gun       => Gun1X_screen,
+      ypos_gun       => to_integer(Gun1Y_screen),
+      xpos_screen    => videoout_request_clkvid.xpos,
+      ypos_screen    => to_integer(videoout_request_clkvid.lineDisp),
+
+      out_irq10      => Gun1IRQ10
+   );
+
+   justifier_sensor2: entity work.justifier_sensor
+   port map
+   (
+      clk            => clkvid,
+      ce             => videoout_out.ce,
+      vsync          => videoout_out.vsync,
+      hblank         => videoout_out.hblank,
+
+      xpos_gun       => Gun2X_screen,
+      ypos_gun       => to_integer(Gun2Y_screen),
+      xpos_screen    => videoout_request_clkvid.xpos,
+      ypos_screen    => to_integer(videoout_request_clkvid.lineDisp),
+
+      out_irq10      => Gun2IRQ10
+   );
+
    overlay_ena <= overlay_error_ena or overlay_cd_ena or overlay_fps_ena or debugtextDbg_ena or (overlay_Gun1_ena and Gun1CrosshairOn) or (overlay_Gun2_ena and Gun2CrosshairOn);
    
    overlay_data <= overlay_error_data when (overlay_error_ena = '1') else

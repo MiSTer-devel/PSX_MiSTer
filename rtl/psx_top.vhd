@@ -472,6 +472,8 @@ architecture arch of psx_top is
    signal Gun2Y_scanlines        : unsigned(8 downto 0);
    signal Gun1AimOffscreen       : std_logic;
    signal Gun2AimOffscreen       : std_logic;
+   signal Gun1IRQ10              : std_logic;
+   signal Gun2IRQ10              : std_logic;
 
    -- memcard
    signal memcard1_pause         : std_logic;
@@ -887,8 +889,16 @@ begin
    Gun1AimOffscreen <= '1' when Gun1X = x"00" or Gun1X = x"FF" or Gun1Y = x"00" or Gun1Y = x"FF" else '0';
    Gun2AimOffscreen <= '1' when Gun2X = x"00" or Gun2X = x"FF" or Gun2Y = x"00" or Gun2Y = x"FF" else '0';
 
-   Gun1CrosshairOn <= '1' when showGunCrosshairs = '1' and joypad1.PadPortGunCon = '1' and Gun1AimOffscreen = '0' else '0';
-   Gun2CrosshairOn <= '1' when showGunCrosshairs = '1' and joypad2.PadPortGunCon = '1' and Gun2AimOffscreen = '0' else '0';
+   Gun1CrosshairOn <= '1' when
+                      showGunCrosshairs = '1' and
+                      (joypad1.PadPortGunCon = '1' or joypad1.PadPortJustif = '1') and
+                      Gun1AimOffscreen = '0'
+                   else '0';
+   Gun2CrosshairOn <= '1' when
+                      showGunCrosshairs = '1' and
+                      (joypad2.PadPortGunCon = '1' or joypad2.PadPortJustif = '1') and
+                      Gun2AimOffscreen = '0'
+                   else '0';
 
    -- Map the gun's Y coordinate to 240 scanlines
    Gun1Y_scanlines <= resize(Gun1Y, 9) - resize(Gun1Y(7 downto 4), 9); -- Gun1Y * 240 / 256
@@ -1016,7 +1026,10 @@ begin
    );
    
    irq_SIO       <= '0'; -- todo
-   irq_LIGHTPEN  <= '0'; -- todo
+   irq_LIGHTPEN  <= '1' when
+                    (Gun1IRQ10 = '1' and joypad1.PadPortJustif = '1') or
+                    (Gun2IRQ10 = '1' and joypad2.PadPortJustif = '1')
+                 else '0';
 
    iirq : entity work.irq
    port map
@@ -1272,10 +1285,12 @@ begin
       Gun1CrosshairOn      => Gun1CrosshairOn,
       Gun1X                => Gun1X,
       Gun1Y_scanlines      => Gun1Y_scanlines,
+      Gun1IRQ10            => Gun1IRQ10,
 
       Gun2CrosshairOn      => Gun2CrosshairOn,
       Gun2X                => Gun2X,
       Gun2Y_scanlines      => Gun2Y_scanlines,
+      Gun2IRQ10            => Gun2IRQ10,
 
       cdSlow               => cdslowEna,
       

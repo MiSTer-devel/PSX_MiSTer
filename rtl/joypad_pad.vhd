@@ -72,6 +72,8 @@ architecture arch of joypad_pad is
       NEGCONANALOGI,
       NEGCONANALOGII,
       NEGCONANALOGL,
+      JUSTIFBUTTONSLSB,
+      JUSTIFBUTTONSMSB,
       CHANGECONFIG,
       SETSTATELSB,
       SETSTATEMSB,
@@ -105,6 +107,7 @@ architecture arch of joypad_pad is
    signal mouseSave       : std_logic := '0';
    signal gunConSave      : std_logic := '0';
    signal neGconSave      : std_logic := '0';
+   signal justifSave      : std_logic := '0';
    signal dsSave          : std_logic := '0';
 
    signal prevMouseEvent  : std_logic := '0';
@@ -303,6 +306,7 @@ begin
                         mouseSave       <= joypad.PadPortMouse;
                         gunConSave      <= joypad.PadPortGunCon;
                         neGconSave      <= joypad.PadPortNeGcon;
+                        justifSave      <= joypad.PadPortJustif;
                         dsSave          <= joypad.PadPortDS;
                         receiveValid    <= '1';
                         receiveBuffer   <= x"FF";
@@ -321,6 +325,7 @@ begin
                               mouseSave       <= joypad.PadPortMouse;
                               gunConSave      <= joypad.PadPortGunCon;
                               neGconSave      <= joypad.PadPortNeGcon;
+                              justifSave      <= joypad.PadPortJustif;
                               dsSave          <= joypad.PadPortDS;
                               receiveValid    <= '1';
                               receiveBuffer   <= x"FF";
@@ -343,6 +348,8 @@ begin
                                  receiveBuffer   <= x"63";
                               elsif (neGconSave = '1') then
                                  receiveBuffer   <= x"23";
+                              elsif (justifSave = '1') then
+                                 receiveBuffer   <= x"31";
                               elsif (analogPadSave = '1' or dsAnalogModeSave = '1') then
                                  receiveBuffer   <= x"73";
                               else
@@ -429,6 +436,8 @@ begin
                                controllerState <= MOUSEBUTTONSLSB;
                            elsif (gunConSave = '1') then
                                controllerState <= GUNCONBUTTONSLSB;
+                           elsif (justifSave = '1') then
+                               controllerState <= JUSTIFBUTTONSLSB;
                            else
                                controllerState <= BUTTONLSB;
                            end if;
@@ -823,6 +832,44 @@ begin
                            end if;
                            receiveValid    <= '1';
                            controllerState <= IDLE;
+
+-- ##############################################################################
+-- #################### Konami Justifier
+-- ##############################################################################
+
+                        when JUSTIFBUTTONSLSB =>
+                           controllerState <= JUSTIFBUTTONSMSB;
+                           ack             <= '1';
+                           receiveValid    <= '1';
+
+                           if joypad.KeyTriangle = '1' or GunAimOffscreen = '1' then
+                              gunOffscreen <= '1';
+                           else
+                              gunOffscreen <= '0';
+                           end if;
+
+                           receiveBuffer(0) <= '1';
+                           receiveBuffer(1) <= '1';
+                           receiveBuffer(2) <= '1';
+                           receiveBuffer(3) <= not joypad.KeyStart; -- Start (left-side button)
+                           receiveBuffer(4) <= '1';
+                           receiveBuffer(5) <= '1';
+                           receiveBuffer(6) <= '1';
+                           receiveBuffer(7) <= '1';
+
+                        when JUSTIFBUTTONSMSB =>
+                           controllerState  <= IDLE;
+                           receiveValid     <= '1';
+
+                           receiveBuffer(0) <= '1';
+                           receiveBuffer(1) <= '1';
+                           receiveBuffer(2) <= '1';
+                           receiveBuffer(3) <= '1';
+                           receiveBuffer(4) <= '1';
+                           receiveBuffer(5) <= '1';
+                           receiveBuffer(6) <= not joypad.KeyCross; -- Back (rear-end button)
+                           receiveBuffer(7) <= not (joypad.KeyCircle or joypad.KeyTriangle); -- Trigger
+
                            
 -- ##############################################################################
 -- #################### Dualshock 
