@@ -179,7 +179,6 @@ assign HDMI_FREEZE = isPaused;
 
 assign ADC_BUS  = 'Z;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
-assign USER_OUT = '1;
 
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = status[8:7];
@@ -368,8 +367,8 @@ parameter CONF_STR = {
 	"-;",
 	"o78,System Type,Auto,NTSC-U,NTSC-J,PAL;",
 	"-;",
-	"oDG,Pad1,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,Justifier;",
-	"oHK,Pad2,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,Justifier;",
+	"oDG,Pad1,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,Justifier,SNAC-port1;",
+	"oHK,Pad2,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,Justifier,SNAC-port2;",
 	"h2O9,Show Crosshair,Off,On;",
 	"-;",
 	"OS,FPS Overlay,Off,On;",
@@ -731,7 +730,8 @@ defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 // 0111 -> Wheel Analog
 // 1000 -> DualShock
 // 1001 -> Konami Justifier lightgun
-// 1010..1111 -> reserved
+// 1010 -> SNAC
+// 1011..1111 -> reserved
 
 wire PadPortEnable1 = (status[48:45] != 4'b0011);
 wire PadPortAnalog1 = (status[48:45] == 4'b0001) || (status[48:45] == 4'b0111);
@@ -741,6 +741,7 @@ wire PadPortNeGcon1 = (status[48:45] == 4'b0101) || (status[48:45] == 4'b0110);
 wire PadPortWheel1  = (status[48:45] == 4'b0110) || (status[48:45] == 4'b0111);
 wire PadPortDS1     = (status[48:45] == 4'b1000);
 wire PadPortJustif1 = (status[48:45] == 4'b1001);
+wire snacPort1      = (status[48:45] == 4'b1010);
 
 wire PadPortEnable2 = (status[52:49] != 4'b0011);
 wire PadPortAnalog2 = (status[52:49] == 4'b0001) || (status[52:49] == 4'b0111);
@@ -750,6 +751,7 @@ wire PadPortNeGcon2 = (status[52:49] == 4'b0101) || (status[52:49] == 4'b0110);
 wire PadPortWheel2  = (status[52:49] == 4'b0110) || (status[52:49] == 4'b0111);
 wire PadPortDS2     = (status[52:49] == 4'b1000);
 wire PadPortJustif2 = (status[52:49] == 4'b1001);
+wire snacPort2      = (status[52:49] == 4'b1010);
 
 wire [1:0] padMode;
 reg  [1:0] padMode_1;
@@ -970,6 +972,20 @@ psx
    .MouseRight(mouse[1]),
    .MouseX({mouse[4],mouse[15:8]}),
    .MouseY({mouse[5],mouse[23:16]}),
+   //snac
+   .snacPort1(snacPort1),
+   .snacPort2(snacPort2),
+   .selectedPort1Snac(selectedPort1Snac),
+   .selectedPort2Snac(selectedPort2Snac),
+   .irq10Snac(irq10Snac),
+   .transmitValueSnac(transmitValueSnac),
+   .clk9Snac(clk9Snac),
+   .receiveBufferSnac(receiveBufferSnac),
+   .beginTransferSnac(beginTransferSnac),
+   .actionNextSnac(actionNextSnac),
+   .receiveValidSnac(receiveValidSnac),
+   .ackSnac(~ack),//using real ack not the 1 cycle ack
+	
    //sound       
 	.sound_out_left(AUDIO_L),
 	.sound_out_right(AUDIO_R),
@@ -1360,6 +1376,205 @@ always_ff @(posedge clk_1x) begin
 			end
 		endcase
 	end
+end
+
+wire clk8Snac;
+wire clk9Snac;
+wire oldClk8;
+wire oldClk9;
+wire selectedPort1Snac;
+wire selectedPort2Snac;
+wire oldselectedPort1;
+wire oldselectedPort2;
+wire [7:0]transmitValueSnac;
+wire [7:0]receiveBufferSnac;
+wire receiveValidSnac;
+wire beginTransferSnac;
+wire actionNextSnac;
+wire actionNextPadSnac;
+reg [7:0]Send;
+reg [7:0]Receive;
+wire Cmd;
+wire Dat;
+wire ack;
+wire oldAck;
+//wire ackSnac;
+wire [15:0]ackTimer;
+wire ackNone;
+wire oneTime;
+wire [3:0]bitCnt;
+wire [7:0]byteCnt;
+wire [6:0]bytesLeft;
+wire [7:0]pad1ID;
+wire [7:0]pad2ID;
+wire [7:0]targetID;
+wire irq10Snac;
+wire csync;
+wire MCtransfer;
+
+assign clk8Snac = bitCnt < 8 ? clk9Snac : 1'b1;
+
+always @(posedge clk_1x) 
+begin
+
+	if (snacPort1 || snacPort2) begin
+		USER_OUT[0] <= ~selectedPort2Snac;
+		USER_OUT[1] <= ~selectedPort1Snac;
+		USER_OUT[2] <= Cmd;
+		USER_OUT[3] <= 1'b1; //ACK
+		USER_OUT[4] <= 1'b1; //DAT
+		USER_OUT[5] <= oldClk8;	
+		ack         <= (snacPort1 || snacPort2) ? USER_IN[3] : 1'b1;
+		Dat         <= USER_IN[4];	
+		
+		if ((pad1ID == 8'h63 || pad2ID == 8'h63) && (pad1ID != 8'h31 || pad2ID != 8'h31)) begin //quirk for guncon, irq is N/C in guncon. so using irq line and outputting csync on snac for g-con. only if justifier isn't connected
+			USER_OUT[6] <= ~csync;
+			irq10Snac   <= 1'b0;
+			csync       <= VGA_HS ^ VGA_VS;//real csync shifts HSync during VSync, should be close enough to work	with guncon
+		end
+		else begin
+			USER_OUT[6] <= 1'b1;		
+			irq10Snac   <= ~USER_IN[6];
+		end
+	end
+	else begin
+		USER_OUT  <= '1;
+		irq10Snac <= 1'b0;
+		ack       <= 1'b1;
+		Dat       <= 1'b1;
+	end
+		
+	oldselectedPort1 <= selectedPort1Snac;
+	oldselectedPort2 <= selectedPort2Snac;
+
+	if ((~oldselectedPort1 && selectedPort1Snac) || (~oldselectedPort2 && selectedPort2Snac)) begin
+		byteCnt <= 8'd0;
+	end
+
+	if (beginTransferSnac) begin
+		bitCnt  <= 4'd0;
+		byteCnt <= byteCnt + 8'd1 ;
+	end
+	
+	oldClk8 <= clk8Snac;
+	oldClk9 <= clk9Snac;
+	
+	if (oldClk9 && ~clk9Snac) begin	//send on falling edge
+		if (bitCnt < 8) begin
+			if (bitCnt==0) begin
+				Cmd  <= transmitValueSnac[0];
+				Send <= {1'b1, transmitValueSnac[7:1]};
+			end
+			else begin
+				Cmd  <= Send[0];
+				Send <= {1'b1, Send[7:1]};
+			end
+		end	
+		else begin
+			Cmd  <= 1'b1;
+			Send <= Send;
+		end
+	end	
+	
+	if(~oldClk8 && clk8Snac) begin //receive on rising edge
+		Receive <= { Dat, Receive[7:1]};
+		bitCnt <= bitCnt + 1'b1;
+		if(bitCnt == 4'd7) begin//check for ack 
+			oneTime <= 1'b1;
+			if (MCtransfer) ackTimer <= 16'd60000;//very late ack after 7th byte. around 56000 cycles (1.7ms) with a sony MC. 3rd party MCs don't seem to do this
+			else begin
+				if (byteCnt == bytesLeft + bytesLeft + 3) ackTimer <= 16'd400;//only wait around 150 on last byte
+				else ackTimer <= 16'd1800;//1st byte of multitap(1375) cycles to ack,digital(460),analog(350-400),ds2(250-400),mouse(120),guncon(270)
+			end
+		end	
+	end
+
+	if (ackTimer > 0) begin
+		ackTimer <= ackTimer - 16'd1;
+	end	
+	
+	oldAck <= ack;
+	if(oldAck && ~ack) begin //ack received
+		actionNextPadSnac <= 1'b1;
+		ackTimer <= 8'd255;//a delay between ack and next action. too small might cause a hang. using acktimer 1-255
+	end
+	else if(ackTimer == 1) begin //wait over
+		actionNextPadSnac <= 1'b1;
+		oneTime <= 1'b0;		
+	end
+	else if (ackTimer == 16'd258) begin //no ack
+		ackNone <= 1'b1;
+		actionNextPadSnac <= 1'b1;
+	end
+	else if (ackTimer == 16'd256) begin //reset if no ack
+		oneTime <= 1'b0;
+		ackTimer <= 16'd0;
+	end	
+	else begin
+		actionNextPadSnac <= 1'b0;
+		ackNone <= 1'b0;
+	end
+		
+	if (actionNextPadSnac && ((snacPort1 && selectedPort1Snac) || (snacPort2 && selectedPort2Snac))) begin //logic for joypad.vhd
+		if (oneTime) begin
+			if (ackNone) begin
+				if (byteCnt < (bytesLeft + bytesLeft + 4)) begin // no ack on last byte of transfer
+					receiveBufferSnac <= Receive;
+					receiveValidSnac <= 1'b1;
+					actionNextSnac <= 1'b1;
+				end
+				else
+					actionNextSnac <= 1'b1;
+				end	
+			else begin
+				if (byteCnt < 3) begin
+					receiveBufferSnac <= Receive;
+					receiveValidSnac <= 1'b1;
+					//ackSnac <= 1'b1;
+				end
+				else begin
+					if (byteCnt < (bytesLeft + bytesLeft + 4)) begin
+						receiveBufferSnac <= Receive;
+						receiveValidSnac <= 1'b1;
+						//ackSnac <= 1'b1;
+					end
+				end
+				actionNextSnac <= 1'b1;	
+			end
+		end
+		else begin
+			actionNextSnac <= 1'b1;	
+		end
+	end	
+	else begin
+		receiveBufferSnac <= 8'd0;
+		receiveValidSnac <= 1'b0;
+		actionNextSnac <= 1'b0;
+		//ackSnac <= 1'b0;
+	end	
+	
+	if (receiveValidSnac) begin
+		if (byteCnt == 1) begin
+			targetID <= transmitValueSnac;
+		end
+		if (byteCnt == 2) begin 
+			if (targetID == 8'h81 || targetID == 8'h82 || targetID == 8'h83 || targetID == 8'h84) begin 	//memcard quirks
+				MCtransfer <= 1'b1;
+				if (transmitValueSnac == 8'h52) bytesLeft <= 7'd69;//read
+				if (transmitValueSnac == 8'h57) bytesLeft <= 7'd68;//write
+				if (transmitValueSnac == 8'h53) bytesLeft <= 7'd4;//ID Cmd			
+			end 
+			else begin //joypad quirks
+				MCtransfer <= 1'b0;
+				if (selectedPort1Snac) pad1ID <= Receive;
+				if (selectedPort2Snac) pad2ID <= Receive;
+
+				if (Receive == 8'h80) bytesLeft <= 7'd16; //for multitap
+				else bytesLeft <= {3'd0, Receive[3:0]};	
+			end
+		end
+	end
+		
 end
 
 endmodule
