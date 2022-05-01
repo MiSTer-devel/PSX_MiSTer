@@ -368,8 +368,8 @@ parameter CONF_STR = {
 	"-;",
 	"o78,System Type,NTSC-U,NTSC-J,PAL;",
 	"-;",
-	"oDG,Pad1,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock;",
-	"oHK,Pad2,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock;",
+	"oDG,Pad1,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,Justifier;",
+	"oHK,Pad2,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,Justifier;",
 	"h2O9,Show Crosshair,Off,On;",
 	"-;",
 	"OS,FPS Overlay,Off,On;",
@@ -446,7 +446,7 @@ parameter CONF_STR = {
 
 wire  [1:0] buttons;
 wire [63:0] status;
-wire [15:0] status_menumask = {(PadPortGunCon1 | PadPortGunCon2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {(PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -719,8 +719,8 @@ defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 // 0110 -> Wheel Negcon
 // 0111 -> Wheel Analog
 // 1000 -> DualShock
-// 1001 -> DualShock forced Analog
-// 1001..1111 -> reserved
+// 1001 -> Konami Justifier lightgun
+// 1010..1111 -> reserved
 
 wire PadPortEnable1 = (status[48:45] != 4'b0011);
 wire PadPortAnalog1 = (status[48:45] == 4'b0001) || (status[48:45] == 4'b0111);
@@ -728,7 +728,8 @@ wire PadPortMouse1  = (status[48:45] == 4'b0010);
 wire PadPortGunCon1 = (status[48:45] == 4'b0100);
 wire PadPortNeGcon1 = (status[48:45] == 4'b0101) || (status[48:45] == 4'b0110);
 wire PadPortWheel1  = (status[48:45] == 4'b0110) || (status[48:45] == 4'b0111);
-wire PadPortDS1     = (status[48:45] == 4'b1000) || (status[48:45] == 4'b1001);
+wire PadPortDS1     = (status[48:45] == 4'b1000);
+wire PadPortJustif1 = (status[48:45] == 4'b1001);
 
 wire PadPortEnable2 = (status[52:49] != 4'b0011);
 wire PadPortAnalog2 = (status[52:49] == 4'b0001) || (status[52:49] == 4'b0111);
@@ -736,7 +737,8 @@ wire PadPortMouse2  = (status[52:49] == 4'b0010);
 wire PadPortGunCon2 = (status[52:49] == 4'b0100);
 wire PadPortNeGcon2 = (status[52:49] == 4'b0101) || (status[52:49] == 4'b0110);
 wire PadPortWheel2  = (status[52:49] == 4'b0110) || (status[52:49] == 4'b0111);
-wire PadPortDS2     = (status[52:49] == 4'b1000) || (status[52:49] == 4'b1001);
+wire PadPortDS2     = (status[52:49] == 4'b1000);
+wire PadPortJustif2 = (status[52:49] == 4'b1001);
 
 wire [1:0] padMode;
 reg  [1:0] padMode_1;
@@ -916,6 +918,7 @@ psx
    .PadPortNeGcon1 (PadPortNeGcon1),
    .PadPortWheel1  (PadPortWheel1),
    .PadPortDS1     (PadPortDS1),
+   .PadPortJustif1 (PadPortJustif1),
    .PadPortEnable2 (PadPortEnable2),
    .PadPortAnalog2 (PadPortAnalog2),
    .PadPortMouse2  (PadPortMouse2 ),
@@ -923,6 +926,7 @@ psx
    .PadPortNeGcon2 (PadPortNeGcon2),
    .PadPortWheel2  (PadPortWheel2),
    .PadPortDS2     (PadPortDS2),
+   .PadPortJustif2 (PadPortJustif2),
    .KeyTriangle({joy2[4], joy[4] }),    
    .KeyCircle  ({joy2[5] ,joy[5] }),       
    .KeyCross   ({joy2[6] ,joy[6] }),       
