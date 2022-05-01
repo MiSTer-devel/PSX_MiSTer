@@ -64,10 +64,10 @@ entity psx_mister is
       DDRAM_WE              : out std_logic;
       -- cd
       region                : in  std_logic_vector(1 downto 0);
+      region_out            : out std_logic_vector(1 downto 0);
       hasCD                 : in  std_logic;
       LIDopen               : in  std_logic;
       fastCD                : in  std_logic;
-      libcryptKey           : in  std_logic_vector(15 downto 0);
       trackinfo_data        : in std_logic_vector(31 downto 0);
       trackinfo_addr        : in std_logic_vector(8 downto 0);
       trackinfo_write       : in std_logic;
@@ -276,10 +276,10 @@ begin
       ddr3_RD               => DDRAM_RD,
       -- cd
       region                => region,
+      region_out            => region_out,
       hasCD                 => hasCD,
       LIDopen               => LIDopen,
       fastCD                => fastCD,
-      libcryptKey           => libcryptKey,
       trackinfo_data        => trackinfo_data,
       trackinfo_addr        => trackinfo_addr, 
       trackinfo_write       => trackinfo_write,

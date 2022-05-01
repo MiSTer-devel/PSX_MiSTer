@@ -17,7 +17,7 @@ entity cd_top is
       LIDopen              : in  std_logic;
       fastCD               : in  std_logic;
       region               : in  std_logic_vector(1 downto 0);
-      libcryptKey          : in  std_logic_vector(15 downto 0);
+      region_out           : out std_logic_vector(1 downto 0);
       
       fullyIdle            : out std_logic;
       cdSlow               : out std_logic := '0';
@@ -196,7 +196,8 @@ architecture arch of cd_top is
    signal driveBusy                 : std_logic;
    signal driveDelay                : integer range 0 to 134217727;
    signal driveDelayNext            : integer range 0 to 134217727;
-         
+   signal driveREADSPEED            : integer range 0 to 134217727;
+   
    signal handleDrive               : std_logic := '0';
    signal startMotor                : std_logic := '0';
    signal startMotorReset           : std_logic := '0';
@@ -416,6 +417,8 @@ architecture arch of cd_top is
    signal isAudio                   : std_logic;
    
    signal isAudioCD                 : std_logic;
+   
+   signal libcryptKey               : std_logic_vector(15 downto 0);
       
    type ttrackSearchState is
 	(
@@ -476,7 +479,7 @@ begin
                   ce when (FifoData_Empty = '0' and dma_read = '1') else 
                   '0';
    
-   dma_readdata <= FifoData_Dout when (FifoData_Empty = '0') else (others => '1');
+   dma_readdata <= FifoData_Dout when (FifoData_Empty = '0') else (others => '0');
    
    
    ss_out(21)( 7 downto  0) <= CDROM_STATUS;
@@ -1875,6 +1878,12 @@ begin
             
             seekLBA <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
             
+            if (modeReg(7) = '1') then
+               driveREADSPEED <= READSPEED2X;
+            else
+               driveREADSPEED <= READSPEED1X;
+            end if;
+            
             if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1' or seekOnDiskPlay = '1') then
                if (seekOnDiskPlay = '1') then
                   readLBA <= playLBA;
@@ -1892,8 +1901,8 @@ begin
                internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                internalStatus(1)          <= '1'; -- motor on
                internalStatus(6)          <= '1'; -- seeking
-               driveDelay     <= READSPEED2X - 2;
-               driveDelayNext <= READSPEED2X - 2;
+               driveDelay                 <= driveREADSPEED - 2;
+               driveDelayNext             <= driveREADSPEED - 2;
                
                if (INSTANTSEEK = '0') then
                   calcSeekTime <= '1';
@@ -1926,8 +1935,8 @@ begin
             end if;
             
             if (addSeekTime = '1') then
-               driveDelay     <= driveDelay + READSPEED2X * seekTimeMul;
-               driveDelayNext <= driveDelay + READSPEED2X * seekTimeMul;
+               driveDelay     <= driveDelay + driveREADSPEED * seekTimeMul;
+               driveDelayNext <= driveDelay + driveREADSPEED * seekTimeMul;
             end if;
             
             if (readSN = '1') then
@@ -2883,6 +2892,11 @@ begin
                if (to_integer(unsigned(trackinfo_addr)) = 2) then
                   totalSecondsBCD <= trackinfo_data(7 downto 0);
                   totalMinutesBCD <= trackinfo_data(15 downto 8);
+               end if;               
+               
+               if (to_integer(unsigned(trackinfo_addr)) = 3) then
+                  libcryptKey <= trackinfo_data(15 downto 0);
+                  region_out  <= trackinfo_data(17 downto 16);
                end if;
             
                -- tracks

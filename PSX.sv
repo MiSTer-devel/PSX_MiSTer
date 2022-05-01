@@ -265,7 +265,7 @@ always @(posedge CLK_50M) begin : cfg_block
 	reg pffw = 0, pffw2 = 0;
 	reg [3:0] state = 0;
 
-	pald  <= status[40];
+	pald  <= isPal;
 	pald2 <= pald;
 
 	pdbg  <= syncVideoClock;
@@ -366,7 +366,7 @@ parameter CONF_STR = {
 	"RH,Save state (Alt-F1);",
 	"RI,Restore state (F1);",
 	"-;",
-	"o78,System Type,NTSC-U,NTSC-J,PAL;",
+	"o78,System Type,Auto,NTSC-U,NTSC-J,PAL;",
 	"-;",
 	"oDG,Pad1,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,Justifier;",
 	"oHK,Pad2,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,Justifier;",
@@ -560,11 +560,10 @@ assign sd_wr[1] = 0;
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
-reg bios_download, exe_download, sbi_download, cdinfo_download, code_download;
+reg bios_download, exe_download, cdinfo_download, code_download;
 always @(posedge clk_1x) begin
 	bios_download    <= ioctl_download & (ioctl_index == 0);
 	exe_download     <= ioctl_download & (ioctl_index == 1);
-	sbi_download     <= ioctl_download & (ioctl_index == 250);
 	cdinfo_download  <= ioctl_download & (ioctl_index == 251);
 	code_download    <= ioctl_download & (ioctl_index == 255);
 end
@@ -605,7 +604,9 @@ reg old_save_a = 0;
 
 wire bk_save_a = OSD_STATUS & bk_autosave;
 
-reg [15:0] libcryptKey;
+reg  [1:0] region;
+wire [1:0] region_out;
+reg        isPal;
 
 always @(posedge clk_1x) begin
 	ramdownload_wr <= 0;
@@ -629,10 +630,6 @@ always @(posedge clk_1x) begin
 	end
    exe_download_1  <= exe_download;
    loadExe         <= exe_download_1 & ~exe_download;   
-   
-   if (sbi_download && ioctl_wr) begin
-      libcryptKey <= ioctl_dout;
-   end
      
    if (img_mounted[1]) begin
       if (img_size > 0) begin
@@ -641,6 +638,20 @@ always @(posedge clk_1x) begin
          hasCD     <= 0;
       end
    end
+  
+   case(status[40:39])
+      0: begin
+            case(region_out)
+               0: begin region = 2'b00; isPal <= 0; end   // unknown => default to NTSC          
+               1: begin region = 2'b01; isPal <= 0; end   // JP
+               2: begin region = 2'b00; isPal <= 0; end   // US
+               3: begin region = 2'b10; isPal <= 1; end   // EU
+            endcase
+         end
+      1: begin region = 2'b00; isPal <= 0; end
+      2: begin region = 2'b01; isPal <= 0; end
+      3: begin region = 2'b10; isPal <= 1; end
+	endcase
    
    memcard1_load <= 0;
    memcard2_load <= 0;
@@ -847,11 +858,11 @@ psx
    .DDRAM_BE        (DDRAM_BE        ),
    .DDRAM_WE        (DDRAM_WE        ),
    // cd
-   .region          (status[40:39]),
+   .region          (region),
+   .region_out      (region_out),
    .hasCD           (hasCD),
    .LIDopen         (status[42]),
    .fastCD          (0),
-   .libcryptKey     (libcryptKey),
    .trackinfo_data  (ramdownload_wrdata),
    .trackinfo_addr  (ramdownload_wraddr[10:2]),
    .trackinfo_write (ramdownload_wr && cdinfo_download),
@@ -893,7 +904,7 @@ psx
    .memcard2_dataOut(sd_buff_din3), 
    // video
    .videoout_on     (~status[14]),
-   .isPal           (status[40]),
+   .isPal           (isPal),
    .pal60           (status[15]),
    .hsync           (hs),
    .vsync           (vs),

@@ -69,10 +69,10 @@ entity psx_top is
       ddr3_RD               : out std_logic := '0'; 
       -- cd
       region                : in  std_logic_vector(1 downto 0);
+      region_out            : out std_logic_vector(1 downto 0);
       hasCD                 : in  std_logic;
       fastCD                : in  std_logic;
       LIDopen               : in  std_logic;
-      libcryptKey           : in  std_logic_vector(15 downto 0);
       trackinfo_data        : in std_logic_vector(31 downto 0);
       trackinfo_addr        : in std_logic_vector(8 downto 0);
       trackinfo_write       : in std_logic;
@@ -1216,7 +1216,7 @@ begin
       fastCD               => fastCD,
       LIDopen              => LIDopen,
       region               => region,
-      libcryptKey          => libcryptKey,
+      region_out           => region_out,
       
       cdSlow               => cdSlow,
       error                => errorCD,

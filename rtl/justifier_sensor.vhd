@@ -13,6 +13,7 @@ entity justifier_sensor is
    port
    (
       clk                  : in  std_logic;
+      clkvid               : in  std_logic;
       ce                   : in  std_logic;
       vsync                : in  std_logic;
       hblank               : in  std_logic;
@@ -32,19 +33,22 @@ architecture arch of justifier_sensor is
    type tState is
    (
       CHECKLINE,
-      CHECKPOS_H,
-      CHECKPOS_V,
+      CHECKPOS,
       DRAW,
       WAITHSYNC
    );
    signal state : tState := CHECKLINE;
 
    signal diff       : integer range -1024 to 1023;
-   signal draw_count : integer range 0 to 7;
+   signal draw_count : integer range 0 to 3;
+   
+   signal irq10      : std_logic := '0';
+   signal irq10_1    : std_logic := '0';
+   signal irq10_2    : std_logic := '0';
 
 begin
 
-   out_irq10  <= '1' when (state = DRAW) else '0';
+   irq10  <= '1' when (state = DRAW) else '0';
 
 
    diff <= ypos_screen - ypos_gun when state = CHECKLINE else
@@ -53,28 +57,30 @@ begin
    process (clk)
    begin
       if rising_edge(clk) then
+         
+         irq10_1   <= irq10;
+         irq10_2   <= irq10_1;
+         out_irq10 <= irq10_2;
+
+      end if;
+   end process;
+
+   process (clkvid)
+   begin
+      if rising_edge(clkvid) then
 
          case (state) is
 
             when CHECKLINE =>
-               if (hblank = '0' and diff >= -3 and diff <= 3 and xpos_gun > 0) then
-                  state <= CHECKPOS_V;
+               if (hblank = '0' and diff >= -3 and diff <= 3) then
+                  state <= CHECKPOS;
                   if (diff = 0) then
-                     state <= CHECKPOS_H;
+                     state <= CHECKPOS;
                   end if;
                end if;
 
-            when CHECKPOS_H =>
-               draw_count <= 6;
-               if (xpos_gun < 4) then
-                  draw_count <= 2 + xpos_gun;
-               end if;
-               if (diff >= -3 and diff <= 3) then
-                  state <= DRAW;
-               end if;
-
-            when CHECKPOS_V =>
-               draw_count <= 0;
+            when CHECKPOS =>
+               draw_count <= 3;
                if (diff = 0) then
                   state      <= DRAW;
                end if;
@@ -101,4 +107,5 @@ begin
 
       end if;
    end process;
+   
 end architecture;

@@ -461,7 +461,8 @@ begin
    justifier_sensor1: entity work.justifier_sensor
    port map
    (
-      clk            => clkvid,
+      clk            => clk1x,
+      clkvid         => clkvid,
       ce             => videoout_out.ce,
       vsync          => videoout_out.vsync,
       hblank         => videoout_out.hblank,
@@ -477,7 +478,8 @@ begin
    justifier_sensor2: entity work.justifier_sensor
    port map
    (
-      clk            => clkvid,
+      clk            => clk1x,
+      clkvid         => clkvid,
       ce             => videoout_out.ce,
       vsync          => videoout_out.vsync,
       hblank         => videoout_out.hblank,

@@ -42,6 +42,7 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/gpu_videoout_async.vhd ^
 ../../rtl/gpu_videoout_sync.vhd ^
 ../../rtl/gpu_crosshair.vhd ^
+../../rtl/justifier_sensor.vhd ^
 ../../rtl/gpu_videoout.vhd ^
 ../../rtl/gpu.vhd ^
 ../../rtl/irq.vhd ^
