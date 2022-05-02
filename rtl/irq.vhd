@@ -20,6 +20,7 @@ entity irq is
       irq_SIO              : in  std_logic;
       irq_SPU              : in  std_logic;
       irq_LIGHTPEN         : in  std_logic;
+      irq10Snac            : in  std_logic;
       
       bus_addr             : in  unsigned(3 downto 0); 
       bus_dataWrite        : in  std_logic_vector(31 downto 0);
@@ -76,7 +77,7 @@ begin
    irqIn(7)  <= irq_PAD;     
    irqIn(8)  <= irq_SIO;     
    irqIn(9)  <= irq_SPU;     
-   irqIn(10) <= irq_LIGHTPEN;
+   irqIn(10) <= irq_LIGHTPEN or irq10Snac;
 
    ss_out(0)(10 downto 0) <= std_logic_vector(I_STATUS);
    ss_out(1)(10 downto 0) <= std_logic_vector(I_MASK);

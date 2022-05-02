@@ -144,6 +144,20 @@ entity psx_top is
       MouseRight            : in  std_logic;
       MouseX                : in  signed(8 downto 0);
       MouseY                : in  signed(8 downto 0);
+      --snac
+      snacPort1             : in  std_logic;
+      snacPort2             : in  std_logic;
+      irq10Snac             : in  std_logic;
+      actionNextSnac        : in  std_logic;
+      receiveValidSnac      : in  std_logic;
+      ackSnac               : in  std_logic;
+      receiveBufferSnac	    : in  std_logic_vector(7 downto 0);
+      transmitValueSnac     : out std_logic_vector(7 downto 0);		
+      selectedPort1Snac     : out std_logic;
+      selectedPort2Snac     : out std_logic;
+      clk9Snac              : out std_logic;
+      beginTransferSnac     : out std_logic;
+
       -- sound                            
       sound_out_left        : out std_logic_vector(15 downto 0) := (others => '0');
       sound_out_right       : out std_logic_vector(15 downto 0) := (others => '0');
@@ -938,6 +952,18 @@ begin
       Gun1AimOffscreen     => Gun1AimOffscreen,
       Gun2AimOffscreen     => Gun2AimOffscreen,
       
+      snacPort1            => snacport1,
+      snacPort2            => snacport2,      
+      selectedPort1Snac    => selectedPort1Snac,
+      selectedPort2Snac    => selectedPort2Snac,
+      transmitValueSnac    => transmitValueSnac,
+      clk9Snac             => clk9Snac,
+      receiveBufferSnac	   => receiveBufferSnac,
+      beginTransferSnac    => beginTransferSnac,
+      actionNextSnac       => actionNextSnac,
+      receiveValidSnac     => receiveValidSnac,
+      ackSnac              => ackSnac,
+      
       mem1_request         => memDDR3card1_request,   
       mem1_BURSTCNT        => memDDR3card1_BURSTCNT,  
       mem1_ADDR            => memDDR3card1_ADDR,      
@@ -1049,6 +1075,7 @@ begin
       irq_SIO              => irq_SIO,     
       irq_SPU              => irq_SPU,     
       irq_LIGHTPEN         => irq_LIGHTPEN,
+      irq10Snac            => irq10Snac,
       
       bus_addr             => bus_irq_addr,     
       bus_dataWrite        => bus_irq_dataWrite,
