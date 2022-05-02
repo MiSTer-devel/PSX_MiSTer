@@ -39,8 +39,8 @@ entity joypad is
       Gun1AimOffscreen     : in  std_logic;
       Gun2AimOffscreen     : in  std_logic;
 
-      snacPort1            : in  std_logic;
-      snacPort2            : in  std_logic;		
+      snacPort1_in         : in  std_logic;
+      snacPort2_in         : in  std_logic;		
       actionNextSnac       : in  std_logic;
       receiveValidSnac     : in  std_logic;
       ackSnac              : in  std_logic;
@@ -114,6 +114,8 @@ architecture arch of joypad is
    signal actionNextPad       : std_logic := '0';
       
    -- snac
+   signal snacPort1           : std_logic := '0';
+   signal snacPort2           : std_logic := '0';	
    signal baudCntSnac         : unsigned(20 downto 0) := (others => '0');
    signal bitCntSnac          : unsigned(4 downto 0)  := (others => '0');
    signal initialDelaySnac    : unsigned(10 downto 0) := (others => '0');
@@ -499,7 +501,12 @@ begin
    process (clk1x)
    begin
       if rising_edge(clk1x) then
-		
+
+         if (SS_idle = '1') then -- don't allow switching on/off snac when transfer is going on
+            snacPort1 <= snacPort1_in;
+            snacPort2 <= snacPort2_in;
+         end if;
+         
          if (reset = '1') then		  
             baudCntSnac  <= to_unsigned(0, 21);
             bitCntSnac   <= to_unsigned(0, 5);	
@@ -509,9 +516,9 @@ begin
             oldselectedPort2Snac <= '0';
             beginTransferdelayedSnac <= '0';
             clk9Snac <= '0';	
-				
-         elsif (ce = '1') then					
-		
+
+         elsif (ce = '1') then
+
             if (baudCntSnac > 0) then
               baudCntSnac <= baudCntSnac - 1;
             else
@@ -585,7 +592,7 @@ begin
          end if;
          
          SS_idle <= '0';
-         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNext = '0' and isActivePad = '0') then
+         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNextCombine = '0' and isActivePad = '0' and initialDelaySnac = 0 and beginTransferdelayedSnac = '0') then
             SS_idle <= '1';
          end if;
          

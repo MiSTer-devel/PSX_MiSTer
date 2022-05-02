@@ -45,9 +45,10 @@ entity cd_top is
       cd_hps_write         : in  std_logic;
       cd_hps_data          : in  std_logic_vector(15 downto 0);
          
-      trackinfo_data       : in std_logic_vector(31 downto 0);
-      trackinfo_addr       : in std_logic_vector(8 downto 0);
-      trackinfo_write      : in std_logic;
+      trackinfo_data       : in  std_logic_vector(31 downto 0);
+      trackinfo_addr       : in  std_logic_vector(8 downto 0);
+      trackinfo_write      : in  std_logic;
+      resetFromCD          : out std_logic := '0';
          
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
@@ -416,8 +417,7 @@ architecture arch of cd_top is
    signal secondsBCD                : std_logic_vector(7 downto 0);
    signal isAudio                   : std_logic;
    
-   signal isAudioCD                 : std_logic;
-   
+   signal isAudioCD                 : std_logic := '0';
    signal libcryptKey               : std_logic_vector(15 downto 0);
       
    type ttrackSearchState is
@@ -2820,7 +2820,7 @@ begin
       if (rising_edge(clk1x)) then
       
          trackInfo_wrenA <= '0';
-      
+         
          if (reset = '1') then
          
             trackSearchState     <= TRACKSEARCH_IDLE;
@@ -2897,6 +2897,7 @@ begin
                if (to_integer(unsigned(trackinfo_addr)) = 3) then
                   libcryptKey <= trackinfo_data(15 downto 0);
                   region_out  <= trackinfo_data(17 downto 16);
+                  resetFromCD <= trackinfo_data(18);
                end if;
             
                -- tracks

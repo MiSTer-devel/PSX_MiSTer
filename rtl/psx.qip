@@ -1,4 +1,3 @@
-set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) proc_bus.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) dpram.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) RamMLAB.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) export.vhd ]

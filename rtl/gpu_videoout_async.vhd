@@ -15,6 +15,8 @@ entity gpu_videoout_async is
       reset_1x                : in  std_logic;
       softReset_1x            : in  std_logic;
       
+      rotate180_in            : in  std_logic;
+      
       allowunpause1x          : out std_logic;
       
       videoout_settings_1x    : in  tvideoout_settings;
@@ -72,6 +74,7 @@ architecture arch of gpu_videoout_async is
    signal videoout_request     : tvideoout_request := ('0', (others => '0'), (others => '0'), 0, (others => '0'));
    
    -- timing
+   signal lineMax          : integer range 0 to 512;
    signal lineIn           : unsigned(8 downto 0) := (others => '0');
    signal nextHCount       : integer range 0 to 4095;
 
@@ -107,6 +110,10 @@ architecture arch of gpu_videoout_async is
    signal clkDiv           : integer range 4 to 10 := 4; 
    signal clkCnt           : integer range 0 to 10 := 0;
    signal xmax             : integer range 0 to 1023 := 256;
+   signal xpos             : integer range 0 to 1023 := 256;
+   signal xCount           : integer range 0 to 1023 := 256;
+   signal readAddrCount    : unsigned(9 downto 0) := (others => '0');
+   signal rotate180        : std_logic;
       
    signal hsync_start      : integer range 0 to 4095;
    signal hsync_end        : integer range 0 to 4095;
@@ -205,6 +212,7 @@ begin
       variable isVsync                   : std_logic;
       variable vdispNew                  : integer range 0 to 511;
       variable interlacedDisplayFieldNew : std_logic;
+      variable nextLineCalc              : unsigned(8 downto 0);
    begin
       if rising_edge(clkvid) then
       
@@ -212,6 +220,12 @@ begin
             vDisplayMax <= 288;
          else
             vDisplayMax <= 240;
+         end if;
+          
+         if (videoout_settings.GPUSTAT_VerRes = '1') then
+            lineMax <= (vDisplayEnd - vDisplayStart) * 2;
+         else
+            lineMax <= vDisplayEnd - vDisplayStart;
          end if;
       
          if (nextHCount <   3) then videoout_reports.hblank_tmr <= '1'; else videoout_reports.hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
@@ -359,35 +373,49 @@ begin
                   if (vdispNew >= vDisplayStart and vdispNew < vDisplayEnd) then
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
                         if ((videoout_reports.activeLineLSB xor videoout_settings.vramRange(10)) = '1') then
-                           videoout_request.lineInNext <= to_unsigned(((vdispNew - vDisplayStart) * 2) + 1, 9);
+                           nextLineCalc := to_unsigned(((vdispNew - vDisplayStart) * 2) + 1, 9);
                         else
-                           videoout_request.lineInNext <= to_unsigned((vdispNew - vDisplayStart) * 2, 9);
+                           nextLineCalc := to_unsigned((vdispNew - vDisplayStart) * 2, 9);
                         end if;
                      else
-                        videoout_request.lineInNext <= to_unsigned(vdispNew - vDisplayStart, 9);
+                        nextLineCalc := to_unsigned(vdispNew - vDisplayStart, 9);
                      end if;
                      videoout_request.fetch      <= ce;
                   end if;
                else  
                   if (vdispNew = vtotal) then
-                     if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_reports.interlacedDisplayField = '1') then
-                        videoout_request.lineInNext <= to_unsigned(1, 9);
+                     if (rotate180 = '1') then
+                        if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_reports.interlacedDisplayField = '1') then
+                           nextLineCalc := to_unsigned((lineMax - 2), 9);
+                        else
+                           nextLineCalc := to_unsigned((lineMax - 1), 9);
+                        end if;
                      else
-                        videoout_request.lineInNext <= to_unsigned(0, 9);
+                        if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_reports.interlacedDisplayField = '1') then
+                           nextLineCalc := to_unsigned(1, 9);
+                        else
+                           nextLineCalc := to_unsigned(0, 9);
+                        end if;
                      end if;
                      videoout_request.fetch      <= ce;
                   elsif (vdispNew >= vDisplayStart and vdispNew < vDisplayEnd) then
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
                         if ((videoout_reports.activeLineLSB xor videoout_settings.vramRange(10)) = '1') then
-                           videoout_request.lineInNext <= to_unsigned(((vdispNew - vDisplayStart) * 2) + 1, 9);
+                           nextLineCalc := to_unsigned(((vdispNew - vDisplayStart) * 2) + 1, 9);
                         else
-                           videoout_request.lineInNext <= to_unsigned((vdispNew - vDisplayStart) * 2, 9);
+                           nextLineCalc := to_unsigned((vdispNew - vDisplayStart) * 2, 9);
                         end if;
                      else
-                        videoout_request.lineInNext <= to_unsigned(vdispNew - vDisplayStart, 9);
+                        nextLineCalc := to_unsigned(vdispNew - vDisplayStart, 9);
                      end if;
                      videoout_request.fetch      <= ce;
                   end if;
+               end if;
+               
+               if (rotate180 = '1') then
+                  videoout_request.lineInNext <= to_unsigned((lineMax - 1), 9) - nextLineCalc;
+               else
+                  videoout_request.lineInNext <= nextLineCalc;
                end if;
               
             end if;
@@ -413,13 +441,18 @@ begin
    videoout_out.DisplayOffsetX <= videoout_settings.vramRange(9 downto 0);
    videoout_out.DisplayOffsetY <= videoout_settings.vramRange(18 downto 10);
    
+   videoout_request.xpos       <= xpos;
+   
    process (clkvid)
-      variable vsync_hstart : integer range 0 to 4095;
+      variable vsync_hstart  : integer range 0 to 4095;
       variable vsync_vstart  : integer range 0 to 511;
+      variable nextLineCalc  : unsigned(8 downto 0);
    begin
       if rising_edge(clkvid) then
          
          videoout_out.ce <= '0';
+         
+         rotate180 <= rotate180_in and (not videoout_settings.GPUSTAT_ColorDepth24);
          
          if (videoout_settings.GPUSTAT_HorRes2 = '1') then
             clkDiv  <= 7; videoout_out.hResMode <= "010"; -- 368
@@ -479,15 +512,29 @@ begin
             
                when WAITNEWLINE =>
                   videoout_out.hblank <= '1';
-                  if (lineIn /= videoout_request.lineDisp) then
+                  
+                  nextLineCalc := to_unsigned((lineMax - 1), 9) - lineIn;
+                  
+                  if ((rotate180 = '1' and nextLineCalc /= videoout_request.lineDisp) or (rotate180 = '0' and lineIn /= videoout_request.lineDisp)) then
                      state <= WAITHBLANKEND;
-                     videoout_request.lineDisp <= lineIn;
-                     videoout_readAddr <= lineIn(0) & "00" & x"00";
+                     
+                     if (rotate180 = '1') then
+                        xpos                      <= xmax - 1;
+                        videoout_readAddr         <= lineIn(0) & (readAddrCount - 1);
+                        videoout_request.lineDisp <= nextLineCalc;
+                     else
+                        xpos                      <= 0;
+                        videoout_readAddr         <= lineIn(0) & "00" & x"00";
+                        videoout_request.lineDisp <= lineIn;
+                     end if;
+                    
                      if (videoout_settings.GPUSTAT_VerRes = '1') then -- interlaced mode
                         videoout_readAddr(10) <= lineIn(1);
                      end if;
-                     videoout_request.xpos <= 0;
+                     
+                     xCount                <= 0;
                      clkCnt                <= 0;
+                     readAddrCount         <= (others => '0');
                      hCropCount            <= (others => '0');
                      hCropPixels           <= (others => '0');
                   end if;
@@ -519,15 +566,21 @@ begin
                         videoout_out.b      <= pixelData_B;
                      end if;
                      
-                     if (videoout_request.xpos < 1023) then
-                        videoout_request.xpos <= videoout_request.xpos + 1;
+                     if (xCount < 1023) then
+                        xCount <= xCount + 1;
+                     end if;
+                     
+                     if (rotate180 = '1' and xpos > 0) then
+                        xpos <= xpos - 1;
+                     elsif (rotate180 = '0' and xpos < 1023) then
+                        xpos <= xpos + 1;
                      end if;
                      
                      hCropPixels <= hCropPixels + 1;
                      if (((hCropCount + 1) >= videoout_settings.hDisplayRange(23 downto 12))) then
                         if ((hCropPixels + 1) = 0) then
                            state       <= WAITNEWLINE;
-                           xmax        <= videoout_request.xpos + 1;
+                           xmax        <= xCount + 1;
                         end if;
                      end if;
                      
@@ -539,7 +592,7 @@ begin
                         if (clkCnt = 0) then
                            if (videoout_settings.GPUSTAT_ColorDepth24 = '1') then
                               videoout_readAddr  <= videoout_readAddr + 1;
-                              if (videoout_request.xpos = 0 or readstate24 = READ24_0) then
+                              if (xCount = 0 or readstate24 = READ24_0) then
                                  readstate <= READ24_0;
                               else
                                  readstate <= READ24_8;
@@ -551,7 +604,12 @@ begin
       
                      when READ16 =>
                         readstate          <= IDLE;
-                        videoout_readAddr  <= videoout_readAddr + 1;
+                        readAddrCount      <= readAddrCount + 1;
+                        if (rotate180 = '1') then
+                           videoout_readAddr  <= videoout_readAddr - 1;
+                        else
+                           videoout_readAddr  <= videoout_readAddr + 1;
+                        end if;
                         pixelData_R        <= videoout_pixelRead( 4 downto  0) & videoout_pixelRead( 4 downto 2);
                         pixelData_G        <= videoout_pixelRead( 9 downto  5) & videoout_pixelRead( 9 downto 7);
                         pixelData_B        <= videoout_pixelRead(14 downto 10) & videoout_pixelRead(14 downto 12);

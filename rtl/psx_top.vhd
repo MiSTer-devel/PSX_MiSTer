@@ -3,7 +3,6 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;     
 
 library MEM;
-use work.pProc_bus.all;
 use work.pexport.all;
 use work.pJoypad.all;
 
@@ -39,12 +38,14 @@ entity psx_top is
       textureFilter         : in  std_logic;
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
+      rotate180             : in  std_logic;
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
       REPRODUCIBLESPUDMA    : in  std_logic;
       WIDESCREEN            : in  std_logic_vector(1 downto 0);
-      -- RAM/BIOS interface      
+      -- RAM/BIOS interface  
+      biosregion            : in  std_logic_vector(1 downto 0);      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
       ram_dataRead          : in  std_logic_vector(127 downto 0);
@@ -73,9 +74,10 @@ entity psx_top is
       hasCD                 : in  std_logic;
       fastCD                : in  std_logic;
       LIDopen               : in  std_logic;
-      trackinfo_data        : in std_logic_vector(31 downto 0);
-      trackinfo_addr        : in std_logic_vector(8 downto 0);
-      trackinfo_write       : in std_logic;
+      trackinfo_data        : in  std_logic_vector(31 downto 0);
+      trackinfo_addr        : in  std_logic_vector(8 downto 0);
+      trackinfo_write       : in  std_logic;
+      resetFromCD           : out std_logic;
       cd_hps_req            : out std_logic := '0';
       cd_hps_lba            : out std_logic_vector(31 downto 0);
       cd_hps_lba_sim        : out std_logic_vector(31 downto 0);
@@ -952,8 +954,8 @@ begin
       Gun1AimOffscreen     => Gun1AimOffscreen,
       Gun2AimOffscreen     => Gun2AimOffscreen,
       
-      snacPort1            => snacport1,
-      snacPort2            => snacport2,      
+      snacPort1_in         => snacport1,
+      snacPort2_in         => snacport2,      
       selectedPort1Snac    => selectedPort1Snac,
       selectedPort2Snac    => selectedPort2Snac,
       transmitValueSnac    => transmitValueSnac,
@@ -1273,6 +1275,7 @@ begin
       trackinfo_data       => trackinfo_data,
       trackinfo_addr       => trackinfo_addr, 
       trackinfo_write      => trackinfo_write,
+      resetFromCD          => resetFromCD,
       
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
@@ -1308,6 +1311,7 @@ begin
       debugmodeOn          => debugmodeOn,
       syncVideoOut         => syncVideoOut,
       syncInterlace        => syncInterlace,
+      rotate180            => rotate180,
       
       Gun1CrosshairOn      => Gun1CrosshairOn,
       Gun1X                => Gun1X,
@@ -1538,6 +1542,7 @@ begin
       fastboot             => fastboot,
       NOMEMWAIT            => FASTMEM,
       DATACACHEON          => DATACACHEON,
+      region_in            => biosregion,
       PATCHSERIAL          => PATCHSERIAL,
             
       ram_dataWrite        => ram_cpu_dataWrite,

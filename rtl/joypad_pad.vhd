@@ -160,8 +160,6 @@ architecture arch of joypad_pad is
   
 begin 
 
-   rumble <= portStates(portNr).rumble;
-   
    padMode <= portStates(1).dsAnalogMode & portStates(0).dsAnalogMode;
    
    ss_out(0)            <= portStates(0).dsConfigMode;  
@@ -188,6 +186,16 @@ begin
          receiveBuffer  <= x"00";
       
          ack <= '0';
+         
+         -- weak motor -> always full strength
+         rumble(7 downto 0) <= portStates(portNr).rumble(7 downto 0);
+         
+         -- strong motor: "The Left/Large motor starts spinning at circa min=50h..60h, and, once when started keeps spinning downto circa min=38h"
+         if (unsigned(portStates(portNr).rumble) < 15#38#) then
+            rumble(15 downto 8) <= (others => '0');
+         else      
+            rumble(15 downto 8) <= portStates(portNr).rumble(15 downto 8);
+         end if;
          
          -- increase analog values by 1/8 and convert from -127..127 to 0..255
          newAnalog := resize(joypad.Analog2X, 9);

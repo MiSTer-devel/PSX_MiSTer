@@ -22,7 +22,8 @@ entity gpu_videoout is
             
       videoout_on                : in  std_logic;
       syncVideoOut               : in  std_logic;
-            
+      rotate180                  : in  std_logic;
+             
       debugmodeOn                : in  std_logic;
          
       fpscountOn                 : in  std_logic;
@@ -183,6 +184,8 @@ begin
       ce_1x                   => ce,   
       reset_1x                => reset,
       softReset_1x            => softReset,
+      
+      rotate180_in            => rotate180,
                
       allowunpause1x          => allowunpause_a,
                

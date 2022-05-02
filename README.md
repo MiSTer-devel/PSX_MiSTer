@@ -1,5 +1,4 @@
 # [Playstation](https://en.wikipedia.org/wiki/PlayStation_(console)) for [MiSTer Platform](https://github.com/MiSTer-devel/Main_MiSTer/wiki)
-by [Robert Peip](https://github.com/RobertPeip/)
 
 ## Hardware Requirements
 SDRAM of any size is required.
@@ -9,23 +8,39 @@ SDRAM of any size is required.
 * Option for core pause when OSD is open
 * Optional manual Memory Card file loading (.MCD)
 * CUE+BIN and CHD format support
-* Multiple Disc Game support with Lid open/close toggle
+* Multiple Disc Game support with automatic Lid open/close toggle
 * Fast Boot (Skips BIOS)
 * Dithering On/Off Toggle
 * Bob or Weave Deinterlacing
-* Inputs: Digital, Analog, Mouse, NeGcon, and Guncon support.
+* Texture Filtering
+* Widescreen modes
+* Screen roation by 180°
+* Inputs: DualShock, Digital, Analog, Mouse, NeGcon, Wheel, Justifier and Guncon support.
+* Native Input support through SNAC
 
 ## Bios
-Rename your playstation bios file (e.g. `scph-1001.bin`/`ps-22a.bin` ) to `boot.rom` and place it in the `./games/PSX/` folder.
+Rename your playstation bios file (e.g. `scph-1001.bin`/`ps-22a.bin` ) and place it in the `./games/PSX/` folder.
 
-You can also place a cd_bios.rom in the same directory as the CD or 1 directory above, to have it uses together with that CD. This can be used for games that depend on the BIOS region(US,EU,JP).
+```
+boot.rom  => US BIOS
+boot1.rom => JP BIOS
+boot2.rom => EU BIOS
+```
+
+You can also place a cd_bios.rom in the same directory as the CD or 1 directory above, to have it uses together with that CD. This can be used for games that depend on a special BIOS beyond usual US,EU,JP.
+
+## Region
+
+Region settings (e.g. Clock, BIOS, CD check) are selected automatically when loading a CD. You can force a different Region in OSD.
 
 ## Memory Card
+
 One card can be mounted for each controller slot. Cards are in raw .mcd format. An empty formatted .mcd file is available for [download here](https://github.com/MiSTer-devel/PSX_MiSTer/raw/main/memcard/empty.mcd).
 
 You need to save them either manually in the OSD or turn on autosave. Saving or loading a card will pause the core for a short time.
 
 ## Multiple Disc Games
+
 To swap discs while the game is running, you will need have all of the disc files for the game placed in the same folder. Then when loading a new disc for most games you will need to toggle the Lid Open/Close option to tell the game you have opened the lid and closed it. Example folder structure of a multi disc game:
 
 ```
@@ -35,11 +50,10 @@ To swap discs while the game is running, you will need have all of the disc file
 ```
 
 ## Video output
-Core uses either normal output or direct framebuffer mode.
 
-In Framebuffer mode you can choose to view:
-- normal drawing area without any overscan cutoff
-- full VRAM as 1024x512 pixel image (debug mode)
+Core can output through HDMI and Analog out.
+
+HDMI also offers a debugging framebuffer mode with support of full VRAM as 1024x512 pixel image(debug only)
 
 ## Libcrypt
 
@@ -71,17 +85,19 @@ The debug menu is intended for use by developers only. They don't really serve a
 
 ## Pad Options
 The following pad types are emulated by the core and can be independently assigned to each port:
+- DualShock:
+  Switch Digital/Analog mode with mouse/touchpad click or L3+R3+Up/Down 
 - Digital  
   (ID 0x41) Ten button digital pad.
 - Analog  
   (ID 0x73) Twinstick pad.  
-  Currently does not support rumble function or the configuration protocol, so older games might not detect it.
 - Mouse  
   (ID 0x12) Two button mouse.
 - Off  
   Pad unplugged from port.
 - GunCon  
   (ID 0x62) GunCon compatible lightgun.
+- Justifier  
 - NeGcon  
   (ID 0x23) NeGcon compatible racing pad.  
   Primarily developed for dual analog stick usage with the following mapping (genuine NeGcons  
@@ -93,12 +109,15 @@ The following pad types are emulated by the core and can be independently assign
    - II -> Right Analog Down, Rectangle (100% pressed), L2 (100% pressed)
    - L -> L1 (100% pressed)
    - R -> R1
+   
+SNAC can be selected for each port and will support gamepads and memory cards on the corresponding slot.
+When SNAC is enabled for a slot, the emulated gamepad/memory for this slot is disconnected.
 
 ## Status
 
-Work in progress, don't report any bugs!
+Work in progress, don't report bugs yet!
 
-- some games working
+- many games working
 
 --
 
@@ -116,8 +135,7 @@ IRQ    : 80%
 - irq_SIO missing        
 - irq_LIGHTPEN missing
 
-PAD    : 80%
-- SNAC interface missing
+PAD    : 90%
 
 DMA    : 80%
 - DMA write performance only 32bit/2 cycles, should be 32Bit/1 cycle?
@@ -136,7 +154,6 @@ GTE    : 80%
 MDEC   : 90%
 - timing slightly too fast (4996/5376)
  
-CD     : 80%
-- check seek position while seeking not implemented
+CD     : 90%
 
 SPU    : 90%

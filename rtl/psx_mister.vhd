@@ -34,12 +34,14 @@ entity psx_mister is
       textureFilter         : in  std_logic;
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
+      rotate180             : in  std_logic;
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
       REPRODUCIBLESPUDMA    : in  std_logic;
       WIDESCREEN            : in  std_logic_vector(1 downto 0);
       -- RAM/BIOS interface      
+      biosregion            : in  std_logic_vector(1 downto 0);  
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
       ram_dataRead          : in  std_logic_vector(127 downto 0);
@@ -68,9 +70,10 @@ entity psx_mister is
       hasCD                 : in  std_logic;
       LIDopen               : in  std_logic;
       fastCD                : in  std_logic;
-      trackinfo_data        : in std_logic_vector(31 downto 0);
-      trackinfo_addr        : in std_logic_vector(8 downto 0);
-      trackinfo_write       : in std_logic;
+      trackinfo_data        : in  std_logic_vector(31 downto 0);
+      trackinfo_addr        : in  std_logic_vector(8 downto 0);
+      trackinfo_write       : in  std_logic;
+      resetFromCD           : out std_logic;
       cd_hps_req            : out std_logic := '0';
       cd_hps_lba            : out std_logic_vector(31 downto 0);
       cd_hps_lba_sim        : out std_logic_vector(31 downto 0);
@@ -260,12 +263,14 @@ begin
       textureFilter         => textureFilter,
       syncVideoOut          => syncVideoOut,
       syncInterlace         => syncInterlace,
+      rotate180             => rotate180,
       SPUon                 => SPUon,
       SPUSDRAM              => SPUSDRAM,
       REVERBOFF             => REVERBOFF,
       REPRODUCIBLESPUDMA    => REPRODUCIBLESPUDMA,
       WIDESCREEN            => WIDESCREEN,
       -- RAM/BIOS interface        
+      biosregion            => biosregion,
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 
@@ -297,6 +302,7 @@ begin
       trackinfo_data        => trackinfo_data,
       trackinfo_addr        => trackinfo_addr, 
       trackinfo_write       => trackinfo_write,
+      resetFromCD           => resetFromCD,
       cd_hps_req            => cd_hps_req,  
       cd_hps_lba            => cd_hps_lba,  
       cd_hps_lba_sim        => cd_hps_lba_sim,  

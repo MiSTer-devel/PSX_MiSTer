@@ -333,7 +333,7 @@ always @(posedge clk_1x) begin : ffwd
 	fast_forward <= (FFrequest | ff_latch);
 end
 
-wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download;
+wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download | cdDownloadReset;
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
@@ -341,7 +341,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXXXXXXXXXXXXXX XXXXXX  XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
+// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -385,6 +385,7 @@ parameter CONF_STR = {
 	"P1OM,Dithering,On,Off;",
 	"P1o9,Deinterlacing,Weave,Bob;",
 	"P1oS,Sync 480i for HDMI,Off,On;",
+	"P1OO,Rotate,Off,On;",
 	"P1oLM,Widescreen Hack,Off,3:2,5:3,16:9;",
 	"P1O5,Texture Filter,Off,On;",
 	"P1-;",
@@ -439,7 +440,11 @@ parameter CONF_STR = {
 	"Slot 1 Analog,",
 	"Slot 1 Digital,",
 	"Slot 2 Analog,",
-	"Slot 2 Digital;",
+	"Slot 2 Digital,",
+	"Region Unknown->US,",
+	"Region JP,",
+	"Region US,",
+	"Region EU;",
 	"V,v",`BUILD_DATE
 };
 
@@ -561,7 +566,7 @@ assign sd_wr[1] = 0;
 
 reg bios_download, exe_download, cdinfo_download, code_download;
 always @(posedge clk_1x) begin
-	bios_download    <= ioctl_download & (ioctl_index == 0);
+	bios_download    <= ioctl_download & (ioctl_index[5:0] == 0);
 	exe_download     <= ioctl_download & (ioctl_index == 1);
 	cdinfo_download  <= ioctl_download & (ioctl_index == 251);
 	code_download    <= ioctl_download & (ioctl_index == 255);
@@ -584,6 +589,7 @@ reg        ramdownload_wr;
 reg        hasCD = 0;
 
 reg exe_download_1 = 0;
+reg cdinfo_download_1 = 0;
 reg loadExe = 0;
 
 reg sd_mounted2 = 0;
@@ -603,7 +609,9 @@ reg old_save_a = 0;
 
 wire bk_save_a = OSD_STATUS & bk_autosave;
 
+reg cdbios = 0;
 reg  [1:0] region;
+reg  [1:0] biosregion;
 wire [1:0] region_out;
 reg        isPal;
 
@@ -613,8 +621,8 @@ always @(posedge clk_1x) begin
       if (ioctl_wr) begin
          if(~ioctl_addr[1]) begin
             ramdownload_wrdata[15:0] <= ioctl_dout;
-            if (bios_download)         ramdownload_wraddr  <= ioctl_addr[26:0] + BIOS_START[26:0];
-            else if (exe_download)     ramdownload_wraddr  <= ioctl_addr[26:0] + EXE_START[26:0];                              
+            if (bios_download)         ramdownload_wraddr  <= {6'd1, ioctl_index[7:6], ioctl_addr[18:0]};
+            else if (exe_download)     ramdownload_wraddr  <= ioctl_addr[20:0] + EXE_START[26:0];                              
             else if (cdinfo_download)  ramdownload_wraddr  <= ioctl_addr[26:0];      
          end else begin
             ramdownload_wrdata[31:16] <= ioctl_dout;
@@ -651,6 +659,13 @@ always @(posedge clk_1x) begin
       2: begin region = 2'b01; isPal <= 0; end
       3: begin region = 2'b10; isPal <= 1; end
 	endcase
+   
+   if (bios_download && ioctl_index[7:6] == 2'b11) cdbios <= 1'b1;
+   
+   if (cdbios)
+      biosregion <= 2'b11;
+   else
+      biosregion <= region;
    
    memcard1_load <= 0;
    memcard2_load <= 0;
@@ -759,10 +774,15 @@ reg  [1:0] padMode_1;
 reg [7:0] psx_info;
 reg psx_info_req;
 
+wire resetFromCD;
+reg  cdDownloadReset = 0;
+
 always @(posedge clk_1x) begin
 
    psx_info_req <= 0;
    padMode_1    <= padMode;
+   
+   cdinfo_download_1 <= cdinfo_download;
 
    if (ss_info_req) begin
       psx_info_req <= 1;
@@ -775,6 +795,21 @@ always @(posedge clk_1x) begin
       psx_info_req <= 1;
       if (padMode[1])  psx_info <= 8'd17;
       if (!padMode[1]) psx_info <= 8'd18;
+   end else if (cdinfo_download_1 && ~cdinfo_download) begin
+      if (status[40:39] == 2'b00) begin
+         psx_info_req <= 1;
+         case(region_out)
+            0: begin psx_info <= 8'd19; end   // unknown => default to NTSC          
+            1: begin psx_info <= 8'd20; end   // JP
+            2: begin psx_info <= 8'd21; end   // US
+            3: begin psx_info <= 8'd22; end   // EU
+         endcase
+      end
+   end
+   
+   cdDownloadReset <= 0;
+   if (cdinfo_download_1 && ~cdinfo_download && resetFromCD) begin
+      cdDownloadReset <= 1;
    end
 
 end
@@ -831,12 +866,14 @@ psx
    .textureFilter(status[5]),
    .syncVideoOut(syncVideoOut),
    .syncInterlace(status[60]),
+   .rotate180(status[24]),
    .SPUon(~status[30]),
    .SPUSDRAM(status[44] & SDRAM2_EN),
    .REVERBOFF(0),
    .REPRODUCIBLESPUDMA(status[43]),
    .WIDESCREEN(status[54:53]),
    // RAM/BIOS interface      
+   .biosregion(biosregion),
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),
    .ram_dataRead(sdr_sdram_dout),
@@ -868,6 +905,7 @@ psx
    .trackinfo_data  (ramdownload_wrdata),
    .trackinfo_addr  (ramdownload_wraddr[10:2]),
    .trackinfo_write (ramdownload_wr && cdinfo_download),
+   .resetFromCD     (resetFromCD),
    .cd_hps_req      (sd_rd[1]),  
    .cd_hps_lba      (sd_lba1),  
    .cd_hps_ack      (sd_ack[1]),

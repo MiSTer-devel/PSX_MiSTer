@@ -29,6 +29,7 @@ entity gpu is
       debugmodeOn          : in  std_logic;
       syncVideoOut         : in  std_logic;
       syncInterlace        : in  std_logic;
+      rotate180            : in  std_logic;
 
       Gun1CrosshairOn      : in  std_logic;
       Gun1X                : in  unsigned(7 downto 0);
@@ -159,8 +160,8 @@ architecture arch of gpu is
    signal GPUSTAT_DMADirection      : std_logic_vector(1 downto 0);
       
    signal vramRange                 : unsigned(18 downto 0) := (others => '0');
-   signal hDisplayRange             : unsigned(23 downto 0) := (others => '0');
-   signal vDisplayRange             : unsigned(19 downto 0) := (others => '0');
+   signal hDisplayRange             : unsigned(23 downto 0) := x"C60260";
+   signal vDisplayRange             : unsigned(19 downto 0) := x"3FC10";
       
    signal drawMode                  : unsigned(13 downto 0) := (others => '0');
       
@@ -1572,6 +1573,7 @@ begin
          
       videoout_on                => videoout_on,
       syncVideoOut               => syncVideoOut,
+      rotate180                  => rotate180,
             
       debugmodeOn                => debugmodeOn,
             
