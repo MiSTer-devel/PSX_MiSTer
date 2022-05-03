@@ -367,8 +367,8 @@ parameter CONF_STR = {
 	"-;",
 	"o78,System Type,Auto,NTSC-U,NTSC-J,PAL;",
 	"-;",
-	"oDG,Pad1,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,Justifier,SNAC-port1;",
-	"oHK,Pad2,Digital,Analog,Mouse,Off,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Dualshock,Justifier,SNAC-port2;",
+	"oDG,Pad1,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port1;",
+	"oHK,Pad2,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port2;",
 	"h2O9,Show Crosshair,Off,On;",
 	"-;",
 	"OS,FPS Overlay,Off,On;",
@@ -399,24 +399,24 @@ parameter CONF_STR = {
 	"P2OP,Pause when OSD is open,Off,On;",
 	"P2OL,CD Fast Seek,Off,On;",
 	"P2oQ,Data Cache(Cheats Off),Off,On;",
-	"-;",
-
-	"P3,Debug;",
-	"P3-;",
-	"P3OE,DDR3 Framebuffer,Off,On;",
-	"P3OA,DDR3 FB Color,16,24;",
-	"P3OB,VRAMViewer,Off,On;",
-	"P3oP,Sync Video Out,Off,On;",
-	"P3oO,Sync Video Clock,Off,On;",
-	"P3OU,Sound,On,Off;",
-	"P3OJ,RepTimingGPU,Off,On;",
-	"P3OK,RepTimingDMA,Off,On;",
-	"P3oB,RepTimingSPUDMA,Off,On;",
-	"P3OQ,DMAinBLOCKs,Off,On;",
-	"P3OF,Force 60Hz PAL,Off,On;",
-	"P3OR,Textures,On,Off;",
-	//"P3oM,Patch TTY,Off,On;",
-	"P3T1,Advance Pause;",
+	
+	"h3-;",
+	"h3P3,Debug;",
+	"h3P3-;",
+	"h3P3OE,DDR3 Framebuffer,Off,On;",
+	"h3P3OA,DDR3 FB Color,16,24;",
+	"h3P3OB,VRAMViewer,Off,On;",
+	"h3P3oP,Sync Video Out,Off,On;",
+	"h3P3oO,Sync Video Clock,Off,On;",
+	"h3P3OU,Sound,On,Off;",
+	"h3P3OJ,RepTimingGPU,Off,On;",
+	"h3P3OK,RepTimingDMA,Off,On;",
+	"h3P3oB,RepTimingSPUDMA,Off,On;",
+	"h3P3OQ,DMAinBLOCKs,Off,On;",
+	"h3P3OF,Force 60Hz PAL,Off,On;",
+	"h3P3OR,Textures,On,Off;",
+	//"h3P3oM,Patch TTY,Off,On;",
+	"h3P3T1,Advance Pause;",
 
 	"- ;",
 	"R0,Reset;",
@@ -448,9 +448,10 @@ parameter CONF_STR = {
 	"V,v",`BUILD_DATE
 };
 
+reg dbg_enabled = 0;
 wire  [1:0] buttons;
 wire [63:0] status;
-wire [15:0] status_menumask = {(PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -735,36 +736,36 @@ defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 
 ////////////////////////////  PAD  ///////////////////////////////////
 
-// 0000 -> digital
-// 0000 -> analog
-// 0000 -> mouse
-// 0011 -> off
+// 0000 -> DualShock
+// 0001 -> off
+// 0010 -> digital
+// 0011 -> analog
 // 0100 -> Namco GunCon lightgun
 // 0101 -> Namco NeGcon
 // 0110 -> Wheel Negcon
 // 0111 -> Wheel Analog
-// 1000 -> DualShock
+// 1000 -> mouse
 // 1001 -> Konami Justifier lightgun
 // 1010 -> SNAC
 // 1011..1111 -> reserved
 
-wire PadPortEnable1 = (status[48:45] != 4'b0011);
-wire PadPortAnalog1 = (status[48:45] == 4'b0001) || (status[48:45] == 4'b0111);
-wire PadPortMouse1  = (status[48:45] == 4'b0010);
+wire PadPortDS1     = (status[48:45] == 4'b0000);
+wire PadPortEnable1 = (status[48:45] != 4'b0001);
+wire PadPortAnalog1 = (status[48:45] == 4'b0011) || (status[48:45] == 4'b0111);
 wire PadPortGunCon1 = (status[48:45] == 4'b0100);
 wire PadPortNeGcon1 = (status[48:45] == 4'b0101) || (status[48:45] == 4'b0110);
 wire PadPortWheel1  = (status[48:45] == 4'b0110) || (status[48:45] == 4'b0111);
-wire PadPortDS1     = (status[48:45] == 4'b1000);
+wire PadPortMouse1  = (status[48:45] == 4'b1000);
 wire PadPortJustif1 = (status[48:45] == 4'b1001);
 wire snacPort1      = (status[48:45] == 4'b1010);
 
-wire PadPortEnable2 = (status[52:49] != 4'b0011);
-wire PadPortAnalog2 = (status[52:49] == 4'b0001) || (status[52:49] == 4'b0111);
-wire PadPortMouse2  = (status[52:49] == 4'b0010);
+wire PadPortDS2     = (status[52:49] == 4'b0000);
+wire PadPortEnable2 = (status[52:49] != 4'b0001);
+wire PadPortAnalog2 = (status[52:49] == 4'b0011) || (status[52:49] == 4'b0111);
 wire PadPortGunCon2 = (status[52:49] == 4'b0100);
 wire PadPortNeGcon2 = (status[52:49] == 4'b0101) || (status[52:49] == 4'b0110);
 wire PadPortWheel2  = (status[52:49] == 4'b0110) || (status[52:49] == 4'b0111);
-wire PadPortDS2     = (status[52:49] == 4'b1000);
+wire PadPortMouse2  = (status[52:49] == 4'b1000);
 wire PadPortJustif2 = (status[52:49] == 4'b1001);
 wire snacPort2      = (status[52:49] == 4'b1010);
 
@@ -811,6 +812,8 @@ always @(posedge clk_1x) begin
    if (cdinfo_download_1 && ~cdinfo_download && resetFromCD) begin
       cdDownloadReset <= 1;
    end
+   
+   if (joy[14] && joy[15] && joy[8]) dbg_enabled <= 1;  // L3+R3+Select
 
 end
 

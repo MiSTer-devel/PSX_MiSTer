@@ -29,6 +29,8 @@ boot2.rom => EU BIOS
 
 You can also place a cd_bios.rom in the same directory as the CD or 1 directory above, to have it uses together with that CD. This can be used for games that depend on a special BIOS beyond usual US,EU,JP.
 
+If you get a black screen with "ED" overlay in upper left corner, either your BIOS files are corrupt or missing or you have no SDRAM module installed.
+
 ## Region
 
 Region settings (e.g. Clock, BIOS, CD check) are selected automatically when loading a CD. You can force a different Region in OSD.
@@ -76,7 +78,7 @@ List of Errors:
 - EA     - SPU timeout
 - EB     - DMA and CPU interlock error 
 - EC     - DMA FIFO overflow
-- ED     - CPU Data/Bus request timeout
+- ED     - CPU Data/Bus request timeout -> will also appear if the BIOS is not found or corrupt or no SDRAM module is installed
 - EE     - Dotclock used as timer report(only relevant if game shows issues)
 
 ## Debug Options

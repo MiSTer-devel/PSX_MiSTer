@@ -223,8 +223,9 @@ architecture arch of spu is
    signal ramTransferAddr     : unsigned(18 downto 0);
    
    -- interrupt
-   signal IRQ9                : std_logic;
-   signal irqSaved            : std_logic;
+   signal IRQ9                : std_logic := '0';
+   signal irqSaved            : std_logic := '0';
+   signal irqVoicetrigger     : std_logic := '0';
    
    -- processing
    signal busy                : std_logic := '0';
@@ -973,11 +974,13 @@ begin
             envelope_startnext <= '0';
             
             if (ram_request = '1' and cnt(15) = '1' and cnt(6) = '1' and (IRQ_ADDR = ram_Adr(18 downto 3)) and irq9 = '0') then
-               if (REPRODUCIBLESPUIRQ = '1') then
-                  irqSaved <= '1';
-               else
-                  IRQ9 <= '1';
-                  irqOut <= '1';
+               if (irqVoicetrigger = '1' or (state /= VOICE_EVALHEADER and state /= VOICE_EVALSAMPLE)) then
+                  if (REPRODUCIBLESPUIRQ = '1') then
+                     irqSaved <= '1';
+                  else
+                     IRQ9 <= '1';
+                     irqOut <= '1';
+                  end if;
                end if;
             end if;
          
@@ -1410,6 +1413,12 @@ begin
                   ram_isVoice     <= '1';
                   ram_rnw         <= '1';
                   ram_Adr         <= std_logic_vector(voice.currentAddr) & "000";
+                  
+                  irqVoicetrigger <= '0';
+                  if (voice.adpcmDecodePtr <= voice.adpcmSamplePos(17 downto 12)) then
+                     irqVoicetrigger <= '1';
+                  end if;
+                  
                   sampleIndex     <= voice.adpcmSamplePos(17 downto 12);
                   volRight        <= signed(RamVoiceVolumes_dataB(1));
                   envVolRight     <= signed(RamVoiceVolumes_dataB(1));

@@ -131,6 +131,7 @@ begin
                SS_Adr      <= to_unsigned(i * 4 + 0, 19);
                wait until rising_edge(clk);
                SS_wren(14) <= '0';
+               wait until rising_edge(clk);
                
                SS_DataWrite( 7 downto  0) <= std_logic_vector(to_unsigned(data((savetypes(14).offset + i) * 4 + 2), 8));
                SS_DataWrite(15 downto  8) <= std_logic_vector(to_unsigned(data((savetypes(14).offset + i) * 4 + 3), 8));
@@ -138,6 +139,7 @@ begin
                SS_Adr      <= to_unsigned(i * 4 + 2, 19);
                wait until rising_edge(clk);
                SS_wren(14) <= '0';
+               wait until rising_edge(clk);
             end loop;
             
          end if;
