@@ -219,6 +219,9 @@ begin
             
             beginTransfer   <= '0';
             actionNext      <= '0';
+            
+            joypad1_rumble  <= (others => '0');
+            joypad2_rumble  <= (others => '0');
 
          elsif (ce = '1') then
          
