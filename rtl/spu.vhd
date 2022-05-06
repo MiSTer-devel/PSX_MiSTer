@@ -1679,7 +1679,7 @@ begin
                         adpcm_ram_wren_a       <= "0111";
                         if (loopEnd = '1') then
                            ENDX(index)           <= '1';
-                           voice.currentAddr     <= unsigned(RamVoice_dataB(1));
+                           voice.currentAddr     <= unsigned(RamVoice_dataB(1)(15 downto 1)) & '0';
                            if (loopRepeat = '0') then
                               voice.adsrphase <= ADSRPHASE_OFF;
                               RamVoice_dataA  <= (others => '0');
@@ -1704,7 +1704,7 @@ begin
                      ENDX(index)            <= '0';
                      voice_adsrWrite(index) <= '0'; 
                      voice.adpcmDecodePtr   <= (others => '0');
-                     voice.currentAddr      <= unsigned(RamVoice_dataB(1));
+                     voice.currentAddr      <= unsigned(RamVoice_dataB(1)(15 downto 1)) & '0';
                      voice.adsrphase        <= ADSRPHASE_ATTACK;
                      voice.adpcmSamplePos   <= (others => '0');
                      voice.adpcmLast0       <= (others => '0');
