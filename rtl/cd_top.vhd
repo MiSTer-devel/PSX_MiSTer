@@ -788,7 +788,6 @@ begin
    -- command processing
    process(clk1x)
       variable paramCountNew : integer range 0 to 6;
-      variable skipCmd       : std_logic;
    begin
       if (rising_edge(clk1x)) then
          
@@ -854,7 +853,6 @@ begin
             -- receive new command request or decrease wait timer on pending command
             if (beginCommand = '1') then
             
-               skipCmd := '0';
                case (newCmd) is
                   when x"02"  => paramCountNew := 3; --Setloc
                   when x"0D"  => paramCountNew := 2; --SetFilter
@@ -869,33 +867,32 @@ begin
             
                if (cmdPending = '1' and paramCount > paramCountNew) then
                   FifoParam_reset <= '1';
-                  skipCmd         := '1';
-               end if;
-            
-               if (skipCmd = '0') then
-                  cmdPending <= '1';
-                  cmd_busy   <= '1';
-                  if (driveState = DRIVE_OPENING) then
-                     cmd_delay  <= 15000 - 2;
-                  else
-                     cmd_delay  <= 25000 - 2;
-                  end if;
-                  if (newCmd = x"1C") then -- init
-                     cmd_delay <= 120000 - 2;
-                  end if;
-   
-                  nextCmd    <= newCmd;
-                  paramCount <= paramCountNew;
-                  
-                  if (driveState = DRIVE_IDLE and internalStatus(1) = '1' and newCmd = x"11") then
-                     updatePhysicalPosition <= '1';
-                  end if;
-                  
-                  if (CDROM_IRQFLAG /= "00000") then
-                     cmd_busy  <= '0';
-                  end if;
                end if;
                
+               working <= '0'; -- second response from reset will interfere with command (e.g. wipeout xl)
+            
+               cmdPending <= '1';
+               cmd_busy   <= '1';
+               if (driveState = DRIVE_OPENING) then
+                  cmd_delay  <= 15000 - 2;
+               else
+                  cmd_delay  <= 25000 - 2;
+               end if;
+               if (newCmd = x"1C") then -- init
+                  cmd_delay <= 120000 - 2;
+               end if;
+   
+               nextCmd    <= newCmd;
+               paramCount <= paramCountNew;
+               
+               if (driveState = DRIVE_IDLE and internalStatus(1) = '1' and newCmd = x"11") then
+                  updatePhysicalPosition <= '1';
+               end if;
+               
+               if (CDROM_IRQFLAG /= "00000") then
+                  cmd_busy  <= '0';
+               end if;
+         
             elsif (pause_cmd = '1') then
                cmd_busy  <= '0';
                if (cmd_busy = '1') then
