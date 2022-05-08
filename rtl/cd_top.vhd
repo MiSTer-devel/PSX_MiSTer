@@ -729,12 +729,10 @@ begin
                end if;
             end if; 
             
-            if (processCDDASector = '1' and driveState = DRIVE_PLAYING and modeReg(2) = '1' and lastreportCDDA /= '0' & nextSubdata(9)(7 downto 4)) then
-               if (CDROM_IRQFLAG = "00000") then
-                  CDROM_IRQFLAG <= "00001";
-                  if (CDROM_IRQENA(0) = '1') then
-                     irqOut <= '1';
-                  end if;
+            if (CDDA_outcnt = 8) then
+               CDROM_IRQFLAG <= "00001";
+               if (CDROM_IRQENA(0) = '1') then
+                  irqOut <= '1';
                end if;
             end if;
             
@@ -907,7 +905,7 @@ begin
                cmd_busy <= '1';
             elsif (cmd_busy = '1') then
                if (cmd_delay > 0) then
-                  if ((driveBusy = '0' or driveDelay > 100) and (working = '0' or workDelay > 100)) then
+                  if (cmd_delay < 16 or ((driveBusy = '0' or driveDelay > 100) and (working = '0' or workDelay > 100))) then
                      cmd_delay <= cmd_delay - 1;
                   end if;
                elsif (sectorFetchState = SFETCH_IDLE) then
@@ -1531,7 +1529,9 @@ begin
             -- CDDA reporting
             if (processCDDASector = '1' and driveState = DRIVE_PLAYING and modeReg(2) = '1' and lastreportCDDA /= '0' & nextSubdata(9)(7 downto 4)) then
                lastreportCDDA     <= '0' & nextSubdata(9)(7 downto 4);
-               if (CDROM_IRQFLAG = "00000") then -- todo: async fifo instead of ignore?
+               -- don't return CDDA response if a command is currently in process or response is still pending
+               -- latching it and respond later when irq and response have been processed is not possible or too late, so rather drop it
+               if (CDDA_outcnt = 0 and CDROM_IRQFLAG = "00000" and FifoResponse_Empty = '1' and handleCommand = '0' and cmd_busy = '0') then
                   CDDA_outcnt        <= 8;
                   FifoResponse_reset <= '1';
                end if;
@@ -2168,7 +2168,7 @@ begin
       end if;
    end process;
    
-   iramSectorBuffer: entity work.dpram
+   iramSectorBuffer: entity mem.dpram
    generic map 
    ( 
       addr_width => 10, 
@@ -2193,7 +2193,7 @@ begin
    sectorBuffers_addrB <= std_logic_vector(to_unsigned(to_integer(SS_Adr - 2048), 13)) when (SS_rden = '1' and SS_Adr >= 2048 and SS_Adr < 2048 + (1024 * 8)) else 
                           std_logic_vector(copySectorPointer & to_unsigned(copyReadAddr, 10));
    
-   iramSectorBuffers: entity work.dpram
+   iramSectorBuffers: entity mem.dpram
    generic map 
    ( 
       addr_width => 13, 
@@ -2942,7 +2942,7 @@ begin
    secondsBCD <= trackInfo_DataOutA(45 downto 38);
    minutesBCD <= trackInfo_DataOutA(53 downto 46);   
    
-   iramTrackInfos: entity work.dpram
+   iramTrackInfos: entity mem.dpram
    generic map 
    ( 
       addr_width => 7, 

@@ -14,8 +14,6 @@ architecture arch of etb is
 
    signal clk1x               : std_logic := '1';
             
-   signal reset               : std_logic := '1';
-   
    -- cd
    signal bus_addr            : unsigned(3 downto 0) := (others => '0'); 
    signal bus_dataWrite       : std_logic_vector(7 downto 0) := (others => '0');
@@ -33,8 +31,6 @@ architecture arch of etb is
    signal cd_hps_ack          : std_logic := '0';
    signal cd_hps_write        : std_logic := '0';
    signal cd_hps_data         : std_logic_vector(15 downto 0);
-   
-   signal cdSize              : unsigned(29 downto 0);
    
    signal sampleticks         : unsigned(9 downto 0) := (others => '0');
    signal spu_tick            : std_logic := '0';
@@ -54,7 +50,8 @@ architecture arch of etb is
    signal trackinfo_write     : std_logic := '0';
 
    -- savestates
-   signal reset_in            : std_logic;
+   signal reset               : std_logic;
+   signal reset_in            : std_logic := '1';
    signal reset_out           : std_logic := '1';
    signal SS_reset            : std_logic := '0';
    signal SS_DataWrite        : std_logic_vector(31 downto 0) := (others => '0');
@@ -65,27 +62,28 @@ architecture arch of etb is
    signal cmdCount            : integer := 0;
    signal clkCount            : integer := 0;
    
+   signal swapCD              : std_logic := '0';
+   
 begin
 
    clk1x  <= not clk1x  after 15 ns;
    
    reset_in  <= '0' after 3000 ns;
    
+   reset <= reset_out or reset_in;
+   
    icd_top : entity psx.cd_top
    port map
    (
       clk1x                => clk1x,
       ce                   => '1',        
-      reset                => reset_out,  
+      reset                => reset,  
 
-      INSTANTSEEK          => '1',
+      INSTANTSEEK          => '0',
       hasCD                => '1',
-      newCD                => reset_out,
       LIDopen              => '0',
-      cdSize               => cdSize,
       fastCD               => '0',
-      region               => "10",
-      libcryptKey          => x"0000",
+      region               => "00",
       
       fullyIdle            => fullyIdle,
       
@@ -246,7 +244,17 @@ begin
 
          cdLoaded <= '1';
       end if;
-   
+      
+      if (swapCD = '1' and reset_out = '1') then
+         wait until rising_edge(clk1x);
+         swapCD <= '0';
+         trackinfo_data  <= (others => '0');
+         trackinfo_addr  <= (others => '1');
+         trackinfo_write <= '1';
+         wait until rising_edge(clk1x);
+         trackinfo_write <= '0';
+         wait until rising_edge(clk1x);
+      end if;
    
       wait until rising_edge(clk1x);
       if (cd_hps_req = '1') then
@@ -273,7 +281,6 @@ begin
                end loop;
                
                file_close(infile);
-               cdSize <= to_unsigned(targetpos * 4, 30);
             
             end if;
 
