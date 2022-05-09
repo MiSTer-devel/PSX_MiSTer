@@ -341,7 +341,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download | cdD
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-//      XXXXXXX  XXX  XXXXXXXXXXXX  XXXXXXXXXXXXXXXXXXXXXXX XXXXX XX
+//    XXXXXXXXX XXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -356,10 +356,9 @@ parameter CONF_STR = {
 	"SC3,SAVMCD,Mount Memory Card 2;",
 	"-;",
 	"oV,Automount Memory Card 1,Yes,No;",
-	"D0RC,Reload Memory Cards;",
-	"D0RD,Save Memory Cards;",
-	"D0ON,Autosave,Off,On;",
-	"D0-;",
+	"RD,Save Memory Cards;",
+	"ON,Autosave,Off,On;",
+	"-;",
 	"o4,Savestates to SDCard,On,Off;",
 	"o56,Savestate Slot,1,2,3,4;",
 	"RH,Save state (Alt-F1);",
@@ -370,6 +369,7 @@ parameter CONF_STR = {
 	"oDG,Pad1,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port1;",
 	"oHK,Pad2,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port2;",
 	"h2O9,Show Crosshair,Off,On;",
+	"h4OV,DS Mode,L3+R3+Up/Dn | Click,L1+L2+R1+R2+Up/Dn;",
 	"-;",
 	"OS,FPS Overlay,Off,On;",
 	"OT,Error Overlay,On,Off;",
@@ -382,6 +382,8 @@ parameter CONF_STR = {
 	"P1o23,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"P1-;",
 	"P1oU,Fixed HBlank,On,Off;",
+	"P1oN,Fixed VBlank,Off,On;",
+	"d5P1O34,Vertical Crop,Off,On(224/270),On(216/256);",
 	"P1OM,Dithering,On,Off;",
 	"P1o9,Deinterlacing,Weave,Bob;",
 	"P1oS,Sync 480i for HDMI,Off,On;",
@@ -451,7 +453,7 @@ parameter CONF_STR = {
 reg dbg_enabled = 0;
 wire  [1:0] buttons;
 wire [63:0] status;
-wire [15:0] status_menumask = {dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -600,11 +602,9 @@ reg memcard1_load = 0;
 reg memcard2_load = 0;
 reg memcard_save = 0;
 
-wire bk_load     = status[12];
 wire bk_save     = status[13];
 wire bk_autosave = status[23];
 
-reg old_load = 0; 
 reg old_save = 0; 
 reg old_save_a = 0;
 
@@ -690,14 +690,8 @@ always @(posedge clk_1x) begin
       end
    end
    
-   old_load   <= bk_load;
 	old_save   <= bk_save;
 	old_save_a <= bk_save_a;
-   
-   if (~old_load & bk_load) begin 
-      memcard1_load <= 1;
-      memcard2_load <= 1;
-   end
    
    if ((~old_save & bk_save) | (~old_save_a & bk_save_a)) memcard_save <= 1;
    
@@ -870,6 +864,8 @@ psx
    .syncVideoOut(syncVideoOut),
    .syncInterlace(status[60]),
    .rotate180(status[24]),
+   .fixedVBlank(status[55]),
+   .vCrop(status[4:3]),
    .SPUon(~status[30]),
    .SPUSDRAM(status[44] & SDRAM2_EN),
    .REVERBOFF(0),
@@ -965,6 +961,7 @@ psx
    .video_isPal     (video_isPal),   
    .video_hResMode  (video_hResMode),
    //Keys
+   .DSAltSwitchMode(status[31]),
    .PadPortEnable1 (PadPortEnable1),
    .PadPortAnalog1 (PadPortAnalog1),
    .PadPortMouse1  (PadPortMouse1 ),
@@ -1297,25 +1294,29 @@ localparam reg [23:0] aspect_ratio_lut_ntsc[128] = '{
     24'h2AF1EB, 24'hD3F982, 24'hED9AB4, 24'h163101, 24'h724531, 24'hDCBA12, 24'hC50907, 24'hFB7B92, 
     24'h580411, 24'hFDDBC7, 24'hAA77F1, 24'hD259D7, 24'h2ED233, 24'h2431B5, 24'hC1992B, 24'h20F191, 
     24'h7665A7, 24'h42D334, 24'hD09A0A, 24'hF17BAB, 24'hFFFC6B, 24'h6B653B, 24'h5153FA, 24'hFD9C73 
-};
-
-localparam reg [23:0] aspect_ratio_lut_pal[128] = '{
-    24'h42015D, 24'hF15506, 24'h35D121, 24'hFED563, 24'h40015D, 24'h2750D8, 24'hFF4585, 24'h45C185, 
-    24'h95B349, 24'h4A91A6, 24'hDC54E8, 24'h77D2B0, 24'hDF950D, 24'hCA1499, 24'hEA9560, 24'hD9B506, 
-    24'hB00417, 24'hB2242B, 24'hD6650D, 24'hE0F556, 24'hE0955D, 24'hC374B3, 24'hAC342B, 24'hB3145D, 
-    24'h65227B, 24'hE7F5BA, 24'hE2359F, 24'h3CC185, 24'hAEE467, 24'hBC94C7, 24'h4851D8, 24'hB33499, 
-    24'hF4F653, 24'h15808F, 24'h3A2185, 24'h78732B, 24'hC4C535, 24'hDCF5E2, 24'hF8A6A9, 24'hADF4B0, 
-    24'hE46631, 24'h6D02F9, 24'h77C349, 24'hD7E5F5, 24'h14208F, 24'h72E335, 24'h94742B, 24'h4571F6, 
-    24'h30015D, 24'hBAD556, 24'h4031D8, 24'hDBC659, 24'h345185, 24'h0C705D, 24'hF74743, 24'hB4B556, 
-    24'h12D08F, 24'h8D5438, 24'h32A185, 24'hF5B76A, 24'hFCC7AB, 24'h89F435, 24'h87F42B, 24'h8D945D, 
-    24'h2C015D, 24'hCCB660, 24'h45422B, 24'h23E121, 24'h9FB50D, 24'hD536C7, 24'h800417, 24'h0B505D, 
-    24'h07A03F, 24'hD9670D, 24'h7853EC, 24'hB3F5E5, 24'hCA56A9, 24'hEFF7F0, 24'hE947C1, 24'hDFF77B, 
-    24'h5892F9, 24'h629353, 24'hF74861, 24'hE907EF, 24'h43F253, 24'h4E32B0, 24'h1270A3, 24'hD13742, 
-    24'hB1A631, 24'h6833A6, 24'h5482F9, 24'hF3889B, 24'hC006D1, 24'hBAC6A9, 24'hC4D70D, 24'hAA5621, 
-    24'hCA374F, 24'hD14799, 24'h5132F6, 24'h981592, 24'hE29856, 24'h94F581, 24'hCF77B3, 24'h9DD5E2, 
-    24'hCB979F, 24'hD307EF, 24'hB066A9, 24'hDFA87B, 24'hE618C3, 24'h4852C4, 24'h2BF1B0, 24'h4C12EF, 
-    24'hB006D1, 24'hA7F688, 24'hF01960, 24'h26C185, 24'h06403F, 24'h7FC50D, 24'hFB59FA, 24'hEA2955, 
-    24'hFACA09, 24'hA5C6A9, 24'h67542B, 24'h7EA521, 24'h89F59C, 24'h72D4B0, 24'hD16895, 24'hEF89DB
+};                                                                                                  
+                                                                                                       
+localparam reg [23:0] aspect_ratio_lut_pal[160] = '{                                                   
+    24'hE8F4D9, 24'h41015D, 24'h40815D, 24'h8EB30A, 24'hF8D557, 24'h1C009B, 24'h1CB0A0, 24'h473190,    
+    24'h711280, 24'hCEF49C, 24'hD734D4, 24'hCAC495, 24'h4791A1, 24'hF695A7, 24'hC7549A, 24'hC31489, 
+    24'hAEB417, 24'hB8C45B, 24'hA2C3DD, 24'hBCF484, 24'hD2E513, 24'hC2A4B7, 24'hEFF5DA, 24'h85D349, 
+    24'h18809B, 24'h0C9050, 24'hF59626, 24'hE595C9, 24'h35C15D, 24'hF81655, 24'h0EC061, 24'hEA160D, 
+    24'h68D2BA, 24'hD735A2, 24'h4731E0, 24'hE9A631, 24'hDC35DF, 24'h6D12ED, 24'h96D412, 24'hB87502, 
+    24'hCFF5AE, 24'h73732C, 24'hF1D6AF, 24'h7CA377, 24'h30C15D, 24'hA7A4B7, 24'h5C629D, 24'h3941A1, 
+    24'h4A221F, 24'hF5B712, 24'hD5F631, 24'h8ED428, 24'h8BC417, 24'hE236A8, 24'hA854FB, 24'hEAE6FD, 
+    24'hD73670, 24'hD5666B, 24'hFD97AB, 24'hA8751F, 24'hCDA649, 24'hCE1655, 24'h5C92DC, 24'h3BC1DB, 
+    24'hAEB574, 24'hB5A5B3, 24'hFE8807, 24'h2B015D, 24'h13009B, 24'hB6F5DC, 24'hA5E557, 24'hC7D677, 
+    24'hD1A6D1, 24'h099050, 24'hEF37DB, 24'hB8C619, 24'h25B140, 24'h4FD2A9, 24'hE1978E, 24'hD7373E, 
+    24'h28515D, 24'hE437C1, 24'hD35737, 24'hF4D866, 24'hF97899, 24'h42724D, 24'h5572F9, 24'h27015D, 
+    24'hCF0745, 24'h6D83DD, 24'hFFB910, 24'hE35818, 24'hEB2869, 24'hB1565F, 24'hF3F8CE, 24'hE05822, 
+    24'h10A09B, 24'hEFF8C7, 24'h9E35D0, 24'h87B502, 24'hBAF6EE, 24'hD7D809, 24'hD7380C, 24'hF59939, 
+    24'h2E31BE, 24'hE0B883, 24'h6B8417, 24'h93F5A7, 24'h09E061, 24'hE3B8C6, 24'hBCE74F, 24'h2FC1DB, 
+    24'h22F15D, 24'h818513, 24'h5ED3BB, 24'hFF3A15, 24'h5AB399, 24'hB52737, 24'hF0199A, 24'hEE5992, 
+    24'hBDB7A6, 24'hC74811, 24'h3FD298, 24'h77F4E5, 24'h4552D7, 24'h1390CE, 24'hE4D973, 24'h25B190, 
+    24'h91960F, 24'hBBD7D9, 24'h20815D, 24'h788513, 24'h20415D, 24'h9BF69E, 24'h8EB614, 24'h8435A7, 
+    24'hF8DAAE, 24'h9B26AF, 24'h0E009B, 24'h8EA631, 24'h1CB140, 24'h1B112F, 24'hD05925, 24'hD1F940, 
+    24'h89060F, 24'hD7098B, 24'h88060F, 24'h4172ED, 24'hD739A8, 24'hDBE9E7, 24'h656495, 24'hFF8B97, 
+    24'hD1A98B, 24'hA6D79F, 24'hB4E84B, 24'hEC7AE1, 24'hFF1BC7, 24'h5C944A, 24'hC31912, 24'hEE8B21 
 };
 
 logic [11:0] h_pos, v_pos, vb_pos, v_total;
@@ -1363,7 +1364,9 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 
 		if (v_pos < 128)
 			v_total <= 6'd0;
-		else if (v_pos > 255)
+		else if (video_isPal && v_pos > 287)
+			v_total <= 8'd159;		
+		else if (~video_isPal && v_pos > 255)
 			v_total <= 7'd127;
 		else
 			v_total <= v_pos - 8'd128;

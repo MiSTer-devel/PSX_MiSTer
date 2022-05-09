@@ -11,6 +11,7 @@ entity joypad_pad is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      DSAltSwitchMode      : in  std_logic;
       joypad               : in  joypad_t;
       rumble               : out std_logic_vector(15 downto 0);
       padMode              : out std_logic_vector(1 downto 0);
@@ -238,19 +239,30 @@ begin
                command         <= COMMAND_NONE;
             elsif (joypad.PadPortDS = '1') then
                if (portStates(portNr).dsAnalogLock = '0') then
-                  if (switchmode = '1' and portNr = 0) then
+               
+                  -- switch from mouseclick/touchpad
+                  if (portNr = 0) then
                      switchmode <= '0';
-                     portStates(0).dsAnalogMode <= not portStates(0).dsAnalogMode;
-                     portStates(0).dsRumbleMode <= '0';
+                     if (switchmode = '1' and DSAltSwitchMode = '0') then
+                        portStates(0).dsAnalogMode <= not portStates(0).dsAnalogMode;
+                        portStates(0).dsRumbleMode <= '0';
+                     end if;
                   end if;
-                  if (joypad.KeyL3 = '1' and joypad.KeyR3 = '1' and joypad.KeyUp = '1') then 
+                  
+                  -- switch from button combo
+                  if (((DSAltSwitchMode = '1' and joypad.KeyL1 = '1' and joypad.KeyL2 = '1' and joypad.KeyR1 = '1' and joypad.KeyR2 = '1') or
+                       (DSAltSwitchMode = '0' and joypad.KeyL3 = '1' and joypad.KeyR3 = '1')) 
+                     and joypad.KeyUp = '1') then 
                      portStates(portNr).dsAnalogMode <= '1';
                      portStates(portNr).dsRumbleMode <= '0';
                   end if;
-                  if (joypad.KeyL3 = '1' and joypad.KeyR3 = '1' and joypad.KeyDown = '1') then 
+                  if (((DSAltSwitchMode = '1' and joypad.KeyL1 = '1' and joypad.KeyL2 = '1' and joypad.KeyR1 = '1' and joypad.KeyR2 = '1') or
+                       (DSAltSwitchMode = '0' and joypad.KeyL3 = '1' and joypad.KeyR3 = '1')) 
+                     and joypad.KeyDown = '1') then 
                      portStates(portNr).dsAnalogMode <= '0';
                      portStates(portNr).dsRumbleMode <= '0';
                   end if;
+                  
                end if;
             else
                portStates(portNr).dsConfigMode   <= '0';

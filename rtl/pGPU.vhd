@@ -26,6 +26,9 @@ package pGPU is
       vDisplayRange           : unsigned(19 downto 0);
       pal60                   : std_logic;
       syncInterlace           : std_logic;
+      rotate180               : std_logic;
+      fixedVBlank             : std_logic;
+      vCrop                   : std_logic_vector(1 downto 0);
    end record;
    
    type tvideoout_reports is record

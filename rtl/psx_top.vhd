@@ -39,6 +39,8 @@ entity psx_top is
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
       rotate180             : in  std_logic;
+      fixedVBlank           : in  std_logic;
+      vCrop                 : in  std_logic_vector(1 downto 0);
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
@@ -135,6 +137,7 @@ entity psx_top is
       video_isPal           : out std_logic;
       video_hResMode        : out std_logic_vector(2 downto 0);
 
+      DSAltSwitchMode       : in  std_logic;
       joypad1               : in  joypad_t;
       joypad2               : in  joypad_t;
       joypad1_rumble        : out std_logic_vector(15 downto 0);
@@ -931,6 +934,7 @@ begin
 
       isPal                => isPal, -- passed through for GunCon
       
+      DSAltSwitchMode      => DSAltSwitchMode,
       joypad1              => joypad1,
       joypad2              => joypad2,
       joypad1_rumble       => joypad1_rumble,
@@ -1312,6 +1316,8 @@ begin
       syncVideoOut         => syncVideoOut,
       syncInterlace        => syncInterlace,
       rotate180            => rotate180,
+      fixedVBlank          => fixedVBlank,
+      vCrop                => vCrop,   
       
       Gun1CrosshairOn      => Gun1CrosshairOn,
       Gun1X                => Gun1X,

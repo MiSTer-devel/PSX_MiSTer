@@ -35,6 +35,8 @@ entity psx_mister is
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
       rotate180             : in  std_logic;
+      fixedVBlank           : in  std_logic;
+      vCrop                 : in  std_logic_vector(1 downto 0);
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
@@ -131,6 +133,7 @@ entity psx_mister is
       video_isPal           : out std_logic;
       video_hResMode        : out std_logic_vector(2 downto 0);
       -- Keys - all active high   
+      DSAltSwitchMode       : in  std_logic;
       PadPortEnable1        : in  std_logic;
       PadPortAnalog1        : in  std_logic;
       PadPortMouse1         : in  std_logic;
@@ -264,6 +267,8 @@ begin
       syncVideoOut          => syncVideoOut,
       syncInterlace         => syncInterlace,
       rotate180             => rotate180,
+      fixedVBlank           => fixedVBlank,
+      vCrop                 => vCrop,      
       SPUon                 => SPUon,
       SPUSDRAM              => SPUSDRAM,
       REVERBOFF             => REVERBOFF,
@@ -360,6 +365,8 @@ begin
       video_isPal           => video_isPal, 
       video_hResMode        => video_hResMode, 
       -- inputs
+      DSAltSwitchMode       => DSAltSwitchMode,
+      
       joypad1.PadPortEnable => PadPortEnable1,
       joypad1.PadPortAnalog => PadPortAnalog1,
       joypad1.PadPortMouse  => PadPortMouse1,

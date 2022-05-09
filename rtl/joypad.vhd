@@ -16,6 +16,7 @@ entity joypad is
 
       isPal                : in  std_logic; -- passed through for GunCon
       
+      DSAltSwitchMode      : in  std_logic;
       joypad1              : in  joypad_t;
       joypad2              : in  joypad_t;
       joypad1_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
@@ -400,6 +401,7 @@ begin
       ce                   => ce,       
       reset                => reset,    
        
+      DSAltSwitchMode      => DSAltSwitchMode,
       joypad               => joypad_selected,
       rumble               => rumble_selected,
       padMode              => padMode,

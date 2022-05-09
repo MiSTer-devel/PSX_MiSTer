@@ -30,6 +30,8 @@ entity gpu is
       syncVideoOut         : in  std_logic;
       syncInterlace        : in  std_logic;
       rotate180            : in  std_logic;
+      fixedVBlank          : in  std_logic;
+      vCrop                : in  std_logic_vector(1 downto 0);
 
       Gun1CrosshairOn      : in  std_logic;
       Gun1X                : in  unsigned(7 downto 0);
@@ -1546,6 +1548,9 @@ begin
    videoout_settings.vDisplayRange           <= vDisplayRange;
    videoout_settings.pal60                   <= pal60;
    videoout_settings.syncInterlace           <= syncInterlace;
+   videoout_settings.rotate180               <= rotate180;
+   videoout_settings.fixedVBlank             <= fixedVBlank;
+   videoout_settings.vCrop                   <= vCrop;
    
    videoout_ss_in.interlacedDisplayField  <= ss_timing_in(4)(19);
    videoout_ss_in.nextHCount              <= ss_timing_in(4)(11 downto 0);
@@ -1573,7 +1578,6 @@ begin
          
       videoout_on                => videoout_on,
       syncVideoOut               => syncVideoOut,
-      rotate180                  => rotate180,
             
       debugmodeOn                => debugmodeOn,
             

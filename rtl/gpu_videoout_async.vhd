@@ -15,8 +15,6 @@ entity gpu_videoout_async is
       reset_1x                : in  std_logic;
       softReset_1x            : in  std_logic;
       
-      rotate180_in            : in  std_logic;
-      
       allowunpause1x          : out std_logic;
       
       videoout_settings_1x    : in  tvideoout_settings;
@@ -93,6 +91,11 @@ architecture arch of gpu_videoout_async is
    signal vDisplayMax      : integer range 0 to 314 := 239;
    
    signal InterlaceFieldN  : std_logic := '0';  
+   
+   signal vblankFixed      : std_logic := '0';   
+   signal vblankFixedField : std_logic := '0';  
+   signal noDraw           : std_logic := '0';  
+   signal newLineTrigger   : std_logic := '0';  
    
    -- output   
    type tState is
@@ -211,6 +214,7 @@ begin
       variable mode480i                  : std_logic;
       variable isVsync                   : std_logic;
       variable vdispNew                  : integer range 0 to 511;
+      variable vblankFixedNew            : std_logic;
       variable interlacedDisplayFieldNew : std_logic;
       variable nextLineCalc              : unsigned(8 downto 0);
    begin
@@ -227,7 +231,9 @@ begin
          else
             lineMax <= vDisplayEnd - vDisplayStart;
          end if;
-      
+         
+         newLineTrigger <= '0';
+         
          if (nextHCount <   3) then videoout_reports.hblank_tmr <= '1'; else videoout_reports.hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
                 
          if (reset = '1') then
@@ -367,6 +373,33 @@ begin
                   if (videoout_settings.vramRange(10) = '1' and (vdispNew mod 2) = 0) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
                end if;
                
+               -- fixed vblank 
+               vblankFixedNew := '1';
+               if (videoout_settings.GPUSTAT_PalVideoMode = '1' and videoout_settings.pal60 = '0') then
+                  if (videoout_settings.vCrop = "01") then
+                     if (vdispNew >= 28 and vdispNew < 298)  then vblankFixedNew := '0'; end if;  -- 270 lines
+                  elsif (videoout_settings.vCrop = "10") then
+                     if (vdispNew >= 35 and vdispNew < 291)  then vblankFixedNew := '0'; end if;  -- 256 lines
+                  else
+                     if (vdispNew >= 19 and vdispNew < 307)  then vblankFixedNew := '0'; end if;  -- 288 lines
+                  end if;
+               else
+                  if (videoout_settings.vCrop = "01") then
+                     if (vdispNew >= 24 and vdispNew < 248)  then vblankFixedNew := '0'; end if;   -- 224 lines
+                  elsif (videoout_settings.vCrop = "10") then
+                     if (vdispNew >= 28  and vdispNew < 244) then vblankFixedNew := '0'; end if;   -- 216 lines
+                  else
+                     if (vdispNew >= 16 and vdispNew < 256)  then vblankFixedNew := '0'; end if;   -- 240 lines
+                  end if;
+               end if;
+               vblankFixed <= vblankFixedNew;
+               
+               if (isVsync = '1' and vblankFixedNew = '1') then
+                  vblankFixedField <= interlacedDisplayFieldNew;
+               end if;
+                             
+               newLineTrigger <= '1';
+               
                -- fetching of next line from framebuffer
                vdispNew := vdispNew + 1;
                if (vDisplayStart > 0) then
@@ -435,8 +468,12 @@ begin
    end process;
    
    -- timing generation reading
-   videoout_out.vblank         <= videoout_reports.inVsync when vDisplayCnt < vDisplayMax else '1';
-   videoout_out.interlace      <= videoout_settings.GPUSTAT_VerRes and videoout_reports.interlacedDisplayField;
+   videoout_out.vblank         <= vblankFixed when (videoout_settings.fixedVBlank = '1') else
+                                  videoout_reports.inVsync when vDisplayCnt < vDisplayMax else '1';
+   
+   
+   videoout_out.interlace      <= vblankFixedField when (videoout_settings.fixedVBlank = '1') else
+                                  videoout_settings.GPUSTAT_VerRes and videoout_reports.interlacedDisplayField;
 
    videoout_out.DisplayOffsetX <= videoout_settings.vramRange(9 downto 0);
    videoout_out.DisplayOffsetY <= videoout_settings.vramRange(18 downto 10);
@@ -452,7 +489,7 @@ begin
          
          videoout_out.ce <= '0';
          
-         rotate180 <= rotate180_in and (not videoout_settings.GPUSTAT_ColorDepth24);
+         rotate180 <= videoout_settings.rotate180 and (not videoout_settings.GPUSTAT_ColorDepth24);
          
          if (videoout_settings.GPUSTAT_HorRes2 = '1') then
             clkDiv  <= 7; videoout_out.hResMode <= "010"; -- 368
@@ -537,6 +574,21 @@ begin
                      readAddrCount         <= (others => '0');
                      hCropCount            <= (others => '0');
                      hCropPixels           <= (others => '0');
+                     
+                     noDraw                <= '0';
+                     
+                  elsif (newLineTrigger = '1' and videoout_settings.fixedVBlank = '1' and vblankFixed = '0') then
+                     
+                     state                 <= WAITHBLANKEND;
+                     
+                     xCount                <= 0;
+                     clkCnt                <= 0;
+                     readAddrCount         <= (others => '0');
+                     hCropCount            <= (others => '0');
+                     hCropPixels           <= (others => '0');
+
+                     noDraw                <= '1';
+
                   end if;
             
                when WAITHBLANKEND =>
@@ -552,11 +604,15 @@ begin
                   if (clkCnt >= (clkDiv - 1)) then
                      videoout_out.ce     <= '1';
                      videoout_out.hblank <= '0';
-                     if (overlay_ena = '1') then
+                     if (videoout_settings.fixedVBlank = '1' and vblankFixed = '1') then
+                        videoout_out.r      <= (others => '0');
+                        videoout_out.g      <= (others => '0');
+                        videoout_out.b      <= (others => '0');
+                     elsif (overlay_ena = '1') then
                         videoout_out.r      <= overlay_data( 7 downto 0);
                         videoout_out.g      <= overlay_data(15 downto 8);
                         videoout_out.b      <= overlay_data(23 downto 16);
-                     elsif (videoout_settings.GPUSTAT_DisplayDisable = '1' or ce = '0') then
+                     elsif (videoout_settings.GPUSTAT_DisplayDisable = '1' or ce = '0' or noDraw = '1') then
                         videoout_out.r      <= (others => '0');
                         videoout_out.g      <= (others => '0');
                         videoout_out.b      <= (others => '0');
