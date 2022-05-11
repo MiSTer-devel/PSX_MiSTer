@@ -420,7 +420,7 @@ parameter CONF_STR = {
 	//"h3P3oM,Patch TTY,Off,On;",
 	"h3P3T1,Advance Pause;",
 
-	"- ;",
+	"-   ;",
 	"R0,Reset;",
 	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Savestates,Fastfoward;",
 	"jn,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,X,X;",
