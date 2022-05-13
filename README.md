@@ -37,6 +37,8 @@ Region settings (e.g. Clock, BIOS, CD check) are selected automatically when loa
 
 ## Memory Card
 
+Games that are in their own folder will create it's own memory card in media/fat/saves/psx as <folder name>.sav 
+
 One card can be mounted for each controller slot. Cards are in raw .mcd format. An empty formatted .mcd file is available for [download here](https://github.com/MiSTer-devel/PSX_MiSTer/raw/main/memcard/empty.mcd).
 
 You need to save them either manually in the OSD or turn on autosave. Saving or loading a card will pause the core for a short time.
