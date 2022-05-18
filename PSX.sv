@@ -349,8 +349,8 @@ parameter CONF_STR = {
 	"S1,CUECHD,Load CD;",
 	"F1,EXE,Load Exe;",
 	"-;",
-	"C,Cheats;",
-	"O6,Cheats Enabled,Yes,No;",
+	"d6C,Cheats;",
+	"h6O6,Cheats Enabled,Yes,No;",
 	"-;",
 	"SC2,SAVMCD,Mount Memory Card 1;",
 	"SC3,SAVMCD,Mount Memory Card 2;",
@@ -453,7 +453,7 @@ parameter CONF_STR = {
 reg dbg_enabled = 0;
 wire  [1:0] buttons;
 wire [63:0] status;
-wire [15:0] status_menumask = {status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
