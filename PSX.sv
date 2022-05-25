@@ -422,7 +422,7 @@ parameter CONF_STR = {
 
 	"-   ;",
 	"R0,Reset;",
-	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Savestates,Fastfoward;",
+	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Savestates,Fastforward;",
 	"jn,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,X,X;",
 	"I,",
 	"Slot=DPAD|Save/Load=Start+DPAD,",

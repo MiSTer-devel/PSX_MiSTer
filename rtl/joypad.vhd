@@ -134,7 +134,6 @@ architecture arch of joypad is
    signal selectedPort1       : std_logic;
    signal selectedPort2       : std_logic;
    signal selectedPort        : std_logic;
-   signal selectedPort_1      : std_logic;
       
    signal portNr              : integer range 0 to 1;
       
@@ -364,12 +363,11 @@ begin
             end if;
             JOY_CTRL_13_1 <= JOY_CTRL(13);
             
-            selectedPort_1 <= selectedPort1; 
-            if (selectedPort_1 /= selectedPort1) then
-               if (selectedPort1) then
-                  joypad2_rumble <= rumble_selected;
-               else
+            if (receiveValidPad = '1') then
+               if (selectedPort1 = '1') then
                   joypad1_rumble <= rumble_selected;
+               else
+                  joypad2_rumble <= rumble_selected;
                end if;
             end if;
           

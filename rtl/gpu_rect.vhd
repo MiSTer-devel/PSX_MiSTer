@@ -245,9 +245,9 @@ begin
                   
                when CHECKPOS =>
                   if (rec_transparency = '1' or rec_texture = '1') then 
-                     targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * 4), 32);
+                     targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * to_unsigned(4, 4)), 32);
                   else
-                     targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * 2), 32);
+                     targetTiming <= to_unsigned(50 + to_integer(rec_sizex * rec_sizey * to_unsigned(2, 4)), 32);
                   end if;
                
                   xsize := to_signed(to_integer(rec_sizex), 12);
