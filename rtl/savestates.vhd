@@ -162,7 +162,7 @@ architecture arch of savestates is
    signal SS_wren_2x          : std_logic_vector(SAVETYPESCOUNT - 1 downto 0);
    signal SS_rden_2x          : std_logic_vector(SAVETYPESCOUNT - 1 downto 0);
    
-   signal unstallwait         : integer range 0 to 134217727 := 0;
+   signal unstallwait         : integer range 0 to 16777215 := 0;
    
    signal ddr3_ADDR_save      : std_logic_vector(25 downto 0) := (others => '0');
    signal ddr3_DOUT_saved     : std_logic_vector(63 downto 0);
@@ -470,7 +470,7 @@ begin
                if (DDR3_busy = '0') then
                   state       <= SAVEWAITHPSDONE;
                   if (increaseSSHeaderCount = '1') then
-                     unstallwait <= 134217727;
+                     unstallwait <= 16777215;
                   end if;
                end if;
              

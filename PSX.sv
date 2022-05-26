@@ -333,7 +333,7 @@ always @(posedge clk_1x) begin : ffwd
 	fast_forward <= (FFrequest | ff_latch);
 end
 
-wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download | cdDownloadReset;
+wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | cdDownloadReset;
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
@@ -341,7 +341,7 @@ wire reset = RESET | buttons[1] | status[0] | bios_download | exe_download | cdD
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-//    XXXXXXXXX XXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
+//  X XXXXXXXXX XXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -398,7 +398,6 @@ parameter CONF_STR = {
 	"P2-;",
 	"P2OG,Fastboot,Off,On;",
 	"P2oA,CD Lid,Closed,Open;",
-	"P2OP,Pause when OSD is open,Off,On;",
 	"P2OL,CD Fast Seek,Off,On;",
 	"P2oQ,Data Cache(Cheats Off),Off,On;",
 	
@@ -652,7 +651,7 @@ always @(posedge clk_1x) begin
      
    if (img_mounted[1]) begin
       if (img_size > 0) begin
-         hasCD       <= 1;
+         hasCD     <= 1;
       end else begin
          hasCD     <= 0;
       end
@@ -822,24 +821,51 @@ always @(posedge clk_1x) begin
 
 end
 
-////////////////////////////  PAUSE  ///////////////////////////////////
+////////////////////////////  PAUSE and RESET  ///////////////////////////
 reg paused = 0;
 reg [9:0] unpause = 0;
 reg status1_1;
 wire isPaused;
 
+reg [20:0] aliveCnt = 0;
+reg heartbeat_1 = 0;
+
+reg reset = 0;
+
 always @(posedge clk_1x) begin
 
    paused <= 0;
-   if (status[25] & OSD_STATUS & (unpause == 0)) begin
+
+   // pause from OSD open
+   if (OSD_STATUS & (unpause == 0)) begin
       paused <= 1;
    end
    
+   // Advance Pause OSD trigger
    status1_1 <= status[1];
    if (status[1] & ~status1_1) begin
       unpause <= 1023;
    end else if (unpause > 0) begin
       unpause <= unpause - 1'd1;
+   end
+   
+   // pause from heartbeat
+   heartbeat_1 <= heartbeat;
+   if (hasCD && (heartbeat == heartbeat_1)) begin
+      if (aliveCnt[20] == 0) begin
+         aliveCnt <= aliveCnt + 1'b1;
+      end else begin
+         paused <= 1;
+      end
+   end else begin
+      aliveCnt <= 0;
+   end
+   
+   // reset
+   reset <= 0;
+   if (reset_or) begin
+      reset    <= 1;
+      aliveCnt <= 0;
    end
 
 end

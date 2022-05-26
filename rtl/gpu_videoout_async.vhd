@@ -268,7 +268,7 @@ begin
                allowunpause <= '0';
             end if;
             
-            if (vpos_pause = vpos and nextHCount_pause = nextHCount) then
+            if (softReset = '1' or (vpos_pause = vpos and nextHCount_pause = nextHCount)) then
                allowunpause <= '1';
                unpauseCnt   <= 3;
             end if;
