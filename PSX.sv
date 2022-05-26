@@ -506,6 +506,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
 (
 	.clk_sys(clk_1x),
 	.HPS_BUS(HPS_BUS),
+	.EXT_BUS(EXT_BUS),
 
 	.buttons(buttons),
 	.forced_scandoubler(forced_scandoubler),
@@ -564,6 +565,16 @@ assign sd_rd[0] = 0;
 assign sd_wr[0] = 0;
 
 assign sd_wr[1] = 0;
+
+wire [35:0] EXT_BUS;
+wire        heartbeat;
+
+hps_ext hps_ext
+(
+	.clk_sys(clk_1x),
+	.EXT_BUS(EXT_BUS),
+	.heartbeat(heartbeat)
+);
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
