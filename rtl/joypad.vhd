@@ -345,7 +345,7 @@ begin
                      -- current logic assumes delayless long ack duration
                      -- measurements and values from @JaCzekanski, psx-sps and duckstation
                      if (ackMem1 = '1') then
-                        baudCnt <= to_unsigned(1502, 21); -- todo: should be ~5us + duration 9.98us => 500 clock cycles?
+                        baudCnt <= to_unsigned(500, 21); -- todo: should be ~5us + duration 9.98us => 500 clock cycles?
                      else
                         baudCnt <= to_unsigned(752, 21); -- ACK delay is between 6.8us-13.7us + duration 9.98us => 566 - 833 clock cycles
                      end if;

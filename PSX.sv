@@ -346,7 +346,8 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 `include "build_id.v"
 parameter CONF_STR = {
 	"PSX;SS3E000000:400000;",
-	"S1,CUECHD,Load CD;",
+	"H7S1,CUECHD,Load CD;",
+	"h7-,Reload core for CD;",
 	"F1,EXE,Load Exe;",
 	"-;",
 	"d6C,Cheats;",
@@ -452,7 +453,7 @@ parameter CONF_STR = {
 reg dbg_enabled = 0;
 wire  [1:0] buttons;
 wire [63:0] status;
-wire [15:0] status_menumask = {~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -625,6 +626,7 @@ reg  [1:0] region;
 reg  [1:0] biosregion;
 wire [1:0] region_out;
 reg        isPal;
+reg biosMod = 0;
 
 always @(posedge clk_1x) begin
 	ramdownload_wr <= 0;
@@ -647,7 +649,9 @@ always @(posedge clk_1x) begin
       ioctl_wait <= 0;
 	end
    exe_download_1  <= exe_download;
-   loadExe         <= exe_download_1 & ~exe_download;   
+   loadExe         <= exe_download_1 & ~exe_download;  
+
+   if (loadExe) biosMod <= 1'b1;
      
    if (img_mounted[1]) begin
       if (img_size > 0) begin

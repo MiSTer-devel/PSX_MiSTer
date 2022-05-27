@@ -81,6 +81,7 @@ architecture arch of gpu_videoout_async is
    
    signal nextHCount_pause : integer range 0 to 4095;
    signal vpos_pause       : integer range 0 to 511;
+   signal field_pause      : std_logic := '0'; 
    signal unpauseCnt       : integer range 0 to 3 := 0;
    
    signal htotal           : integer range 3406 to 3413;
@@ -253,6 +254,7 @@ begin
             unpauseCnt       <= 3;
             nextHCount_pause <= 1;
             vpos_pause       <= 0;
+            field_pause      <= '0';
             
          else
          
@@ -260,6 +262,7 @@ begin
             if (ce_1 = '1' and ce = '0') then
                nextHCount_pause <= nextHCount;
                vpos_pause       <= vpos;
+               field_pause      <= videoout_reports.interlacedDisplayField;
             end if;
             
             if (unpauseCnt > 0) then
@@ -268,7 +271,7 @@ begin
                allowunpause <= '0';
             end if;
             
-            if (softReset = '1' or (vpos_pause = vpos and nextHCount_pause = nextHCount)) then
+            if (softReset = '1' or (vpos_pause = vpos and nextHCount_pause = nextHCount and videoout_reports.interlacedDisplayField = field_pause)) then
                allowunpause <= '1';
                unpauseCnt   <= 3;
             end if;
