@@ -367,7 +367,9 @@ architecture arch of gpu is
    type tvramState is
    (
       IDLE,
-      READVRAM
+      READVRAM,
+      WAITRAMDONE,
+      WAITUNPAUSE
    );
    signal vramState : tvramState := IDLE;
    
@@ -381,6 +383,7 @@ architecture arch of gpu is
    signal reqVRAMYPos               : unsigned(8 downto 0);
    signal reqVRAMSize               : unsigned(10 downto 0);
    signal reqVRAMremain             : unsigned(7 downto 0);
+   signal reqVRAMwait               : unsigned(7 downto 0);
    signal reqVRAMwrap               : unsigned(7 downto 0);
    signal reqVRAMnext               : unsigned(7 downto 0);
    signal reqVRAMaddr               : unsigned(7 downto 0) := (others => '0');
@@ -1428,13 +1431,13 @@ begin
             vramState   <= IDLE;
             reqVRAMDone <= '0';
             
-         elsif (ce = '1') then
+         else
          
             reqVRAMDone <= '0';
          
             case (vramState) is
                when IDLE =>
-                  if ((vram_WE = '0' or vram_BUSY = '0') and vram_pause = '0') then
+                  if (ce = '1' and (vram_WE = '0' or vram_BUSY = '0') and vram_pause = '0') then
                      if (reqVRAMEnable = '1') then
                         reqVRAMStore <= (not pipeline_reqVRAMEnable) and (not videoout_reqVRAMEnable);
                         reqVRAMSizeRounded := reqVRAMSize;
@@ -1473,7 +1476,10 @@ begin
                   end if;
                   
                when READVRAM =>
-                  if (vram_DOUT_READY = '1') then
+                  if (ce = '0') then
+                     vramState     <= WAITRAMDONE;
+                     reqVRAMwait   <= reqVRAMremain;
+                  elsif (vram_DOUT_READY = '1') then
                      reqVRAMaddr <= reqVRAMaddr + 1;
                      if (reqVRAMremain > 0) then
                         reqVRAMremain <= reqVRAMremain - 1;
@@ -1501,6 +1507,21 @@ begin
                            reqVRAMDone <= '1';
                         end if;
                      end if;
+                  end if;
+                  
+               when WAITRAMDONE =>
+                  if (vram_DOUT_READY = '1') then
+                     if (reqVRAMwait > 0) then
+                        reqVRAMwait <= reqVRAMwait - 1;
+                     else
+                        vramState   <= WAITUNPAUSE;
+                     end if;
+                  end if;
+               
+               when WAITUNPAUSE =>
+                  if (ce = '1') then
+                     vramState <= READVRAM;
+                     vram_RD   <= '1';
                   end if;
             
             end case;
@@ -1660,7 +1681,7 @@ begin
          end if;
          
          SS_Idle <= '0';
-         if (proc_idle = '1' and fifoIn_Empty = '1' and fifoOut_Empty = '1' and vramState = IDLE and pipeline_busy = '0'  and fifoOut_Wr = '0' and pixelWrite = '0') then
+         if (proc_idle = '1' and fifoIn_Empty = '1' and fifoOut_Empty = '1' and vramState = IDLE and pipeline_busy = '0' and fifoOut_Wr = '0' and pixelWrite = '0') then
             SS_Idle <= '1';
          end if;     
 
