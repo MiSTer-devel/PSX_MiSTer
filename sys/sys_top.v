@@ -1135,7 +1135,7 @@ reg        dv_hs, dv_vs, dv_de;
 always @(posedge clk_vid) begin
 	reg [23:0] dv_d1, dv_d2;
 	reg        dv_de1, dv_de2, dv_hs1, dv_hs2, dv_vs1, dv_vs2;
-	reg [12:0] vsz, vcnt;
+	reg [12:0] vsz, vcnt, vcnt_l, vcnt_ll;
 	reg        old_hs, old_vs;
 	reg        vde;
 	reg  [3:0] hss;
@@ -1147,7 +1147,11 @@ always @(posedge clk_vid) begin
 		if(~old_hs && vga_hs_osd) begin
 			old_vs <= vga_vs_osd;
 			if(~&vcnt) vcnt <= vcnt + 1'd1;
-			if(~old_vs & vga_vs_osd & ~f1) vsz <= vcnt;
+			if(~old_vs & vga_vs_osd) begin
+				if (vcnt != vcnt_ll || vcnt < vcnt_l) vsz <= vcnt;
+				vcnt_l <= vcnt;
+				vcnt_ll <= vcnt_l;
+			end
 			if(old_vs & ~vga_vs_osd) vcnt <= 0;
 			
 			if(vcnt == 1) vde <= 1;
