@@ -94,7 +94,7 @@ architecture arch of gpu_videoout_async is
    signal InterlaceFieldN  : std_logic := '0';  
    
    signal vblankFixed      : std_logic := '0';   
-   signal vblankFixedField : std_logic := '0';  
+
    signal noDraw           : std_logic := '0';  
    signal newLineTrigger   : std_logic := '0';  
    
@@ -397,10 +397,7 @@ begin
                end if;
                vblankFixed <= vblankFixedNew;
                
-               if (isVsync = '1' and vblankFixedNew = '1') then
-                  vblankFixedField <= interlacedDisplayFieldNew;
-               end if;
-                             
+
                newLineTrigger <= '1';
                
                -- fetching of next line from framebuffer
@@ -475,8 +472,7 @@ begin
                                   videoout_reports.inVsync when vDisplayCnt < vDisplayMax else '1';
    
    
-   videoout_out.interlace      <= vblankFixedField when (videoout_settings.fixedVBlank = '1') else
-                                  videoout_settings.GPUSTAT_VerRes and videoout_reports.interlacedDisplayField;
+   videoout_out.interlace      <= videoout_settings.GPUSTAT_VerRes and videoout_reports.GPUSTAT_InterlaceField;
 
    videoout_out.DisplayOffsetX <= videoout_settings.vramRange(9 downto 0);
    videoout_out.DisplayOffsetY <= videoout_settings.vramRange(18 downto 10);
@@ -546,6 +542,10 @@ begin
                videoout_out.ce  <= '1';
             end if;
             
+            if (nextHCount = 1) then --clock divider reset at end of line
+               clkCnt           <= 0;
+            end if;
+
             hCropCount <= hCropCount + 1;
             
             case (state) is
@@ -573,7 +573,6 @@ begin
                      end if;
                      
                      xCount                <= 0;
-                     clkCnt                <= 0;
                      readAddrCount         <= (others => '0');
                      hCropCount            <= (others => '0');
                      hCropPixels           <= (others => '0');
@@ -585,7 +584,6 @@ begin
                      state                 <= WAITHBLANKEND;
                      
                      xCount                <= 0;
-                     clkCnt                <= 0;
                      readAddrCount         <= (others => '0');
                      hCropCount            <= (others => '0');
                      hCropPixels           <= (others => '0');
@@ -605,7 +603,6 @@ begin
                   
                when DRAW =>
                   if (clkCnt >= (clkDiv - 1)) then
-                     videoout_out.ce     <= '1';
                      videoout_out.hblank <= '0';
                      if (videoout_settings.fixedVBlank = '1' and vblankFixed = '1') then
                         videoout_out.r      <= (others => '0');
