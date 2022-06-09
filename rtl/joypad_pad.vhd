@@ -138,7 +138,7 @@ architecture arch of joypad_pad is
       dsRumbleIndexL : integer range -1 to 5;
    end record;
    type portState_array is array(0 to 1) of portState;
-   signal portStates : portState_array;
+   signal portStates : portState_array := (others => ('0', '0', '0', '0', (others => '1'), (others => '0'), -1, -1));
 
    signal dsConfigModeSave  : std_logic := '0';
    signal dsAnalogModeSave  : std_logic := '0';

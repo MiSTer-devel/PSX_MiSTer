@@ -124,8 +124,8 @@ architecture arch of cd_xa is
    signal ringInR             : signed(15 downto 0);
    
    signal resampleDir         : std_logic;
-   signal resampleSamples     : unsigned(2 downto 0);
-   signal resampleSampleCnt   : unsigned(4 downto 0);
+   signal resampleSamples     : unsigned(2 downto 0) := (others => '0');
+   signal resampleSampleCnt   : unsigned(4 downto 0) := (others => '0');
    
    signal ringOut             : signed(15 downto 0);
    signal zigZagAddr          : unsigned(7 downto 0);

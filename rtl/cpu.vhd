@@ -1711,11 +1711,7 @@ begin
             
             execute_lastreadCOP           <= ss_in(59)(10);
             
-            DIVstart                      <= '0';
-            
          elsif (ce = '1') then
-         
-            DIVstart    <= '0';
             
             -- mul/div calc/wait
             if (hiloWait > 0) then
@@ -1848,9 +1844,9 @@ begin
                      hilocalc <= HILOCALC_MULT;
                      mul1     <= value1;
                      mul2     <= value2;
-                     if    (value1(31 downto 11) = 0 or value1(31 downto 11) = 16#1FFFFF#) then hiloWait <= 5;
-                     elsif (value1(31 downto 20) = 0 or value1(31 downto 20) = 16#FFF#)    then hiloWait <= 8;
-                     else  hiloWait <= 12;
+                     if    (value1(31 downto 11) = 0 or value1(31 downto 11) = 16#1FFFFF#) then hiloWait <= 7;
+                     elsif (value1(31 downto 20) = 0 or value1(31 downto 20) = 16#FFF#)    then hiloWait <= 10;
+                     else  hiloWait <= 14;
                      end if;
                   end if;
                   
@@ -1858,14 +1854,14 @@ begin
                      hilocalc <= HILOCALC_MULTU;
                      mul1     <= value1;
                      mul2     <= value2;
-                     if    (value1(31 downto 11) = 0) then hiloWait <= 5;
-                     elsif (value1(31 downto 20) = 0) then hiloWait <= 8;
-                     else  hiloWait <= 12;
+                     if    (value1(31 downto 11) = 0) then hiloWait <= 7;
+                     elsif (value1(31 downto 20) = 0) then hiloWait <= 10;
+                     else  hiloWait <= 14;
                      end if;
                   end if;
                   
                   if (EXEcalcDIV = '1') then
-                     hiloWait    <= 38;
+                     hiloWait    <= 37;
                      if (value2 = 0) then
                         hilocalc      <= HILOCALC_DIV0;
                         DIV0remainder <= value1;
@@ -1880,23 +1876,23 @@ begin
                         DIV0remainder <= (others => '0');
                      else
                         hilocalc    <= HILOCALC_DIV;
-                        DIVstart    <= '1';
-                        DIVdividend <= resize(signed(value1), 33);
-                        DIVdivisor  <= resize(signed(value2), 33);
+                        --DIVstart    <= '1';
+                        --DIVdividend <= resize(signed(value1), 33);
+                        --DIVdivisor  <= resize(signed(value2), 33);
                      end if;
                   end if;
                   
                   if (EXEcalcDIVU = '1') then
-                     hiloWait    <= 38;
+                     hiloWait    <= 37;
                      if (value2 = 0) then
                         hilocalc      <= HILOCALC_DIV0;
                         DIV0remainder <= value1;
                         DIV0quotient  <= (others => '1');
                      else
                         hilocalc    <= HILOCALC_DIVU;
-                        DIVstart    <= '1';
-                        DIVdividend <= '0' & signed(value1);
-                        DIVdivisor  <= '0' & signed(value2);
+                        --DIVstart    <= '1';
+                        --DIVdividend <= '0' & signed(value1);
+                        --DIVdivisor  <= '0' & signed(value2);
                      end if;
                   end if;
                   
@@ -1912,6 +1908,10 @@ begin
          
       end if;
    end process;
+   
+   DIVstart    <= '1' when (reset = '0' and ce = '1' and stall = 0 and exception(4 downto 2) = 0 and (EXEcalcDIV = '1' or EXEcalcDIVU = '1')) else '0';
+   DIVdividend <= resize(signed(value1), 33) when (EXEcalcDIV = '1') else '0' & signed(value1);
+   DIVdivisor  <= resize(signed(value2), 33) when (EXEcalcDIV = '1') else '0' & signed(value2);
    
    
 --##############################################################

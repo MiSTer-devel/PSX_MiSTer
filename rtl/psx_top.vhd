@@ -462,7 +462,7 @@ architecture arch of psx_top is
    signal cdSlow                 : std_logic;
    signal cdslowEna              : std_logic;
    signal errorEna               : std_logic;
-   signal errorCode              : unsigned(3 downto 0);
+   signal errorCode              : unsigned(3 downto 0) := (others => '0');
    
    signal errorCD                : std_logic;
    signal errorCPU               : std_logic;
