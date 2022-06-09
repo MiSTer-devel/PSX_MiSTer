@@ -140,8 +140,13 @@ entity psx_top is
       DSAltSwitchMode       : in  std_logic;
       joypad1               : in  joypad_t;
       joypad2               : in  joypad_t;
+      joypad3               : in  joypad_t;
+      joypad4               : in  joypad_t;
+      multitap              : in  std_logic;
       joypad1_rumble        : out std_logic_vector(15 downto 0);
       joypad2_rumble        : out std_logic_vector(15 downto 0);
+      joypad3_rumble        : out std_logic_vector(15 downto 0);
+      joypad4_rumble        : out std_logic_vector(15 downto 0);
       padMode               : out std_logic_vector(1 downto 0);
 
       MouseEvent            : in  std_logic;
@@ -937,8 +942,13 @@ begin
       DSAltSwitchMode      => DSAltSwitchMode,
       joypad1              => joypad1,
       joypad2              => joypad2,
+      joypad3              => joypad3,
+      joypad4              => joypad4,
+      multitap             => multitap,
       joypad1_rumble       => joypad1_rumble,
       joypad2_rumble       => joypad2_rumble,
+      joypad3_rumble       => joypad3_rumble,
+      joypad4_rumble       => joypad4_rumble,
       padMode              => padMode,
 
       memcard1_available   => memcard1_available,

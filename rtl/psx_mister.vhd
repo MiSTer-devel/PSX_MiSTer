@@ -152,22 +152,22 @@ entity psx_mister is
       PadPortDS2            : in  std_logic;
       PadPortJustif2        : in  std_logic;
       PadPortStick2         : in  std_logic;
-      KeyTriangle           : in  std_logic_vector(1 downto 0); 
-      KeyCircle             : in  std_logic_vector(1 downto 0); 
-      KeyCross              : in  std_logic_vector(1 downto 0); 
-      KeySquare             : in  std_logic_vector(1 downto 0);
-      KeySelect             : in  std_logic_vector(1 downto 0);
-      KeyStart              : in  std_logic_vector(1 downto 0);
-      KeyRight              : in  std_logic_vector(1 downto 0);
-      KeyLeft               : in  std_logic_vector(1 downto 0);
-      KeyUp                 : in  std_logic_vector(1 downto 0);
-      KeyDown               : in  std_logic_vector(1 downto 0);
-      KeyR1                 : in  std_logic_vector(1 downto 0);
-      KeyR2                 : in  std_logic_vector(1 downto 0);
-      KeyR3                 : in  std_logic_vector(1 downto 0);
-      KeyL1                 : in  std_logic_vector(1 downto 0);
-      KeyL2                 : in  std_logic_vector(1 downto 0);
-      KeyL3                 : in  std_logic_vector(1 downto 0);
+      KeyTriangle           : in  std_logic_vector(3 downto 0);
+      KeyCircle             : in  std_logic_vector(3 downto 0);
+      KeyCross              : in  std_logic_vector(3 downto 0);
+      KeySquare             : in  std_logic_vector(3 downto 0);
+      KeySelect             : in  std_logic_vector(3 downto 0);
+      KeyStart              : in  std_logic_vector(3 downto 0);
+      KeyRight              : in  std_logic_vector(3 downto 0);
+      KeyLeft               : in  std_logic_vector(3 downto 0);
+      KeyUp                 : in  std_logic_vector(3 downto 0);
+      KeyDown               : in  std_logic_vector(3 downto 0);
+      KeyR1                 : in  std_logic_vector(3 downto 0);
+      KeyR2                 : in  std_logic_vector(3 downto 0);
+      KeyR3                 : in  std_logic_vector(3 downto 0);
+      KeyL1                 : in  std_logic_vector(3 downto 0);
+      KeyL2                 : in  std_logic_vector(3 downto 0);
+      KeyL3                 : in  std_logic_vector(3 downto 0);
       Analog1XP1            : in  signed(7 downto 0);
       Analog1YP1            : in  signed(7 downto 0);
       Analog2XP1            : in  signed(7 downto 0);
@@ -176,6 +176,15 @@ entity psx_mister is
       Analog1YP2            : in  signed(7 downto 0);
       Analog2XP2            : in  signed(7 downto 0);
       Analog2YP2            : in  signed(7 downto 0);                  
+      Analog1XP3            : in  signed(7 downto 0);
+      Analog1YP3            : in  signed(7 downto 0);
+      Analog2XP3            : in  signed(7 downto 0);
+      Analog2YP3            : in  signed(7 downto 0);
+      Analog1XP4            : in  signed(7 downto 0);
+      Analog1YP4            : in  signed(7 downto 0);
+      Analog2XP4            : in  signed(7 downto 0);
+      Analog2YP4            : in  signed(7 downto 0);
+      multitap              : in  std_logic;
       -- mouse
       MouseEvent            : in  std_logic;
       MouseLeft             : in  std_logic;
@@ -184,6 +193,8 @@ entity psx_mister is
       MouseY                : in  signed(8 downto 0);
       RumbleDataP1          : out std_logic_vector(15 downto 0);
       RumbleDataP2          : out std_logic_vector(15 downto 0);
+      RumbleDataP3          : out std_logic_vector(15 downto 0);
+      RumbleDataP4          : out std_logic_vector(15 downto 0);
       padMode               : out std_logic_vector(1 downto 0);
       -- snac
       snacPort1             : in  std_logic;
@@ -432,7 +443,71 @@ begin
       joypad2.Analog2X      => Analog2XP2,
       joypad2.Analog2Y      => Analog2YP2,
       joypad2_rumble        => RumbleDataP2,
-      
+
+      joypad3.PadPortEnable => '1',
+      joypad3.PadPortAnalog => '0',
+      joypad3.PadPortMouse  => '0',
+      joypad3.PadPortGunCon => '0',
+      joypad3.PadPortNeGcon => '0',
+      joypad3.PadPortJustif => '0',
+      joypad3.WheelMap      => '0',
+      joypad3.PadPortDS     => '0',
+
+      joypad3.KeyTriangle   => KeyTriangle(2),
+      joypad3.KeyCircle     => KeyCircle(2),
+      joypad3.KeyCross      => KeyCross(2),
+      joypad3.KeySquare     => KeySquare(2),
+      joypad3.KeySelect     => KeySelect(2),
+      joypad3.KeyStart      => KeyStart(2),
+      joypad3.KeyRight      => KeyRight(2),
+      joypad3.KeyLeft       => KeyLeft(2),
+      joypad3.KeyUp         => KeyUp(2),
+      joypad3.KeyDown       => KeyDown(2),
+      joypad3.KeyR1         => KeyR1(2),
+      joypad3.KeyR2         => KeyR2(2),
+      joypad3.KeyR3         => KeyR3(2),
+      joypad3.KeyL1         => KeyL1(2),
+      joypad3.KeyL2         => KeyL2(2),
+      joypad3.KeyL3         => KeyL3(2),
+      joypad3.Analog1X      => Analog1XP3,
+      joypad3.Analog1Y      => Analog1YP3,
+      joypad3.Analog2X      => Analog2XP3,
+      joypad3.Analog2Y      => Analog2YP3,
+      joypad3_rumble        => RumbleDataP3,
+
+      joypad4.PadPortEnable => '1',
+      joypad4.PadPortAnalog => '0',
+      joypad4.PadPortMouse  => '0',
+      joypad4.PadPortGunCon => '0',
+      joypad4.PadPortNeGcon => '0',
+      joypad4.PadPortJustif => '0',
+      joypad4.WheelMap      => '0',
+      joypad4.PadPortDS     => '0',
+
+      joypad4.KeyTriangle   => KeyTriangle(3),
+      joypad4.KeyCircle     => KeyCircle(3),
+      joypad4.KeyCross      => KeyCross(3),
+      joypad4.KeySquare     => KeySquare(3),
+      joypad4.KeySelect     => KeySelect(3),
+      joypad4.KeyStart      => KeyStart(3),
+      joypad4.KeyRight      => KeyRight(3),
+      joypad4.KeyLeft       => KeyLeft(3),
+      joypad4.KeyUp         => KeyUp(3),
+      joypad4.KeyDown       => KeyDown(3),
+      joypad4.KeyR1         => KeyR1(3),
+      joypad4.KeyR2         => KeyR2(3),
+      joypad4.KeyR3         => KeyR3(3),
+      joypad4.KeyL1         => KeyL1(3),
+      joypad4.KeyL2         => KeyL2(3),
+      joypad4.KeyL3         => KeyL3(3),
+      joypad4.Analog1X      => Analog1XP4,
+      joypad4.Analog1Y      => Analog1YP4,
+      joypad4.Analog2X      => Analog2XP4,
+      joypad4.Analog2Y      => Analog2YP4,
+      joypad4_rumble        => RumbleDataP4,
+
+      multitap              => multitap,
+
       padMode               => padMode,
 
       MouseEvent            => MouseEvent,
