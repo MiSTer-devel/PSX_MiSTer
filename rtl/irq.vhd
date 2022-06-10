@@ -47,7 +47,7 @@ end entity;
 architecture arch of irq is
 
    signal I_STATUS : unsigned(10 downto 0) := (others => '0');
-   signal I_MASK   : unsigned(10 downto 0) := (others => '0');
+   signal I_MASK   : unsigned(31 downto 0) := (others => '0');
    
    signal irqIn    : unsigned(10 downto 0);
    signal irqIn_1  : unsigned(10 downto 0);
@@ -65,7 +65,7 @@ begin
    export_irq  <= "00000" & I_STATUS;
 -- synthesis translate_on
 
-   irqRequest <= '1' when ((I_STATUS and I_MASK) > 0) else '0';
+   irqRequest <= '1' when ((I_STATUS and I_MASK(10 downto 0)) > 0) else '0';
    
    irqIn(0)  <= irq_VBLANK;  
    irqIn(1)  <= irq_GPU;     
@@ -80,7 +80,7 @@ begin
    irqIn(10) <= irq_LIGHTPEN or irq10Snac;
 
    ss_out(0)(10 downto 0) <= std_logic_vector(I_STATUS);
-   ss_out(1)(10 downto 0) <= std_logic_vector(I_MASK);
+   ss_out(1)(31 downto 0) <= std_logic_vector(I_MASK);
 
    process (clk1x)
       variable I_STATUSNew : unsigned(10 downto 0);
@@ -90,7 +90,7 @@ begin
          if (reset = '1') then
                
             I_STATUS    <= unsigned(ss_in(0)(10 downto 0));
-            I_MASK      <= unsigned(ss_in(1)(10 downto 0));
+            I_MASK      <= unsigned(ss_in(1)(31 downto 0));
             irqIn_1     <= (others => '0');
             
             first       <= '1';
@@ -106,7 +106,7 @@ begin
                if (bus_addr(3 downto 2) = "00") then
                   bus_dataRead <= x"00000" & '0' & std_logic_vector(I_STATUS);
                elsif (bus_addr(3 downto 2) = "01") then
-                  bus_dataRead <= x"00000" & '0' & std_logic_vector(I_MASK);
+                  bus_dataRead <= std_logic_vector(I_MASK);
                else
                   bus_dataRead <= x"FFFFFFFF";
                end if;
@@ -118,7 +118,7 @@ begin
                if (bus_addr = 0) then
                   I_STATUSNew := I_STATUSNew and unsigned(bus_dataWrite(10 downto 0));
                elsif (bus_addr = 4) then
-                  I_MASK   <= unsigned(bus_dataWrite(10 downto 0));
+                  I_MASK   <= unsigned(bus_dataWrite(31 downto 16)) & "00000" & unsigned(bus_dataWrite(10 downto 0));
                end if;
             
             end if;

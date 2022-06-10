@@ -637,7 +637,7 @@ begin
       
          bus_exp1_dataRead <= (others => '0');
          if (bus_exp1_read = '1') then
-            bus_exp1_dataRead <= (others => '1');
+            bus_exp1_dataRead <= (others => '0');
          end if;
       
          bus_exp3_dataRead <= (others => '0');

@@ -119,9 +119,7 @@ When SNAC is enabled for a slot, the emulated gamepad/memory for this slot is di
 
 ## Status
 
-Work in progress, don't report bugs yet!
-
-- many games working
+Many games working
 
 --
 
@@ -134,10 +132,10 @@ GPU    : 90%
 
 Memory : 80%
 - rotate register not done for all busses
+- sdram controller needs rewrite to support fast banked read
 
-IRQ    : 80%
-- irq_SIO missing        
-- irq_LIGHTPEN missing
+IRQ    : 90%
+- irq_SIO missing because unused        
 
 PAD    : 90%
 
@@ -148,7 +146,7 @@ Memctrl: register stubs only
 
 SIO    : register stubs only
 
-Timer  : 50%
+Timer  : 80%
 - dotclock base missing
 - accuracy for start/wraparound not tested
 

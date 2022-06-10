@@ -28,7 +28,7 @@ end entity;
 architecture arch of sio is
 
    signal SIO_STAT : std_logic_vector(31 downto 0);
-   signal SIO_MODE : std_logic_vector(15 downto 0);
+   signal SIO_MODE : std_logic_vector( 7 downto 0);
    signal SIO_CTRL : std_logic_vector(15 downto 0);
    signal SIO_BAUD : std_logic_vector(15 downto 0);
    
@@ -40,7 +40,7 @@ architecture arch of sio is
 begin 
 
    ss_out(0)              <= SIO_STAT;
-   ss_out(1)(15 downto 0) <= SIO_MODE;
+   ss_out(1)( 7 downto 0) <= SIO_MODE;
    ss_out(2)(15 downto 0) <= SIO_CTRL;
    ss_out(3)(15 downto 0) <= SIO_BAUD;
 
@@ -50,8 +50,8 @@ begin
       
          if (reset = '1') then
          
-            SIO_STAT <= ss_in(0);              -- (others => '0');
-            SIO_MODE <= ss_in(1)(15 downto 0); -- x"0005";
+            SIO_STAT <= ss_in(0);              -- x"00000005";
+            SIO_MODE <= ss_in(1)( 7 downto 0); -- x"00";
             SIO_CTRL <= ss_in(2)(15 downto 0); -- x"0000";
             SIO_BAUD <= ss_in(3)(15 downto 0); -- x"00DC";
             
@@ -63,7 +63,7 @@ begin
             if (bus_read = '1') then
                case (bus_addr(3 downto 0)) is
                   when x"4" => bus_dataRead <= SIO_STAT;    
-                  when x"8" => bus_dataRead <= x"0000" & SIO_MODE;
+                  when x"8" => bus_dataRead <= SIO_CTRL & x"00" & SIO_MODE;
                   when x"A" => bus_dataRead <= x"0000" & SIO_CTRL;                    
                   when x"E" => bus_dataRead <= x"0000" & SIO_BAUD;  
                   when others => bus_dataRead <= (others => '1');
@@ -75,12 +75,12 @@ begin
                case (bus_addr(3 downto 0)) is
                   when x"8" =>
                      if (bus_writeMask(1 downto 0) /= "00") then
-                        SIO_MODE <= bus_dataWrite(15 downto 0);
+                        SIO_MODE <= bus_dataWrite(7 downto 0);
                      elsif (bus_writeMask(3 downto 2) /= "00") then
                         SIO_CTRL <= bus_dataWrite(31 downto 16);
                         if (bus_dataWrite(22) = '1') then -- reset
-                           SIO_STAT <= (others => '0');
-                           SIO_MODE <= x"0005";
+                           SIO_STAT <= x"00000005";
+                           SIO_MODE <= x"00";
                            SIO_CTRL <= x"0000";
                            SIO_BAUD <= x"00DC";
                         end if; 
@@ -113,7 +113,7 @@ begin
                ss_in(i) <= (others => '0');
             end loop;
             
-            ss_in(1) <= x"00000005"; -- SIO_MODE  
+            ss_in(0) <= x"00000005"; -- SIO_STAT  
             ss_in(3) <= x"000000DC"; -- SIO_BAUD  
             
          elsif (SS_wren = '1') then

@@ -703,12 +703,12 @@ begin
                   end case;  
                   
                -- SPU
-               when SPU_WRITE =>  -- todo: single byte write is special
+               when SPU_WRITE =>
                   byteStep    <= byteStep + 2;
                   bus_spu_addr <= addressData_buf(9 downto 2) & byteStep;
                   case (byteStep) is
-                     when "00" => if (writeMask_buf(1 downto 0) /= "00") then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(15 downto  0); end if;
-                     when "10" => if (writeMask_buf(3 downto 2) /= "00") then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(31 downto 16); end if; state <= BUSACTION; 
+                     when "00" => if (writeMask_buf(0) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(15 downto  0); end if;
+                     when "10" => if (writeMask_buf(2) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(31 downto 16); end if; state <= BUSACTION; 
                      when others => null;
                   end case;
                   
