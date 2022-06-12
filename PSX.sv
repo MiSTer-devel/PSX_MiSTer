@@ -367,8 +367,8 @@ parameter CONF_STR = {
 	"-;",
 	"o78,System Type,Auto,NTSC-U,NTSC-J,PAL;",
 	"-;",
-	"oDG,Pad1,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port1;",
-	"oHK,Pad2,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port2;",
+	"oDG,Pad1,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port1,Analog Joystick;",
+	"oHK,Pad2,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port2,Analog Joystick;",
 	"h2O9,Show Crosshair,Off,On;",
 	"h4OV,DS Mode,L3+R3+Up/Dn | Click,L1+L2+R1+R2+Up/Dn;",
 	"-;",
@@ -755,7 +755,8 @@ defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 // 1000 -> mouse
 // 1001 -> Konami Justifier lightgun
 // 1010 -> SNAC
-// 1011..1111 -> reserved
+// 1011 -> Analog Joystick
+// 1100..1111 -> reserved
 
 wire PadPortDS1     = (status[48:45] == 4'b0000);
 wire PadPortEnable1 = (status[48:45] != 4'b0001);
@@ -766,6 +767,7 @@ wire PadPortWheel1  = (status[48:45] == 4'b0110) || (status[48:45] == 4'b0111);
 wire PadPortMouse1  = (status[48:45] == 4'b1000);
 wire PadPortJustif1 = (status[48:45] == 4'b1001);
 wire snacPort1      = (status[48:45] == 4'b1010);
+wire PadPortStick1  = (status[48:45] == 4'b1011);
 
 wire PadPortDS2     = (status[52:49] == 4'b0000);
 wire PadPortEnable2 = (status[52:49] != 4'b0001);
@@ -776,6 +778,7 @@ wire PadPortWheel2  = (status[52:49] == 4'b0110) || (status[52:49] == 4'b0111);
 wire PadPortMouse2  = (status[52:49] == 4'b1000);
 wire PadPortJustif2 = (status[52:49] == 4'b1001);
 wire snacPort2      = (status[52:49] == 4'b1010);
+wire PadPortStick2  = (status[52:49] == 4'b1011);
 
 wire [1:0] padMode;
 reg  [1:0] padMode_1;
@@ -1011,6 +1014,7 @@ psx
    .PadPortWheel1  (PadPortWheel1),
    .PadPortDS1     (PadPortDS1),
    .PadPortJustif1 (PadPortJustif1),
+   .PadPortStick1  (PadPortStick1),
    .PadPortEnable2 (PadPortEnable2),
    .PadPortAnalog2 (PadPortAnalog2),
    .PadPortMouse2  (PadPortMouse2 ),
@@ -1019,6 +1023,7 @@ psx
    .PadPortWheel2  (PadPortWheel2),
    .PadPortDS2     (PadPortDS2),
    .PadPortJustif2 (PadPortJustif2),
+   .PadPortStick2  (PadPortStick2),
    .KeyTriangle({joy2[4], joy[4] }),    
    .KeyCircle  ({joy2[5] ,joy[5] }),       
    .KeyCross   ({joy2[6] ,joy[6] }),       

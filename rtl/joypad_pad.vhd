@@ -110,6 +110,7 @@ architecture arch of joypad_pad is
    signal neGconSave      : std_logic := '0';
    signal justifSave      : std_logic := '0';
    signal dsSave          : std_logic := '0';
+   signal analogStickSave : std_logic := '0';
 
    signal prevMouseEvent  : std_logic := '0';
    signal MouseLeft_1     : std_logic := '0';
@@ -328,6 +329,7 @@ begin
                         neGconSave      <= joypad.PadPortNeGcon;
                         justifSave      <= joypad.PadPortJustif;
                         dsSave          <= joypad.PadPortDS;
+                        analogStickSave <= joypad.PadPortStick;
                         receiveValid    <= '1';
                         receiveBuffer   <= x"FF";
                         dsConfigModeSave  <= portStates(portNr).dsConfigMode;
@@ -347,6 +349,7 @@ begin
                               neGconSave      <= joypad.PadPortNeGcon;
                               justifSave      <= joypad.PadPortJustif;
                               dsSave          <= joypad.PadPortDS;
+                              analogStickSave <= joypad.PadPortStick;
                               receiveValid    <= '1';
                               receiveBuffer   <= x"FF";
                               dsConfigModeSave  <= portStates(portNr).dsConfigMode;
@@ -372,6 +375,8 @@ begin
                                  receiveBuffer   <= x"31";
                               elsif (analogPadSave = '1' or dsAnalogModeSave = '1') then
                                  receiveBuffer   <= x"73";
+                              elsif (analogStickSave = '1') then
+                                 receiveBuffer   <= x"53";
                               else
                                  receiveBuffer   <= x"41";
                               end if;
@@ -503,6 +508,10 @@ begin
                            else
                               controllerState  <= BUTTONMSB;
                            end if;
+                           -- Analog Joystick does not have L3 and R3 buttons
+                           if (analogStickSave = '1') then
+                               receiveBuffer(2 downto 1) <= "11";
+                           end if;
                            ack              <= '1';
                            receiveValid     <= '1';
                            rumbleOnFirst    <= '0';
@@ -536,7 +545,7 @@ begin
                            receiveBuffer(6) <= not joypad.KeyCross;
                            receiveBuffer(7) <= not joypad.KeySquare;
                            receiveValid     <= '1';
-                           if (analogPadSave = '1' or dsAnalogModeSave = '1' or dsConfigModeSave = '1') then
+                           if (analogPadSave = '1' or dsAnalogModeSave = '1' or dsConfigModeSave = '1' or analogStickSave = '1') then
                               controllerState <= ANALOGRIGHTX;
                               ack <= '1';
                            else
