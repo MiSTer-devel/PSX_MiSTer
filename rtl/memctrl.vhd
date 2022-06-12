@@ -32,8 +32,8 @@ end entity;
 
 architecture arch of memctrl is
 
-   signal MC_EXP1_BASE    : std_logic_vector(31 downto 0);
-   signal MC_EXP2_BASE    : std_logic_vector(31 downto 0);
+   signal MC_EXP1_BASE    : std_logic_vector(23 downto 0);
+   signal MC_EXP2_BASE    : std_logic_vector(23 downto 0);
    signal MC_EXP1_DELAY   : std_logic_vector(31 downto 0);
    signal MC_EXP3_DELAY   : std_logic_vector(31 downto 0);
    signal MC_BIOS_DELAY   : std_logic_vector(31 downto 0);
@@ -51,8 +51,8 @@ architecture arch of memctrl is
 
 begin 
 
-   ss_out(1) <= MC_EXP1_BASE;   
-   ss_out(2) <= MC_EXP2_BASE;   
+   ss_out(1)(23 downto 0) <= MC_EXP1_BASE;   
+   ss_out(2)(23 downto 0) <= MC_EXP2_BASE;   
    ss_out(3) <= MC_EXP1_DELAY;  
    ss_out(4) <= MC_EXP3_DELAY;  
    ss_out(5) <= MC_BIOS_DELAY;  
@@ -69,8 +69,8 @@ begin
       
          if (reset = '1') then
                
-            MC_EXP1_BASE       <= ss_in(1); -- x"1F000000";
-            MC_EXP2_BASE       <= ss_in(2); -- x"1F802000";
+            MC_EXP1_BASE       <= ss_in(1)(23 downto 0); -- x"000000";
+            MC_EXP2_BASE       <= ss_in(2)(23 downto 0); -- x"802000";
             MC_EXP1_DELAY      <= ss_in(3); -- x"0013243F";
             MC_EXP3_DELAY      <= ss_in(4); -- x"00003022";
             MC_BIOS_DELAY      <= ss_in(5); -- x"0013243F";
@@ -88,9 +88,9 @@ begin
 
             -- bus read
             if (bus_read = '1') then
-               case (to_integer(bus_addr(5 downto 0))) is
-                  when 16#00# => bus_dataRead <= MC_EXP1_BASE;   
-                  when 16#04# => bus_dataRead <= MC_EXP2_BASE;   
+               case (to_integer(bus_addr(5 downto 2) & "00")) is
+                  when 16#00# => bus_dataRead <= x"1F" & MC_EXP1_BASE;   
+                  when 16#04# => bus_dataRead <= x"1F" & MC_EXP2_BASE;   
                   when 16#08# => bus_dataRead <= MC_EXP1_DELAY;  
                   when 16#0C# => bus_dataRead <= MC_EXP3_DELAY;  
                   when 16#10# => bus_dataRead <= MC_BIOS_DELAY;  
@@ -105,8 +105,8 @@ begin
             -- bus write
             if (bus_write = '1') then
                case (to_integer(bus_addr(5 downto 0))) is
-                  when 16#00# => MC_EXP1_BASE   <= bus_dataWrite(31) & MC_EXP1_BASE  (30) & bus_dataWrite(29) & MC_EXP1_BASE  (28) & bus_dataWrite(27 downto 24) & MC_EXP1_BASE  (23 downto 21) & bus_dataWrite(20 downto 0);   
-                  when 16#04# => MC_EXP2_BASE   <= bus_dataWrite(31) & MC_EXP2_BASE  (30) & bus_dataWrite(29) & MC_EXP2_BASE  (28) & bus_dataWrite(27 downto 24) & MC_EXP2_BASE  (23 downto 21) & bus_dataWrite(20 downto 0);   
+                  when 16#00# => MC_EXP1_BASE   <= bus_dataWrite(23 downto 0);   
+                  when 16#04# => MC_EXP2_BASE   <= bus_dataWrite(23 downto 0);   
                   when 16#08# => MC_EXP1_DELAY  <= bus_dataWrite(31) & MC_EXP1_DELAY (30) & bus_dataWrite(29) & MC_EXP1_DELAY (28) & bus_dataWrite(27 downto 24) & MC_EXP1_DELAY (23 downto 21) & bus_dataWrite(20 downto 0);  
                   when 16#0C# => MC_EXP3_DELAY  <= bus_dataWrite(31) & MC_EXP3_DELAY (30) & bus_dataWrite(29) & MC_EXP3_DELAY (28) & bus_dataWrite(27 downto 24) & MC_EXP3_DELAY (23 downto 21) & bus_dataWrite(20 downto 0);  
                   when 16#10# => MC_BIOS_DELAY  <= bus_dataWrite(31) & MC_BIOS_DELAY (30) & bus_dataWrite(29) & MC_BIOS_DELAY (28) & bus_dataWrite(27 downto 24) & MC_BIOS_DELAY (23 downto 21) & bus_dataWrite(20 downto 0);  
@@ -153,8 +153,8 @@ begin
             end loop;
             
             ss_in(0) <= x"00000B88"; -- MC_RAMSIZE
-            ss_in(1) <= x"1F000000"; -- MC_EXP1_BASE   
-            ss_in(2) <= x"1F802000"; -- MC_EXP2_BASE   
+            ss_in(1) <= x"00000000"; -- MC_EXP1_BASE   
+            ss_in(2) <= x"00802000"; -- MC_EXP2_BASE   
             ss_in(3) <= x"0013243F"; -- MC_EXP1_DELAY  
             ss_in(4) <= x"00003022"; -- MC_EXP3_DELAY  
             ss_in(5) <= x"0013243F"; -- MC_BIOS_DELAY  

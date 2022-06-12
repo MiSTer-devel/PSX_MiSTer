@@ -470,9 +470,6 @@ begin
                   reqsize_buf     <= mem_reqsize;
                   writeMask_buf   <= mem_writeMask;
                   
-                  rotate32        <= '0';
-                  rotate16        <= '0';
-                  
                   data_cd         <= (others => '0');
                   data_spu        <= (others => '0');
                   
@@ -576,13 +573,21 @@ begin
                                  bus_spu_addr <= mem_addressData(9 downto 0);
                                  bus_spu_read <= '1';
                                  waitcnt      <= 15;
+                                 rotate16     <= '1';
                               else
                                  state   <= SPU_WRITE;
                               end if;
                            else  
                               state <= BUSACTION;
-                              if (bus_dma_read   = '1' and mem_reqsize /= 4) then rotate32 <= '1'; end if;
-                              if (bus_memc_read  = '1' and mem_reqsize /= 2) then rotate16 <= '1'; end if;
+                              if (bus_memc_read  = '1') then rotate32 <= '1'; end if;
+                              if (bus_pad_read   = '1') then rotate16 <= '1'; end if;
+                              if (bus_sio_read   = '1') then rotate16 <= '1'; end if;
+                              if (bus_memc2_read = '1') then rotate32 <= '1'; end if;
+                              if (bus_dma_read   = '1') then rotate32 <= '1'; end if;
+                              if (bus_tmr_read   = '1') then rotate32 <= '1'; end if;
+                              if (bus_irq_read   = '1') then rotate32 <= '1'; end if;
+                              if (bus_gpu_read   = '1') then rotate32 <= '1'; end if;
+                              if (bus_mdec_read  = '1') then rotate32 <= '1'; end if;
                            end if;
                         end if;
             
@@ -634,6 +639,8 @@ begin
                   
                when BUSACTION =>
                   if (bus_stall = '0') then
+                     rotate32 <= '0';
+                     rotate16 <= '0';
                      if (rotate32 = '1') then
                         case (addressData_buf(1 downto 0)) is
                            when "00" => mem_dataRead_buf <= dataFromBusses;

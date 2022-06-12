@@ -61,7 +61,7 @@ begin
 
             -- bus read
             if (bus_read = '1') then
-               case (bus_addr(3 downto 0)) is
+               case (bus_addr(3 downto 1) & '0') is
                   when x"4" => bus_dataRead <= SIO_STAT;    
                   when x"8" => bus_dataRead <= SIO_CTRL & x"00" & SIO_MODE;
                   when x"A" => bus_dataRead <= x"0000" & SIO_CTRL;                    
@@ -77,7 +77,7 @@ begin
                      if (bus_writeMask(1 downto 0) /= "00") then
                         SIO_MODE <= bus_dataWrite(7 downto 0);
                      elsif (bus_writeMask(3 downto 2) /= "00") then
-                        SIO_CTRL <= bus_dataWrite(31 downto 16);
+                        SIO_CTRL <= "000" & bus_dataWrite(28 downto 23) & "0" & bus_dataWrite(21) & "0" & bus_dataWrite(19 downto 16);
                         if (bus_dataWrite(22) = '1') then -- reset
                            SIO_STAT <= x"00000005";
                            SIO_MODE <= x"00";
