@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-//  X XXXXXXXXX XXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
+//  X XXXXXXXXXXXXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -367,10 +367,11 @@ parameter CONF_STR = {
 	"-;",
 	"o78,System Type,Auto,NTSC-U,NTSC-J,PAL;",
 	"-;",
-	"oDG,Pad1,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port1,Analog Joystick;",
-	"oHK,Pad2,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port2,Analog Joystick;",
-	"h2O9,Show Crosshair,Off,On;",
-	"h4OV,DS Mode,L3+R3+Up/Dn | Click,L1+L2+R1+R2+Up/Dn;",
+	"D8oDG,Pad1,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port1,Analog Joystick;",
+	"D8oHK,Pad2,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port2,Analog Joystick;",
+	"D8h2O9,Show Crosshair,Off,On;",
+	"D8h4OV,DS Mode,L3+R3+Up/Dn | Click,L1+L2+R1+R2+Up/Dn;",
+	"OC,Multitap,Off,Port1: 4 x Digital;",
 	"-;",
 	"OS,FPS Overlay,Off,On;",
 	"OT,Error Overlay,On,Off;",
@@ -453,7 +454,7 @@ parameter CONF_STR = {
 reg dbg_enabled = 0;
 wire  [1:0] buttons;
 wire [63:0] status;
-wire [15:0] status_menumask = {biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {multitap, biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -480,6 +481,8 @@ reg         ioctl_wait = 0;
 wire [17:0] joy;
 wire [17:0] joy_unmod;
 wire [17:0] joy2;
+wire [17:0] joy3;
+wire [17:0] joy4;
 
 wire [10:0] ps2_key;
 
@@ -490,11 +493,17 @@ wire [15:0] joystick_analog_l0;
 wire [15:0] joystick_analog_r0;
 wire [15:0] joystick_analog_l1;
 wire [15:0] joystick_analog_r1;
+wire [15:0] joystick_analog_l2;
+wire [15:0] joystick_analog_r2;
+wire [15:0] joystick_analog_l3;
+wire [15:0] joystick_analog_r3;
 
 wire [24:0] mouse;
 
 wire [15:0] joystick1_rumble;
 wire [15:0] joystick2_rumble;
+wire [15:0] joystick3_rumble;
+wire [15:0] joystick4_rumble;
 wire [32:0] RTC_time;
 
 wire [63:0] status_in = {status[63:39],ss_slot,status[36:0]};
@@ -513,6 +522,8 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
 
 	.joystick_0(joy_unmod),
 	.joystick_1(joy2),
+	.joystick_2(joy3),
+	.joystick_3(joy4),
 	.ps2_key(ps2_key),
 
 	.status(status),
@@ -780,6 +791,8 @@ wire PadPortJustif2 = (status[52:49] == 4'b1001);
 wire snacPort2      = (status[52:49] == 4'b1010);
 wire PadPortStick2  = (status[52:49] == 4'b1011);
 
+wire multitap       = status[12];
+
 wire [1:0] padMode;
 reg  [1:0] padMode_1;
 
@@ -1024,22 +1037,22 @@ psx
    .PadPortDS2     (PadPortDS2),
    .PadPortJustif2 (PadPortJustif2),
    .PadPortStick2  (PadPortStick2),
-   .KeyTriangle({joy2[4], joy[4] }),    
-   .KeyCircle  ({joy2[5] ,joy[5] }),       
-   .KeyCross   ({joy2[6] ,joy[6] }),       
-   .KeySquare  ({joy2[7] ,joy[7] }),       
-   .KeySelect  ({joy2[8] ,joy[8] }),       
-   .KeyStart   ({joy2[9] ,joy[9] }),        
-   .KeyRight   ({joy2[0] ,joy[0] }),
-   .KeyLeft    ({joy2[1] ,joy[1] }),
-   .KeyUp      ({joy2[3] ,joy[3] }),
-   .KeyDown    ({joy2[2] ,joy[2] }),      
-   .KeyR1      ({joy2[11],joy[11]}),          
-   .KeyR2      ({joy2[13],joy[13]}),          
-   .KeyR3      ({joy2[15],joy[15]}),          
-   .KeyL1      ({joy2[10],joy[10]}),          
-   .KeyL2      ({joy2[12],joy[12]}),          
-   .KeyL3      ({joy2[14],joy[14]}),          
+   .KeyTriangle({joy4[4], joy3[4], joy2[4], joy[4] }),
+   .KeyCircle  ({joy4[5] ,joy3[5] ,joy2[5] ,joy[5] }),
+   .KeyCross   ({joy4[6] ,joy3[6] ,joy2[6] ,joy[6] }),
+   .KeySquare  ({joy4[7] ,joy3[7] ,joy2[7] ,joy[7] }),
+   .KeySelect  ({joy4[8] ,joy3[8] ,joy2[8] ,joy[8] }),
+   .KeyStart   ({joy4[9] ,joy3[9] ,joy2[9] ,joy[9] }),
+   .KeyRight   ({joy4[0] ,joy3[0] ,joy2[0] ,joy[0] }),
+   .KeyLeft    ({joy4[1] ,joy3[1] ,joy2[1] ,joy[1] }),
+   .KeyUp      ({joy4[3] ,joy3[3] ,joy2[3] ,joy[3] }),
+   .KeyDown    ({joy4[2] ,joy3[2] ,joy2[2] ,joy[2] }),
+   .KeyR1      ({joy4[11],joy3[11],joy2[11],joy[11]}),
+   .KeyR2      ({joy4[13],joy3[13],joy2[13],joy[13]}),
+   .KeyR3      ({joy4[15],joy3[15],joy2[15],joy[15]}),
+   .KeyL1      ({joy4[10],joy3[10],joy2[10],joy[10]}),
+   .KeyL2      ({joy4[12],joy3[12],joy2[12],joy[12]}),
+   .KeyL3      ({joy4[14],joy3[14],joy2[14],joy[14]}),
    .Analog1XP1(joystick_analog_l0[7:0]),       
    .Analog1YP1(joystick_analog_l0[15:8]),       
    .Analog2XP1(joystick_analog_r0[7:0]),           
@@ -1048,14 +1061,25 @@ psx
    .Analog1YP2(joystick_analog_l1[15:8]),       
    .Analog2XP2(joystick_analog_r1[7:0]),           
    .Analog2YP2(joystick_analog_r1[15:8]),           
+   .Analog1XP3(joystick_analog_l2[7:0]),
+   .Analog1YP3(joystick_analog_l2[15:8]),
+   .Analog2XP3(joystick_analog_r2[7:0]),
+   .Analog2YP3(joystick_analog_r2[15:8]),
+   .Analog1XP4(joystick_analog_l3[7:0]),
+   .Analog1YP4(joystick_analog_l3[15:8]),
+   .Analog2XP4(joystick_analog_r3[7:0]),
+   .Analog2YP4(joystick_analog_r3[15:8]),
    .RumbleDataP1(joystick1_rumble),
    .RumbleDataP2(joystick2_rumble),
+   .RumbleDataP3(joystick3_rumble),
+   .RumbleDataP4(joystick4_rumble),
    .padMode(padMode),
    .MouseEvent(mouse[24]),
    .MouseLeft(mouse[0]),
    .MouseRight(mouse[1]),
    .MouseX({mouse[4],mouse[15:8]}),
    .MouseY({mouse[5],mouse[23:16]}),
+   .multitap(multitap),
    //snac
    .snacPort1(snacPort1),
    .snacPort2(snacPort2),
