@@ -226,6 +226,8 @@ begin
             
             joypad1_rumble  <= (others => '0');
             joypad2_rumble  <= (others => '0');
+            joypad3_rumble  <= (others => '0');
+            joypad4_rumble  <= (others => '0');
 
          elsif (ce = '1') then
          

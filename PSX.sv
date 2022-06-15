@@ -777,18 +777,18 @@ wire PadPortNeGcon1 = (status[48:45] == 4'b0101) || (status[48:45] == 4'b0110);
 wire PadPortWheel1  = (status[48:45] == 4'b0110) || (status[48:45] == 4'b0111);
 wire PadPortMouse1  = (status[48:45] == 4'b1000);
 wire PadPortJustif1 = (status[48:45] == 4'b1001);
-wire snacPort1      = (status[48:45] == 4'b1010);
+wire snacPort1      = (status[48:45] == 4'b1010) && ~multitap;
 wire PadPortStick1  = (status[48:45] == 4'b1011);
 
 wire PadPortDS2     = (status[52:49] == 4'b0000);
-wire PadPortEnable2 = (status[52:49] != 4'b0001);
+wire PadPortEnable2 = (status[52:49] != 4'b0001) && ~multitap;
 wire PadPortAnalog2 = (status[52:49] == 4'b0011) || (status[52:49] == 4'b0111);
 wire PadPortGunCon2 = (status[52:49] == 4'b0100);
 wire PadPortNeGcon2 = (status[52:49] == 4'b0101) || (status[52:49] == 4'b0110);
 wire PadPortWheel2  = (status[52:49] == 4'b0110) || (status[52:49] == 4'b0111);
 wire PadPortMouse2  = (status[52:49] == 4'b1000);
 wire PadPortJustif2 = (status[52:49] == 4'b1001);
-wire snacPort2      = (status[52:49] == 4'b1010);
+wire snacPort2      = (status[52:49] == 4'b1010) && ~multitap;
 wire PadPortStick2  = (status[52:49] == 4'b1011);
 
 wire multitap       = status[12];
@@ -812,11 +812,11 @@ always @(posedge clk_1x) begin
    if (ss_info_req) begin
       psx_info_req <= 1;
       psx_info     <= ss_info;
-   end else if (padMode_1[0] != padMode[0]) begin
+   end else if (padMode_1[0] != padMode[0] && ~multitap) begin
       psx_info_req <= 1;
       if (padMode[0])  psx_info <= 8'd15;
       if (!padMode[0]) psx_info <= 8'd16;
-   end else if (padMode_1[1] != padMode[1]) begin
+   end else if (padMode_1[1] != padMode[1] && ~multitap) begin
       psx_info_req <= 1;
       if (padMode[1])  psx_info <= 8'd17;
       if (!padMode[1]) psx_info <= 8'd18;

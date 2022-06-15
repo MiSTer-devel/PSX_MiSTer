@@ -154,6 +154,9 @@ architecture arch of joypad_pad is
    signal dsAnalogModeSave  : std_logic := '0';
 
    signal multitapModeSave  : std_logic := '0';
+   signal isMultitap_1      : std_logic := '0';
+   signal multitap_swapped  : std_logic := '0';
+   signal multitap_offCnt   : integer range 0 to 255;
 
    type tresponse is array (natural range <>) of std_logic_vector(7 downto 0);
    constant response : tresponse :=(
@@ -191,10 +194,10 @@ begin
 
    joypad <= joypad1 when (isMultitap = '0' and portNr = 0) else
              joypad2 when (isMultitap = '0' and portNr = 1) else
-             joypad1 when multitap_counter = 0 else
              joypad2 when multitap_counter = 1 else
              joypad3 when multitap_counter = 2 else
-             joypad4 when multitap_counter = 3;
+             joypad4 when multitap_counter = 3 else
+             joypad1;
    
    process (clk1x)
       variable mouseIncX            : signed(9 downto 0) := (others => '0');
@@ -266,7 +269,7 @@ begin
                isActive        <= '0';
                controllerState <= IDLE;
                command         <= COMMAND_NONE;
-            elsif (joypad.PadPortDS = '1') then
+            elsif (joypad.PadPortDS = '1' and isMultitap = '0') then
                if (portStates(portNr).dsAnalogLock = '0') then
                
                   -- switch from mouseclick/touchpad
@@ -304,7 +307,7 @@ begin
             end if;
             
             MouseLeft_1 <= MouseLeft;
-            if (MouseLeft = '1' and MouseLeft_1 = '0') then
+            if (joypad1.PadPortDS = '1' and isMultitap = '0' and MouseLeft = '1' and MouseLeft_1 = '0') then
                switchmode <= '1';
             end if;
 
@@ -344,7 +347,21 @@ begin
                if (portStates(portNr).dsRumbleIndexL = -1) then portStates(portNr).rumble(15 downto 8) <= (others => '0'); end if;
             end if;
          
-            if (actionNext = '1' and transmitting = '1') then
+            -- turning off multitap must disconnect any pad for some time to give the game the chance to recognize the switch
+            isMultitap_1 <= isMultitap;
+            if (isMultitap = '0' and isMultitap_1 = '1') then
+               multitap_swapped <= '1';
+               multitap_offCnt  <= 255;
+               isActive         <= '0';
+            elsif (actionNext = '1' and transmitting = '1' and selected = '1' and joypad.PadPortEnable = '1') then
+               if (multitap_offCnt > 0) then
+                  multitap_offCnt <= multitap_offCnt - 1;
+               else
+                  multitap_swapped <= '0';
+               end if;
+            end if;
+         
+            if (actionNext = '1' and transmitting = '1' and multitap_swapped = '0') then
                if (selected = '1' and ((isMultitap = '0' and joypad.PadPortEnable = '1') or (isMultitap = '1' and portNr = 0))) then
                   if (isActive = '0' and slotIdle = '1') then
                      if (controllerState = IDLE and transmitValue = x"01") then
