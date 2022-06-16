@@ -338,10 +338,10 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
 // Status Bit Map: (0..31 => "O", 32..63 => "o")
-// 0         1         2         3          4         5         6
-// 01234567890123456789012345678901 23456789012345678901234567890123
-// 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-//  X XXXXXXXXXXXXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX
+// 0         1         2         3          4         5         6            7         8         9
+// 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
+// 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
+//  X XXXXXXXXX XXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -371,7 +371,7 @@ parameter CONF_STR = {
 	"D8oHK,Pad2,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port2,Analog Joystick;",
 	"D8h2O9,Show Crosshair,Off,On;",
 	"D8h4OV,DS Mode,L3+R3+Up/Dn | Click,L1+L2+R1+R2+Up/Dn;",
-	"OC,Multitap,Off,Port1: 4 x Digital;",
+	"O[66],Multitap,Off,Port1: 4 x Digital;",
 	"-;",
 	"OS,FPS Overlay,Off,On;",
 	"OT,Error Overlay,On,Off;",
@@ -390,8 +390,8 @@ parameter CONF_STR = {
 	"P1o9,Deinterlacing,Weave,Bob;",
 	"P1oS,Sync 480i for HDMI,Off,On;",
 	"P1OO,Rotate,Off,On;",
-	"P1oLM,Widescreen Hack,Off,3:2,5:3,16:9;",
-	"P1O5,Texture Filter,Off,On;",
+	"P1O[54:53],Widescreen Hack,Off,3:2,5:3,16:9;",
+	"P1O[5],Texture Filter,Off,On;",
 	"P1-;",
 	"d1P1oC,SPU RAM select,DDR3,SDRAM2;",
 	"P1O78,Stereo Mix,None,25%,50%,100%;",
@@ -400,8 +400,11 @@ parameter CONF_STR = {
 	"P2-;",
 	"P2OG,Fastboot,Off,On;",
 	"P2oA,CD Lid,Closed,Open;",
-	"P2OL,CD Fast Seek,Off,On;",
-	"P2oQ,Data Cache(Cheats Off),Off,On;",
+	"P2-,(U) = unsafe, can crash;",
+	"P2OL,CD Fast Seek,Off,On(U);",
+	"P2oQ,Data Cache(Cheats Off),Off,On(U);",
+	"P2O[64],Pause when OSD open,On,Off(U);",
+	"P2O[65],Pause when HPS busy,On,Off(U);",
 	
 	"h3-;",
 	"h3P3,Debug;",
@@ -453,7 +456,7 @@ parameter CONF_STR = {
 
 reg dbg_enabled = 0;
 wire  [1:0] buttons;
-wire [63:0] status;
+wire [127:0] status;
 wire [15:0] status_menumask = {multitap, biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
@@ -506,7 +509,7 @@ wire [15:0] joystick3_rumble;
 wire [15:0] joystick4_rumble;
 wire [32:0] RTC_time;
 
-wire [63:0] status_in = {status[63:39],ss_slot,status[36:0]};
+wire [127:0] status_in = {status[127:39],ss_slot,status[36:0]};
 
 wire bk_pending;
 wire DIRECT_VIDEO;
@@ -791,7 +794,7 @@ wire PadPortJustif2 = (status[52:49] == 4'b1001);
 wire snacPort2      = (status[52:49] == 4'b1010) && ~multitap;
 wire PadPortStick2  = (status[52:49] == 4'b1011);
 
-wire multitap       = status[12];
+wire multitap       = status[66];
 
 wire [1:0] padMode;
 reg  [1:0] padMode_1;
@@ -857,7 +860,7 @@ always @(posedge clk_1x) begin
    paused <= 0;
 
    // pause from OSD open
-   if (OSD_STATUS & (unpause == 0)) begin
+   if (~status[64] & OSD_STATUS & (unpause == 0)) begin
       paused <= 1;
    end
    
@@ -874,7 +877,7 @@ always @(posedge clk_1x) begin
    if (hasCD && (heartbeat == heartbeat_1)) begin
       if (aliveCnt[20] == 0) begin
          aliveCnt <= aliveCnt + 1'b1;
-      end else begin
+      end else if (isPaused || ~status[65]) begin
          paused <= 1;
       end
    end else begin
