@@ -40,28 +40,57 @@ architecture arch of gte_UNRDivide is
       x"07", x"07", x"06", x"06", x"05", x"05", x"04", x"04", x"03", x"03", x"02", x"02", x"01", x"01", x"00", x"00", --
       x"00" -- one extra table entry (for "(d-7FC0h)/80h"=100h)
    );
-
-   type tstate is
-   (
-      IDLE,
-      SHIFT,
-      READTABLE,
-      CALC_X,
-      CALC_D,
-      CALC_R,
-      CALCRESULT
-   );
-   signal state : tstate := IDLE;
    
-   signal shiftcount    : integer range 0 to 15;        
+         
       
-   signal calc_lhs      : unsigned(31 downto 0);
+   -- stage 1
+   signal trigger_1     : std_logic := '0';
+   signal divError_1    : std_logic := '0';
+   signal lhs_1         : unsigned(15 downto 0);
+   
+   signal shiftcount    : integer range 0 to 15;  
+      
+   -- stage 2
+   signal trigger_2     : std_logic := '0';
+   signal divError_2    : std_logic := '0';
+   signal lhs_2         : unsigned(15 downto 0);
+   signal shiftcount_2  : integer range 0 to 15;  
+      
    signal calc_rhs      : unsigned(15 downto 0);
+      
+   -- stage 3
+   signal trigger_3     : std_logic := '0';
+   signal divError_3    : std_logic := '0';
+   signal lhs_3         : unsigned(15 downto 0);
+   signal shiftcount_3  : integer range 0 to 15; 
+   
    signal tableValue    : unsigned(7 downto 0);
    signal divisor       : signed(16 downto 0);
+         
+   -- stage 4
+   signal trigger_4     : std_logic := '0';
+   signal divError_4    : std_logic := '0';
+   signal lhs_4         : unsigned(15 downto 0);
+   signal shiftcount_4  : integer range 0 to 15; 
+   signal divisor_4     : signed(16 downto 0);
+            
    signal calc_val_x    : signed(10 downto 0);
    signal calc_val_xn   : signed(10 downto 0);
+            
+   -- stage 5
+   signal trigger_5     : std_logic := '0';
+   signal divError_5    : std_logic := '0';
+   signal lhs_5         : unsigned(15 downto 0);
+   signal shiftcount_5  : integer range 0 to 15; 
+   signal calc_val_x_5  : signed(10 downto 0);
+             
    signal calc_val_d    : signed(19 downto 0);
+             
+   -- stage 6
+   signal trigger_6     : std_logic := '0';
+   signal divError_6    : std_logic := '0';
+
+   signal calc_lhs      : unsigned(31 downto 0);
    signal calc_val_r    : unsigned(19 downto 0);
 
 begin 
@@ -74,65 +103,91 @@ begin
       if rising_edge(clk2x) then
       
          divError       <= '0';
+
+         -- stage 0 - receive
+         trigger_1  <= trigger;
+         divError_1 <= '0';
+         lhs_1      <= lhs;
          
-         case (state) is
-         
-            when IDLE =>
-               if (trigger = '1') then
-                  if (rhs * 2 <= lhs) then
-                     divError <= '1';
-                     result   <= (others => '1');
-                  else
-                     state <= SHIFT;
-                  end if;
-                  
-                  shiftcount <= 0;
-                  for i in 0 to 15 loop
-                     if (rhs(i) = '1') then
-                        shiftcount <= 15 - i;
-                     end if;
-                  end loop;
-               
-               end if;
-               
-            when SHIFT =>
-               state    <= READTABLE;
-               calc_lhs <= resize(lhs, 32) sll shiftcount;
-               calc_rhs <= rhs sll shiftcount;
-               
-            when READTABLE =>
-               state      <= CALC_X;
-               tableValue <= unr_table((to_integer(calc_rhs(14 downto 0)) + 64) / 128);
-               divisor    <= '0' & signed(calc_rhs);
-               divisor(15)<= '1';
-               
-            when CALC_X =>
-               state       <= CALC_D;
-               calc_val_x  <= signed(resize(tableValue, 11) + 16#101#);
-               calc_val_xn <= -signed((resize(tableValue, 11) + 16#101#));
+         if (trigger = '1') then
+            if (rhs * 2 <= lhs) then
+               divError_1 <= '1';
+            end if;
             
-            when CALC_D =>
-               state      <= CALC_R;
-               var_calc_d := resize(((divisor * calc_val_xn) + 16#80#), 28);
-               calc_val_d <= x"20000" + var_calc_d(27 downto 8); 
-
-            when CALC_R =>
-               state      <= CALCRESULT;
-               var_calc_r := resize(((calc_val_x * calc_val_d) + 16#80#), 28);
-               calc_val_r <= unsigned(var_calc_r(27 downto 8));
-
-            when CALCRESULT =>
-               state       <= IDLE;
-               calc_result := resize(((calc_lhs * calc_val_r) + x"8000") / x"10000", 32);
-               if (calc_result > x"1FFFF") then
-                  result   <= (others => '1');
-               else
-                  result   <= calc_result(16 downto 0);
+            shiftcount <= 0;
+            for i in 0 to 15 loop
+               if (rhs(i) = '1') then
+                  shiftcount <= 15 - i;
                end if;
-               
-         end case;
+            end loop;
+         end if;
+            
+         -- stage 1: SHIFT
+         trigger_2      <= trigger_1;
+         divError_2     <= divError_1;
+         lhs_2          <= lhs_1;
+         shiftcount_2   <= shiftcount;
          
+         if (trigger_1 = '1') then
+            calc_rhs <= rhs sll shiftcount;
+         end if;
+            
+         -- stage 2: READTABLE
+         trigger_3      <= trigger_2;
+         divError_3     <= divError_2;
+         lhs_3          <= lhs_2;
+         shiftcount_3   <= shiftcount_2;
+         
+         if (trigger_2 = '1') then
+            tableValue <= unr_table((to_integer(calc_rhs(14 downto 0)) + 64) / 128);
+            divisor    <= '0' & signed(calc_rhs);
+            divisor(15)<= '1';
+         end if;
+            
+         -- stage 3: CALC_X
+         trigger_4      <= trigger_3;
+         divError_4     <= divError_3;
+         lhs_4          <= lhs_3;
+         shiftcount_4   <= shiftcount_3;
+         divisor_4      <= divisor;
+         
+         if (trigger_3 = '1') then
+            calc_val_x  <= signed(resize(tableValue, 11) + 16#101#);
+            calc_val_xn <= -signed((resize(tableValue, 11) + 16#101#));
+         end if;
+         
+         -- stage 4: CALC_D
+         trigger_5      <= trigger_4;
+         divError_5     <= divError_4;
+         lhs_5          <= lhs_4;
+         shiftcount_5   <= shiftcount_4;
+         calc_val_x_5   <= calc_val_x;
+         
+         var_calc_d := resize(((divisor_4 * calc_val_xn) + 16#80#), 28);
+         if (trigger_4 = '1') then
+            calc_val_d <= x"20000" + var_calc_d(27 downto 8); 
+         end if;
 
+         -- stage 5: CALC_R
+         trigger_6   <= trigger_5;
+         divError_6 <= divError_5;
+         
+         var_calc_r := resize(((calc_val_x_5 * calc_val_d) + 16#80#), 28);
+         if (trigger_5 = '1') then
+            calc_val_r <= unsigned(var_calc_r(27 downto 8));
+            calc_lhs   <= resize(lhs_5, 32) sll shiftcount_5;
+         end if;
+
+         -- stage 6: CALCRESULT
+         calc_result := resize(((calc_lhs * calc_val_r) + x"8000") / x"10000", 32);
+         if (trigger_6 = '1') then
+            if (calc_result > x"1FFFF" or divError_6 = '1') then
+               result   <= (others => '1');
+            else
+               result   <= calc_result(16 downto 0);
+            end if;
+            divError <= divError_6;
+         end if;
          
       end if;
    end process;

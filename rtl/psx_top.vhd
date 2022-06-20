@@ -23,7 +23,7 @@ entity psx_top is
       loadExe               : in  std_logic;
       fastboot              : in  std_logic;
       FASTMEM               : in  std_logic;
-      DATACACHEON           : in  std_logic;
+      TURBO                 : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
@@ -1557,7 +1557,7 @@ begin
       
       fastboot             => fastboot,
       NOMEMWAIT            => FASTMEM,
-      DATACACHEON          => DATACACHEON,
+      DATACACHEON          => TURBO,
       region_in            => biosregion,
       PATCHSERIAL          => PATCHSERIAL,
             
@@ -1753,6 +1753,7 @@ begin
       reset                => reset_intern,     
       
       WIDESCREEN           => WIDESCREEN,
+      TURBO                => TURBO,
       
       gte_busy             => gte_busy,     
       gte_readAddr         => gte_readAddr, 

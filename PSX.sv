@@ -403,7 +403,7 @@ parameter CONF_STR = {
 	"P2-;",
 	"P2-,(U) = unsafe -> can crash;",
 	"P2O[21],CD Fast Seek,Off,On(U);",
-	"P2O[58],Data Cache(Cheats Off),Off,On(U);",
+	"P2O[58],Turbo(Cheats Off),Off,On(U);",
 	"P2O[64],Pause when OSD open,On,Off(U);",
 	"P2O[65],Pause when HPS busy,On,Off(U);",
 	
@@ -909,7 +909,7 @@ psx
    .loadExe(loadExe),
    .fastboot(status[16]),
    .FASTMEM(0),
-   .DATACACHEON(status[58]),
+   .TURBO(status[58]),
    .REPRODUCIBLEGPUTIMING(status[19]),
    .REPRODUCIBLEDMATIMING(status[20]),
    .DMABLOCKATONCE(status[26]),

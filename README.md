@@ -127,11 +127,10 @@ CPU    : 90%
 - exception for read in invalid instruction and data area missing
 
 GPU    : 90%
-- mask bits not implemented for cpu2vram
+- mask bits not implemented for cpu2vram -> nothing yet found that uses it
 - vram2vram read/modify/write race condition when copying to same line
 
 Memory : 80%
-- rotate register not done for all busses
 - sdram controller needs rewrite to support fast banked read
 
 IRQ    : 90%
@@ -150,8 +149,8 @@ Timer  : 80%
 - dotclock base missing
 - accuracy for start/wraparound not tested
 
-GTE    : 80%
-- timing not correct
+GTE    : 90%
+- CPU <-> GTE Transfer pipeline delay not fully correct
 
 MDEC   : 90%
 - timing slightly too fast (4996/5376)

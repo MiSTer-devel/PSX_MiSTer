@@ -15,6 +15,7 @@ entity gte is
       reset                : in  std_logic;
       
       WIDESCREEN           : in  std_logic_vector(1 downto 0);
+      TURBO                : in  std_logic;
       
       gte_busy             : out std_logic;
       gte_readAddr         : in  unsigned(5 downto 0);
@@ -132,7 +133,9 @@ architecture arch of gte is
    signal REG_FLAG  : unsigned(31 downto 0);
    
    -- widescreen
-   signal IR1aspect : signed(16 downto 0);
+   signal IR1aspect     : signed(16 downto 0);
+   signal IR1aspect_1   : signed(16 downto 0);
+   signal IR1aspect_2   : signed(16 downto 0);
   
    -- calculation
    type tstate is
@@ -163,38 +166,44 @@ architecture arch of gte is
    );
    signal state : tstate := IDLE;
    
-   signal calcStep   : integer range 0 to 31;
-   signal batchCount : integer range 0 to 2;
+   signal calcStep         : integer range 0 to 63;
+   signal batchCount       : integer range 0 to 2;
+   signal turbomode        : std_logic := '0';      
+         
+   signal cmdShift         : std_logic;
+   signal cmdsatIR         : std_logic;
+   signal cmdMM            : unsigned(1 downto 0);
+   signal cmdMV            : unsigned(1 downto 0);
+   signal cmdTV            : unsigned(1 downto 0);
    
-   signal cmdShift   : std_logic;
-   signal cmdsatIR   : std_logic;
-   signal cmdMM      : unsigned(1 downto 0);
-   signal cmdMV      : unsigned(1 downto 0);
-   signal cmdTV      : unsigned(1 downto 0);
+   signal calcColor        : unsigned(23 downto 0);
+   signal pushRGBfromMAC   : std_logic := '0';
+   signal setOTZ           : std_logic := '0';
+   signal pushSZandDivide  : std_logic := '0';
+   signal pushSXY          : std_logic := '0';
    
-   signal calcColor : unsigned(23 downto 0);
-   signal pushRGBfromMAC : std_logic := '0';
-   signal setOTZ         : std_logic := '0';
+   signal REG_IR2_1        : signed(15 downto 0);
+   signal REG_IR2_2        : signed(15 downto 0);
    
-   signal matrix00   : signed(15 downto 0);
-   signal matrix01   : signed(15 downto 0);
-   signal matrix02   : signed(15 downto 0);
-   signal matrix10   : signed(15 downto 0);
-   signal matrix11   : signed(15 downto 0);
-   signal matrix12   : signed(15 downto 0);
-   signal matrix20   : signed(15 downto 0);
-   signal matrix21   : signed(15 downto 0);
-   signal matrix22   : signed(15 downto 0);
-      
-   signal vector0    : signed(15 downto 0);
-   signal vector1    : signed(15 downto 0);
-   signal vector2    : signed(15 downto 0);
-   
-   signal translate0 : signed(31 downto 0);
-   signal translate1 : signed(31 downto 0);
-   signal translate2 : signed(31 downto 0);
-   
-   signal shiftvalue : signed(31 downto 0);
+   signal matrix00         : signed(15 downto 0);
+   signal matrix01         : signed(15 downto 0);
+   signal matrix02         : signed(15 downto 0);
+   signal matrix10         : signed(15 downto 0);
+   signal matrix11         : signed(15 downto 0);
+   signal matrix12         : signed(15 downto 0);
+   signal matrix20         : signed(15 downto 0);
+   signal matrix21         : signed(15 downto 0);
+   signal matrix22         : signed(15 downto 0);
+            
+   signal vector0          : signed(15 downto 0);
+   signal vector1          : signed(15 downto 0);
+   signal vector2          : signed(15 downto 0);
+         
+   signal translate0       : signed(31 downto 0);
+   signal translate1       : signed(31 downto 0);
+   signal translate2       : signed(31 downto 0);
+         
+   signal shiftvalue       : signed(31 downto 0);
    
    -- MACs
    signal MAC0req          : tMAC0req;
@@ -273,6 +282,8 @@ begin
             when "11"   => IR1aspect <= resize((resize(REG_IR1 & "000", 21)  + resize(REG_IR1 & "00", 21)                              ) / 16, 17);   -- * (8 + 4)     / 16 -> 16:9
             when others => IR1aspect <= resize(REG_IR1, 17);
          end case;
+      
+         turbomode <= TURBO;
       
          if (reset = '1' and loading_savestate = '0') then
          
@@ -375,6 +386,8 @@ begin
             div_trigger     <= '0';
             pushRGBfromMAC  <= '0';
             setOTZ          <= '0';
+            pushSZandDivide <= '0';
+            pushSXY         <= '0';
             
             if (gte_readEna = '1') then
                case (to_integer(gte_readAddr)) is
@@ -569,7 +582,7 @@ begin
                      cmdMV    <= gte_cmdData(16 downto 15);
                      cmdTV    <= gte_cmdData(14 downto 13);
                      case (to_integer(gte_cmdData(5 downto 0))) is
-                        when 16#01# => state <= CALC_RTPS; vector0 <= REG_V0X;
+                        when 16#01# => state <= CALC_RTPS;
                         when 16#06# => state <= CALC_NCLIP; 
                         when 16#0C# => state <= CALC_OP; 
                         when 16#10# => state <= CALC_DPCS; calcColor <= REG_RGBC(23 downto 0);
@@ -587,7 +600,7 @@ begin
                         when 16#2A# => state <= CALC_DPCT; calcColor <= REG_RGB0(23 downto 0);
                         when 16#2D# => state <= CALC_AVSZ3;
                         when 16#2E# => state <= CALC_AVSZ4;
-                        when 16#30# => state <= CALC_RTPT; vector0 <= REG_V0X;
+                        when 16#30# => state <= CALC_RTPT;
                         when 16#3D# => state <= CALC_GPF;
                         when 16#3E# => state <= CALC_GPL;
                         when 16#3F# => state <= CALC_NCCT;                        
@@ -603,94 +616,113 @@ begin
                      gte_busy <= '0';
                   end if;
                   
-               when CALC_RTPS | CALC_RTPT =>
+               when CALC_RTPS =>
                   case (calcStep) is
                      --                     mul1                        mul2                  add                           sub  swap    svSh  useIR    IRs    IRsF        satIR     satIRF  uRes trigger
-                     when 0 => MAC1req <= (resize(REG_RT11, 32), resize(vector0, 32), resize(signed(REG_TR0), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
-                               MAC2req <= (resize(REG_RT21, 32), resize(vector0, 32), resize(signed(REG_TR1), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
-                               MAC3req <= (resize(REG_RT31, 32), resize(vector0, 32), resize(signed(REG_TR2), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1');
+                     when 0 => MAC1req <= (resize(REG_RT11, 32), resize(REG_V0X, 32), resize(signed(REG_TR0), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
+                               MAC2req <= (resize(REG_RT21, 32), resize(REG_V0X, 32), resize(signed(REG_TR1), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
+                               MAC3req <= (resize(REG_RT31, 32), resize(REG_V0X, 32), resize(signed(REG_TR2), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1');
 
-                              case (batchCount) is
-                                 when 0 => vector1 <= REG_V0Y; vector2 <= REG_V0Z;
-                                 when 1 => vector1 <= REG_V1Y; vector2 <= REG_V1Z;
-                                 when 2 => vector1 <= REG_V2Y; vector2 <= REG_V2Z;
-                              end case;                               
-                               
-                     when 1 => MAC1req <= (resize(REG_RT12, 32), resize(vector1, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
-                               MAC2req <= (resize(REG_RT22, 32), resize(vector1, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
-                               MAC3req <= (resize(REG_RT32, 32), resize(vector1, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1');
+                     when 1 => MAC1req <= (resize(REG_RT12, 32), resize(REG_V0Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
+                               MAC2req <= (resize(REG_RT22, 32), resize(REG_V0Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
+                               MAC3req <= (resize(REG_RT32, 32), resize(REG_V0Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1');
                                                                                                                             
-                     when 2 => MAC1req <= (resize(REG_RT13, 32), resize(vector2, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
-                               MAC2req <= (resize(REG_RT23, 32), resize(vector2, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
-                               MAC3req <= (resize(REG_RT33, 32), resize(vector2, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift,      '1', cmdsatIR,      '0',  '1',  '1');
+                     when 2 => MAC1req <= (resize(REG_RT13, 32), resize(REG_V0Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
+                               MAC2req <= (resize(REG_RT23, 32), resize(REG_V0Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
+                               MAC3req <= (resize(REG_RT33, 32), resize(REG_V0Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift,      '1', cmdsatIR,      '0',  '1',  '1');
 
-                     when 4 => -- push sz and start divide
-                        div_trigger <= '1';
-                        div_lhs     <= unsigned(REG_H);
-                        if (mac3Shifted < 0) then
-                           REG_FLAG(18) <= '1'; REG_FLAG(31) <= '1';
-                           REG_SZ3      <= x"0000";
-                           div_rhs      <= x"0000";
-                        elsif (mac3Shifted > 16#FFFF#) then
-                           REG_FLAG(18) <= '1'; REG_FLAG(31) <= '1';
-                           REG_SZ3      <= x"FFFF";
-                           div_rhs      <= x"FFFF";
-                        else
-                           REG_SZ3      <= unsigned(mac3Shifted(15 downto 0));
-                           div_rhs      <= unsigned(mac3Shifted(15 downto 0));
-                        end if;
-                        REG_SZ0 <= REG_SZ1; REG_SZ1 <= REG_SZ2; REG_SZ2 <= REG_SZ3;
+                     when 3 => pushSZandDivide <= '1';
 
                               --             mul1                       mul2                    add         sub  swap useIR IRs cOvf uRes trigger
                      when 12 => MAC0req <= (          IR1aspect, '0' & signed(div_result), signed(REG_OFX), '0', '0', '0', '0', '1', '0', '1'); 
                      when 13 => MAC0req <= (resize(REG_IR2, 17), '0' & signed(div_result), signed(REG_OFY), '0', '0', '0', '0', '1', '0', '1'); 
-                     when 15 => -- push SXY
-                        if (mac0Last(34 downto 16) < -1024) then
-                           REG_SX2 <= to_signed(-1024, 16);
-                           REG_FLAG(14) <= '1'; REG_FLAG(31) <= '1';
-                        elsif (mac0Last(34 downto 16) > 1023) then
-                           REG_SX2 <= to_signed(1023, 16);  
-                           REG_FLAG(14) <= '1'; REG_FLAG(31) <= '1';                           
-                        else
-                           REG_SX2 <= mac0Last(31 downto 16);  
-                        end if;   
-                        if (mac0_result(34 downto 16) < -1024) then
-                           REG_SY2 <= to_signed(-1024, 16);
-                           REG_FLAG(13) <= '1'; REG_FLAG(31) <= '1';
-                        elsif (mac0_result(34 downto 16) > 1023) then
-                           REG_SY2 <= to_signed(1023, 16);   
-                           REG_FLAG(13) <= '1'; REG_FLAG(31) <= '1';                           
-                        else
-                           REG_SY2 <= mac0_result(31 downto 16);  
-                        end if; 
-                        REG_SX0 <= REG_SX1; REG_SX1 <= REG_SX2;
-                        REG_SY0 <= REG_SY1; REG_SY1 <= REG_SY2;
-                        if (state = CALC_RTPT and batchCount < 2) then
-                           calcStep   <= 0;
-                           batchCount <= batchCount + 1;
-                           case (batchCount) is
-                                 when 0 => vector0 <= REG_V1X;
-                                 when 1 => vector0 <= REG_V2X;
-                                 when 2 => null; -- cannot happen
-                           end case;
-                        else
-                           MAC0req <= (resize(REG_DQA, 17), '0' & signed(div_result), signed(REG_DQB), '0', '0', '1', '1', '1', '0', '1');
-                        end if;
+                     when 14 => pushSXY <= '1';
+                     when 15 => MAC0req <= (resize(REG_DQA, 17), '0' & signed(div_result), signed(REG_DQB), '0', '0', '1', '1', '1', '0', '1');
                                
-                     when 17 => state <= IDLE;
+                     when 17 => if (turbomode = '1') then state <= IDLE; end if;
+                     when 25 => state <= IDLE;
+                     when others => null;
+                  end case;
+                  
+               when CALC_RTPT =>
+                  case (calcStep) is
+                     --                     mul1                        mul2                  add                           sub  swap    svSh  useIR    IRs    IRsF        satIR     satIRF  uRes trigger
+                              -- first round
+                     when 0 => MAC1req <= (resize(REG_RT11, 32), resize(REG_V0X, 32), resize(signed(REG_TR0), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
+                               MAC2req <= (resize(REG_RT21, 32), resize(REG_V0X, 32), resize(signed(REG_TR1), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
+                               MAC3req <= (resize(REG_RT31, 32), resize(REG_V0X, 32), resize(signed(REG_TR2), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1');                           
+                               
+                     when 1 => MAC1req <= (resize(REG_RT12, 32), resize(REG_V0Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
+                               MAC2req <= (resize(REG_RT22, 32), resize(REG_V0Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
+                               MAC3req <= (resize(REG_RT32, 32), resize(REG_V0Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1');
+                                                                                                                            
+                     when 2 => MAC1req <= (resize(REG_RT13, 32), resize(REG_V0Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
+                               MAC2req <= (resize(REG_RT23, 32), resize(REG_V0Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
+                               MAC3req <= (resize(REG_RT33, 32), resize(REG_V0Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift,      '1', cmdsatIR,      '0',  '1',  '1');
+
+                     when 3 => pushSZandDivide <= '1';
+                               -- second round
+                               MAC1req <= (resize(REG_RT11, 32), resize(REG_V1X, 32), resize(signed(REG_TR0), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
+                               MAC2req <= (resize(REG_RT21, 32), resize(REG_V1X, 32), resize(signed(REG_TR1), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
+                               MAC3req <= (resize(REG_RT31, 32), resize(REG_V1X, 32), resize(signed(REG_TR2), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1');
+                     
+                     when 4 => MAC1req <= (resize(REG_RT12, 32), resize(REG_V1Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
+                               MAC2req <= (resize(REG_RT22, 32), resize(REG_V1Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
+                               MAC3req <= (resize(REG_RT32, 32), resize(REG_V1Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1');
+                                                                                                                            
+                     when 5 => MAC1req <= (resize(REG_RT13, 32), resize(REG_V1Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
+                               MAC2req <= (resize(REG_RT23, 32), resize(REG_V1Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
+                               MAC3req <= (resize(REG_RT33, 32), resize(REG_V1Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift,      '1', cmdsatIR,      '0',  '1',  '1');
+                     when 6 => pushSZandDivide <= '1'; IR1aspect_1 <= IR1aspect; REG_IR2_1 <= REG_IR2;
+                               -- third round
+                               MAC1req <= (resize(REG_RT11, 32), resize(REG_V2X, 32), resize(signed(REG_TR0), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
+                               MAC2req <= (resize(REG_RT21, 32), resize(REG_V2X, 32), resize(signed(REG_TR1), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1'); 
+                               MAC3req <= (resize(REG_RT31, 32), resize(REG_V2X, 32), resize(signed(REG_TR2), 33) & x"000", '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '0',  '1');
+                     
+                     when 7 => MAC1req <= (resize(REG_RT12, 32), resize(REG_V2Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
+                               MAC2req <= (resize(REG_RT22, 32), resize(REG_V2Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1'); 
+                               MAC3req <= (resize(REG_RT32, 32), resize(REG_V2Y, 32), to_signed(0, 45),                     '0', '0',      '0', '0',      '0',      '0',      '0',      '0',  '1',  '1');
+                                                                                                                            
+                     when 8 => MAC1req <= (resize(REG_RT13, 32), resize(REG_V2Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
+                               MAC2req <= (resize(REG_RT23, 32), resize(REG_V2Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
+                               MAC3req <= (resize(REG_RT33, 32), resize(REG_V2Z, 32), to_signed(0, 45),                     '0', '0', cmdShift, '1', cmdShift,      '1', cmdsatIR,      '0',  '1',  '1');
+                     when 9 => pushSZandDivide <= '1'; IR1aspect_2 <= IR1aspect; REG_IR2_2 <= REG_IR2;
+
+                              --             mul1                       mul2                    add         sub  swap useIR IRs cOvf uRes trigger
+                              -- first round
+                     when 12 => MAC0req <= (          IR1aspect_1, '0' & signed(div_result), signed(REG_OFX), '0', '0', '0', '0', '1', '0', '1'); 
+                     when 13 => MAC0req <= (resize(REG_IR2_1, 17), '0' & signed(div_result), signed(REG_OFY), '0', '0', '0', '0', '1', '0', '1'); 
+                     when 14 => pushSXY <= '1';
+                     
+                              -- second round
+                     when 15 => MAC0req <= (          IR1aspect_2, '0' & signed(div_result), signed(REG_OFX), '0', '0', '0', '0', '1', '0', '1'); 
+                     when 16 => MAC0req <= (resize(REG_IR2_2, 17), '0' & signed(div_result), signed(REG_OFY), '0', '0', '0', '0', '1', '0', '1'); 
+                     when 17 => pushSXY <= '1';
+                     
+                              -- third round
+                     when 18 => MAC0req <= (          IR1aspect, '0' & signed(div_result), signed(REG_OFX), '0', '0', '0', '0', '1', '0', '1'); 
+                     when 19 => MAC0req <= (resize(REG_IR2, 17), '0' & signed(div_result), signed(REG_OFY), '0', '0', '0', '0', '1', '0', '1'); 
+                     when 20 => pushSXY <= '1';
+                     
+                     -- only for third round
+                     when 21 =>  MAC0req <= (resize(REG_DQA, 17), '0' & signed(div_result), signed(REG_DQB), '0', '0', '1', '1', '1', '0', '1');
+                               
+                     when 23 => if (turbomode = '1') then state <= IDLE; end if;
+                     when 41 => state <= IDLE;
                      when others => null;
                   end case;
                
                when CALC_NCLIP =>
                   case (calcStep) is
-                     --                                 mul1              mul2           add     sub  swap useIR IRs cOvf uRes trigger
-                     when 0 => MAC0req <= (resize(REG_SX0, 17), resize(REG_SY1,18), x"00000000", '0', '0', '0', '0', '0', '0', '1'); 
-                     when 1 => MAC0req <= (resize(REG_SX1, 17), resize(REG_SY2,18), x"00000000", '0', '0', '0', '0', '0', '1', '1'); 
-                     when 2 => MAC0req <= (resize(REG_SX2, 17), resize(REG_SY0,18), x"00000000", '0', '0', '0', '0', '0', '1', '1'); 
-                     when 3 => MAC0req <= (resize(REG_SX0, 17), resize(REG_SY2,18), x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
-                     when 4 => MAC0req <= (resize(REG_SX1, 17), resize(REG_SY0,18), x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
-                     when 5 => MAC0req <= (resize(REG_SX2, 17), resize(REG_SY1,18), x"00000000", '1', '0', '0', '0', '1', '1', '1'); 
-                     when 7 => state <= IDLE;
+                     --                                  mul1              mul2           add     sub  swap useIR IRs cOvf uRes trigger
+                     when 0  => MAC0req <= (resize(REG_SX0, 17), resize(REG_SY1,18), x"00000000", '0', '0', '0', '0', '0', '0', '1'); 
+                     when 1  => MAC0req <= (resize(REG_SX1, 17), resize(REG_SY2,18), x"00000000", '0', '0', '0', '0', '0', '1', '1'); 
+                     when 2  => MAC0req <= (resize(REG_SX2, 17), resize(REG_SY0,18), x"00000000", '0', '0', '0', '0', '0', '1', '1'); 
+                     when 3  => MAC0req <= (resize(REG_SX0, 17), resize(REG_SY2,18), x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
+                     when 4  => MAC0req <= (resize(REG_SX1, 17), resize(REG_SY0,18), x"00000000", '1', '0', '0', '0', '0', '1', '1'); 
+                     when 5  => MAC0req <= (resize(REG_SX2, 17), resize(REG_SY1,18), x"00000000", '1', '0', '0', '0', '1', '1', '1'); 
+                     when 7  => if (turbomode = '1') then state <= IDLE; end if;
+                     when 11 => state <= IDLE;
                      when others => null;
                   end case;
                   
@@ -705,7 +737,8 @@ begin
                                MAC2req <= (resize(REG_RT11, 32), resize(REG_IR3, 32), to_signed(0, 45), '1', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1'); 
                                MAC3req <= (resize(REG_RT22, 32), resize(REG_IR1, 32), to_signed(0, 45), '1', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1');
                      
-                     when 3 => state <= IDLE;
+                     when 3 => if (turbomode = '1') then state <= IDLE; end if;
+                     when 7 => state <= IDLE;
                      when others => null;
                   end case;
                   
@@ -728,12 +761,16 @@ begin
                     
                      when 8 => 
                         if (state = CALC_DPCS or batchCount = 2) then
-                           state <= IDLE;
+                           if (turbomode = '1') then
+                              state <= IDLE;
+                           end if;
                         else
                            calcStep   <= 0;
                            batchCount <= batchCount + 1;
                            calcColor  <= REG_RGB0(23 downto 0);
                         end if;
+                        
+                     when 10 => state <= IDLE;
                      when others => null;
                   end case;               
                   
@@ -754,7 +791,8 @@ begin
                      
                      when 5 => pushRGBfromMAC <= '1';
                     
-                     when 8 => state <= IDLE;
+                     when 8 => if (turbomode = '1') then state <= IDLE; end if;
+                     when 10 => state <= IDLE;
                      when others => null;
                   end case;
                   
@@ -825,7 +863,8 @@ begin
                                MAC2req <= (resize(matrix12, 32), resize(vector2, 32), to_signed(0, 45), '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1');
                                MAC3req <= (resize(matrix22, 32), resize(vector2, 32), to_signed(0, 45), '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1');
                     
-                     when 6 => state <= IDLE;
+                     when 6 => if (turbomode = '1') then state <= IDLE; end if;
+                     when 10 => state <= IDLE;
                      when others => null;
                   end case;
                
@@ -886,15 +925,20 @@ begin
                                 MAC2req <= (resize(REG_IR2, 32), resize(REG_IR0, 32),                        mac2Last,         '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '0',  '1'); 
                                 MAC3req <= (resize(REG_IR3, 32), resize(REG_IR0, 32),                        mac3Last,         '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '0',  '1');
 
-                     when 18 => pushRGBfromMAC <= '1';
-                               
+                     when 18 => pushRGBfromMAC <= '1';       
+                     
                      when 21 => 
                         if (state = CALC_NCDS or batchCount = 2) then
-                           state <= IDLE;
+                           if (turbomode = '1') then 
+                              state <= IDLE; 
+                           end if;
                         else
                            calcStep   <= 0;
                            batchCount <= batchCount + 1;
                         end if;
+                     
+                     when 33 => if (state = CALC_NCDS) then state <= IDLE; end if;
+                     when 39 => state <= IDLE;   
                      when others => null;
                   end case;        
 
@@ -938,7 +982,8 @@ begin
 
                      when 13 => pushRGBfromMAC <= '1';
                                
-                     when 16 => state <= IDLE;
+                     when 16 => if (turbomode = '1') then state <= IDLE; end if;
+                     when 20 => state <= IDLE;
                      when others => null;
                   end case;   
 
@@ -994,11 +1039,16 @@ begin
                                
                      when 17 => 
                         if (state = CALC_NCCS or batchCount = 2) then
-                           state <= IDLE;
+                           if (turbomode = '1') then 
+                              state <= IDLE; 
+                           end if;
                         else
                            calcStep   <= 0;
                            batchCount <= batchCount + 1;
                         end if;
+                     
+                     when 29 => if (state = CALC_NCCS) then state <= IDLE; end if;
+                     when 37 => state <= IDLE;
                      when others => null;
                   end case;  
                   
@@ -1033,7 +1083,8 @@ begin
 
                      when 9 => pushRGBfromMAC <= '1';
                                
-                     when 12 => state <= IDLE;
+                     when 12 => if (turbomode = '1') then state <= IDLE; end if;
+                     when 16 => state <= IDLE;
                      when others => null;
                   end case; 
 
@@ -1080,11 +1131,15 @@ begin
                                
                      when 12 => 
                         if (state = CALC_NCS or batchCount = 2) then
-                           state <= IDLE;
+                           if (turbomode = '1') then 
+                              state <= IDLE; 
+                           end if;
                         else
                            calcStep   <= 0;
                            batchCount <= batchCount + 1;
                         end if;
+                     when 22 => if (state = CALC_NCS) then state <= IDLE; end if;
+                     when 28 => state <= IDLE;
                      when others => null;
                   end case;                  
                   
@@ -1094,7 +1149,8 @@ begin
                      when 0 => MAC1req <= (resize(REG_IR1, 32), resize(REG_IR1, 32), to_signed(0, 45), '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '0',  '1'); 
                                MAC2req <= (resize(REG_IR2, 32), resize(REG_IR2, 32), to_signed(0, 45), '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '0',  '1'); 
                                MAC3req <= (resize(REG_IR3, 32), resize(REG_IR3, 32), to_signed(0, 45), '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '0',  '1'); 
-                     when 2 => state <= IDLE; gte_busy <= '0';
+                     when 2 => if (turbomode = '1') then state <= IDLE; end if;
+                     when 5 => state <= IDLE;
                      when others => null;
                   end case;
                   
@@ -1131,7 +1187,7 @@ begin
                      when 1 => MAC0req <= ('0' & signed(REG_SZ2), resize(REG_ZSF3,18), x"00000000", '0', '0', '0', '0', '1', '1', '1'); 
                      when 2 => MAC0req <= ('0' & signed(REG_SZ3), resize(REG_ZSF3,18), x"00000000", '0', '0', '0', '0', '1', '1', '1'); 
                      when 3 => setOTZ <= '1';
-                     when 6 => state <= IDLE;
+                     when 5 => state <= IDLE;
                      when others => null;
                   end case;                  
                
@@ -1177,7 +1233,7 @@ begin
                                MAC3req <= (resize(REG_IR3, 32), resize(REG_IR0, 32), to_signed(0, 45), '0', '0', cmdShift, '1', cmdShift, cmdShift, cmdsatIR, cmdsatIR,  '1',  '1');
 
                      when 3 => pushRGBfromMAC <= '1';
-                     when 6 => state <= IDLE;
+                     when 5 => state <= IDLE;
                      when others => null;
                   end case;
             
@@ -1231,6 +1287,49 @@ begin
                else
                   REG_OTZ <= unsigned(mac0_result(27 downto 12));
                end if;
+            end if;
+            
+            -- push sz and start divide
+            if (pushSZandDivide = '1') then
+               div_trigger <= '1';
+               div_lhs     <= unsigned(REG_H);
+               if (mac3Shifted < 0) then
+                  REG_FLAG(18) <= '1'; REG_FLAG(31) <= '1';
+                  REG_SZ3      <= x"0000";
+                  div_rhs      <= x"0000";
+               elsif (mac3Shifted > 16#FFFF#) then
+                  REG_FLAG(18) <= '1'; REG_FLAG(31) <= '1';
+                  REG_SZ3      <= x"FFFF";
+                  div_rhs      <= x"FFFF";
+               else
+                  REG_SZ3      <= unsigned(mac3Shifted(15 downto 0));
+                  div_rhs      <= unsigned(mac3Shifted(15 downto 0));
+               end if;
+               REG_SZ0 <= REG_SZ1; REG_SZ1 <= REG_SZ2; REG_SZ2 <= REG_SZ3;
+            end if;
+            
+            -- push SXY
+            if (pushSXY = '1') then
+               if (mac0Last(34 downto 16) < -1024) then
+                  REG_SX2 <= to_signed(-1024, 16);
+                  REG_FLAG(14) <= '1'; REG_FLAG(31) <= '1';
+               elsif (mac0Last(34 downto 16) > 1023) then
+                  REG_SX2 <= to_signed(1023, 16);  
+                  REG_FLAG(14) <= '1'; REG_FLAG(31) <= '1';                           
+               else
+                  REG_SX2 <= mac0Last(31 downto 16);  
+               end if;   
+               if (mac0_result(34 downto 16) < -1024) then
+                  REG_SY2 <= to_signed(-1024, 16);
+                  REG_FLAG(13) <= '1'; REG_FLAG(31) <= '1';
+               elsif (mac0_result(34 downto 16) > 1023) then
+                  REG_SY2 <= to_signed(1023, 16);   
+                  REG_FLAG(13) <= '1'; REG_FLAG(31) <= '1';                           
+               else
+                  REG_SY2 <= mac0_result(31 downto 16);  
+               end if; 
+               REG_SX0 <= REG_SX1; REG_SX1 <= REG_SX2;
+               REG_SY0 <= REG_SY1; REG_SY1 <= REG_SY2;
             end if;
             
             -- writebacks
