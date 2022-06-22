@@ -1835,7 +1835,7 @@ begin
                   cop0_CAUSE(10) <= irqRequest;
 
                   blockLoadforward <= '0';
-                  if (executeReadEnable = '1' and EXEReadEnable = '1' and resultTarget = EXEresultTarget) then
+                  if (executeReadEnable = '1' and EXEReadEnable = '1' and EXEGTeReadEnable = '0' and resultTarget = EXEresultTarget) then
                      blockLoadforward <= '1';
                   end if;                 
                   

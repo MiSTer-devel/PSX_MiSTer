@@ -608,6 +608,10 @@ begin
                         videoout_out.r      <= (others => '0');
                         videoout_out.g      <= (others => '0');
                         videoout_out.b      <= (others => '0');
+                     elsif (videoout_settings.hCrop = '1' and xCount >= videoout_out.DisplayWidth) then
+                        videoout_out.r      <= (others => '0');
+                        videoout_out.g      <= (others => '0');
+                        videoout_out.b      <= (others => '0');
                      elsif (overlay_ena = '1') then
                         videoout_out.r      <= overlay_data( 7 downto 0);
                         videoout_out.g      <= overlay_data(15 downto 8);

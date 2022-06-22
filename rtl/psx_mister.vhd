@@ -37,6 +37,7 @@ entity psx_mister is
       rotate180             : in  std_logic;
       fixedVBlank           : in  std_logic;
       vCrop                 : in  std_logic_vector(1 downto 0);
+      hCrop                 : in  std_logic;
       SPUon                 : in  std_logic;
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
@@ -282,6 +283,7 @@ begin
       rotate180             => rotate180,
       fixedVBlank           => fixedVBlank,
       vCrop                 => vCrop,      
+      hCrop                 => hCrop,
       SPUon                 => SPUon,
       SPUSDRAM              => SPUSDRAM,
       REVERBOFF             => REVERBOFF,
