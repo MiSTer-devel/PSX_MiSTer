@@ -55,6 +55,7 @@ architecture arch of timer is
    signal timer2_subcount : unsigned(2 downto 0);
    signal hblank_1        : std_logic;
    signal vblank_1        : std_logic;
+   signal dotclock_1      : std_logic;
    
    -- savestates
    type t_ssarray is array(0 to 15) of std_logic_vector(31 downto 0);
@@ -123,6 +124,7 @@ begin
             timer2_subcount <= timer2_subcount + 1;
             hblank_1        <= hblank;
             vblank_1        <= vblank;
+            dotclock_1      <= dotclock;
             
             for i in 0 to 2 loop
                if (timerArray(i).T_MODE(7) = '0') then -- not toggle mode -> reset irq
@@ -133,8 +135,7 @@ begin
             -- check for new ticks
             newTick := "000";
             if (timerArray(0).T_MODE(8) = '1') then
-               newTick(0) := dotclock;
-               error      <= '1';
+               newTick(0) := dotclock and (not dotclock_1);
             else
                newTick(0) := '1';
             end if;

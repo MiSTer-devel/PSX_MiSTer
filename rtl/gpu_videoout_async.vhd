@@ -209,7 +209,8 @@ begin
    vDisplayStart <= to_integer(videoout_settings.vDisplayRange( 9 downto  0));
    vDisplayEnd   <= to_integer(videoout_settings.vDisplayRange(19 downto 10));
 
-   videoout_reports.vsync <= videoout_out.vsync;
+   videoout_reports.vsync    <= videoout_out.vsync;
+   videoout_reports.dotclock <= videoout_out.ce;
 
    process (clkvid)
       variable mode480i                  : std_logic;

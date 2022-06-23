@@ -95,7 +95,8 @@ begin
       
          if (nextHCount <   3) then videoout_reports.hblank_tmr <= '1'; else videoout_reports.hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
                 
-         videoout_reports.vsync <= '0';
+         videoout_reports.vsync    <= '0';
+         videoout_reports.dotclock <= '0';
          if (videoout_settings.GPUSTAT_VerRes = '1') then
             if (vsyncCount >= 5 and vsyncCount < 8) then videoout_reports.vsync <= '1'; end if;
          else

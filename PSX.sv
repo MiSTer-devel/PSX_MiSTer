@@ -428,7 +428,7 @@ parameter CONF_STR = {
 
 	"-   ;",
 	"R0,Reset;",
-	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Savestates,Fastforward;",
+	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Savestates,Fastforward,Pause;",
 	"jn,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,X,X;",
 	"I,",
 	"Slot=DPAD|Save/Load=Start+DPAD,",
@@ -483,11 +483,11 @@ wire        ioctl_wr;
 wire  [7:0] ioctl_index;
 reg         ioctl_wait = 0;
 
-wire [17:0] joy;
-wire [17:0] joy_unmod;
-wire [17:0] joy2;
-wire [17:0] joy3;
-wire [17:0] joy4;
+wire [18:0] joy;
+wire [18:0] joy_unmod;
+wire [18:0] joy2;
+wire [18:0] joy3;
+wire [18:0] joy4;
 
 wire [10:0] ps2_key;
 
@@ -575,7 +575,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
    .direct_video(DIRECT_VIDEO)
 );
 
-assign joy = joy_unmod[16] ? 16'b0 : joy_unmod;
+assign joy = joy_unmod[16] ? 19'b0 : joy_unmod;
 
 assign sd_rd[0] = 0;
 assign sd_wr[0] = 0;
@@ -857,12 +857,24 @@ reg heartbeat_1 = 0;
 
 reg reset = 0;
 
+reg buttonpause_1 = 0;
+reg button_paused = 0;
+
 always @(posedge clk_1x) begin
 
    paused <= 0;
 
    // pause from OSD open
    if (~status[64] & OSD_STATUS & (unpause == 0)) begin
+      paused <= 1;
+   end
+   
+   // pause from button
+   buttonpause_1 <= joy[18];
+   if (joy[18] & ~buttonpause_1) begin
+      button_paused <= ~button_paused;
+   end
+   if (button_paused) begin
       paused <= 1;
    end
    

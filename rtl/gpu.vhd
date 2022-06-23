@@ -89,6 +89,7 @@ entity gpu is
 
       hblank_tmr           : out std_logic := '0';
       vblank_tmr           : out std_logic := '0';
+      dotclock             : out std_logic;
       
       video_hsync          : out std_logic := '0';
       video_vsync          : out std_logic := '0';
@@ -1654,6 +1655,8 @@ begin
    video_b              <= videoout_out.b;             
    video_isPal          <= videoout_out.isPal;
    video_hResMode       <= videoout_out.hResMode;
+   
+   dotclock             <= videoout_reports.dotclock;
    
 --##############################################################
 --############################### savestates

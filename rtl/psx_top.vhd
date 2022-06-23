@@ -382,6 +382,7 @@ architecture arch of psx_top is
    -- gpu
    signal vblank_tmr             : std_logic;
    signal hblank_tmr             : std_logic;
+   signal dotclock               : std_logic;
    
    signal vram_pause             : std_logic; 
    signal vram_paused            : std_logic; 
@@ -1220,7 +1221,7 @@ begin
       
       error                => errorTimer,
       
-      dotclock             => '0', -- todo
+      dotclock             => dotclock,
       hblank               => hblank_tmr,
       vblank               => vblank_tmr,
       
@@ -1386,6 +1387,7 @@ begin
 
       hblank_tmr           => hblank_tmr,
       vblank_tmr           => vblank_tmr,
+      dotclock             => dotclock,
       
       video_hsync          => hsync, 
       video_vsync          => vsync, 

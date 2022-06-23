@@ -454,6 +454,7 @@ begin
       joypad3.PadPortJustif => '0',
       joypad3.WheelMap      => '0',
       joypad3.PadPortDS     => '0',
+      joypad3.PadPortStick  => '0',
 
       joypad3.KeyTriangle   => KeyTriangle(2),
       joypad3.KeyCircle     => KeyCircle(2),
@@ -485,6 +486,7 @@ begin
       joypad4.PadPortJustif => '0',
       joypad4.WheelMap      => '0',
       joypad4.PadPortDS     => '0',
+      joypad4.PadPortStick  => '0',
 
       joypad4.KeyTriangle   => KeyTriangle(3),
       joypad4.KeyCircle     => KeyCircle(3),

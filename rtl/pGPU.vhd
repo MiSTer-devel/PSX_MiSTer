@@ -41,6 +41,7 @@ package pGPU is
       inVsync                 : std_logic;
       interlacedDisplayField  : std_logic;
       activeLineLSB           : std_logic;
+      dotclock                : std_logic;
    end record;
   
    type tvideoout_ss is record
