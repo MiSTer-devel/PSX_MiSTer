@@ -1428,6 +1428,10 @@ begin
             vram_pauseCnt <= 0;
          end if;
          
+         if (vram_pause = '1' and vramState = WAITUNPAUSE and ce = '0') then
+            vram_paused <= '1';
+         end if;
+         
          if (reset = '1') then
             
             vramState   <= IDLE;
