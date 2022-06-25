@@ -169,6 +169,7 @@ entity psx_mister is
       KeyL1                 : in  std_logic_vector(3 downto 0);
       KeyL2                 : in  std_logic_vector(3 downto 0);
       KeyL3                 : in  std_logic_vector(3 downto 0);
+      ToggleDS              : in  std_logic_vector(3 downto 0);
       Analog1XP1            : in  signed(7 downto 0);
       Analog1YP1            : in  signed(7 downto 0);
       Analog2XP1            : in  signed(7 downto 0);
@@ -408,6 +409,7 @@ begin
       joypad1.KeyL1         => KeyL1(0),
       joypad1.KeyL2         => KeyL2(0),
       joypad1.KeyL3         => KeyL3(0),
+      joypad1.ToggleDS      => ToggleDS(0),
       joypad1.Analog1X      => Analog1XP1,
       joypad1.Analog1Y      => Analog1YP1,
       joypad1.Analog2X      => Analog2XP1,
@@ -440,6 +442,7 @@ begin
       joypad2.KeyL1         => KeyL1(1),
       joypad2.KeyL2         => KeyL2(1),
       joypad2.KeyL3         => KeyL3(1),
+      joypad2.ToggleDS      => ToggleDS(1),
       joypad2.Analog1X      => Analog1XP2,
       joypad2.Analog1Y      => Analog1YP2,
       joypad2.Analog2X      => Analog2XP2,
@@ -472,6 +475,7 @@ begin
       joypad3.KeyL1         => KeyL1(2),
       joypad3.KeyL2         => KeyL2(2),
       joypad3.KeyL3         => KeyL3(2),
+      joypad3.ToggleDS      => ToggleDS(2),
       joypad3.Analog1X      => Analog1XP3,
       joypad3.Analog1Y      => Analog1YP3,
       joypad3.Analog2X      => Analog2XP3,
@@ -504,6 +508,7 @@ begin
       joypad4.KeyL1         => KeyL1(3),
       joypad4.KeyL2         => KeyL2(3),
       joypad4.KeyL3         => KeyL3(3),
+      joypad4.ToggleDS      => ToggleDS(3),
       joypad4.Analog1X      => Analog1XP4,
       joypad4.Analog1Y      => Analog1YP4,
       joypad4.Analog2X      => Analog2XP4,

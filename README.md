@@ -90,7 +90,7 @@ The debug menu is intended for use by developers only. They don't really serve a
 ## Pad Options
 The following pad types are emulated by the core and can be independently assigned to each port:
 - DualShock:
-  Switch Digital/Analog mode with mouse/touchpad click or L3+R3+Up/Down 
+  Switch Digital/Analog mode with mouse/touchpad click or L3+R3+Up/Down or mapable button 
 - Digital  
   (ID 0x41) Ten button digital pad.
 - Analog  

@@ -15,6 +15,7 @@ type joypad_t is record
    PadPortStick  : std_logic;
 
    WheelMap    : std_logic;
+   ToggleDS    : std_logic;
 
    KeyTriangle : std_logic;
    KeyCircle   : std_logic;

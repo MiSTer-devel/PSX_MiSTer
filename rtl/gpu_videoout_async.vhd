@@ -72,7 +72,7 @@ architecture arch of gpu_videoout_async is
    signal videoout_request     : tvideoout_request := ('0', (others => '0'), (others => '0'), 0, (others => '0'));
    
    -- timing
-   signal lineMax          : integer range 0 to 512;
+   signal lineMax          : integer range 0 to 512 := 512;
    signal lineIn           : unsigned(8 downto 0) := (others => '0');
    signal nextHCount       : integer range 0 to 4095;
 
@@ -117,13 +117,13 @@ architecture arch of gpu_videoout_async is
    signal xpos             : integer range 0 to 1023 := 256;
    signal xCount           : integer range 0 to 1023 := 256;
    signal readAddrCount    : unsigned(9 downto 0) := (others => '0');
-   signal rotate180        : std_logic;
+   signal rotate180        : std_logic := '0';
       
    signal hsync_start      : integer range 0 to 4095;
    signal hsync_end        : integer range 0 to 4095;
    
-   signal hCropCount       : unsigned(11 downto 0);
-   signal hCropPixels      : unsigned(1 downto 0);
+   signal hCropCount       : unsigned(11 downto 0) := (others => '0');
+   signal hCropPixels      : unsigned(1 downto 0) := (others => '0');
    
    type tReadState is
    (
@@ -403,6 +403,7 @@ begin
                
                -- fetching of next line from framebuffer
                vdispNew := vdispNew + 1;
+               nextLineCalc := (others => '0');
                if (vDisplayStart > 0) then
                   if (vdispNew >= vDisplayStart and vdispNew < vDisplayEnd) then
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
@@ -543,7 +544,7 @@ begin
                videoout_out.ce  <= '1';
             end if;
             
-            if (nextHCount = 1) then --clock divider reset at end of line
+            if (newLineTrigger = '1') then --clock divider reset at end of line
                clkCnt           <= 0;
             end if;
 

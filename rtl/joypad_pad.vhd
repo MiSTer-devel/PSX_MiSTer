@@ -123,6 +123,7 @@ architecture arch of joypad_pad is
    signal prevMouseEvent  : std_logic := '0';
    signal MouseLeft_1     : std_logic := '0';
    signal switchmode      : std_logic := '0';
+   signal ToggleDSsave    : std_logic_vector(1 downto 0) := (others => '0');
 
    signal mouseAccX       : signed(9 downto 0) := (others => '0');
    signal mouseAccY       : signed(9 downto 0) := (others => '0');
@@ -281,6 +282,13 @@ begin
                      end if;
                   end if;
                   
+                  -- switch from button
+                  if (ToggleDSsave(portNr) = '1') then
+                     ToggleDSsave(portNr) <= '0';
+                     portStates(portNr).dsAnalogMode <= not portStates(portNr).dsAnalogMode;
+                     portStates(portNr).dsRumbleMode <= '0';
+                  end if;
+                  
                   -- switch from button combo
                   if (((DSAltSwitchMode = '1' and joypad.KeyL1 = '1' and joypad.KeyL2 = '1' and joypad.KeyR1 = '1' and joypad.KeyR2 = '1') or
                        (DSAltSwitchMode = '0' and joypad.KeyL3 = '1' and joypad.KeyR3 = '1')) 
@@ -310,6 +318,11 @@ begin
             if (joypad1.PadPortDS = '1' and isMultitap = '0' and MouseLeft = '1' and MouseLeft_1 = '0') then
                switchmode <= '1';
             end if;
+            
+            if (joypad1.ToggleDS = '1') then ToggleDSsave(0) <= '1'; end if;
+            if (joypad2.ToggleDS = '1') then ToggleDSsave(1) <= '1'; end if;
+            -- if (joypad3.ToggleDS = '1') then ToggleDSsave(2) <= '1'; end if; -- not yet usuable
+            -- if (joypad4.ToggleDS = '1') then ToggleDSsave(3) <= '1'; end if; -- not yet usuable
 
             prevMouseEvent  <= MouseEvent;
             if (prevMouseEvent /= MouseEvent) then

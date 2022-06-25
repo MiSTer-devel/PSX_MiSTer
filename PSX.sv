@@ -428,7 +428,7 @@ parameter CONF_STR = {
 
 	"-   ;",
 	"R0,Reset;",
-	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Savestates,Fastforward,Pause(Core);",
+	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Savestates,Fastforward,Pause(Core),Toggle Dualshock;",
 	"jn,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,X,X;",
 	"I,",
 	"Slot=DPAD|Save/Load=Start+DPAD,",
@@ -483,11 +483,11 @@ wire        ioctl_wr;
 wire  [7:0] ioctl_index;
 reg         ioctl_wait = 0;
 
-wire [18:0] joy;
-wire [18:0] joy_unmod;
-wire [18:0] joy2;
-wire [18:0] joy3;
-wire [18:0] joy4;
+wire [19:0] joy;
+wire [19:0] joy_unmod;
+wire [19:0] joy2;
+wire [19:0] joy3;
+wire [19:0] joy4;
 
 wire [10:0] ps2_key;
 
@@ -575,7 +575,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
    .direct_video(DIRECT_VIDEO)
 );
 
-assign joy = joy_unmod[16] ? 19'b0 : joy_unmod;
+assign joy = joy_unmod[16] ? 20'b0 : joy_unmod;
 
 assign sd_rd[0] = 0;
 assign sd_wr[0] = 0;
@@ -807,6 +807,9 @@ reg psx_info_req;
 wire resetFromCD;
 reg  cdDownloadReset = 0;
 
+reg [3:0] ToggleDS = 0;
+reg [3:0] joy19_1 = 0;
+
 always @(posedge clk_1x) begin
 
    psx_info_req <= 0;
@@ -843,6 +846,13 @@ always @(posedge clk_1x) begin
    end
    
    if (joy[14] && joy[15] && joy[8]) dbg_enabled <= 1;  // L3+R3+Select
+   
+   // DS toggle
+   joy19_1 <= {joy4[19] ,joy3[19] ,joy2[19] ,joy[19] };
+   ToggleDS[0] <=  joy[19] & ~joy19_1[0];
+   ToggleDS[1] <= joy2[19] & ~joy19_1[1];
+   ToggleDS[2] <= joy3[19] & ~joy19_1[2];
+   ToggleDS[3] <= joy4[19] & ~joy19_1[3];
 
 end
 
@@ -1071,6 +1081,7 @@ psx
    .KeyL1      ({joy4[10],joy3[10],joy2[10],joy[10]}),
    .KeyL2      ({joy4[12],joy3[12],joy2[12],joy[12]}),
    .KeyL3      ({joy4[14],joy3[14],joy2[14],joy[14]}),
+   .ToggleDS   (ToggleDS),
    .Analog1XP1(joystick_analog_l0[7:0]),       
    .Analog1YP1(joystick_analog_l0[15:8]),       
    .Analog2XP1(joystick_analog_r0[7:0]),           
@@ -1720,7 +1731,7 @@ begin
 				if (selectedPort2Snac) pad2ID <= Receive;
 
 				if (Receive == 8'h80) bytesLeft <= 9'd32; //for multitap
-				else bytesLeft <= {5'd0, Receive[3:0] + 5'd0, Receive[3:0]};	
+				else bytesLeft <= {5'd0, (Receive[3:0] + Receive[3:0])};	
 			end
 		end
 		if (byteCnt == 4 && PStransfer == 1) begin //for pocketstation
