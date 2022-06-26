@@ -4,6 +4,7 @@ vcom -93 -quiet -work  sim/tb ^
 
 vcom -93 -quiet -work  sim/mem ^
 ../../rtl/ramMLAB.vhd ^
+../../rtl/dpram.vhd ^
 ../../rtl/SyncFifo.vhd ^
 ../../rtl/SyncFifoFallThrough.vhd ^
 ../../rtl/SyncRam.vhd

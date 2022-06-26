@@ -97,6 +97,7 @@ architecture arch of gpu_videoout_async is
 
    signal noDraw           : std_logic := '0';  
    signal newLineTrigger   : std_logic := '0';  
+   signal nextLineCalcSaved: unsigned(8 downto 0) := (others => '0');
    
    -- output   
    type tState is
@@ -403,7 +404,7 @@ begin
                
                -- fetching of next line from framebuffer
                vdispNew := vdispNew + 1;
-               nextLineCalc := (others => '0');
+               nextLineCalc := nextLineCalcSaved;
                if (vDisplayStart > 0) then
                   if (vdispNew >= vDisplayStart and vdispNew < vDisplayEnd) then
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
@@ -446,6 +447,7 @@ begin
                      videoout_request.fetch      <= ce;
                   end if;
                end if;
+               nextLineCalcSaved <= nextLineCalc;
                
                if (rotate180 = '1') then
                   videoout_request.lineInNext <= to_unsigned((lineMax - 1), 9) - nextLineCalc;

@@ -303,25 +303,28 @@ architecture arch of spu is
       adpcmDecodePtr   : unsigned(5 downto 0);
       adsrphase        : unsigned(2 downto 0);
       adsrTicks        : unsigned(23 downto 0);
+      firstBlock       : std_logic;
+      ignoreLoopWB     : std_logic;
    end record;
    
-   signal voice        : voiceRecord := ((others => '0'), (others => '0'), (others => '0'), (others => '0'), (others => '0'), (others => '0'), (others => '0'));
+   signal voice        : voiceRecord := ((others => '0'), (others => '0'), (others => '0'), (others => '0'), (others => '0'), (others => '0'), (others => '0'), '0', '0');
    
    signal voice_lastVolume  : signed(15 downto 0);
    signal voice_lastVolume1 : signed(15 downto 0);
    signal voice_lastVolume3 : signed(15 downto 0);
    
    signal voice_adsrWrite   : std_logic_vector(23 downto 0) := (others => '0');
+   signal voice_repeatWrite : std_logic_vector(23 downto 0) := (others => '0');
    
    -- voicerecordram
    signal RamVoiceRecord_addrA : unsigned(4 downto 0) := (others => '0');
-   signal RamVoiceRecord_dataA : std_logic_vector(100 downto 0) := (others => '0');
+   signal RamVoiceRecord_dataA : std_logic_vector(102 downto 0) := (others => '0');
    signal RamVoiceRecord_write : std_logic := '0';     
    
    type tvoicerecords_addrB is array(0 to 1) of unsigned(4 downto 0);
    signal RamVoiceRecord_addrB : tvoicerecords_addrB;
    
-   type tvoicerecords_dataB is array(0 to 1) of std_logic_vector(100 downto 0);
+   type tvoicerecords_dataB is array(0 to 1) of std_logic_vector(102 downto 0);
    signal RamVoiceRecord_dataB : tvoicerecords_dataB; 
    
    --type tvoicearray is array(0 to 23) of voiceRecord;
@@ -636,7 +639,7 @@ begin
       itagramVOICECORDS : entity mem.RamMLAB
       GENERIC MAP 
       (
-         width         => 101,
+         width         => 103,
          widthad       => 5,
          width_byteena => 1
       )
@@ -961,6 +964,8 @@ begin
                      
                   when "11" =>
                      RamVoiceRecord_dataA(100 downto 77) <= SS_DataWrite(23 downto 0); -- voice.adsrTicks
+                     RamVoiceRecord_dataA(101)           <= SS_DataWrite(24);          -- voice.firstBlock
+                     RamVoiceRecord_dataA(102)           <= SS_DataWrite(25);          -- voice.ignoreLoopWB
                      RamVoiceRecord_write <= '1';
                   
                   when others =>
@@ -992,7 +997,8 @@ begin
                   RamVoice_addrA <= bus_addr(8 downto 1);
 
                   case (bus_addr(3 downto 0)) is
-                     when x"8" | x"A" => voice_adsrWrite(to_integer(bus_addr(8 downto 4))) <= '1';
+                     when x"8" | x"A" => voice_adsrWrite(to_integer(bus_addr(8 downto 4)))   <= '1';
+                     when x"E"        => voice_repeatWrite(to_integer(bus_addr(8 downto 4))) <= '1';
                      when others => null;
                   end case;
                   
@@ -1399,12 +1405,23 @@ begin
                      voice.adpcmDecodePtr <= unsigned(RamVoiceRecord_dataB(0)( 73 downto  68));
                      voice.adsrphase      <= unsigned(RamVoiceRecord_dataB(0)( 76 downto  74));
                      voice.adsrTicks      <= unsigned(RamVoiceRecord_dataB(0)(100 downto  77));
+                     voice.firstBlock     <= RamVoiceRecord_dataB(0)(101);
+                     voice.ignoreLoopWB   <= RamVoiceRecord_dataB(0)(102);
                         
                      reset_adsr <= '0';
                      if (voice_adsrWrite(index) = '1') then
                         voice_adsrWrite(index) <= '0'; 
                         reset_adsr             <= '1';
                      end if;
+                     
+                     if (voice_repeatWrite(index) = '1') then
+                        voice_repeatWrite(index) <= '0'; 
+                        if (unsigned(RamVoiceRecord_dataB(0)(76 downto 74)) /= ADSRPHASE_OFF and RamVoiceRecord_dataB(0)(101) = '0') then
+                           voice.ignoreLoopWB <= '1';
+                        end if;
+                     end if;
+                     
+                     
                   end if;
                      
                when VOICE_READHEADER =>
@@ -1451,7 +1468,7 @@ begin
                      loopEnd      <= ram_dataRead(8);
                      loopRepeat   <= ram_dataRead(9);
                      updateRepeat <= '0';
-                     if (ram_dataRead(10) = '1' and voice.adpcmDecodePtr = 0) then -- write ADPCM Repeat Address
+                     if (ram_dataRead(10) = '1' and voice.adpcmDecodePtr = 0 and voice.ignoreLoopWB = '0') then -- write ADPCM Repeat Address
                         updateRepeat <= '1';
                      end if;
                      volumeSetting      <= unsigned(RamVoice_dataB(1));
@@ -1669,6 +1686,7 @@ begin
                      RamVoice_addrA <= to_unsigned((index * 8) + 6, 8); 
                      
                      if (voice.adpcmSamplePos(19 downto 12) >= 28) then
+                        voice.firstBlock      <= '0';
                         voice.adpcmSamplePos  <= voice.adpcmSamplePos - 114688; -- (28 << 12)
                         voice.AdpcmDecodePtr  <= (others => '0');
                         --adpcmSamples(index,0) <= adpcmSamples(index,28);
@@ -1700,22 +1718,24 @@ begin
                   state <= VOICE_END;
                
                   if (KEYON(index) = '1') then
-                     KEYON(index)           <= '0';
-                     ENDX(index)            <= '0';
-                     voice_adsrWrite(index) <= '0'; 
-                     voice.adpcmDecodePtr   <= (others => '0');
-                     voice.currentAddr      <= unsigned(RamVoice_dataB(1)(15 downto 1)) & '0';
-                     voice.adsrphase        <= ADSRPHASE_ATTACK;
-                     voice.adpcmSamplePos   <= (others => '0');
-                     voice.adpcmLast0       <= (others => '0');
-                     voice.adpcmLast1       <= (others => '0');
-                     voice.adsrTicks        <= adsr_ticks(ADSR_ATTACK);
+                     KEYON(index)            <= '0';
+                     ENDX(index)             <= '0';
+                     voice_adsrWrite(index)  <= '0'; 
+                     voice.firstBlock        <= '1'; 
+                     voice.ignoreLoopWB      <= '0'; 
+                     voice.adpcmDecodePtr    <= (others => '0');
+                     voice.currentAddr       <= unsigned(RamVoice_dataB(1)(15 downto 1)) & '0';
+                     voice.adsrphase         <= ADSRPHASE_ATTACK;
+                     voice.adpcmSamplePos    <= (others => '0');
+                     voice.adpcmLast0        <= (others => '0');
+                     voice.adpcmLast1        <= (others => '0');
+                     voice.adsrTicks         <= adsr_ticks(ADSR_ATTACK);
                      --adpcmSamples(index,0)  <= (others => '0');
                      --adpcmSamples(index,1)  <= (others => '0');
                      --adpcmSamples(index,2)  <= (others => '0');
-                     adpcm_ram_address_a    <= to_unsigned(index, 5) & "000";
-                     adpcm_ram_data_a       <= (others => (others => '0'));
-                     adpcm_ram_wren_a       <= "0111";
+                     adpcm_ram_address_a     <= to_unsigned(index, 5) & "000";
+                     adpcm_ram_data_a        <= (others => (others => '0'));
+                     adpcm_ram_wren_a        <= "0111";
                   end if;   
                   
                   if (KEYOFF(index) = '1') then
@@ -1774,6 +1794,8 @@ begin
                   RamVoiceRecord_dataA( 73 downto  68) <= std_logic_vector(voice.adpcmDecodePtr);
                   RamVoiceRecord_dataA( 76 downto  74) <= std_logic_vector(voice.adsrphase);
                   RamVoiceRecord_dataA(100 downto  77) <= std_logic_vector(voice.adsrTicks);
+                  RamVoiceRecord_dataA(101)            <= voice.firstBlock;
+                  RamVoiceRecord_dataA(102)            <= voice.ignoreLoopWB;
 
                -- DATA TRANSFER   
                when RAM_READ =>
@@ -2418,7 +2440,7 @@ begin
                    when "00" => SS_DataRead <= x"0000" & RamVoiceRecord_dataB(1)(15 downto 0);     -- voice.currentAddr
                    when "01" => SS_DataRead <= RamVoiceRecord_dataB(1)(47 downto 16);              -- voice.adpcmLast0 + voice.adpcmLast1
                    when "10" => SS_DataRead <= "000" & RamVoiceRecord_dataB(1)(76 downto 48);      -- voice.adpcmSamplePos + voice.adpcmDecodePtr + voice.adsrphase 
-                   when "11" => SS_DataRead <= x"00" & RamVoiceRecord_dataB(1)(100 downto 77);     -- voice.adsrTicks
+                   when "11" => SS_DataRead <= "000000" & RamVoiceRecord_dataB(1)(102 downto 77);  -- voice.adsrTicks + voice.firstBlock + voice.ignoreLoopWB
                    when others =>
                 end case;
             else
