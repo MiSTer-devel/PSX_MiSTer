@@ -1453,6 +1453,7 @@ begin
                         if (reqVRAMXPos(1 downto 0) /= "00" and ((to_integer(reqVRAMXPos(1 downto 0)) + to_integer(reqVRAMSize) > 4))) then 
                            reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
                         end if;
+                        if (reqVRAMSizeRounded > 1024) then reqVRAMSizeRounded := to_unsigned(1024, 11); end if;
                         vramState     <= READVRAM;
                         vram_ADDR     <= std_logic_vector(reqVRAMYPos) & std_logic_vector(reqVRAMXPos(9 downto 2)) & "000";
                         vram_RD       <= '1';

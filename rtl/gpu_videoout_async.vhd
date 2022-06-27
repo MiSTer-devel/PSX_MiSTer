@@ -207,11 +207,10 @@ begin
 
    videoout_request.fetchsize <= to_unsigned(xmax, 10);
 
-   vDisplayStart <= to_integer(videoout_settings.vDisplayRange( 9 downto  0));
-   vDisplayEnd   <= to_integer(videoout_settings.vDisplayRange(19 downto 10));
-
    videoout_reports.vsync    <= videoout_out.vsync;
    videoout_reports.dotclock <= videoout_out.ce;
+
+   videoout_out.isPal <= videoout_settings.GPUSTAT_PalVideoMode;
 
    process (clkvid)
       variable mode480i                  : std_logic;
@@ -220,11 +219,16 @@ begin
       variable vblankFixedNew            : std_logic;
       variable interlacedDisplayFieldNew : std_logic;
       variable nextLineCalc              : unsigned(8 downto 0);
+      variable pal60offset               : integer range 0 to 128;
    begin
       if rising_edge(clkvid) then
       
-         if (videoout_out.isPal = '1') then
-            vDisplayMax <= 288;
+         if (videoout_settings.GPUSTAT_PalVideoMode = '1') then
+            if (videoout_settings.pal60 = '1') then
+               vDisplayMax <= 256;
+            else
+               vDisplayMax <= 288;
+            end if;
          else
             vDisplayMax <= 240;
          end if;
@@ -233,6 +237,19 @@ begin
             lineMax <= (vDisplayEnd - vDisplayStart) * 2;
          else
             lineMax <= vDisplayEnd - vDisplayStart;
+         end if;
+         
+         vDisplayStart <= to_integer(videoout_settings.vDisplayRange( 9 downto  0));
+         vDisplayEnd   <= to_integer(videoout_settings.vDisplayRange(19 downto 10));
+         if (videoout_settings.pal60 = '1' and videoout_settings.vDisplayRange(19 downto 10) > 260) then
+            pal60offset := to_integer(videoout_settings.vDisplayRange(19 downto 10)) - 260;
+            if (pal60offset < to_integer(videoout_settings.vDisplayRange( 9 downto  0))) then
+               vDisplayStart <= to_integer(videoout_settings.vDisplayRange( 9 downto  0)) - pal60offset;
+               vDisplayEnd   <= to_integer(videoout_settings.vDisplayRange(19 downto 10)) - pal60offset;
+            else
+               vDisplayStart <= 5;
+               vDisplayEnd   <= 260;
+            end if;
          end if;
          
          newLineTrigger <= '0';
@@ -288,7 +305,6 @@ begin
                else
                   vtotal <= 312;
                end if;
-               videoout_out.isPal <= '1';
             else
                htotal <= 3413;
                if (videoout_settings.GPUSTAT_VertInterlace = '0' or InterlaceFieldN = '0' or videoout_settings.syncInterlace = '1') then
@@ -296,7 +312,6 @@ begin
                else
                   vtotal <= 262;
                end if;
-               videoout_out.isPal <= '0';
             end if;
             
             -- gpu timing count

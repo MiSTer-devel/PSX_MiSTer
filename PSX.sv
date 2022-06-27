@@ -407,6 +407,7 @@ parameter CONF_STR = {
 	"P2O[58],Turbo(Cheats Off),Off,On(U);",
 	"P2O[64],Pause when OSD open,On,Off(U);",
 	"P2O[65],Pause when HPS busy,On,Off(U);",
+	"P2O[15],PAL 60Hz Hack,Off,On(U);",
 	
 	"h3-;",
 	"h3P3,Debug;",
@@ -421,7 +422,6 @@ parameter CONF_STR = {
 	"h3P3O[20],RepTimingDMA,Off,On;",
 	"h3P3O[43],RepTimingSPUDMA,Off,On;",
 	"h3P3O[26],DMAinBLOCKs,Off,On;",
-	"h3P3O[15],Force 60Hz PAL,Off,On;",
 	"h3P3O[27],Textures,On,Off;",
 	//"h3P3O[54],Patch TTY,Off,On;",
 	"h3P3T1,Advance Pause;",

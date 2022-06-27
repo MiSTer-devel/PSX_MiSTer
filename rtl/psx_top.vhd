@@ -756,7 +756,6 @@ begin
          if (REVERBOFF             = '1') then debugmodeOn <= '1'; end if;
          if (REPRODUCIBLESPUDMA    = '1') then debugmodeOn <= '1'; end if;
          if (videoout_on           = '0') then debugmodeOn <= '1'; end if;
-         if (pal60                 = '1') then debugmodeOn <= '1'; end if;
          if (PATCHSERIAL           = '1') then debugmodeOn <= '1'; end if;
          
       end if;

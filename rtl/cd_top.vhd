@@ -787,7 +787,8 @@ begin
    
    -- command processing
    process(clk1x)
-      variable paramCountNew : integer range 0 to 6;
+      variable paramCountNew   : integer range 0 to 6;
+      variable applyNewcommand : std_logic;
    begin
       if (rising_edge(clk1x)) then
          
@@ -864,33 +865,46 @@ begin
                   when x"1F"  => paramCountNew := 6; --VideoCD
                   when others => paramCountNew := 0;
                end case;
-            
-               if (cmdPending = '1' and paramCount > paramCountNew) then
-                  FifoParam_reset <= '1';
+               
+               -- if a second command is executed when a first is still pending depends on which commands they are according to duckstation
+               -- so we use the heuristic from duckstation and extend it by the exceptions that don't work in duckstation
+               -- until a better solution is found               
+               applyNewcommand := '1';
+               
+               if (cmdPending = '1') then
+                  if (newCmd = x"0E" and nextCmd = x"02") then applyNewcommand := '0'; end if; -- happens in "reel fishing" startup -> ignore second command
                end if;
                
-               working <= '0'; -- second response from reset will interfere with command (e.g. wipeout xl)
-            
-               cmdPending <= '1';
-               cmd_busy   <= '1';
-               if (driveState = DRIVE_OPENING) then
-                  cmd_delay  <= 15000 - 2;
-               else
-                  cmd_delay  <= 25000 - 2;
-               end if;
-               if (newCmd = x"1C") then -- init
-                  cmd_delay <= 120000 - 2;
-               end if;
-   
-               nextCmd    <= newCmd;
-               paramCount <= paramCountNew;
+               if (applyNewcommand = '1') then
+                  
+                  if (cmdPending = '1' and paramCount > paramCountNew) then
+                     FifoParam_reset <= '1';
+                  end if;
+                  
+                  working <= '0'; -- second response from reset will interfere with command (e.g. wipeout xl)
                
-               if (driveState = DRIVE_IDLE and internalStatus(1) = '1' and newCmd = x"11") then
-                  updatePhysicalPosition <= '1';
-               end if;
-               
-               if (CDROM_IRQFLAG /= "00000") then
-                  cmd_busy  <= '0';
+                  cmdPending <= '1';
+                  cmd_busy   <= '1';
+                  if (driveState = DRIVE_OPENING) then
+                     cmd_delay  <= 15000 - 2;
+                  else
+                     cmd_delay  <= 25000 - 2;
+                  end if;
+                  if (newCmd = x"1C") then -- init
+                     cmd_delay <= 120000 - 2;
+                  end if;
+      
+                  nextCmd    <= newCmd;
+                  paramCount <= paramCountNew;
+                  
+                  if (driveState = DRIVE_IDLE and internalStatus(1) = '1' and newCmd = x"11") then
+                     updatePhysicalPosition <= '1';
+                  end if;
+                  
+                  if (CDROM_IRQFLAG /= "00000") then
+                     cmd_busy  <= '0';
+                  end if;
+                  
                end if;
          
             elsif (pause_cmd = '1') then

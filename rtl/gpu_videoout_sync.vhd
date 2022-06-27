@@ -349,8 +349,8 @@ begin
                else
                   videoout_out.hblank <= '1';
                   if (videoout_out.hblank = '0') then
-                     hsync_start <= (nextHCount / 2) + (26 * clkDiv) - (8 * clkDiv);
-                     hsync_end   <= (nextHCount / 2) + (2 * clkDiv) - (8 * clkDiv);
+                     hsync_start <= (nextHCount / 2) + (16 * clkDiv);
+                     hsync_end   <= (nextHCount / 2);
                   end if;
                end if;
             end if;

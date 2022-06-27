@@ -449,7 +449,8 @@ begin
                   -- calculate pixels per line for transparency readback
                   div6.start     <= '1';
                   div6.dividend  <= "000" & x"00000000" & signed(points);
-                  div6.divisor   <= "0" & x"000" & (abs(proc_pos2y - proc_pos1y));
+                  if (dy = 0) then  div6.divisor   <= to_signed(1, div6.divisor'length);
+                  else              div6.divisor   <= "0" & x"000" & (abs(proc_pos2y - proc_pos1y)); end if;
                   
                when PROCCALC3 =>
                   pixelCnt  <= (others => '0');
