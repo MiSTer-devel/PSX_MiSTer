@@ -340,8 +340,8 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // Status Bit Map: (0..31 => "O", 32..63 => "o")
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
-// 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-//  X XXXXXXXXX XXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXX
+// 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
+//  X XXXXXXXXX XXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -629,6 +629,11 @@ reg memcard1_load = 0;
 reg memcard2_load = 0;
 reg memcard_save = 0;
 
+reg memcard1_inserted = 0;
+reg memcard2_inserted = 0;
+reg [25:0] memcard1_cnt = 0;
+reg [25:0] memcard2_cnt = 0;
+
 wire bk_save     = status[13];
 wire bk_autosave = status[23];
 
@@ -702,21 +707,43 @@ always @(posedge clk_1x) begin
    memcard2_load <= 0;
    memcard_save <= 0;
    
+   // memcard 1
    if (img_mounted[2]) begin
+      memcard1_inserted <= 0;
+      memcard1_cnt      <= 26'd0;
       if (img_size > 0) begin
-         sd_mounted2   <= 1;
-         memcard1_load <= 1;
+         sd_mounted2       <= 1;
+         memcard1_load     <= 1;
       end else begin
-         sd_mounted2 <= 0;
+         sd_mounted2       <= 0;
       end
    end
    
+   if (sd_mounted2) begin // delay memcard inserted for ~2 seconds on card change
+      if (memcard1_cnt[25]) begin
+         memcard1_inserted <= 1;
+      end else begin
+         memcard1_cnt <= memcard1_cnt + 1'd1;
+      end
+   end
+   
+   // memcard 2
    if (img_mounted[3]) begin
+      memcard2_inserted <= 0;
+      memcard2_cnt      <= 26'd0;
       if (img_size > 0) begin
          sd_mounted3   <= 1;
          memcard2_load <= 1;
       end else begin
          sd_mounted3 <= 0;
+      end
+   end
+   
+   if (sd_mounted3) begin
+      if (memcard2_cnt[25]) begin
+         memcard2_inserted <= 1;
+      end else begin
+         memcard2_cnt <= memcard2_cnt + 1'd1;
       end
    end
    
@@ -1008,7 +1035,8 @@ psx
    .memcard1_load   (memcard1_load),
    .memcard2_load   (memcard2_load),
    .memcard_save    (memcard_save),
-   .memcard1_available (sd_mounted2),
+   .memcard1_mounted   (sd_mounted2),
+   .memcard1_available (memcard1_inserted),
    .memcard1_rd     (sd_rd[2]),
    .memcard1_wr     (sd_wr[2]),
    .memcard1_lba    (sd_lba2),
@@ -1017,7 +1045,8 @@ psx
    .memcard1_addr   (sd_buff_addr[8:0]),
    .memcard1_dataIn (sd_buff_dout),
    .memcard1_dataOut(sd_buff_din2),    
-   .memcard2_available (sd_mounted3),   
+   .memcard2_mounted   (sd_mounted3),
+   .memcard2_available (memcard2_inserted),   
    .memcard2_rd     (sd_rd[3]),
    .memcard2_wr     (sd_wr[3]),
    .memcard2_lba    (sd_lba3),

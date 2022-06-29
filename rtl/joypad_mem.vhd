@@ -126,7 +126,7 @@ begin
             lastData <= receiveBuffer;
          end if; 
 
-         if (reset = '1') then
+         if (reset = '1' or memcard_available = '0') then
          
             state      <= IDLE;
             isActive   <= '0';

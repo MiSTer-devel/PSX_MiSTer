@@ -100,6 +100,7 @@ entity psx_top is
       memcard1_load         : in  std_logic;
       memcard2_load         : in  std_logic;
       memcard_save          : in  std_logic;
+      memcard1_mounted      : in  std_logic;
       memcard1_available    : in  std_logic;
       memcard1_rd           : out std_logic := '0';
       memcard1_wr           : out std_logic := '0';
@@ -109,6 +110,7 @@ entity psx_top is
       memcard1_addr         : in  std_logic_vector(8 downto 0);
       memcard1_dataIn       : in  std_logic_vector(15 downto 0);
       memcard1_dataOut      : out std_logic_vector(15 downto 0);
+      memcard2_mounted      : in  std_logic;               
       memcard2_available    : in  std_logic;               
       memcard2_rd           : out std_logic := '0';
       memcard2_wr           : out std_logic := '0';
@@ -1802,7 +1804,7 @@ begin
       pause                => memcard1_pause,
       system_paused        => pausing,
                            
-      mounted              => memcard1_available,
+      mounted              => memcard1_mounted,
       anyChange            => memDDR3card1_WE,
       
       changePending        => MemCard_changePending1,
@@ -1841,7 +1843,7 @@ begin
       pause                => memcard2_pause,
       system_paused        => pausing,
                            
-      mounted              => memcard2_available,
+      mounted              => memcard2_mounted,
       anyChange            => memDDR3card2_WE,
       
       changePending        => MemCard_changePending2,

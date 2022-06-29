@@ -96,6 +96,7 @@ entity psx_mister is
       memcard1_load         : in  std_logic;
       memcard2_load         : in  std_logic;
       memcard_save          : in  std_logic;
+      memcard1_mounted      : in  std_logic;
       memcard1_available    : in  std_logic;
       memcard1_rd           : out std_logic := '0';
       memcard1_wr           : out std_logic := '0';
@@ -105,6 +106,7 @@ entity psx_mister is
       memcard1_addr         : in  std_logic_vector(8 downto 0);
       memcard1_dataIn       : in  std_logic_vector(15 downto 0);
       memcard1_dataOut      : out std_logic_vector(15 downto 0);
+      memcard2_mounted      : in  std_logic;               
       memcard2_available    : in  std_logic;               
       memcard2_rd           : out std_logic := '0';
       memcard2_wr           : out std_logic := '0';
@@ -343,6 +345,7 @@ begin
       memcard1_load         => memcard1_load,       
       memcard2_load         => memcard2_load,       
       memcard_save          => memcard_save,       
+      memcard1_mounted      => memcard1_mounted, 
       memcard1_available    => memcard1_available, 
       memcard1_rd           => memcard1_rd,        
       memcard1_wr           => memcard1_wr,        
@@ -352,6 +355,7 @@ begin
       memcard1_addr         => memcard1_addr,      
       memcard1_dataIn       => memcard1_dataIn,    
       memcard1_dataOut      => memcard1_dataOut,   
+      memcard2_mounted      => memcard2_mounted, 
       memcard2_available    => memcard2_available, 
       memcard2_rd           => memcard2_rd,        
       memcard2_wr           => memcard2_wr,        
