@@ -1712,7 +1712,12 @@ begin
                else
                   driveDelay     <= 16934400 + 19999;
                   driveDelayNext <= 16934400 + 19999;
-               end if;               
+               end if;  
+
+               if (INSTANTSEEK = '0') then
+                  calcSeekTime <= '1';   
+               end if;
+               diffLBA <= currentLBA;
             
             else
                driveBusy  <= '0';
@@ -1914,10 +1919,15 @@ begin
                internalStatus(6)          <= '1'; -- seeking
                driveDelay                 <= driveREADSPEED - 2;
                driveDelayNext             <= driveREADSPEED - 2;
-               
+
                if (INSTANTSEEK = '0') then
                   calcSeekTime <= '1';
+                  if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                     driveDelay      <= driveREADSPEED - 2 + driveDelay;
+                     driveDelayNext  <= driveREADSPEED - 2 + driveDelay;
+                  end if;
                end if;
+               
                driveBusy      <= '1';
                if (nextCmd = x"15") then
                   driveState  <= DRIVE_SEEKLOGICAL;
