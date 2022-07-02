@@ -629,10 +629,10 @@ begin
                   colorBGb  := unsigned(stage3_oldPixel(14 downto 10));
                   
                   case (drawMode(6 downto 5)) is
-                     when "00" => --  B/2+F/2
-                        colorMixr := to_integer(colorBGr(4 downto 1)) + to_integer(stage3_cr(4 downto 1));
-                        colorMixg := to_integer(colorBGg(4 downto 1)) + to_integer(stage3_cg(4 downto 1));
-                        colorMixb := to_integer(colorBGb(4 downto 1)) + to_integer(stage3_cb(4 downto 1));
+                     when "00" => --  (B+F)/2
+                        colorMixr := (to_integer(colorBGr(4 downto 0)) + to_integer(stage3_cr(4 downto 0))) / 2;
+                        colorMixg := (to_integer(colorBGg(4 downto 0)) + to_integer(stage3_cg(4 downto 0))) / 2;
+                        colorMixb := (to_integer(colorBGb(4 downto 0)) + to_integer(stage3_cb(4 downto 0))) / 2;
                         
                      when "01" => --  B+F
                         colorMixr := to_integer(colorBGr) + to_integer(stage3_cr);
