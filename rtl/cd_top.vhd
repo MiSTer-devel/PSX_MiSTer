@@ -901,7 +901,9 @@ begin
                      updatePhysicalPosition <= '1';
                   end if;
                   
-                  if (CDROM_IRQFLAG /= "00000") then
+                  -- queue up new commands if irq is still pending,
+                  -- but not for reset with second response pending, otherwise will end in endless reset request loop(e.g. Gouketuji Ichizoku 2)
+                  if (CDROM_IRQFLAG /= "00000" and (CDROM_IRQFLAG /= "00010" or newCmd /= x"0A")) then
                      cmd_busy  <= '0';
                   end if;
                   
