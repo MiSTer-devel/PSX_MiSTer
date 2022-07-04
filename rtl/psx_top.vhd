@@ -33,6 +33,7 @@ entity psx_top is
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
       errorOn               : in  std_logic;
+      LBAOn                 : in  std_logic;
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
       textureFilter         : in  std_logic;
@@ -472,6 +473,7 @@ architecture arch of psx_top is
    signal cdslowEna              : std_logic;
    signal errorEna               : std_logic;
    signal errorCode              : unsigned(3 downto 0) := (others => '0');
+   signal LBAdisplay             : unsigned(19 downto 0);
    
    signal errorCD                : std_logic;
    signal errorCPU               : std_logic;
@@ -1266,6 +1268,7 @@ begin
       
       cdSlow               => cdSlow,
       error                => errorCD,
+      LBAdisplay           => LBAdisplay,
           
       irqOut               => irq_CDROM,
       
@@ -1348,6 +1351,9 @@ begin
       errorOn              => errorOn,  
       errorEna             => errorEna, 
       errorCode            => errorCode,
+      
+      LBAOn                => LBAOn,
+      LBAdisplay           => LBAdisplay,
       
       errorLINE            => errorLINE,
       errorRECT            => errorRECT,

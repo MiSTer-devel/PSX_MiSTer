@@ -22,6 +22,7 @@ entity cd_top is
       fullyIdle            : out std_logic;
       cdSlow               : out std_logic := '0';
       error                : out std_logic := '0';
+      LBAdisplay           : out unsigned(19 downto 0);
       
       irqOut               : out std_logic := '0';
       
@@ -481,6 +482,7 @@ begin
    
    dma_readdata <= FifoData_Dout when (FifoData_Empty = '0') else (others => '0');
    
+   LBAdisplay  <= to_unsigned(currentLBA, 20);
    
    ss_out(21)( 7 downto  0) <= CDROM_STATUS;
    ss_out(21)(12 downto  8) <= CDROM_IRQENA;

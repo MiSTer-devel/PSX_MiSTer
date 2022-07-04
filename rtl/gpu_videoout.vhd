@@ -43,6 +43,9 @@ entity gpu_videoout is
       errorOn                    : in  std_logic;
       errorEna                   : in  std_logic;
       errorCode                  : in  unsigned(3 downto 0); 
+      
+      LBAOn                      : in  std_logic;
+      LBAdisplay                 : in  unsigned(19 downto 0);
          
       requestVRAMEnable          : out std_logic := '0';
       requestVRAMXPos            : out unsigned(9 downto 0);
@@ -123,7 +126,11 @@ architecture arch of gpu_videoout is
    
    signal errortext           : unsigned(7 downto 0);
    signal overlay_error_data  : std_logic_vector(23 downto 0);
-   signal overlay_error_ena   : std_logic;
+   signal overlay_error_ena   : std_logic;   
+   
+   signal lbatext             : unsigned(39 downto 0);
+   signal overlay_lba_data    : std_logic_vector(23 downto 0);
+   signal overlay_lba_ena     : std_logic;
    
    signal debugtextDbg        : unsigned(23 downto 0);
    signal debugtextDbg_data   : std_logic_vector(23 downto 0);
@@ -386,6 +393,34 @@ begin
       o_pixel_out_data       => overlay_error_data,
       o_pixel_out_ena        => overlay_error_ena,
       textstring             => x"45" & errortext
+   );    
+   
+   lbatext( 7 downto  0) <= resize(LBAdisplay( 3 downto  0), 8) + 16#30# when (LBAdisplay( 3 downto  0) < 10) else resize(LBAdisplay( 3 downto  0), 8) + 16#37#;
+   lbatext(15 downto  8) <= resize(LBAdisplay( 7 downto  4), 8) + 16#30# when (LBAdisplay( 7 downto  4) < 10) else resize(LBAdisplay( 7 downto  4), 8) + 16#37#;
+   lbatext(23 downto 16) <= resize(LBAdisplay(11 downto  8), 8) + 16#30# when (LBAdisplay(11 downto  8) < 10) else resize(LBAdisplay(11 downto  8), 8) + 16#37#;
+   lbatext(31 downto 24) <= resize(LBAdisplay(15 downto 12), 8) + 16#30# when (LBAdisplay(15 downto 12) < 10) else resize(LBAdisplay(15 downto 12), 8) + 16#37#;
+   lbatext(39 downto 32) <= resize(LBAdisplay(19 downto 16), 8) + 16#30# when (LBAdisplay(19 downto 16) < 10) else resize(LBAdisplay(19 downto 16), 8) + 16#37#;
+   
+   ioverlayLBA : entity work.gpu_overlay
+   generic map
+   (
+      COLS                   => 5,
+      BACKGROUNDON           => '1',
+      RGB_BACK               => x"FFFFFF",
+      RGB_FRONT              => x"0000FF",
+      OFFSETX                => 4,
+      OFFSETY                => 24
+   )
+   port map
+   (
+      clk                    => clkvid,
+      ce                     => videoout_out.ce,
+      ena                    => LBAOn,                    
+      i_pixel_out_x          => videoout_request_clkvid.xpos,
+      i_pixel_out_y          => to_integer(videoout_request_clkvid.lineDisp),
+      o_pixel_out_data       => overlay_lba_data,
+      o_pixel_out_ena        => overlay_lba_ena,
+      textstring             => lbatext
    );   
    
    idebugtext_dbg : entity work.gpu_overlay
@@ -492,9 +527,10 @@ begin
       out_irq10      => Gun2IRQ10
    );
 
-   overlay_ena <= overlay_error_ena or overlay_cd_ena or overlay_fps_ena or debugtextDbg_ena or (overlay_Gun1_ena and Gun1CrosshairOn) or (overlay_Gun2_ena and Gun2CrosshairOn);
+   overlay_ena <= overlay_error_ena or overlay_lba_ena or overlay_cd_ena or overlay_fps_ena or debugtextDbg_ena or (overlay_Gun1_ena and Gun1CrosshairOn) or (overlay_Gun2_ena and Gun2CrosshairOn);
    
    overlay_data <= overlay_error_data when (overlay_error_ena = '1') else
+                   overlay_lba_data   when (overlay_lba_ena = '1') else
                    overlay_cd_data    when (overlay_cd_ena = '1') else
                    overlay_fps_data   when (overlay_fps_ena = '1') else
                    debugtextDbg_data  when (debugtextDbg_ena = '1') else

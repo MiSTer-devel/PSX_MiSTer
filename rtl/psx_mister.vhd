@@ -29,6 +29,7 @@ entity psx_mister is
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
       errorOn               : in  std_logic;
+      LBAOn                 : in  std_logic;
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
       textureFilter         : in  std_logic;
@@ -278,6 +279,7 @@ begin
       fpscountOn            => fpscountOn,
       cdslowOn              => cdslowOn,
       errorOn               => errorOn,
+      LBAOn                 => LBAOn,
       PATCHSERIAL           => PATCHSERIAL,
       noTexture             => noTexture,
       textureFilter         => textureFilter,

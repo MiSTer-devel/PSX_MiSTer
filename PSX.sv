@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XXXXXXXXX XXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXX
+//  X XXXXXXXXX XXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -361,6 +361,7 @@ parameter CONF_STR = {
 	"O[23],Autosave,Off,On;",
 	"-;",
 	"O[36],Savestates to SDCard,On,Off;",
+	"O[68],Autoincrement Slot,Off,On;",
 	"O[38:37],Savestate Slot,1,2,3,4;",
 	"RH,Save state (Alt-F1);",
 	"RI,Restore state (F1);",
@@ -423,7 +424,7 @@ parameter CONF_STR = {
 	"h3P3O[43],RepTimingSPUDMA,Off,On;",
 	"h3P3O[26],DMAinBLOCKs,Off,On;",
 	"h3P3O[27],Textures,On,Off;",
-	//"h3P3O[54],Patch TTY,Off,On;",
+	"h3P3O[69],LBA Overlay,Off,On;",
 	"h3P3T1,Advance Pause;",
 
 	"-   ;",
@@ -431,7 +432,7 @@ parameter CONF_STR = {
 	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Savestates,Fastforward,Pause(Core),Toggle Dualshock;",
 	"jn,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,X,X;",
 	"I,",
-	"Slot=DPAD|Save/Load=Start+DPAD,",
+	"Load=DPAD Up|Save=Down|Slot=L+R,",
 	"Active Slot 1,",
 	"Active Slot 2,",
 	"Active Slot 3,",
@@ -511,7 +512,7 @@ wire [15:0] joystick3_rumble;
 wire [15:0] joystick4_rumble;
 wire [32:0] RTC_time;
 
-wire [127:0] status_in = {status[127:39],ss_slot,status[36:0]};
+wire [127:0] status_in = {status[127:39],ss_slot,status[36:19], 2'b00, status[16:0]};
 
 wire bk_pending;
 wire DIRECT_VIDEO;
@@ -771,10 +772,10 @@ savestate_ui savestate_ui
 	.joyLeft        (joy_unmod[1]  ),
 	.joyDown        (joy_unmod[2]  ),
 	.joyUp          (joy_unmod[3]  ),
-	.joyStart       (joy_unmod[9]  ),
 	.joyRewind      (0             ),
 	.rewindEnable   (0             ), 
 	.status_slot    (status[38:37] ),
+	.autoincslot    (status[68]    ),
 	.OSD_saveload   (status[18:17] ),
 	.ss_save        (ss_save       ),
 	.ss_load        (ss_load       ),
@@ -969,6 +970,7 @@ psx
    .fpscountOn(status[28]),
    .cdslowOn(status[59]),
    .errorOn(~status[29]),
+   .LBAOn(status[69]),
    .PATCHSERIAL(0), //.PATCHSERIAL(status[54]),
    .noTexture(status[27]),
    .textureFilter(status[5]),

@@ -50,6 +50,9 @@ entity gpu is
       errorEna             : in  std_logic;
       errorCode            : in  unsigned(3 downto 0);
       
+      LBAOn                : in  std_logic;
+      LBAdisplay           : in  unsigned(19 downto 0);
+      
       errorLINE            : out std_logic;
       errorRECT            : out std_logic;
       errorPOLY            : out std_logic;
@@ -1628,6 +1631,9 @@ begin
       errorOn                    => errorOn,  
       errorEna                   => errorEna, 
       errorCode                  => errorCode, 
+      
+      LBAOn                      => LBAOn,
+      LBAdisplay                 => LBAdisplay,
                                  
       requestVRAMEnable          => videoout_reqVRAMEnable,
       requestVRAMXPos            => videoout_reqVRAMXPos,  
