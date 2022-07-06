@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XXXXXXXXX XXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXX
+//  X XXXXXXXXX XXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -377,6 +377,7 @@ parameter CONF_STR = {
 	"O[28],FPS Overlay,Off,On;",
 	"O[29],Error Overlay,On,Off;",
 	"O[59],CD Slow Overlay,Off,On;",
+	"h9O[70],CD Overlay,Read,Read+Seek;",
 	"-;",
 
 	"P1,Video & Audio;",
@@ -460,7 +461,7 @@ parameter CONF_STR = {
 reg dbg_enabled = 0;
 wire  [1:0] buttons;
 wire [127:0] status;
-wire [15:0] status_menumask = {multitap, biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {status[59], multitap, biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -969,6 +970,7 @@ psx
    .showGunCrosshairs(status[9]),
    .fpscountOn(status[28]),
    .cdslowOn(status[59]),
+   .testSeek(status[70]),
    .errorOn(~status[29]),
    .LBAOn(status[69]),
    .PATCHSERIAL(0), //.PATCHSERIAL(status[54]),

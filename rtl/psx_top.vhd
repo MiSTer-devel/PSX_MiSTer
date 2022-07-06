@@ -32,6 +32,7 @@ entity psx_top is
       showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
+      testSeek              : in  std_logic;
       errorOn               : in  std_logic;
       LBAOn                 : in  std_logic;
       PATCHSERIAL           : in  std_logic;
@@ -1262,6 +1263,7 @@ begin
       INSTANTSEEK          => INSTANTSEEK,
       hasCD                => hasCD,
       fastCD               => fastCD,
+      testSeek             => testSeek,
       LIDopen              => LIDopen,
       region               => region,
       region_out           => region_out,

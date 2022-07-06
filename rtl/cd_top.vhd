@@ -16,6 +16,7 @@ entity cd_top is
       hasCD                : in  std_logic;
       LIDopen              : in  std_logic;
       fastCD               : in  std_logic;
+      testSeek             : in  std_logic;
       region               : in  std_logic_vector(1 downto 0);
       region_out           : out std_logic_vector(1 downto 0);
       
@@ -237,6 +238,7 @@ architecture arch of cd_top is
    
    signal copyData                  : std_logic := '0';  
    signal seekOK                    : std_logic := '1';
+   signal afterSeek                 : std_logic := '0'; 
    signal startReading              : std_logic := '0';  
    signal startPlaying              : std_logic := '0';  
    signal processDataSector         : std_logic := '0';  
@@ -1689,8 +1691,8 @@ begin
                startMotor <= '1';
             end if;
             
-            calcSeekTime <= '0';
-            addSeekTime  <= '0';
+            calcSeekTime  <= '0';
+            addSeekTime   <= '0';
             
          elsif (softReset = '1') then
          
@@ -1712,10 +1714,8 @@ begin
                driveBusy  <= '1';
                if (modeReg(7) = '1') then -- double speed
                   driveDelay     <= 16934400 + 33868800 + 19999;
-                  driveDelayNext <= 16934400 + 33868800 + 19999;
                else
                   driveDelay     <= 16934400 + 19999;
-                  driveDelayNext <= 16934400 + 19999;
                end if;  
 
                if (INSTANTSEEK = '0') then
@@ -1806,9 +1806,11 @@ begin
                      if (seekOk = '1') then
                         if (readAfterSeek = '1') then
                            startReading  <= '1';
+                           afterSeek     <= '1';
                            readAfterSeek <= '0';
                         elsif (playAfterSeek = '1') then
                            startPlaying  <= '1';
+                           afterSeek     <= '1';
                            playAfterSeek <= '0';
                         else
                            ackDrive <= '1';
@@ -1927,9 +1929,10 @@ begin
                if (INSTANTSEEK = '0') then
                   calcSeekTime <= '1';
                   if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
-                     driveDelay      <= driveREADSPEED - 2 + driveDelay;
-                     driveDelayNext  <= driveREADSPEED - 2 + driveDelay;
-                  end if;
+                     driveDelay <= driveREADSPEED - 2 + driveDelay;
+                  elsif (driveState = DRIVE_SPEEDCHANGEORTOCREAD and (seekOnDiskPlay = '0' and playAfterSeek = '0')) then
+                     driveDelay <= driveREADSPEED - 2 + driveDelay;
+                  end if; 
                end if;
                
                driveBusy      <= '1';
@@ -1938,7 +1941,7 @@ begin
                else
                   driveState  <= DRIVE_SEEKPHYSICAL;
                end if;
-            end if;
+            end if;    
             
             if (calcSeekTime = '1') then
                if (diffLBA > 0) then -- don't update if diff = 0 -> leave as minimum
@@ -1961,7 +1964,6 @@ begin
             
             if (addSeekTime = '1') then
                driveDelay     <= driveDelay + driveREADSPEED * seekTimeMul;
-               driveDelayNext <= driveDelay + driveREADSPEED * seekTimeMul;
             end if;
             
             if (readSN = '1') then
@@ -1974,6 +1976,7 @@ begin
                   playAfterSeek     <= '0';
                else
                   startReading <= '1';
+                  afterSeek    <= '0';
                end if;
             end if;
             
@@ -1992,6 +1995,7 @@ begin
                   playAfterSeek     <= '1';
                else
                   startPlaying <= '1';
+                  afterSeek    <= '0';
                end if;
             end if;
             
@@ -1999,7 +2003,6 @@ begin
                driveState     <= DRIVE_CHANGESESSION;
                driveBusy      <= '1';
                driveDelay     <= 33868800 / 2;
-               driveDelayNext <= 33868800 / 2;
             end if;
             
             if (startReading = '1') then
@@ -2015,13 +2018,8 @@ begin
                      driveDelay         <= 9999 - 2;
                      driveDelayNext     <= 9999 - 2;
                   else
-                     if (modeReg(7) = '1') then
-                        driveDelay      <= READSPEED2X - 2;
-                        driveDelayNext  <= READSPEED2X - 2;
-                     else
-                        driveDelay      <= READSPEED1X - 2;
-                        driveDelayNext  <= READSPEED1X - 2;
-                     end if;
+                     driveDelay      <= driveREADSPEED - 2;
+                     driveDelayNext  <= driveREADSPEED - 2;
                   end if;
                   driveBusy          <= '1';
                   driveState         <= DRIVE_READING;
@@ -2029,6 +2027,15 @@ begin
                   readSectorPointer  <= (others => '0');
                   readOnDisk         <= '1';
                   readLBA            <= currentLBA;
+                  seekTimeMul        <= 1;
+                  if (INSTANTSEEK = '0' and afterSeek = '0') then
+                     if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                        driveDelay <= driveREADSPEED - 2 + driveDelay;
+                     elsif (driveState = DRIVE_SPEEDCHANGEORTOCREAD) then
+                        driveDelay  <= driveREADSPEED - 2 + driveDelay;
+                     end if;
+                     addSeekTime <= '1';
+                  end if;
                end if;
             end if;
             
@@ -2046,13 +2053,8 @@ begin
                      driveDelay         <= 9999 - 2;
                      driveDelayNext     <= 9999 - 2;
                   else
-                     if (modeReg(7) = '1') then
-                        driveDelay      <= READSPEED2X - 2;
-                        driveDelayNext  <= READSPEED2X - 2;
-                     else
-                        driveDelay      <= READSPEED1X - 2;
-                        driveDelayNext  <= READSPEED1X - 2;
-                     end if;
+                     driveDelay      <= driveREADSPEED - 2;
+                     driveDelayNext  <= driveREADSPEED - 2;
                   end if;
                   driveBusy          <= '1';
                   driveState         <= DRIVE_PLAYING;
@@ -2060,6 +2062,13 @@ begin
                   readSectorPointer  <= (others => '0');
                   readOnDisk         <= '1';
                   readLBA            <= currentLBA;
+                  seekTimeMul        <= 1;
+                  if (INSTANTSEEK = '0' and afterSeek = '0') then
+                     if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                        driveDelay <= driveREADSPEED - 2 + driveDelay;
+                     end if;
+                     addSeekTime <= '1';
+                  end if;
                end if;
             end if;
             
@@ -2109,10 +2118,12 @@ begin
                      -- todo: add time? for now just set new time, it's very long anyway
                      if (newMode(7) = '1') then
                         driveDelay     <= 27095040; -- 80%
-                        driveDelayNext <= 27095040; -- 80%
                      else
                         driveDelay     <= 33868800; -- 44100 * 0x300; -- 100%
-                        driveDelayNext <= 33868800; -- 44100 * 0x300; -- 100%
+                     end if;
+                     if (driveState = DRIVE_IDLE) then
+                        driveState <= DRIVE_SPEEDCHANGEORTOCREAD;
+                        driveBusy  <= '1';
                      end if;
                   end if;
                end if;
@@ -2269,7 +2280,7 @@ begin
          sectorBuffer_wrenA  <= '0';
          sectorBuffers_wrenA <= '0';
          
-         if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+         if (testSeek = '0' and (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT)) then
             slow_block <= '1';
          elsif (handleDrive = '1' and (driveState = DRIVE_READING or driveState = DRIVE_PLAYING)) then
             slow_block <= '0';

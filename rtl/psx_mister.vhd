@@ -28,6 +28,7 @@ entity psx_mister is
       showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
+      testSeek              : in  std_logic;
       errorOn               : in  std_logic;
       LBAOn                 : in  std_logic;
       PATCHSERIAL           : in  std_logic;
@@ -278,6 +279,7 @@ begin
       showGunCrosshairs     => showGunCrosshairs,
       fpscountOn            => fpscountOn,
       cdslowOn              => cdslowOn,
+      testSeek              => testSeek,
       errorOn               => errorOn,
       LBAOn                 => LBAOn,
       PATCHSERIAL           => PATCHSERIAL,
