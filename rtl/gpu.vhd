@@ -788,6 +788,9 @@ begin
             if (poly_drawModeNew = '1') then
                drawMode(8 downto 0) <= poly_drawModeRec(8 downto 0);
                drawMode(11)         <= poly_drawModeRec(11);
+               if (drawMode(8 downto 7) /= poly_drawModeRec(8 downto 7)) then
+                  pipeline_clearCache <= '1';
+               end if;
             end if;
             
             if (clk2xIndex = '1') then
@@ -820,6 +823,9 @@ begin
                   GPUSTAT_DrawToDisplay  <= fifoIn_Dout(10);
                   GPUSTAT_TextureDisable <= fifoIn_Dout(11);
                   drawMode               <= unsigned(fifoIn_Dout(13 downto 0));
+                  if (drawMode(8 downto 7) /= unsigned(fifoIn_Dout(8 downto 7))) then
+                     pipeline_clearCache <= '1';
+                  end if;
                   
                elsif (cmdNew = 16#E2#) then -- Set Texture window
                   textureWindow <= unsigned(fifoIn_Dout(19 downto 0));
