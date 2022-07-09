@@ -583,7 +583,9 @@ begin
                         videoout_request.lineDisp <= nextLineCalc;
                      else
                         xpos                      <= 0;
-                        videoout_readAddr         <= lineIn(0) & "00" & x"00";
+                        -- must add lower 2 bits of display offset here as fetching from ddr3 vram is done in 64bits = 4 pixel steps
+                        -- so if image is shifted in steps below 4, it must be fetched with offset from linebuffer.
+                        videoout_readAddr         <= lineIn(0) & x"00" & videoout_out.DisplayOffsetX(1 downto 0);
                         videoout_request.lineDisp <= lineIn;
                      end if;
                     

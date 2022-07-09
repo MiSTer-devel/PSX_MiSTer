@@ -173,7 +173,10 @@ architecture arch of savestates is
    signal RAMAddrNext         : unsigned(18 downto 0) := (others => '0');
    signal slowcounter         : integer range 0 to 8 := 0;
    
+   signal SPURAM_done1X       : std_logic := '0';
+   signal SPURAM_dataRead1x   : std_logic_vector(15 downto 0);
    signal SPURAM_done2X       : std_logic := '0';
+   signal SPURAM_done2X_1     : std_logic := '0';
    signal SPURAM_dataRead2x   : std_logic_vector(15 downto 0);
    signal spu_din             : std_logic_vector(63 downto 0);
    
@@ -237,6 +240,12 @@ begin
             when others => SS_DataRead <= (others => '0');
          end case;
          
+         SPURAM_done1X <= '0';
+         if (SS_SPURAM_done = '1') then
+            SPURAM_done1X     <= '1';
+            SPURAM_dataRead1x <= SS_SPURAM_dataRead;
+         end if;
+         
       end if;
    end process;
 
@@ -265,9 +274,9 @@ begin
          end if;
          
          SPURAM_done2X <= '0';
-         if (SS_SPURAM_done = '1') then
+         if (SPURAM_done1X = '1') then
             SPURAM_done2X     <= '1';
-            SPURAM_dataRead2x <= SS_SPURAM_dataRead;
+            SPURAM_dataRead2x <= SPURAM_dataRead1x;
          end if;
          
          if (ddr3_BUSY = '0') then

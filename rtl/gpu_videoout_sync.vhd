@@ -357,7 +357,9 @@ begin
             
             if (lineIn /= videoout_request.lineDisp) then
                videoout_request.lineDisp <= lineIn;
-               videoout_readAddr <= lineIn(0) & "00" & x"00";
+               -- must add lower 2 bits of display offset here as fetching from ddr3 vram is done in 64bits = 4 pixel steps
+               -- so if image is shifted in steps below 4, it must be fetched with offset from linebuffer.
+               videoout_readAddr         <= lineIn(0) & x"00" & videoout_out.DisplayOffsetX(1 downto 0);
                if (videoout_settings.GPUSTAT_VerRes = '1') then -- interlaced mode
                   videoout_readAddr(10) <= lineIn(1);
                end if;
