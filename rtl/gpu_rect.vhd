@@ -26,6 +26,7 @@ entity gpu_rect is
       drawingAreaTop       : in  unsigned(8 downto 0);
       drawingAreaBottom    : in  unsigned(8 downto 0);
       
+      fifoOut_idle         : in  std_logic;
       pipeline_busy        : in  std_logic;
       pipeline_stall       : in  std_logic;
       pipeline_new         : out std_logic := '0';
@@ -72,6 +73,7 @@ architecture arch of gpu_rect is
       REQUESTTEXTURE,
       REQUESTSIZE,
       CHECKPOS,
+      REQUESTFIRST,
       REQUESTLINE,
       READWAIT,
       PROCPIXELS,
@@ -285,9 +287,14 @@ begin
                         done  <= '1';
                      end if;
                   elsif (rec_transparency = '1' or DrawPixelsMask = '1') then
-                     state  <= REQUESTLINE;
+                     state  <= REQUESTFIRST;
                   else
                      state  <= PROCPIXELS;
+                  end if;
+               
+               when REQUESTFIRST =>
+                  if (pipeline_busy = '0' and fifoOut_idle = '1') then
+                     state <= REQUESTLINE;
                   end if;
                        
                when REQUESTLINE =>

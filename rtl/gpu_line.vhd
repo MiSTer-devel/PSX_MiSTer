@@ -34,6 +34,7 @@ entity gpu_line is
       div5                 : inout div_type; 
       div6                 : inout div_type; 
       
+      fifoOut_idle         : in  std_logic;
       pipeline_busy        : in  std_logic;
       pipeline_stall       : in  std_logic;
       pipeline_new         : out std_logic := '0';
@@ -112,6 +113,7 @@ architecture arch of gpu_line is
       PROCCALC1,
       PROCCALC2,
       PROCCALC3,
+      PROCREQUESTFIRST,
       PROCREADLINE,
       PROCREADWAIT,
       PROCPIXELS
@@ -397,7 +399,7 @@ begin
                   else
                      if (dy(9 downto 0) = 0) then 
                         if (proc_transparency = '1' or DrawPixelsMask = '1') then
-                           procstate <= PROCREADLINE;
+                           procstate <= PROCREQUESTFIRST;
                         else
                            procstate <= PROCPIXELS;
                         end if;
@@ -465,7 +467,7 @@ begin
                   workb <= '0' & signed(proc_color1(23 downto 16)) & x"800";
                   if (div1.done = '1') then
                      if (proc_transparency = '1' or DrawPixelsMask = '1') then
-                        procstate <= PROCREADLINE;
+                        procstate <= PROCREQUESTFIRST;
                      else
                         procstate <= PROCPIXELS;
                      end if;
@@ -477,6 +479,11 @@ begin
                      if (singlePixelLines = '0') then
                         yPerLine <= resize(unsigned(div6.quotient(9 downto 0)),11) + 1;
                      end if;
+                  end if;
+                  
+               when PROCREQUESTFIRST =>
+                  if (pipeline_busy = '0' and fifoOut_idle = '1') then
+                     procstate <= PROCREADLINE;
                   end if;
                   
                when PROCREADLINE =>

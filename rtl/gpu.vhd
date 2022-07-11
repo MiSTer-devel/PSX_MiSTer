@@ -361,12 +361,14 @@ architecture arch of gpu is
    signal fifoOut_reset             : std_logic; 
    signal fifoOut_Din               : std_logic_vector(84 downto 0);
    signal fifoOut_Wr                : std_logic; 
+   signal fifoOut_Wr_1              : std_logic; 
    signal fifoOut_Full              : std_logic;
    signal fifoOut_NearFull          : std_logic;
    signal fifoOut_Dout              : std_logic_vector(84 downto 0);
    signal fifoOut_Rd                : std_logic;
    signal fifoOut_Empty             : std_logic;
    signal fifoOut_Valid             : std_logic;
+   signal fifoOut_idle              : std_logic;
    
    -- vram access
    type tvramState is
@@ -1053,6 +1055,7 @@ begin
       div5                 => line_div(4), 
       div6                 => line_div(5), 
       
+      fifoOut_idle         => fifoOut_idle,
       pipeline_busy        => pipeline_busy,
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => line_pipeline_new,        
@@ -1103,6 +1106,7 @@ begin
       drawingAreaTop       => drawingAreaTop,   
       drawingAreaBottom    => drawingAreaBottom,
       
+      fifoOut_idle         => fifoOut_idle,
       pipeline_busy        => pipeline_busy,
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => rect_pipeline_new,        
@@ -1173,6 +1177,7 @@ begin
       div5                 => poly_div(4), 
       div6                 => poly_div(5), 
       
+      fifoOut_idle         => fifoOut_idle,
       pipeline_busy        => pipeline_busy,
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => poly_pipeline_new,        
@@ -1337,6 +1342,8 @@ begin
    begin
       if rising_edge(clk2x) then
       
+         fifoOut_Wr_1 <= fifoOut_Wr;
+      
          fifoOut_Wr  <= '0';
          fifoOut_Din <= pixel64wordEna & pixel64Addr & pixel64data;
       
@@ -1386,9 +1393,10 @@ begin
             elsif (pixel64timeout > 0) then
             
                pixel64timeout <= pixel64timeout - 1;
-               if (pixel64timeout = 1) then
+               if (pixel64timeout = 1 or pipeline_busy = '0') then
                   pixel64filled  <= '0';
                   fifoOut_Wr     <= '1';
+                  pixel64timeout <= 0;
                end if;
                
             end if;
@@ -1399,6 +1407,8 @@ begin
    end process;
    
    fifoOut_Rd <= '1' when (ce = '1' and vramState = IDLE and vram_BUSY = '0' and fifoOut_Empty = '0' and reqVRAMEnable = '0' and vram_pause = '0') else '0';
+   
+   fifoOut_idle <= '1' when (fifoOut_Empty = '1' and fifoOut_Wr = '0' and fifoOut_Wr_1 = '0' and pixel64filled = '0') else '0';
    
    VRAMIdle    <= '1' when (vramState = IDLE and (vram_WE = '0' or vram_BUSY = '0')) else '0';
    reqVRAMIdle <= VRAMIdle and (not videoout_reqVRAMEnable) and (not vram_pause);

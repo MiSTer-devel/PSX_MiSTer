@@ -39,6 +39,7 @@ entity gpu_poly is
       div5                 : inout div_type; 
       div6                 : inout div_type; 
       
+      fifoOut_idle         : in  std_logic;
       pipeline_busy        : in  std_logic;
       pipeline_stall       : in  std_logic;
       pipeline_new         : out std_logic := '0';
@@ -100,6 +101,7 @@ architecture arch of gpu_poly is
       PREPAREHALF,
       PREPAREDECMODE,
       PREPARELINE,
+      REQUESTFIRST,
       REQUESTLINE,
       READWAIT,
       PROCPIXELS,
@@ -913,7 +915,11 @@ begin
                   end if;
                
                   if (rec_transparency = '1' or DrawPixelsMask = '1') then
-                     state <= REQUESTLINE;
+                     if (firstPixel = '1') then
+                        state <= REQUESTFIRST;
+                     else
+                        state <= REQUESTLINE;
+                     end if;
                   else
                      state <= PROCPIXELS;
                   end if;
@@ -1016,6 +1022,11 @@ begin
                            end if;
                         end if;
                      end if;
+                  end if;
+                       
+                when REQUESTFIRST =>
+                  if (pipeline_busy = '0' and fifoOut_idle = '1') then
+                     state <= REQUESTLINE;
                   end if;
                        
                when REQUESTLINE =>
