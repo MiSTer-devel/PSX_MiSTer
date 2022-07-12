@@ -491,7 +491,7 @@ begin
                                   videoout_reports.inVsync when vDisplayCnt < vDisplayMax else '1';
    
    
-   videoout_out.interlace      <= videoout_settings.GPUSTAT_VertInterlace and videoout_reports.GPUSTAT_InterlaceField;
+   videoout_out.interlace      <= videoout_settings.GPUSTAT_VerRes and videoout_reports.GPUSTAT_InterlaceField;
 
    videoout_out.DisplayOffsetX <= videoout_settings.vramRange(9 downto 0);
    videoout_out.DisplayOffsetY <= videoout_settings.vramRange(18 downto 10);
