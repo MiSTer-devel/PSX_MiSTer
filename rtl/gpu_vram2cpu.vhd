@@ -24,6 +24,8 @@ entity gpu_vram2cpu is
       done                 : out std_logic := '0';
       CmdDone              : out std_logic := '0';
       
+      pipeline_busy        : in  std_logic;
+      fifoOut_idle         : in  std_logic;
       requestVRAMEnable    : out std_logic;
       requestVRAMXPos      : out unsigned(9 downto 0);
       requestVRAMYPos      : out unsigned(8 downto 0);
@@ -49,6 +51,7 @@ architecture arch of gpu_vram2cpu is
       IDLE,
       REQUESTWORD2,
       REQUESTWORD3,
+      REQUESTFIRST,
       READVRAM,
       WAITREAD,
       WAITIMING,
@@ -161,7 +164,7 @@ begin
                when REQUESTWORD3 =>
                   if (fifo_Valid = '1') then
                      CmdDone    <= '1';
-                     state      <= READVRAM;
+                     state      <= REQUESTFIRST;
                      widt       <= '0' & unsigned(fifo_data( 9 downto  0));
                      widtVram   <= '0' & unsigned(fifo_data( 9 downto  0));
                      heig       <= '0' & unsigned(fifo_data(24 downto 16));
@@ -177,6 +180,11 @@ begin
                      if (unsigned(fifo_data(24 downto 16)) = 0) then 
                         heig <= to_unsigned(16#200#, 10); 
                      end if;
+                  end if;
+                  
+               when REQUESTFIRST =>
+                  if (pipeline_busy = '0' and fifoOut_idle = '1') then
+                     state <= READVRAM;
                   end if;
                   
                when READVRAM =>

@@ -2506,6 +2506,8 @@ begin
             end if;
          end if;
       
+         -- also check this?
+         -- cop0_SR(10 downto 8) and cop0_CAUSE(10 downto 8)) /= "000"
          SS_idle <= '0';
          if (hiloWait = 0 and blockIRQ = '0' and (irqRequest = '0' or cop0_SR(0) = '0')) then
             SS_idle <= '1';

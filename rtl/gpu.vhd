@@ -965,6 +965,8 @@ begin
       done                 => vram2vram_done,
       --CmdDone              => vram2vram_CmdDone,
       
+      pipeline_busy        => pipeline_busy,
+      fifoOut_idle         => fifoOut_idle,
       requestVRAMEnable    => vram2vram_reqVRAMEnable,
       requestVRAMXPos      => vram2vram_reqVRAMXPos,  
       requestVRAMYPos      => vram2vram_reqVRAMYPos,  
@@ -1009,6 +1011,8 @@ begin
       done                 => vram2cpu_done,
       --CmdDone              => vram2cpu_CmdDone,
       
+      pipeline_busy        => pipeline_busy,
+      fifoOut_idle         => fifoOut_idle,
       requestVRAMEnable    => vram2cpu_reqVRAMEnable,
       requestVRAMXPos      => vram2cpu_reqVRAMXPos,  
       requestVRAMYPos      => vram2cpu_reqVRAMYPos,  
