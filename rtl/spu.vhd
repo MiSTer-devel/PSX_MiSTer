@@ -484,7 +484,9 @@ architecture arch of spu is
    signal ss_in  : t_ssarray := (others => (others => '0'));
    signal ss_out : t_ssarray := (others => (others => '0'));
       
-   signal ss_voice_loading : std_logic := '0';
+   signal ss_voice_loading    : std_logic := '0';
+   
+   signal ss_timeout          : unsigned(23 downto 0);
       
    -- debug_out
    type outtype is record
@@ -852,6 +854,8 @@ begin
             stashedSamples       <= 0;
             
             FifoOut_Cnt          <= 0;
+            FifoOut_reset        <= '1';
+            FifoIn_reset         <= '1';
                
             sound_out_left       <= (others => '0');
             sound_out_right      <= (others => '0');
@@ -2422,8 +2426,15 @@ begin
          end if;
          
          SS_idle <= '0';
-         if (FifoIn_Empty = '1' and FifoOut_Empty = '1' and state = IDLE and sampleticks < 760 and sampleticks > 0 and stashedSamples = 0) then
-            SS_idle <= '1';
+         if ((FifoIn_Empty = '1' or ss_timeout(23) = '1') and (FifoOut_Empty = '1' or ss_timeout(23) = '1') and state = IDLE and sampleticks < 760 and sampleticks > 0 and stashedSamples = 0) then
+            SS_idle    <= '1';
+            if (FifoIn_Empty = '1' and FifoOut_Empty = '1') then
+               ss_timeout <= (others => '0');
+            end if;
+         end if;
+         
+         if (ss_timeout(23) = '0') then
+            ss_timeout <= ss_timeout + 1;
          end if;
          
          if (SS_rden = '1') then

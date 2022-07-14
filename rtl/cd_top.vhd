@@ -440,10 +440,12 @@ architecture arch of cd_top is
    signal ss_in   : t_ssarray := (others => (others => '0'));
    signal ss_out  : t_ssarray := (others => (others => '0'));
 
-   signal SS_rden_sectorbuffer  : std_logic;
-   signal SS_rden_sectorbuffers : std_logic;
+   signal SS_rden_sectorbuffer   : std_logic;
+   signal SS_rden_sectorbuffers  : std_logic;
 
-   signal ss_idle_timeout : integer range 0 to 7;
+   signal ss_idle_timeout        : integer range 0 to 7;
+   
+   signal ss_timeout             : unsigned(23 downto 0);
 
    -- debug
    -- synthesis translate_off
@@ -3033,9 +3035,16 @@ begin
          end if;
          
          SS_idle <= '0';
-         if (FifoParam_Empty = '1' and FifoResponse_Empty = '1' and cmd_busy = '0' and working = '0' and ss_idle_timeout = 0 and
+         if ((FifoParam_Empty = '1' or ss_timeout(23) = '1') and (FifoResponse_Empty = '1' or ss_timeout(23) = '1') and cmd_busy = '0' and working = '0' and ss_idle_timeout = 0 and
            sectorFetchState = SFETCH_IDLE and readSubchannelState = SSUB_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
-            SS_idle <= '1';
+            SS_idle    <= '1';
+            if (FifoParam_Empty = '1' and FifoResponse_Empty = '1') then
+               ss_timeout <= (others => '0');
+            end if;
+         end if;
+         
+         if (ss_timeout(23) = '0') then
+            ss_timeout <= ss_timeout + 1;
          end if;
          
          SS_rden_sectorbuffer <= '0';
