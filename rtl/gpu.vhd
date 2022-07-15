@@ -1253,6 +1253,7 @@ begin
       
       clearCache           => pipeline_clearCache,
       
+      fifoOut_idle         => fifoOut_idle,
       pipeline_busy        => pipeline_busy,
       pipeline_stall       => pipeline_stall,      
       pipeline_new         => pipeline_new,        

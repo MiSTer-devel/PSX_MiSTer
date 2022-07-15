@@ -21,6 +21,7 @@ entity gpu_pixelpipeline is
       
       clearCache           : in  std_logic;
       
+      fifoOut_idle         : in  std_logic;
       pipeline_busy        : out std_logic;
       pipeline_stall       : out std_logic;
       pipeline_new         : in  std_logic;
@@ -213,10 +214,10 @@ begin
 
    pipeline_stall <= '1' when (pixelStall = '1' or state /= IDLE) else '0';
 
-   requestVRAMEnable <= '1'         when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or state = REQUESTPALETTE)) else '0';
-   requestVRAMXPos   <= reqVRAMXPos when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or state = REQUESTPALETTE)) else (others => '0');
-   requestVRAMYPos   <= reqVRAMYPos when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or state = REQUESTPALETTE)) else (others => '0');
-   requestVRAMSize   <= reqVRAMSize when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or state = REQUESTPALETTE)) else (others => '0');
+   requestVRAMEnable <= '1'         when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else '0';
+   requestVRAMXPos   <= reqVRAMXPos when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else (others => '0');
+   requestVRAMYPos   <= reqVRAMYPos when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else (others => '0');
+   requestVRAMSize   <= reqVRAMSize when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else (others => '0');
    
    itagram : altdpram
 	GENERIC MAP 
@@ -418,7 +419,9 @@ begin
                   end if;
                
                when WAITTEXTURE =>
-                  if (requestVRAMDone = '1') then
+                  -- cannot wait for fifoOut_idle here as this would kill the performance completly 
+                  -- also it's totally unclear what real hardware does when primitives draw into their own texture
+                  if (requestVRAMDone = '1') then 
                      state <= IDLE;
                   end if;
                   if (vram_DOUT_READY = '1') then
@@ -436,7 +439,7 @@ begin
                   end if;
                
                when REQUESTPALETTE =>
-                  if (requestVRAMIdle = '1') then
+                  if (requestVRAMIdle = '1' and fifoOut_idle = '1') then
                      state       <= WAITPALETTE;
                   end if;
  
