@@ -63,7 +63,7 @@ set_false_path -from {ascal|o_ivsize*}
 set_false_path -from {ascal|o_format*}
 set_false_path -from {ascal|o_hdown}
 set_false_path -from {ascal|o_vdown}
-set_false_path -from {ascal|o_hmin* ascal|o_hmax* ascal|o_vmin* ascal|o_vmax*}
+set_false_path -from {ascal|o_hmin* ascal|o_hmax* ascal|o_vmin* ascal|o_vmax* ascal|o_vrrmax* ascal|o_vrr}
 set_false_path -from {ascal|o_hdisp* ascal|o_vdisp*}
 set_false_path -from {ascal|o_htotal* ascal|o_vtotal*}
 set_false_path -from {ascal|o_hsstart* ascal|o_vsstart* ascal|o_hsend* ascal|o_vsend*}
