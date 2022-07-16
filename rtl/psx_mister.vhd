@@ -140,6 +140,7 @@ entity psx_mister is
       -- Keys - all active high   
       DSAltSwitchMode       : in  std_logic;
       PadPortEnable1        : in  std_logic;
+      PadPortDigital1       : in  std_logic;
       PadPortAnalog1        : in  std_logic;
       PadPortMouse1         : in  std_logic;
       PadPortGunCon1        : in  std_logic;
@@ -149,6 +150,7 @@ entity psx_mister is
       PadPortJustif1        : in  std_logic;
       PadPortStick1         : in  std_logic;
       PadPortEnable2        : in  std_logic;
+      PadPortDigital2       : in  std_logic;
       PadPortAnalog2        : in  std_logic;
       PadPortMouse2         : in  std_logic;
       PadPortGunCon2        : in  std_logic;
@@ -392,6 +394,7 @@ begin
       DSAltSwitchMode       => DSAltSwitchMode,
       
       joypad1.PadPortEnable => PadPortEnable1,
+      joypad1.PadPortDigital=> PadPortDigital1,
       joypad1.PadPortAnalog => PadPortAnalog1,
       joypad1.PadPortMouse  => PadPortMouse1,
       joypad1.PadPortGunCon => PadPortGunCon1,
@@ -425,6 +428,7 @@ begin
       joypad1_rumble        => RumbleDataP1,
 
       joypad2.PadPortEnable => PadPortEnable2,
+      joypad2.PadPortDigital=> PadPortDigital2,
       joypad2.PadPortAnalog => PadPortAnalog2,
       joypad2.PadPortMouse  => PadPortMouse2,
       joypad2.PadPortGunCon => PadPortGunCon2,
@@ -458,6 +462,7 @@ begin
       joypad2_rumble        => RumbleDataP2,
 
       joypad3.PadPortEnable => '1',
+      joypad3.PadPortDigital=> '1',
       joypad3.PadPortAnalog => '0',
       joypad3.PadPortMouse  => '0',
       joypad3.PadPortGunCon => '0',
@@ -491,6 +496,7 @@ begin
       joypad3_rumble        => RumbleDataP3,
 
       joypad4.PadPortEnable => '1',
+      joypad4.PadPortDigital=> '1',
       joypad4.PadPortAnalog => '0',
       joypad4.PadPortMouse  => '0',
       joypad4.PadPortGunCon => '0',

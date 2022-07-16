@@ -175,7 +175,7 @@ module emu
 	input         OSD_STATUS
 );
 
-assign HDMI_FREEZE = isPaused;
+assign HDMI_FREEZE = 1'b0;
 
 assign ADC_BUS  = 'Z;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
@@ -803,27 +803,29 @@ defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 // 1011 -> Analog Joystick
 // 1100..1111 -> reserved
 
-wire PadPortDS1     = (status[48:45] == 4'b0000);
-wire PadPortEnable1 = (status[48:45] != 4'b0001);
-wire PadPortAnalog1 = (status[48:45] == 4'b0011) || (status[48:45] == 4'b0111);
-wire PadPortGunCon1 = (status[48:45] == 4'b0100);
-wire PadPortNeGcon1 = (status[48:45] == 4'b0101) || (status[48:45] == 4'b0110);
-wire PadPortWheel1  = (status[48:45] == 4'b0110) || (status[48:45] == 4'b0111);
-wire PadPortMouse1  = (status[48:45] == 4'b1000);
-wire PadPortJustif1 = (status[48:45] == 4'b1001);
-wire snacPort1      = (status[48:45] == 4'b1010) && ~multitap;
-wire PadPortStick1  = (status[48:45] == 4'b1011);
-
-wire PadPortDS2     = (status[52:49] == 4'b0000);
-wire PadPortEnable2 = (status[52:49] != 4'b0001) && ~multitap;
-wire PadPortAnalog2 = (status[52:49] == 4'b0011) || (status[52:49] == 4'b0111);
-wire PadPortGunCon2 = (status[52:49] == 4'b0100);
-wire PadPortNeGcon2 = (status[52:49] == 4'b0101) || (status[52:49] == 4'b0110);
-wire PadPortWheel2  = (status[52:49] == 4'b0110) || (status[52:49] == 4'b0111);
-wire PadPortMouse2  = (status[52:49] == 4'b1000);
-wire PadPortJustif2 = (status[52:49] == 4'b1001);
-wire snacPort2      = (status[52:49] == 4'b1010) && ~multitap;
-wire PadPortStick2  = (status[52:49] == 4'b1011);
+wire PadPortDS1      = (status[48:45] == 4'b0000);
+wire PadPortEnable1  = (status[48:45] != 4'b0001);
+wire PadPortDigital1 = (status[48:45] == 4'b0010);
+wire PadPortAnalog1  = (status[48:45] == 4'b0011) || (status[48:45] == 4'b0111);
+wire PadPortGunCon1  = (status[48:45] == 4'b0100);
+wire PadPortNeGcon1  = (status[48:45] == 4'b0101) || (status[48:45] == 4'b0110);
+wire PadPortWheel1   = (status[48:45] == 4'b0110) || (status[48:45] == 4'b0111);
+wire PadPortMouse1   = (status[48:45] == 4'b1000);
+wire PadPortJustif1  = (status[48:45] == 4'b1001);
+wire snacPort1       = (status[48:45] == 4'b1010) && ~multitap;
+wire PadPortStick1   = (status[48:45] == 4'b1011);
+   
+wire PadPortDS2      = (status[52:49] == 4'b0000);
+wire PadPortEnable2  = (status[52:49] != 4'b0001) && ~multitap;
+wire PadPortDigital2 = (status[52:49] == 4'b0010);
+wire PadPortAnalog2  = (status[52:49] == 4'b0011) || (status[52:49] == 4'b0111);
+wire PadPortGunCon2  = (status[52:49] == 4'b0100);
+wire PadPortNeGcon2  = (status[52:49] == 4'b0101) || (status[52:49] == 4'b0110);
+wire PadPortWheel2   = (status[52:49] == 4'b0110) || (status[52:49] == 4'b0111);
+wire PadPortMouse2   = (status[52:49] == 4'b1000);
+wire PadPortJustif2  = (status[52:49] == 4'b1001);
+wire snacPort2       = (status[52:49] == 4'b1010) && ~multitap;
+wire PadPortStick2   = (status[52:49] == 4'b1011);
 
 wire multitap       = status[66];
 
@@ -1081,6 +1083,7 @@ psx
    //Keys
    .DSAltSwitchMode(status[31]),
    .PadPortEnable1 (PadPortEnable1),
+   .PadPortDigital1(PadPortDigital1),
    .PadPortAnalog1 (PadPortAnalog1),
    .PadPortMouse1  (PadPortMouse1 ),
    .PadPortGunCon1 (PadPortGunCon1),
@@ -1090,6 +1093,7 @@ psx
    .PadPortJustif1 (PadPortJustif1),
    .PadPortStick1  (PadPortStick1),
    .PadPortEnable2 (PadPortEnable2),
+   .PadPortDigital2(PadPortDigital2),
    .PadPortAnalog2 (PadPortAnalog2),
    .PadPortMouse2  (PadPortMouse2 ),
    .PadPortGunCon2 (PadPortGunCon2),
@@ -1590,10 +1594,26 @@ wire MCtransfer;
 wire PStransfer;
 wire [7:0]PSdatalength;
 
+reg USER_IN3_1;
+reg USER_IN4_1;
+reg USER_IN6_1;
+
+reg USER_IN3_2;
+reg USER_IN4_2;
+reg USER_IN6_2;
+
 assign clk8Snac = bitCnt < 8 ? clk9Snac : 1'b1;
 
 always @(posedge clk_1x) 
 begin
+
+   USER_IN3_1 <= USER_IN[3];
+   USER_IN4_1 <= USER_IN[4];
+   USER_IN6_1 <= USER_IN[6];
+   
+   USER_IN3_2 <= USER_IN3_1;
+   USER_IN4_2 <= USER_IN4_1;
+   USER_IN6_2 <= USER_IN6_1;
 
 	if (snacPort1 || snacPort2) begin
 		USER_OUT[0] <= ~selectedPort2Snac;
@@ -1602,8 +1622,8 @@ begin
 		USER_OUT[3] <= 1'b1; //ACK
 		USER_OUT[4] <= 1'b1; //DAT
 		USER_OUT[5] <= oldClk8;	
-		ack         <= (snacPort1 || snacPort2) ? USER_IN[3] : 1'b1;
-		Dat         <= USER_IN[4];	
+		ack         <= (snacPort1 || snacPort2) ? USER_IN3_2 : 1'b1;
+		Dat         <= USER_IN4_2;	
 		
 		if ((pad1ID == 8'h63 || pad2ID == 8'h63) && (pad1ID != 8'h31 || pad2ID != 8'h31)) begin //quirk for guncon, irq is N/C in guncon. so using irq line and outputting csync on snac for g-con. only if justifier isn't connected
 			USER_OUT[6] <= ~csync;
@@ -1612,7 +1632,7 @@ begin
 		end
 		else begin
 			USER_OUT[6] <= 1'b1;		
-			irq10Snac   <= ~USER_IN[6];
+			irq10Snac   <= ~USER_IN6_2;
 		end
 	end
 	else begin

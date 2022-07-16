@@ -16,6 +16,7 @@ entity gpu_videoout is
       softReset                  : in  std_logic;
       
       allowunpause               : out std_logic;
+      savestate_pause            : in  std_logic;
             
       videoout_settings          : in  tvideoout_settings;
       videoout_reports           : out tvideoout_reports;
@@ -190,6 +191,7 @@ begin
       ce_1x                   => ce,   
       reset_1x                => reset,
       softReset_1x            => softReset,
+      savestate_pause_1x      => savestate_pause,
                
       allowunpause1x          => allowunpause_a,
                
@@ -244,13 +246,22 @@ begin
             end if;
          end if;
          
+         if (state =  WAITREAD) then
+            if (vram_DOUT_READY = '1') then
+               fillAddr <= fillAddr + 1;
+            end if;
+            if (requestVRAMDone = '1') then
+               state <= WAITNEWLINE; 
+               store <= '0';
+            end if;
+         end if;
          
          if (reset = '1') then
          
             state   <= WAITNEWLINE;
             lineAct <= (others => '0');
          
-         elsif (ce = '1') then
+         elsif (savestate_pause = '0') then
          
             case (state) is
             
@@ -285,14 +296,7 @@ begin
                      store <= '1';
                   end if;
                   
-               when WAITREAD =>
-                  if (vram_DOUT_READY = '1') then
-                     fillAddr <= fillAddr + 1;
-                  end if;
-                  if (requestVRAMDone = '1') then
-                     state <= WAITNEWLINE; 
-                     store <= '0';
-                  end if;
+               when WAITREAD => null; -- handled outside due to savestate_pause
             
             end case;
          

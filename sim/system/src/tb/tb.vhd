@@ -108,22 +108,22 @@ architecture arch of etb is
    signal video_b             : std_logic_vector(7 downto 0);
    
    -- keys
-   signal KeyTriangle         : std_logic_vector(1 downto 0) := (others => '0'); 
-   signal KeyCircle           : std_logic_vector(1 downto 0) := (others => '0'); 
-   signal KeyCross            : std_logic_vector(1 downto 0) := (others => '0'); 
-   signal KeySquare           : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeySelect           : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyStart            : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyRight            : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyLeft             : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyUp               : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyDown             : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyR1               : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyR2               : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyR3               : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyL1               : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyL2               : std_logic_vector(1 downto 0) := (others => '0');
-   signal KeyL3               : std_logic_vector(1 downto 0) := (others => '0');
+   signal KeyTriangle         : std_logic_vector(3 downto 0) := (others => '0'); 
+   signal KeyCircle           : std_logic_vector(3 downto 0) := (others => '0'); 
+   signal KeyCross            : std_logic_vector(3 downto 0) := (others => '0'); 
+   signal KeySquare           : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeySelect           : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyStart            : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyRight            : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyLeft             : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyUp               : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyDown             : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyR1               : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyR2               : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyR3               : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyL1               : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyL2               : std_logic_vector(3 downto 0) := (others => '0');
+   signal KeyL3               : std_logic_vector(3 downto 0) := (others => '0');
    signal Analog1XP1          : signed(7 downto 0) := (others => '0');
    signal Analog1YP1          : signed(7 downto 0) := (others => '0');
    signal Analog2XP1          : signed(7 downto 0) := (others => '0');
@@ -237,25 +237,34 @@ begin
       loadExe               => psx_LoadExe(0),
       fastboot              => '1',
       FASTMEM               => '0',
-      DATACACHEON           => '0',
+      TURBO                 => '0',
       REPRODUCIBLEGPUTIMING => '0',
       REPRODUCIBLEDMATIMING => '0',
       DMABLOCKATONCE        => '0',
       INSTANTSEEK           => '0',
       ditherOff             => '0',
+      showGunCrosshairs     => '0',
       fpscountOn            => '0',
       cdslowOn              => '0',
+      testSeek              => '0',
       errorOn               => '0',
+      LBAOn                 => '0',
       PATCHSERIAL           => '0',
       noTexture             => '0',
+      textureFilter         => '0',
       syncVideoOut          => '0',
       syncInterlace         => '0',
+      rotate180             => '0',
+      fixedVBlank           => '0',
+      vCrop                 => "00",
+      hCrop                 => '0',
       SPUon                 => '1',
-      SPUSDRAM              => '1',
+      SPUSDRAM              => '0',
       REVERBOFF             => '0',
       REPRODUCIBLESPUDMA    => '0',
       WIDESCREEN            => "00",
       -- RAM/BIOS interface        
+      biosregion            => "00",
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead          => ram_dataRead, 
@@ -280,10 +289,10 @@ begin
       DDRAM_WE              => DDRAM_WE,
       -- cd
       region                => "00",
+      region_out            => open,
       hasCD                 => '1',
       LIDopen               => '0',
       fastCD                => '0',
-      libcryptKey           => x"0000",
       trackinfo_data        => trackinfo_data,
       trackinfo_addr        => trackinfo_addr, 
       trackinfo_write       => trackinfo_write,
@@ -304,6 +313,7 @@ begin
       memcard1_load         => memcard1_load,      
       memcard2_load         => memcard2_load,      
       memcard_save          => memcard_save,      
+      memcard1_mounted      => '1',
       memcard1_available    => memcard1_available,
       memcard1_rd           => memcard1_rd,       
       memcard1_wr           => memcard1_wr,       
@@ -313,6 +323,7 @@ begin
       memcard1_addr         => memcard1_addr,     
       memcard1_dataIn       => memcard1_dataIn,   
       memcard1_dataOut      => memcard1_dataOut,  
+      memcard2_mounted      => '1',
       memcard2_available    => memcard2_available,
       memcard2_rd           => memcard2_rd,       
       memcard2_wr           => memcard2_wr,       
@@ -334,22 +345,27 @@ begin
       video_g               => video_g,    
       video_b               => video_b,   
       -- Keys - all active high
+      DSAltSwitchMode       => '0',
       PadPortEnable1        => '1',
+      PadPortDigital1       => '1',
       PadPortAnalog1        => '0',
       PadPortMouse1         => '0',
       PadPortGunCon1        => '0',
       PadPortneGcon1        => '0',
       PadPortWheel1         => '0',
       PadPortDS1            => '0',
-      PadPortDSA1           => '0',
+      PadPortJustif1        => '0',
+      PadPortStick1         => '0',
       PadPortEnable2        => '1',
+      PadPortDigital2       => '1',
       PadPortAnalog2        => '0',
       PadPortMouse2         => '0', 
       PadPortGunCon2        => '0',
       PadPortneGcon2        => '0',
       PadPortWheel2         => '0',
       PadPortDS2            => '0',
-      PadPortDSA2           => '0',
+      PadPortJustif2        => '0',
+      PadPortStick2         => '0',
       KeyTriangle           => KeyTriangle,           
       KeyCircle             => KeyCircle,           
       KeyCross              => KeyCross,           
@@ -366,6 +382,7 @@ begin
       KeyL1                 => KeyL1,           
       KeyL2                 => KeyL2,           
       KeyL3                 => KeyL3,           
+      ToggleDS              => "0000",           
       Analog1XP1            => Analog1XP1,       
       Analog1YP1            => Analog1YP1,       
       Analog2XP1            => Analog2XP1,       
@@ -374,11 +391,28 @@ begin
       Analog1YP2            => Analog1YP2,
       Analog2XP2            => Analog2XP2,
       Analog2YP2            => Analog2YP2, 
+      Analog1XP3            => Analog1XP2,
+      Analog1YP3            => Analog1YP2,
+      Analog2XP3            => Analog2XP2,
+      Analog2YP3            => Analog2YP2, 
+      Analog1XP4            => Analog1XP2,
+      Analog1YP4            => Analog1YP2,
+      Analog2XP4            => Analog2XP2,
+      Analog2YP4            => Analog2YP2, 
+      multitap              => '0',
       MouseEvent            => MouseEvent,
       MouseLeft             => MouseLeft,
       MouseRight            => MouseRight,
       MouseX                => MouseX,
       MouseY                => MouseY,
+      -- snac
+      snacPort1             => '0',
+      snacPort2             => '0',
+      irq10Snac             => '0',
+      actionNextSnac        => '0',
+      receiveValidSnac      => '0',
+      ackSnac               => '0',
+      receiveBufferSnac	    => x"00",
       -- sound              => -- sound       
       sound_out_left        => sound_out_left, 
       sound_out_right       => sound_out_right,
@@ -402,7 +436,8 @@ begin
    iddrram_model : entity tb.ddrram_model
    generic map
    (
-      SLOWTIMING => 20
+      SLOWTIMING   => 15,
+      RANDOMTIMING => '1' 
    )
    port map
    (
@@ -595,7 +630,7 @@ begin
                file_close(infile);
             
             end if;
-
+      
          end if;
       end if;
       

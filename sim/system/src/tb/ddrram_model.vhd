@@ -2,6 +2,8 @@ library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all;     
 use STD.textio.all;
+use ieee.math_real.uniform;
+use ieee.math_real.floor;
 
 library tb;
 use tb.globals.all;
@@ -9,8 +11,9 @@ use tb.globals.all;
 entity ddrram_model is
    generic
    (
-      loadVram   : std_logic := '0';
-      SLOWTIMING : integer := 0
+      loadVram     : std_logic := '0';
+      SLOWTIMING   : integer := 0;
+      RANDOMTIMING : std_logic := '0'
    );
    port 
    (
@@ -41,6 +44,11 @@ begin
    intern_addr <= "00000" & DDRAM_ADDR(22 downto 0) & "0";
 
    process
+   
+      variable seed1 : positive;
+      variable seed2 : positive;
+      variable rnd   : real;
+      variable waittiming     : integer := 0;
    
       variable data : t_data := (others => 0);
       variable cmd_address_save : STD_LOGIC_VECTOR(DDRAM_ADDR'left downto 0);
@@ -137,6 +145,8 @@ begin
       end if;
       
       pixelCount := 0;
+      seed1 := 1;
+      seed2 := 1;
       
       while (1=1) loop
    
@@ -147,7 +157,10 @@ begin
             cmd_burst_save   := DDRAM_BURSTCNT;
             wait until rising_edge(DDRAM_CLK);
             if (SLOWTIMING > 0) then
-               for i in 1 to SLOWTIMING loop
+               waittiming := SLOWTIMING;
+               uniform(seed1, seed2, rnd);
+               waittiming := waittiming + integer(floor(rnd * real(SLOWTIMING)));
+               for i in 1 to waittiming loop
                   wait until rising_edge(DDRAM_CLK);
                end loop;
             end if;

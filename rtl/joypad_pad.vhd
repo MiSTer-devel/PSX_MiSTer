@@ -111,6 +111,7 @@ architecture arch of joypad_pad is
 
    signal joypad          : joypad_t;
 
+   signal digitalPadSave  : std_logic := '0';
    signal analogPadSave   : std_logic := '0';
    signal rumbleOnFirst   : std_logic := '0';
    signal mouseSave       : std_logic := '0';
@@ -381,6 +382,7 @@ begin
                         controllerState <= READY;
                         isActive        <= '1';
                         ack             <= '1';
+                        digitalPadSave  <= joypad.PadPortDigital;
                         analogPadSave   <= joypad.PadPortAnalog;
                         mouseSave       <= joypad.PadPortMouse;
                         gunConSave      <= joypad.PadPortGunCon;
@@ -402,6 +404,7 @@ begin
                               controllerState <= READY;
                               isActive        <= '1';
                               ack             <= '1';
+                              digitalPadSave  <= joypad.PadPortDigital;
                               analogPadSave   <= joypad.PadPortAnalog;
                               mouseSave       <= joypad.PadPortMouse;
                               gunConSave      <= joypad.PadPortGunCon;
@@ -641,11 +644,20 @@ begin
                            receiveBuffer(5) <= not joypad.KeyRight;
                            receiveBuffer(6) <= not joypad.KeyDown;
                            receiveBuffer(7) <= not joypad.KeyLeft;
+                           
+                           if (digitalPadSave = '1') then
+                              if (to_integer(joypad.Analog1X) <= -64) then receiveBuffer(7) <= '0'; end if;
+                              if (to_integer(joypad.Analog1X) >=  64) then receiveBuffer(5) <= '0'; end if;
+                              if (to_integer(joypad.Analog1Y) <= -64) then receiveBuffer(4) <= '0'; end if;
+                              if (to_integer(joypad.Analog1Y) >=  64) then receiveBuffer(6) <= '0'; end if;
+                           end if;
+                           
                            if (neGconSave = '1') then
                               controllerState  <= NEGCONBUTTONMSB;
                            else
                               controllerState  <= BUTTONMSB;
                            end if;
+                           
                            -- Analog Joystick does not have L3 and R3 buttons
                            if (analogStickSave = '1') then
                                receiveBuffer(2 downto 1) <= "11";

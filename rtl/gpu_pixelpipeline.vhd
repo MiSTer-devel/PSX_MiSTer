@@ -356,6 +356,50 @@ begin
    begin
       if rising_edge(clk2x) then
          
+         tag_wren_a    <= '0';
+         cache_wren_a  <= '0';
+         
+         -- must be done here, so it also is effected when ce is off = paused
+         if (state = WAITTEXTURE) then
+            if (requestVRAMDone = '1') then 
+               state <= IDLE;
+            end if;
+            if (vram_DOUT_READY = '1') then
+               tag_wren_a    <= '1';
+               cache_wren_a  <= '1';
+               cache_data_a  <= vram_DOUT;
+               tagValid(to_integer(tag_address_a)) <= '1';
+               case (stage1_u_mux) is
+                  when "00" => stage1_texdata <= vram_DOUT(15 downto  0);
+                  when "01" => stage1_texdata <= vram_DOUT(31 downto 16);
+                  when "10" => stage1_texdata <= vram_DOUT(47 downto 32);
+                  when "11" => stage1_texdata <= vram_DOUT(63 downto 48);
+                  when others => null;
+               end case;
+            end if;
+         end if;
+               
+         if (state = WAITPALETTE) then
+            if (requestVRAMDone = '1') then
+               textPalFetchNext <= 0;
+               if (textPalFetchNext > 0) then
+                  case (textPalFetchNext) is
+                     when 3      => reqVRAMSize <= to_unsigned(192, 11);
+                     when 2      => reqVRAMSize <= to_unsigned(128, 11);
+                     when others => reqVRAMSize <= to_unsigned( 64, 11);
+                  end case;
+                  state          <= REQUESTPALETTE;
+                  reqVRAMXPos    <= (others => '0');
+               else
+                  state <= IDLE;
+               end if;
+            end if;
+            if (vram_DOUT_READY = '1') then
+               CLUTaddrA <= CLUTaddrA + 1;
+            end if;
+         end if;
+         
+         
          if (reset = '1') then
          
             state          <= IDLE;
@@ -370,9 +414,6 @@ begin
             pixelColor <= (others => '0');
             pixelAddr  <= (others => '0');
             pixelWrite <= '0';
-            
-            tag_wren_a    <= '0';
-            cache_wren_a  <= '0';
             
             pipeline_stall_1 <= pipeline_stall;
             
@@ -414,53 +455,20 @@ begin
                   end if;
                
                when REQUESTTEXTURE =>
+                  -- cannot wait for fifoOut_idle here as this would kill the performance completly 
+                  -- also it's totally unclear what real hardware does when primitives draw into their own texture
                   if (requestVRAMIdle = '1') then
                      state       <= WAITTEXTURE;
                   end if;
                
-               when WAITTEXTURE =>
-                  -- cannot wait for fifoOut_idle here as this would kill the performance completly 
-                  -- also it's totally unclear what real hardware does when primitives draw into their own texture
-                  if (requestVRAMDone = '1') then 
-                     state <= IDLE;
-                  end if;
-                  if (vram_DOUT_READY = '1') then
-                     tag_wren_a    <= '1';
-                     cache_wren_a  <= '1';
-                     cache_data_a  <= vram_DOUT;
-                     tagValid(to_integer(tag_address_a)) <= '1';
-                     case (stage1_u_mux) is
-                        when "00" => stage1_texdata <= vram_DOUT(15 downto  0);
-                        when "01" => stage1_texdata <= vram_DOUT(31 downto 16);
-                        when "10" => stage1_texdata <= vram_DOUT(47 downto 32);
-                        when "11" => stage1_texdata <= vram_DOUT(63 downto 48);
-                        when others => null;
-                     end case;
-                  end if;
+               when WAITTEXTURE => null; -- handled outside due to ce
                
                when REQUESTPALETTE =>
                   if (requestVRAMIdle = '1' and fifoOut_idle = '1') then
                      state       <= WAITPALETTE;
                   end if;
  
-               when WAITPALETTE =>
-                  if (requestVRAMDone = '1') then
-                     textPalFetchNext <= 0;
-                     if (textPalFetchNext > 0) then
-                        case (textPalFetchNext) is
-                           when 3      => reqVRAMSize <= to_unsigned(192, 11);
-                           when 2      => reqVRAMSize <= to_unsigned(128, 11);
-                           when others => reqVRAMSize <= to_unsigned( 64, 11);
-                        end case;
-                        state          <= REQUESTPALETTE;
-                        reqVRAMXPos    <= (others => '0');
-                     else
-                        state <= IDLE;
-                     end if;
-                  end if;
-                  if (vram_DOUT_READY = '1') then
-                     CLUTaddrA <= CLUTaddrA + 1;
-                  end if;
+               when WAITPALETTE => null; -- handled outside due to ce
                
             end case;
             

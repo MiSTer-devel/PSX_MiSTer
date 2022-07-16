@@ -129,6 +129,17 @@ begin
          Fifo_Wr    <= '0';
          Fifo_Reset <= '0';
         
+         -- must be done here, so it also is effected when ce is off = paused
+         if (state = WAITREAD) then
+            if (requestVRAMDone = '1') then
+               if (REPRODUCIBLEGPUTIMING = '1') then
+                  state <= WAITIMING;
+               else
+                  state <= WRITING; 
+                  xSrc  <= xSrc + 1;
+               end if;
+            end if;
+         end if;
          
          if (reset = '1') then
          
@@ -195,15 +206,7 @@ begin
                      drawTiming <= (others => '0');
                   end if;
                   
-               when WAITREAD =>
-                  if (requestVRAMDone = '1') then
-                     if (REPRODUCIBLEGPUTIMING = '1') then
-                        state <= WAITIMING;
-                     else
-                        state <= WRITING; 
-                        xSrc  <= xSrc + 1;
-                     end if;
-                  end if;
+               when WAITREAD => null; -- handled outside due to ce
                   
                when WAITIMING =>
                   if (drawTiming >= 80) then

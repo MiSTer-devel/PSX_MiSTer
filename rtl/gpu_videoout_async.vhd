@@ -14,6 +14,7 @@ entity gpu_videoout_async is
       ce_1x                   : in  std_logic;
       reset_1x                : in  std_logic;
       softReset_1x            : in  std_logic;
+      savestate_pause_1x      : in  std_logic;
       
       allowunpause1x          : out std_logic;
       
@@ -54,7 +55,11 @@ architecture arch of gpu_videoout_async is
    
    signal softReset_s2         : std_logic;        
    signal softReset_s1         : std_logic;        
-   signal softReset            : std_logic;      
+   signal softReset            : std_logic;  
+
+   signal savestate_pause_s2   : std_logic;        
+   signal savestate_pause_s1   : std_logic;        
+   signal savestate_pause      : std_logic;    
    
    -- clkvid -> clk1x
    signal videoout_reports_s2  : tvideoout_reports;
@@ -162,6 +167,10 @@ begin
          softReset_s2         <= softReset_1x;
          softReset_s1         <= softReset_s2;
          softReset            <= softReset_s1;
+         
+         savestate_pause_s2   <= savestate_pause_1x;
+         savestate_pause_s1   <= savestate_pause_s2;
+         savestate_pause      <= savestate_pause_s1;   
    
       end if;
    end process;
@@ -431,7 +440,7 @@ begin
                      else
                         nextLineCalc := to_unsigned(vdispNew - vDisplayStart, 9);
                      end if;
-                     videoout_request.fetch      <= ce;
+                     videoout_request.fetch      <= not savestate_pause;
                   end if;
                else  
                   if (vdispNew = vtotal) then
@@ -448,7 +457,7 @@ begin
                            nextLineCalc := to_unsigned(0, 9);
                         end if;
                      end if;
-                     videoout_request.fetch      <= ce;
+                     videoout_request.fetch      <= not savestate_pause;
                   elsif (vdispNew >= vDisplayStart and vdispNew < vDisplayEnd) then
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
                         if ((videoout_reports.activeLineLSB xor videoout_settings.vramRange(10)) = '1') then
@@ -459,7 +468,7 @@ begin
                      else
                         nextLineCalc := to_unsigned(vdispNew - vDisplayStart, 9);
                      end if;
-                     videoout_request.fetch      <= ce;
+                     videoout_request.fetch      <= not savestate_pause;
                   end if;
                end if;
                nextLineCalcSaved <= nextLineCalc;
@@ -637,7 +646,7 @@ begin
                         videoout_out.r      <= overlay_data( 7 downto 0);
                         videoout_out.g      <= overlay_data(15 downto 8);
                         videoout_out.b      <= overlay_data(23 downto 16);
-                     elsif (videoout_settings.GPUSTAT_DisplayDisable = '1' or ce = '0' or noDraw = '1') then
+                     elsif (videoout_settings.GPUSTAT_DisplayDisable = '1' or savestate_pause = '1' or noDraw = '1') then
                         videoout_out.r      <= (others => '0');
                         videoout_out.g      <= (others => '0');
                         videoout_out.b      <= (others => '0');

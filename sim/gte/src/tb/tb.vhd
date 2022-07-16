@@ -70,6 +70,9 @@ begin
       ce                   => '1',        
       reset                => reset,     
       
+      WIDESCREEN           => "00",
+      TURBO                => '0',
+      
       gte_busy             => gte_busy,     
       gte_readAddr         => gte_readAddr, 
       gte_readData         => gte_readData, 

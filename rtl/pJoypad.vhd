@@ -6,6 +6,7 @@ package pJoypad is
 
 type joypad_t is record
    PadPortEnable : std_logic;
+   PadPortDigital: std_logic;
    PadPortAnalog : std_logic;
    PadPortMouse  : std_logic;
    PadPortGunCon : std_logic;

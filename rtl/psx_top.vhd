@@ -1321,6 +1321,7 @@ begin
       reset                => reset_intern,
       
       allowunpause         => allowunpause,
+      savestate_busy       => savestate_busy,
       
       ditherOff            => ditherOff,
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,

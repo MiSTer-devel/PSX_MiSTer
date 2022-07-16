@@ -17,6 +17,7 @@ entity gpu is
       reset                : in  std_logic;
       
       allowunpause         : out std_logic;
+      savestate_busy       : in  std_logic;
       
       ditherOff            : in  std_logic;
       REPRODUCIBLEGPUTIMING: in  std_logic;
@@ -374,9 +375,7 @@ architecture arch of gpu is
    type tvramState is
    (
       IDLE,
-      READVRAM,
-      WAITRAMDONE,
-      WAITUNPAUSE
+      READVRAM
    );
    signal vramState : tvramState := IDLE;
    
@@ -1452,10 +1451,6 @@ begin
             vram_pauseCnt <= 0;
          end if;
          
-         if (vram_pause = '1' and vramState = WAITUNPAUSE and ce = '0') then
-            vram_paused <= '1';
-         end if;
-         
          if (reset = '1') then
             
             vramState   <= IDLE;
@@ -1467,7 +1462,7 @@ begin
          
             case (vramState) is
                when IDLE =>
-                  if (ce = '1' and (vram_WE = '0' or vram_BUSY = '0') and vram_pause = '0') then
+                  if ((ce = '1' or (videoout_reqVRAMEnable = '1' and savestate_busy = '0')) and (vram_WE = '0' or vram_BUSY = '0') and vram_pause = '0') then
                      if (reqVRAMEnable = '1') then
                         reqVRAMStore <= (not pipeline_reqVRAMEnable) and (not videoout_reqVRAMEnable);
                         reqVRAMSizeRounded := reqVRAMSize;
@@ -1507,10 +1502,7 @@ begin
                   end if;
                   
                when READVRAM =>
-                  if (ce = '0') then
-                     vramState     <= WAITRAMDONE;
-                     reqVRAMwait   <= reqVRAMremain;
-                  elsif (vram_DOUT_READY = '1') then
+                  if (vram_DOUT_READY = '1') then
                      reqVRAMaddr <= reqVRAMaddr + 1;
                      if (reqVRAMremain > 0) then
                         reqVRAMremain <= reqVRAMremain - 1;
@@ -1539,22 +1531,7 @@ begin
                         end if;
                      end if;
                   end if;
-                  
-               when WAITRAMDONE =>
-                  if (vram_DOUT_READY = '1') then
-                     if (reqVRAMwait > 0) then
-                        reqVRAMwait <= reqVRAMwait - 1;
-                     else
-                        vramState   <= WAITUNPAUSE;
-                     end if;
-                  end if;
-               
-               when WAITUNPAUSE =>
-                  if (ce = '1') then
-                     vramState <= READVRAM;
-                     vram_RD   <= '1';
-                  end if;
-            
+
             end case;
             
          end if;
@@ -1625,6 +1602,7 @@ begin
       softReset                  => softReset,
                
       allowunpause               => allowunpause,
+      savestate_pause            => savestate_busy,
                
       videoout_settings          => videoout_settings,
       videoout_reports           => videoout_reports,

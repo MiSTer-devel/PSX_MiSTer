@@ -366,6 +366,13 @@ begin
    begin
       if rising_edge(clk2x) then
          
+         -- must be done here, so it also is effected when ce is off = paused
+         if (state = READWAIT) then
+            if (requestVRAMDone = '1') then
+               state <= PROCPIXELS;
+            end if;
+         end if;
+         
          if (reset = '1') then
          
             state <= IDLE;
@@ -1034,10 +1041,7 @@ begin
                      state  <= READWAIT;
                   end if;
                   
-               when READWAIT =>
-                  if (requestVRAMDone = '1') then
-                     state <= PROCPIXELS;
-                  end if;
+               when READWAIT => null; -- handled outside due to ce
                
                when PROCPIXELS =>
                   if (pipeline_stall = '0' and (firstPixel = '0' or pipeline_busy = '0')) then

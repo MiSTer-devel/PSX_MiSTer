@@ -330,6 +330,13 @@ begin
    begin
       if rising_edge(clk2x) then
          
+         -- must be done here, so it also is effected when ce is off = paused
+         if (procstate = PROCREADWAIT) then
+            if (requestVRAMDone = '1') then
+               procstate <= PROCPIXELS;
+            end if;
+         end if;
+         
          if (reset = '1') then
          
             procstate <= PROCIDLE;
@@ -491,7 +498,7 @@ begin
                      procstate         <= PROCREADWAIT;
                   end if;
                   
-               when PROCREADWAIT =>
+               when PROCREADWAIT => null; -- handled outside due to ce
                   if (requestVRAMDone = '1') then
                      procstate <= PROCPIXELS;
                   end if;
