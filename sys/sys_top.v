@@ -168,7 +168,7 @@ assign LED = (led_overtake & led_state) | (~led_overtake & {1'b0,led_locked,1'b0
 
 wire btn_r, btn_o, btn_u;
 `ifdef MISTER_DUAL_SDRAM
-	assign {btn_r,btn_o,btn_u} = {mcp_btn[1],mcp_btn[2],mcp_btn[0]};
+	assign {btn_r,btn_o,btn_u} = SW[3] ? {mcp_btn[1],mcp_btn[2],mcp_btn[0]} : ~{SDRAM2_DQ[9],SDRAM2_DQ[13],SDRAM2_DQ[11]};
 `else
 	assign {btn_r,btn_o,btn_u} = ~{BTN_RESET,BTN_OSD,BTN_USER} | {mcp_btn[1],mcp_btn[2],mcp_btn[0]};
 `endif
@@ -279,9 +279,9 @@ wire       direct_video = cfg[10];
 
 wire       audio_96k    = cfg[6];
 wire       csync_en     = cfg[3];
-wire       ypbpr_en     = cfg[5];
 wire       io_osd_vga   = io_ss1 & ~io_ss2;
 `ifndef MISTER_DUAL_SDRAM
+	wire    ypbpr_en     = cfg[5];
 	wire    sog          = cfg[9];
 	wire    vga_scaler   = cfg[2] | vga_force_scaler;
 `endif
@@ -660,7 +660,7 @@ ascal
 #(
 	.RAMBASE(32'h20000000),
 `ifdef MISTER_SMALL_VBUF
-	.RAMSIZE(32'h00100000),
+	.RAMSIZE(32'h00200000),
 `else
 	.RAMSIZE(32'h00800000),
 `endif
