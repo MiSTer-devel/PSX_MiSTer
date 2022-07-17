@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XXXXXXXXX XXXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXX
+//  X XXXXXXXXX  XXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -353,12 +353,14 @@ parameter CONF_STR = {
 	"d6C,Cheats;",
 	"h6O[6],Cheats Enabled,Yes,No;",
 	"-;",
+	"hA-,Memcard Status: not saved;",
+	"HB-,Memcard Status: saved;",
+	"hC-,Memcard Status: saving...;",
+	"RD,Save Memory Cards;",
+	"O[71],Save to SDCard,On Open OSD,Manual;",
 	"SC2,SAVMCD,Mount Memory Card 1;",
 	"SC3,SAVMCD,Mount Memory Card 2;",
-	"-;",
 	"O[63],Automount Memory Card 1,Yes,No;",
-	"RD,Save Memory Cards;",
-	"O[23],Autosave,Off,On;",
 	"-;",
 	"O[36],Savestates to SDCard,On,Off;",
 	"O[68],Autoincrement Slot,Off,On;",
@@ -454,14 +456,15 @@ parameter CONF_STR = {
 	"Region Unknown->US,",
 	"Region JP,",
 	"Region US,",
-	"Region EU;",
+	"Region EU,",
+	"Saving Memcard;",
 	"V,v",`BUILD_DATE
 };
 
 reg dbg_enabled = 0;
 wire  [1:0] buttons;
 wire [127:0] status;
-wire [15:0] status_menumask = {status[59], multitap, biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {saving_memcard, (bk_pending | saving_memcard), bk_pending, status[59], multitap, biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -631,13 +634,15 @@ reg memcard1_load = 0;
 reg memcard2_load = 0;
 reg memcard_save = 0;
 
+wire saving_memcard;
+
 reg memcard1_inserted = 0;
 reg memcard2_inserted = 0;
 reg [25:0] memcard1_cnt = 0;
 reg [25:0] memcard2_cnt = 0;
 
 wire bk_save     = status[13];
-wire bk_autosave = status[23];
+wire bk_autosave = ~status[71];
 
 reg old_save = 0; 
 reg old_save_a = 0;
@@ -851,6 +856,9 @@ always @(posedge clk_1x) begin
    if (ss_info_req) begin
       psx_info_req <= 1;
       psx_info     <= ss_info;
+   end else if (saving_memcard) begin
+      psx_info_req <= 1;
+      psx_info     <= 8'd23;
    end else if (padMode_1[0] != padMode[0] && ~multitap) begin
       psx_info_req <= 1;
       if (padMode[0])  psx_info <= 8'd15;
@@ -1038,6 +1046,7 @@ psx
    .spuram_done     (spuram_done     ),
    // memcard
    .memcard_changed (bk_pending),
+   .saving_memcard  (saving_memcard),
    .memcard1_load   (memcard1_load),
    .memcard2_load   (memcard2_load),
    .memcard_save    (memcard_save),

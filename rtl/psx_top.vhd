@@ -99,6 +99,7 @@ entity psx_top is
       spuram_done           : in  std_logic;
       -- memcard
       memcard_changed       : out std_logic;
+      saving_memcard        : out std_logic;
       memcard1_load         : in  std_logic;
       memcard2_load         : in  std_logic;
       memcard_save          : in  std_logic;
@@ -511,7 +512,10 @@ architecture arch of psx_top is
    signal memcard2_pause         : std_logic;
    
    signal MemCard_changePending1 : std_logic;
-   signal MemCard_changePending2 : std_logic;
+   signal MemCard_changePending2 : std_logic;   
+   
+   signal MemCard_saving_memcard1: std_logic;
+   signal MemCard_saving_memcard2: std_logic;
    
    signal memHPScard1_request    : std_logic;
    signal memHPScard1_ack        : std_logic := '0';
@@ -1799,6 +1803,7 @@ begin
    ddr3_RD       <= ss_ram_RD           when (ddr3_savestate = '1') else arbiter_RD       when (arbiter_active = '1') else  vram_RD;        
    
    memcard_changed <= MemCard_changePending1 or MemCard_changePending2;
+   saving_memcard  <= MemCard_saving_memcard1 or MemCard_saving_memcard2;
    
    imemcard1 : entity work.memcard
    port map
@@ -1817,6 +1822,7 @@ begin
       anyChange            => memDDR3card1_WE,
       
       changePending        => MemCard_changePending1,
+      saving_memcard       => MemCard_saving_memcard1,
                             
       mem_request          => memHPScard1_request, 
       mem_BURSTCNT         => memHPScard1_BURSTCNT,      
@@ -1856,6 +1862,7 @@ begin
       anyChange            => memDDR3card2_WE,
       
       changePending        => MemCard_changePending2,
+      saving_memcard       => MemCard_saving_memcard2,
                             
       mem_request          => memHPScard2_request, 
       mem_BURSTCNT         => memHPScard2_BURSTCNT,      
