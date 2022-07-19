@@ -29,6 +29,7 @@ entity psx_mister is
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
       testSeek              : in  std_logic;
+      pauseOnCDSlow         : in  std_logic;
       errorOn               : in  std_logic;
       LBAOn                 : in  std_logic;
       PATCHSERIAL           : in  std_logic;
@@ -283,6 +284,7 @@ begin
       fpscountOn            => fpscountOn,
       cdslowOn              => cdslowOn,
       testSeek              => testSeek,
+      pauseOnCDSlow         => pauseOnCDSlow,
       errorOn               => errorOn,
       LBAOn                 => LBAOn,
       PATCHSERIAL           => PATCHSERIAL,

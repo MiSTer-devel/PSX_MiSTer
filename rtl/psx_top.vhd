@@ -33,6 +33,7 @@ entity psx_top is
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
       testSeek              : in  std_logic;
+      pauseOnCDSlow         : in  std_logic;
       errorOn               : in  std_logic;
       LBAOn                 : in  std_logic;
       PATCHSERIAL           : in  std_logic;
@@ -213,8 +214,13 @@ architecture arch of psx_top is
    signal clk1xToggle2X          : std_logic := '0';
    signal clk2xIndex             : std_logic := '0';
    
+   signal Pause_Idle             : std_logic;
    signal pausing                : std_logic := '0';
+   signal pausingSS              : std_logic := '0';
    signal allowunpause           : std_logic;
+   
+   signal pauseCD                : std_logic;
+   signal Pause_idle_cd          : std_logic;
    
    -- ddr3 arbiter
    type tddr3State is
@@ -664,7 +670,9 @@ begin
       end if;
    end process;
  
-   SS_idle <= SS_Idle_gpu and SS_Idle_mdec and SS_Idle_cd and SS_idle_spu and SS_idle_pad and SS_idle_irq and SS_idle_cpu and SS_idle_gte and SS_idle_dma;
+   SS_idle    <= SS_Idle_gpu and SS_Idle_mdec and SS_Idle_cd and SS_idle_spu and SS_idle_pad and SS_idle_irq and SS_idle_cpu and SS_idle_gte and SS_idle_dma;
+   
+   Pause_Idle <= SS_Idle_gpu and SS_Idle_mdec and Pause_idle_cd and SS_idle_spu and SS_idle_pad and SS_idle_irq and SS_idle_cpu and SS_idle_gte and SS_idle_dma; 
    
    -- ce generation
    canDMA <= memMuxIdle and not stallNext;
@@ -684,10 +692,15 @@ begin
             end if;
             
             if (pause = '1') then
-               pausing <= '1';
+               pausing   <= '1';
             end if;
             
-            if (pause = '0' and savestate_pause = '0' and memcard1_pause = '0' and memcard2_pause = '0' and allowunpause = '1') then
+            if (pause = '0' and savestate_pause = '0' and memcard1_pause = '0' and memcard2_pause = '0' and pauseCD = '0' and allowunpause = '1') then
+               pausing   <= '0';
+               pausingSS <= '0';
+            end if;
+            
+            if (savestate_pause = '1' and pausingSS = '0' and allowunpause = '1') then -- must go out of pause for savestate if not in a saveable state
                pausing <= '0';
             end if;
          
@@ -700,11 +713,17 @@ begin
                cpuPaused <= '0';
             else
          
+               -- switch to pause when CD data fetch is slow
+               if ((pauseCD = '1') and cpuPaused = '0' and dmaRequest = '0' and canDMA = '1' and Pause_Idle = '1') then
+                  pausing   <= '1';
+                  ce        <= '0';
+                  ce_cpu    <= '0';
                -- switch to pause/savestate pausing
-               if ((pause = '1' or savestate_pause = '1' or memcard1_pause = '1' or memcard2_pause = '1') and cpuPaused = '0' and dmaRequest = '0' and canDMA = '1' and SS_idle = '1') then
-                  pausing <= '1';
-                  ce      <= '0';
-                  ce_cpu  <= '0';
+               elsif ((pause = '1' or savestate_pause = '1' or memcard1_pause = '1' or memcard2_pause = '1') and cpuPaused = '0' and dmaRequest = '0' and canDMA = '1' and SS_idle = '1') then
+                  pausing   <= '1';
+                  pausingSS <= '1';
+                  ce        <= '0';
+                  ce_cpu    <= '0';
                elsif ((cpuPaused = '1' and dmaOn = '1') or (dmaRequest = '1' and canDMA = '1')) then -- switch to dma
                   cpuPaused <= '1';
                   ce_cpu    <= '0';
@@ -718,7 +737,8 @@ begin
          end if;   
          
          if (reset_in = '1') then
-            pausing <= '0';
+            pausing   <= '0';
+            pausingSS <= '0';
          end if;
          
       end if;
@@ -1268,10 +1288,13 @@ begin
       hasCD                => hasCD,
       fastCD               => fastCD,
       testSeek             => testSeek,
+      pauseOnCDSlow        => pauseOnCDSlow,
       LIDopen              => LIDopen,
       region               => region,
       region_out           => region_out,
       
+      pauseCD              => pauseCD,
+      Pause_idle_cd        => Pause_idle_cd,
       cdSlow               => cdSlow,
       error                => errorCD,
       LBAdisplay           => LBAdisplay,
@@ -1911,7 +1934,7 @@ begin
       savestate_busy          => savestate_busy,    
 
       SS_idle                 => SS_idle,
-      system_paused           => pausing,
+      system_paused           => pausingSS,
       savestate_pause         => savestate_pause,
       ddr3_savestate          => ddr3_savestate,
       

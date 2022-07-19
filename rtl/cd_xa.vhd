@@ -9,7 +9,6 @@ entity cd_xa is
    port 
    (
       clk1x                : in  std_logic;
-      ce                   : in  std_logic;
       reset                : in  std_logic;
 
       spu_tick             : in  std_logic;

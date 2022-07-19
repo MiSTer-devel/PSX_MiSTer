@@ -17,9 +17,12 @@ entity cd_top is
       LIDopen              : in  std_logic;
       fastCD               : in  std_logic;
       testSeek             : in  std_logic;
+      pauseOnCDSlow        : in  std_logic;
       region               : in  std_logic_vector(1 downto 0);
       region_out           : out std_logic_vector(1 downto 0);
       
+      pauseCD              : out std_logic := '0';
+      Pause_idle_cd        : out std_logic := '0';
       fullyIdle            : out std_logic;
       cdSlow               : out std_logic := '0';
       error                : out std_logic := '0';
@@ -2282,6 +2285,13 @@ begin
          sectorBuffer_wrenA  <= '0';
          sectorBuffers_wrenA <= '0';
          
+         pauseCD <= '0';
+         if (pauseOnCDSlow = '1') then
+            if ((sectorFetchState /= SFETCH_IDLE) and driveDelay < 32768) then
+               pauseCD <= '1';
+            end if;
+         end if;
+         
          if (testSeek = '0' and (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT)) then
             slow_block <= '1';
          elsif (handleDrive = '1' and (driveState = DRIVE_READING or driveState = DRIVE_PLAYING)) then
@@ -2325,6 +2335,8 @@ begin
             for i in 0 to 7 loop
                sectorBufferSizes(i) <= to_integer(unsigned(ss_in(i + 96)(11 downto 2)));
             end loop;
+            
+            cd_hps_lba <= (others => '1');
             
          elsif (SS_wren = '1') then
             
@@ -2386,8 +2398,13 @@ begin
                   end if;
                   
                when SFETCH_START =>
-                  sectorFetchState <= SFETCH_HPSACK;
-                  cd_hps_req       <= '1';
+                  if (cd_hps_lba /= std_logic_vector(to_unsigned(lastReadSector, 32))) then
+                     sectorFetchState <= SFETCH_HPSACK;
+                     cd_hps_req       <= '1';
+                  else
+                     sectorFetchState <= SFETCH_IDLE;
+                  end if;
+                     
                   cd_hps_lba       <= std_logic_vector(to_unsigned(lastReadSector, 32));
                   cd_hps_lba_sim   <= (others => '0'); 
                   -- synthesis translate_off
@@ -2472,6 +2489,11 @@ begin
                   end if;
                   
             end case;
+            
+            -- reset cached sector on CD switch
+            if (newCD = '1' and newCD_1 = '0') then
+               cd_hps_lba <= (others => '1');
+            end if;
             
             case (readSubchannelState) is
             
@@ -2764,7 +2786,6 @@ begin
    port map
    (
       clk1x                => clk1x,    
-      ce                   => ce,       
       reset                => reset,
 
       spu_tick             => spu_tick,
@@ -3042,6 +3063,8 @@ begin
                ss_timeout <= (others => '0');
             end if;
          end if;
+         
+         Pause_idle_cd <= '1';
          
          if (ss_timeout(23) = '0') then
             ss_timeout <= ss_timeout + 1;

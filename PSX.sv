@@ -405,12 +405,12 @@ parameter CONF_STR = {
 	"P2-;",
 	"P2O[16],Fastboot,Off,On;",
 	"P2O[42],CD Lid,Closed,Open;",
+	"P2O[64],Pause when OSD open,On,Off;",
 	"P2-;",
 	"P2-,(U) = unsafe -> can crash;",
 	"P2O[21],CD Fast Seek,Off,On(U);",
 	"P2O[58],Turbo(Cheats Off),Off,On(U);",
-	"P2O[64],Pause when OSD open,On,Off(U);",
-	"P2O[65],Pause when HPS busy,On,Off(U);",
+	"P2O[72],Pause when CD slow,On,Off(U);",
 	"P2O[15],PAL 60Hz Hack,Off,On(U);",
 	
 	"h3-;",
@@ -588,14 +588,6 @@ assign sd_wr[0] = 0;
 assign sd_wr[1] = 0;
 
 wire [35:0] EXT_BUS;
-wire        heartbeat;
-
-hps_ext hps_ext
-(
-	.clk_sys(clk_1x),
-	.EXT_BUS(EXT_BUS),
-	.heartbeat(heartbeat)
-);
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
@@ -901,9 +893,6 @@ reg [9:0] unpause = 0;
 reg status1_1;
 wire isPaused;
 
-reg [20:0] aliveCnt = 0;
-reg heartbeat_1 = 0;
-
 reg reset = 0;
 
 reg buttonpause_1 = 0;
@@ -935,23 +924,10 @@ always @(posedge clk_1x) begin
       unpause <= unpause - 1'd1;
    end
    
-   // pause from heartbeat
-   heartbeat_1 <= heartbeat;
-   if (hasCD && (heartbeat == heartbeat_1)) begin
-      if (aliveCnt[20] == 0) begin
-         aliveCnt <= aliveCnt + 1'b1;
-      end else if (isPaused || ~status[65]) begin
-         paused <= 1;
-      end
-   end else begin
-      aliveCnt <= 0;
-   end
-   
    // reset
    reset <= 0;
    if (reset_or) begin
       reset    <= 1;
-      aliveCnt <= 0;
    end
 
 end
@@ -981,6 +957,7 @@ psx
    .fpscountOn(status[28]),
    .cdslowOn(status[59]),
    .testSeek(status[70]),
+   .pauseOnCDSlow(~status[72]),
    .errorOn(~status[29]),
    .LBAOn(status[69]),
    .PATCHSERIAL(0), //.PATCHSERIAL(status[54]),
