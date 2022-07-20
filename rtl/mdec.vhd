@@ -39,7 +39,8 @@ end entity;
 
 architecture arch of mdec is
   
-   signal reset_intern        : std_logic := '0';
+   signal reset_receive       : std_logic := '0';
+   signal reset_calc          : std_logic := '0';
   
    signal FifoIn_Din          : std_logic_vector(31 downto 0) := (others => '0');
    signal FifoIn_Wr           : std_logic; 
@@ -304,7 +305,7 @@ begin
    port map
    ( 
       clk      => clk1x,     
-      reset    => reset_intern,   
+      reset    => reset_calc,   
                 
       Din      => FifoIn_Din,     
       Wr       => FifoIn_Wr,      
@@ -337,7 +338,8 @@ begin
    begin
       if rising_edge(clk1x) then
       
-         reset_intern      <= '0';
+         reset_receive     <= '0';
+         reset_calc        <= '0';
       
          RamYUVwrite       <= '0';
          RamSSwrite        <= '0';
@@ -347,7 +349,7 @@ begin
       
          if (reset = '1') then
          
-            reset_intern    <= '1';
+            reset_calc      <= '1';
          
             receiveState    <= RECEIVE_IDLE;
             fifoSecondAvail <= '0';
@@ -384,24 +386,14 @@ begin
          
          elsif (ce = '1') then
          
-            MDECCONTROL(2) <= '0';
-            if (MDECCONTROL(2) = '1') then
-               reset_intern    <= '1';
-               
-               receiveState    <= RECEIVE_IDLE;
-               fifoSecondAvail <= '0';
-               currentBlock    <= (others => '0');
-               currentCoeff    <= to_unsigned(64, 7);
-               wordsRemain     <= (others => '0');
-               rec_bit15       <= '0';
-               rec_signed      <= '0';
-               rec_depth       <= "00";
-            end if;
-         
             if (bus_write = '1' and bus_addr = x"4") then
                MDECCONTROL <= bus_dataWrite(31 downto 29);
+               if (bus_dataWrite(31) = '1') then
+                  reset_receive <= '1';
+                  reset_calc    <= '1';
+               end if;
             end if;
-         
+            
             case (receiveState) is
             
                when RECEIVE_IDLE =>
@@ -516,6 +508,17 @@ begin
          
          end if;
          
+         if (reset_receive = '1') then
+            receiveState    <= RECEIVE_IDLE;
+            fifoSecondAvail <= '0';
+            currentBlock    <= (others => '0');
+            currentCoeff    <= to_unsigned(64, 7);
+            wordsRemain     <= (others => '0');
+            rec_bit15       <= '0';
+            rec_signed      <= '0';
+            rec_depth       <= "00";
+         end if;
+         
       end if;
    end process;
    
@@ -621,7 +624,7 @@ begin
                     
          end if;
          
-         if (reset_intern = '1') then
+         if (reset_calc = '1') then
             FifoRL_Wr <= '0';
          end if;
          
@@ -638,7 +641,7 @@ begin
    port map
    ( 
       clk      => clk2x,     
-      reset    => reset_intern,   
+      reset    => reset_calc,   
                 
       Din      => FifoRL_Din,     
       Wr       => (FifoRL_Wr and clk2xIndex),      
@@ -775,7 +778,7 @@ begin
          idct_done      <= '0';
          idct_calc0_ena <= '0';
       
-         if (reset_intern = '1') then
+         if (reset_calc = '1') then
          
             idctState    <= IDCT_IDLE;
          
@@ -962,7 +965,7 @@ begin
          color_write <= '0';
          color_done  <= '0';
 
-         if (reset_intern = '1') then
+         if (reset_calc = '1') then
          
             colorState    <= COLOR_IDLE;
          
@@ -1107,7 +1110,7 @@ begin
             fifoOut_done    <= '0';
          end if;
 
-         if (reset_intern = '1') then
+         if (reset_calc = '1') then
          
             outputState    <= OUTPUT_IDLE;
             colormapState  <= COLORMAP_IDLE;
@@ -1236,7 +1239,7 @@ begin
    port map
    ( 
       clk      => clk2x,     
-      reset    => reset_intern,   
+      reset    => reset_calc,   
                 
       Din      => FifoOut_Din,     
       Wr       => FifoOut_Wr,      

@@ -235,7 +235,9 @@ architecture arch of cd_top is
 
    -- exchange with data part
    signal readOnDisk                : std_logic := '0';   
+   signal readOnDisk_buffer         : std_logic := '0';   
    signal readLBA                   : integer range 0 to 524287; 
+   signal readLBA_buffer            : integer range 0 to 524287; 
    signal trackNumberBCD            : unsigned(7 downto 0) := x"00";
    signal trackNumber               : std_logic_vector(6 downto 0);
    
@@ -459,7 +461,7 @@ architecture arch of cd_top is
       
 begin 
 
-   fullyIdle <= '1' when (cmd_busy = '0' and working = '0' and driveBusy = '0' and  sectorFetchState = SFETCH_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) else '0';
+   fullyIdle <= '1' when (cmd_busy = '0' and working = '0' and driveBusy = '0' and sectorFetchState = SFETCH_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) else '0';
 
    ififoData: entity mem.SyncFifoFallThrough
    generic map
@@ -930,7 +932,7 @@ begin
                   if (cmd_delay < 16 or ((driveBusy = '0' or driveDelay > 100) and (working = '0' or workDelay > 100))) then
                      cmd_delay <= cmd_delay - 1;
                   end if;
-               elsif (sectorFetchState = SFETCH_IDLE) then
+               else
                   handleCommand <= '1';
                   cmd_busy      <= '0';
                end if;
@@ -1761,8 +1763,10 @@ begin
          
             if (driveBusy = '1') then
                if (driveDelay > 0) then
-                  driveDelay <= driveDelay - 1;
-               elsif (sectorFetchState = SFETCH_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
+                  if (sectorFetchState = SFETCH_IDLE or driveDelay > 127) then -- make sure to stop drive countdown if data isn't ready early enough so commands are still possible
+                     driveDelay <= driveDelay - 1;
+                  end if;
+               elsif (sectorFetchState = SFETCH_IDLE and readOnDisk = '0' and readOnDisk_buffer = '0' and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
                   handleDrive <= '1';
                   driveBusy   <= '0';
                   
@@ -2298,7 +2302,7 @@ begin
             slow_block <= '0';
          end if;
          
-         if ((sectorFetchState /= SFETCH_IDLE) and driveDelay = 0 and slow_block = '0') then
+         if ((sectorFetchState /= SFETCH_IDLE) and driveDelay < 128 and slow_block = '0') then
             cdSlow       <= '1';
             slow_timeout <= 16777215;
          elsif (slow_timeout > 0) then
@@ -2370,14 +2374,20 @@ begin
             
             readSubchannel <= '0';
    
+            if (readOnDisk = '1') then
+               readOnDisk_buffer <= '1';
+               readLBA_buffer    <= readLBA;
+            end if;
+      
             case (sectorFetchState) is
             
                when SFETCH_IDLE =>
-                  if (readOnDisk = '1' and ce = '1') then
-                     lastReadSector   <= readLBA;
-                     sectorFetchState <= SFETCH_DELAY;
-                     fetchCount       <= 0;
-                     fetchDelay       <= 15;
+                  if (readOnDisk_buffer = '1' and ce = '1') then
+                     lastReadSector    <= readLBA_buffer;
+                     sectorFetchState  <= SFETCH_DELAY;
+                     fetchCount        <= 0;
+                     fetchDelay        <= 15;
+                     readOnDisk_buffer <= '0';
                   end if;
                   
                when SFETCH_DELAY => -- delay to give processing a head start with copy and wait for HPS ack before new request
@@ -2904,7 +2914,7 @@ begin
             case (trackSearchState) is
             
                when TRACKSEARCH_IDLE => 
-                  if (sectorFetchState = SFETCH_IDLE and readOnDisk = '1' and ce = '1') then
+                  if (sectorFetchState = SFETCH_IDLE and readOnDisk_buffer = '1' and ce = '1') then
                      trackSearchState <= TRACKSEARCH_READ;
                      trackInfo_addrB  <= std_logic_vector(to_unsigned(1, 7));
                      trackNumberBCD   <= x"01";
@@ -3057,7 +3067,7 @@ begin
          
          SS_idle <= '0';
          if ((FifoParam_Empty = '1' or ss_timeout(23) = '1') and (FifoResponse_Empty = '1' or ss_timeout(23) = '1') and cmd_busy = '0' and working = '0' and ss_idle_timeout = 0 and
-           sectorFetchState = SFETCH_IDLE and readSubchannelState = SSUB_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
+           sectorFetchState = SFETCH_IDLE and readOnDisk = '0' and readOnDisk_buffer = '0' and readSubchannelState = SSUB_IDLE and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
             SS_idle    <= '1';
             if (FifoParam_Empty = '1' and FifoResponse_Empty = '1') then
                ss_timeout <= (others => '0');
@@ -3099,27 +3109,28 @@ begin
    
    begin
       process
-         constant WRITETIME            : std_logic := '1';
-         
-         file outfile                  : text;
-         variable f_status             : FILE_OPEN_STATUS;
-         variable line_out             : line;
+         constant WRITETIME               : std_logic := '1';
             
-         variable bus_read_1           : std_logic;
-         variable bus_addr_1           : unsigned(3 downto 0);
-         variable cmdAck_1             : std_logic;
-         variable driveAck_1           : std_logic;
-         variable ackDrive_1           : std_logic;
-         variable ackRead_valid_1      : std_logic;
-         variable ackDriveEnd_1        : std_logic;
-         variable ackPendingIRQNext_1  : std_logic;
-         variable readOnDisk_1         : std_logic;
-         variable readOnDisk_2         : std_logic;
-         variable readOnDisk_3         : std_logic;
-         variable fifoResponseSize     : unsigned(31 downto 0);
-         variable newoutputCnt         : unsigned(31 downto 0); 
-         variable fifoDataWrCnt        : unsigned(7 downto 0);
-         variable datatemp             : unsigned(31 downto 0);
+         file outfile                     : text;
+         variable f_status                : FILE_OPEN_STATUS;
+         variable line_out                : line;
+               
+         variable bus_read_1              : std_logic;
+         variable bus_addr_1              : unsigned(3 downto 0);
+         variable cmdAck_1                : std_logic;
+         variable driveAck_1              : std_logic;
+         variable ackDrive_1              : std_logic;
+         variable ackRead_valid_1         : std_logic;
+         variable ackDriveEnd_1           : std_logic;
+         variable ackPendingIRQNext_1     : std_logic;
+         variable errorResponseNext_new_1 : std_logic;
+         variable readOnDisk_1            : std_logic;
+         variable readOnDisk_2            : std_logic;
+         variable readOnDisk_3            : std_logic;
+         variable fifoResponseSize        : unsigned(31 downto 0);
+         variable newoutputCnt            : unsigned(31 downto 0); 
+         variable fifoDataWrCnt           : unsigned(7 downto 0);
+         variable datatemp                : unsigned(31 downto 0);
       begin
    
          file_open(f_status, outfile, "R:\\debug_cd_sim.txt", write_mode);
@@ -3210,7 +3221,21 @@ begin
                write(line_out, to_hstring(internalStatus));
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
-            end if;             
+            end if;      
+
+            if (errorResponseNext_new_1 = '1') then
+               write(line_out, string'("RSPFIFO2: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter - 4));
+                  write(line_out, string'(" ")); 
+               end if;
+               write(line_out, to_hstring(internalStatus or errorResponseCmd_error));
+                write(line_out, string'(" ")); 
+               write(line_out, to_hstring(fifoResponseSize));               
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if;
+            errorResponseNext_new_1 := errorResponseNext_new; 
             
             if (errorResponseDrive_new = '1') then
                write(line_out, string'("RSPERROR: ")); 
