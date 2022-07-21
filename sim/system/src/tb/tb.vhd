@@ -247,6 +247,7 @@ begin
       fpscountOn            => '0',
       cdslowOn              => '0',
       testSeek              => '0',
+      pauseOnCDSlow         => '0',
       errorOn               => '0',
       LBAOn                 => '0',
       PATCHSERIAL           => '0',
@@ -437,7 +438,7 @@ begin
    generic map
    (
       SLOWTIMING   => 15,
-      RANDOMTIMING => '1' 
+      RANDOMTIMING => '0' 
    )
    port map
    (

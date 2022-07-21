@@ -415,9 +415,13 @@ begin
                      singlePixelLines  <= '1';
                      yPerLine          <= to_unsigned(1, 11);
                   end if;
-                  if (dx >= 16#400# or dy >= 16#200#) then
-                     procstate <= PROCIDLE;
-                  end if;
+                  
+                  if (dx >= 16#400# or dy >= 16#200#)                                                            then procstate <= PROCIDLE; end if;
+                  if (proc_pos1x < to_integer(drawingAreaLeft)   and proc_pos2x < to_integer(drawingAreaLeft))   then procstate <= PROCIDLE; end if;
+                  if (proc_pos1x > to_integer(drawingAreaRight)  and proc_pos2x > to_integer(drawingAreaRight))  then procstate <= PROCIDLE; end if;
+                  if (proc_pos1y < to_integer(drawingAreaTop)    and proc_pos2y < to_integer(drawingAreaTop))    then procstate <= PROCIDLE; end if;
+                  if (proc_pos1y > to_integer(drawingAreaBottom) and proc_pos2y > to_integer(drawingAreaBottom)) then procstate <= PROCIDLE; end if;
+                  
                   if (proc_pos1x >= proc_pos2x) then
                      proc_pos1x  <= proc_pos2x; 
                      proc_pos1y  <= proc_pos2y; 

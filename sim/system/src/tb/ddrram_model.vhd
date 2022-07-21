@@ -158,8 +158,10 @@ begin
             wait until rising_edge(DDRAM_CLK);
             if (SLOWTIMING > 0) then
                waittiming := SLOWTIMING;
-               uniform(seed1, seed2, rnd);
-               waittiming := waittiming + integer(floor(rnd * real(SLOWTIMING)));
+               if (RANDOMTIMING = '1') then
+                  uniform(seed1, seed2, rnd);
+                  waittiming := waittiming + integer(floor(rnd * real(SLOWTIMING)));
+               end if;
                for i in 1 to waittiming loop
                   wait until rising_edge(DDRAM_CLK);
                end loop;
