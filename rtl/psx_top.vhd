@@ -39,6 +39,7 @@ entity psx_top is
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
       textureFilter         : in  std_logic;
+      dither24              : in  std_logic;
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
       rotate180             : in  std_logic;
@@ -1358,6 +1359,7 @@ begin
       fpscountOn           => fpscountOn,
       noTexture            => noTexture,
       textureFilter        => textureFilter,
+      dither24             => dither24,
       debugmodeOn          => debugmodeOn,
       syncVideoOut         => syncVideoOut,
       syncInterlace        => syncInterlace,

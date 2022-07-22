@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XXXXXXXXX  XXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXXX
+//  X XXXXXXXXX  XXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -397,6 +397,7 @@ parameter CONF_STR = {
 	"P1O[24],Rotate,Off,On;",
 	"P1O[54:53],Widescreen Hack,Off,3:2,5:3,16:9;",
 	"P1O[5],Texture Filter,Off,On;",
+	"P1O[73],Dither 24 Bit for VGA,Off,On;",
 	"P1-;",
 	"d1P1O[44],SPU RAM select,DDR3,SDRAM2;",
 	"P1O[8:7],Stereo Mix,None,25%,50%,100%;",
@@ -963,6 +964,7 @@ psx
    .PATCHSERIAL(0), //.PATCHSERIAL(status[54]),
    .noTexture(status[27]),
    .textureFilter(status[5]),
+   .dither24(status[73]),
    .syncVideoOut(syncVideoOut),
    .syncInterlace(status[60]),
    .rotate180(status[24]),

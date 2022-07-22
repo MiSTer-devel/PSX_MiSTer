@@ -30,6 +30,7 @@ package pGPU is
       fixedVBlank             : std_logic;
       vCrop                   : std_logic_vector(1 downto 0);
       hCrop                   : std_logic;
+      dither24                : std_logic;
    end record;
    
    type tvideoout_reports is record

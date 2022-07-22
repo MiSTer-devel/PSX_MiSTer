@@ -12,6 +12,8 @@ end entity;
 
 architecture arch of etb is
 
+   constant vgaOut            : std_logic := '1';
+
    signal clk1x               : std_logic := '1';
    signal clk2x               : std_logic := '1';
    signal clkvid              : std_logic := '1';
@@ -62,19 +64,19 @@ architecture arch of etb is
    -- testbench
    signal clkCount            : integer := 0;
    signal cmdCount            : integer := 0;
-   
+
 begin
 
    clk1x  <= not clk1x  after 15 ns;
    clk2x  <= not clk2x  after 7500 ps;
    
    -- NTSC 53.693175 mhz => 18624.340989ps
-   --clkvid <= not clkvid after 9312 ps;
+   clkvid <= not clkvid after 9312 ps;
       
    -- PAL  53.203425 mhz => 18795.782414ps
    
    -- sync  = 2x => 67.7376 mhz
-   clkvid <= not clkvid  after 7500 ps;
+   --clkvid <= not clkvid  after 7500 ps;
    
    
    
@@ -109,29 +111,41 @@ begin
       ce                      => '1',   
       reset                   => reset_out,
          
+      savestate_busy          => '0',
+         
       ditherOff               => '0',
       REPRODUCIBLEGPUTIMING   => '0',
-      isPal                   => '1',
+      isPal                   => '0',
       videoout_on             => '1',
-      fpscountOn              => '1',
-      pal60                   => '0',
+      fpscountOn              => '0',
+      pal60                   => '1',
       noTexture               => '0',
-      syncVideoOut            => '1',
+      textureFilter           => '0',
+      syncVideoOut            => '0',
+      syncInterlace           => '0',
       debugmodeOn             => '0',
+      rotate180               => '0',
+      fixedVBlank             => '1',
+      vCrop                   => "00",
+      hCrop                   => '0',
+      dither24                => '1',
       
       Gun1CrosshairOn         => '0',
-      Gun1X                   => (7 downto 0 => '0'),
-      Gun1Y_scanlines         => (8 downto 0 => '0'),
+      Gun1X                   =>  "00000001",
+      Gun1Y_scanlines         => "000000001",
                               
       Gun2CrosshairOn         => '0',
-      Gun2X                   => (7 downto 0 => '0'),
-      Gun2Y_scanlines         => (8 downto 0 => '0'),
+      Gun2X                   =>  "00011111",
+      Gun2Y_scanlines         => "000001111",
       
-      cdSlow                  => '1',
+      cdSlow                  => '0',
                               
-      errorOn                 => '1',
-      errorEna                => '1',
+      errorOn                 => '0',
+      errorEna                => '0',
       errorCode               => x"8",
+      
+      LBAOn                   => '0',
+      LBAdisplay              => x"00000",
          
       dmaOn                   => '0',
          
@@ -166,7 +180,7 @@ begin
       video_b                 => video_b,  
          
       loading_savestate       => loading_savestate,
-      SS_reset                => '0',
+      SS_reset                => SS_reset,
       SS_DataWrite            => SS_DataWrite,
       SS_Adr                  => SS_Adr(2 downto 0),
       SS_wren_GPU             => SS_wren(1),
@@ -183,7 +197,8 @@ begin
    iddrram_model : entity work.ddrram_model
    generic map
    (
-      loadVram => '1'
+      loadVram   => '1',
+      SLOWTIMING => 0
    )
    port map
    (
@@ -217,18 +232,55 @@ begin
       SS_wren           => SS_wren     
    );
    
-   iframebuffer : entity work.framebuffer
-   port map
-   (
-      clk               => clkvid,     
-      hblank            => hblank,  
-      vblank            => vblank,  
-      video_ce          => video_ce,
-      video_interlace   => video_interlace,
-      video_r           => video_r, 
-      video_g           => video_g,    
-      video_b           => video_b  
-   );
+   gVideoutVGA : if vgaOut = '1' generate
+   
+      signal video_dither_r : std_logic_vector(5 downto 0);
+      signal video_dither_g : std_logic_vector(5 downto 0);
+      signal video_dither_b : std_logic_vector(5 downto 0);
+   
+   begin
+   
+      video_dither_r <= video_r(7 downto 2);
+      video_dither_g <= video_g(7 downto 2);
+      video_dither_b <= video_b(7 downto 2);
+      
+      iframebuffer : entity work.framebuffer
+      port map
+      (
+         clk                  => clkvid,     
+         hblank               => hblank,  
+         vblank               => vblank,  
+         video_ce             => video_ce,
+         video_interlace      => video_interlace,
+         video_r(7 downto 2)  => video_dither_r, 
+         video_r(1 downto 0)  => "00", 
+         video_g(7 downto 2)  => video_dither_g,    
+         video_g(1 downto 0)  => "00",   
+         video_b(7 downto 2)  => video_dither_b,  
+         video_b(1 downto 0)  => "00"  
+      );
+      
+   end generate;
+   
+   
+   gVideoutHDMI : if vgaOut = '0' generate
+   begin
+   
+      iframebuffer : entity work.framebuffer
+      port map
+      (
+         clk               => clkvid,     
+         hblank            => hblank,  
+         vblank            => vblank,  
+         video_ce          => video_ce,
+         video_interlace   => video_interlace,
+         video_r           => video_r, 
+         video_g           => video_g,    
+         video_b           => video_b  
+      );
+   
+   end generate;
+   
    
    process
       file infile          : text;

@@ -35,6 +35,7 @@ entity psx_mister is
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
       textureFilter         : in  std_logic;
+      dither24              : in  std_logic;
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
       rotate180             : in  std_logic;
@@ -290,6 +291,7 @@ begin
       PATCHSERIAL           => PATCHSERIAL,
       noTexture             => noTexture,
       textureFilter         => textureFilter,
+      dither24              => dither24,
       syncVideoOut          => syncVideoOut,
       syncInterlace         => syncInterlace,
       rotate180             => rotate180,

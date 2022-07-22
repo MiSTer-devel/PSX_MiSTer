@@ -18,12 +18,17 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/gpu_poly.vhd ^
 ../../rtl/gpu_pixelpipeline.vhd ^
 ../../rtl/gpu_overlay.vhd ^
+../../rtl/gpu_dither.vhd ^
 ../../rtl/gpu_videoout_async.vhd ^
 ../../rtl/gpu_videoout_sync.vhd ^
 ../../rtl/gpu_crosshair.vhd ^
 ../../rtl/justifier_sensor.vhd ^
 ../../rtl/gpu_videoout.vhd ^
 ../../rtl/gpu.vhd
+
+vcom -93 -quiet -work sim/mem ^
+../system/src/mem/dpram.vhd ^
+../system/src/mem/RamMLAB.vhd
 
 vcom -quiet -work sim/tb ^
 ../system/src/tb/globals.vhd ^

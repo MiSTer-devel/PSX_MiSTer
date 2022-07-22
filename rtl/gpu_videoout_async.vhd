@@ -113,23 +113,29 @@ architecture arch of gpu_videoout_async is
    );
    signal state : tState := WAITNEWLINE;
    
-   signal pixelData_R      : std_logic_vector(7 downto 0) := (others => '0');
-   signal pixelData_G      : std_logic_vector(7 downto 0) := (others => '0');
-   signal pixelData_B      : std_logic_vector(7 downto 0) := (others => '0');
-      
-   signal clkDiv           : integer range 4 to 10 := 4; 
-   signal clkCnt           : integer range 0 to 10 := 0;
-   signal xmax             : integer range 0 to 1023 := 256;
-   signal xpos             : integer range 0 to 1023 := 256;
-   signal xCount           : integer range 0 to 1023 := 256;
-   signal readAddrCount    : unsigned(9 downto 0) := (others => '0');
-   signal rotate180        : std_logic := '0';
-      
-   signal hsync_start      : integer range 0 to 4095;
-   signal hsync_end        : integer range 0 to 4095;
+   signal pixelData_R         : std_logic_vector(7 downto 0) := (others => '0');
+   signal pixelData_G         : std_logic_vector(7 downto 0) := (others => '0');
+   signal pixelData_B         : std_logic_vector(7 downto 0) := (others => '0');
    
-   signal hCropCount       : unsigned(11 downto 0) := (others => '0');
-   signal hCropPixels      : unsigned(1 downto 0) := (others => '0');
+   signal pixelDataDither_R   : std_logic_vector(7 downto 0) := (others => '0');
+   signal pixelDataDither_G   : std_logic_vector(7 downto 0) := (others => '0');
+   signal pixelDataDither_B   : std_logic_vector(7 downto 0) := (others => '0');
+      
+   signal clkDiv              : integer range 4 to 10 := 4; 
+   signal clkCnt              : integer range 0 to 10 := 0;
+   signal xmax                : integer range 0 to 1023 := 256;
+   signal xpos                : integer range 0 to 1023 := 256;
+   signal xCount              : integer range 0 to 1023 := 256;
+   signal readAddrCount       : unsigned(9 downto 0) := (others => '0');
+   signal rotate180           : std_logic := '0';
+   signal ditherCE            : std_logic := '0';
+   signal ditherFirstLine     : std_logic := '0';
+         
+   signal hsync_start         : integer range 0 to 4095;
+   signal hsync_end           : integer range 0 to 4095;
+      
+   signal hCropCount          : unsigned(11 downto 0) := (others => '0');
+   signal hCropPixels         : unsigned(1 downto 0) := (others => '0');
    
    type tReadState is
    (
@@ -495,6 +501,25 @@ begin
       end if;
    end process;
    
+   
+   igpu_dither : entity work.gpu_dither
+   port map
+   (
+      clk       => clkvid,
+      ce        => ditherCE,
+ 
+      x         => xCount,
+      firstLine => ditherFirstLine,
+ 
+      din_r     => pixelData_R,
+      din_g     => pixelData_G,
+      din_b     => pixelData_B,
+ 
+      dout_r    => pixelDataDither_R,
+      dout_g    => pixelDataDither_G,
+      dout_b    => pixelDataDither_B
+   );
+   
    -- timing generation reading
    videoout_out.vblank         <= vblankFixed when (videoout_settings.fixedVBlank = '1') else
                                   videoout_reports.inVsync when vDisplayCnt < vDisplayMax else '1';
@@ -515,6 +540,8 @@ begin
       if rising_edge(clkvid) then
          
          videoout_out.ce <= '0';
+         
+         ditherCE <= '0';
          
          rotate180 <= videoout_settings.rotate180 and (not videoout_settings.GPUSTAT_ColorDepth24);
          
@@ -650,6 +677,10 @@ begin
                         videoout_out.r      <= (others => '0');
                         videoout_out.g      <= (others => '0');
                         videoout_out.b      <= (others => '0');
+                     elsif (videoout_settings.dither24 = '1' and videoout_settings.GPUSTAT_ColorDepth24 = '1') then
+                        videoout_out.r      <= pixelDataDither_R;
+                        videoout_out.g      <= pixelDataDither_G;
+                        videoout_out.b      <= pixelDataDither_B;                     
                      else
                         videoout_out.r      <= pixelData_R;
                         videoout_out.g      <= pixelData_G;
@@ -669,8 +700,9 @@ begin
                      hCropPixels <= hCropPixels + 1;
                      if (((hCropCount + 1) >= videoout_settings.hDisplayRange(23 downto 12))) then
                         if ((hCropPixels + 1) = 0) then
-                           state       <= WAITNEWLINE;
-                           xmax        <= xCount + 1;
+                           state           <= WAITNEWLINE;
+                           xmax            <= xCount + 1;
+                           ditherFirstLine <= '0';
                         end if;
                      end if;
                      
@@ -717,6 +749,7 @@ begin
                         readstate          <= IDLE;
                         readstate24        <= READ24_8;
                         pixelData_B        <= videoout_pixelRead( 7 downto  0);
+                        ditherCE           <= '1';
                   
                      when READ24_24 =>
                         readstate          <= IDLE;
@@ -724,6 +757,7 @@ begin
                         videoout_readAddr  <= videoout_readAddr + 1;
                         pixelData_G        <= videoout_pixelRead( 7 downto  0);
                         pixelData_B        <= videoout_pixelRead(15 downto  8);
+                        ditherCE           <= '1';
             
                   end case;
                
@@ -758,6 +792,7 @@ begin
             if (nextHCount = vsync_hstart) then
                if (vpos = vsync_vstart    ) then videoout_out.vsync <= '1'; end if;
                if (vpos = vsync_vstart + 3) then 
+                  ditherFirstLine    <= '1';
                   videoout_out.vsync <= '0'; 
                   if (videoout_settings.GPUSTAT_VertInterlace = '1') then
                      videoout_reports.GPUSTAT_InterlaceField <= not videoout_reports.GPUSTAT_InterlaceField;

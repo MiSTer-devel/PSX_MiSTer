@@ -27,6 +27,7 @@ entity gpu is
       fpscountOn           : in  std_logic;
       noTexture            : in  std_logic;
       textureFilter        : in  std_logic;
+      dither24             : in  std_logic;
       debugmodeOn          : in  std_logic;
       syncVideoOut         : in  std_logic;
       syncInterlace        : in  std_logic;
@@ -1581,6 +1582,7 @@ begin
    videoout_settings.fixedVBlank             <= fixedVBlank;
    videoout_settings.vCrop                   <= vCrop;
    videoout_settings.hCrop                   <= hCrop;
+   videoout_settings.dither24                <= dither24;
    
    videoout_ss_in.interlacedDisplayField  <= ss_timing_in(4)(19);
    videoout_ss_in.nextHCount              <= ss_timing_in(4)(11 downto 0);

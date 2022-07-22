@@ -59,6 +59,14 @@ Core can output through HDMI and Analog out.
 
 HDMI also offers a debugging framebuffer mode with support of full VRAM as 1024x512 pixel image(debug only)
 
+Analog out from Direct Video is full 24Bit Color, but from Analog Board will only deliver 18 Bits of color.
+You can activate the 24 Bit dithering option to remove color banding in FMVs without decreasing the image quality in 16 bit color ingame.
+
+Fixed Hblank as well as Fixed Vblank can help delivering correct aspect rations and keeping the screen in sync with e.g. shaking animations.
+Both also offer crop options for games that depend on CRT viewports to hide artifacts at the edge of the image.
+
+Sync 480i for HDMI will make 480i content run with 240p timings, making it easier for HDMI devices to keep the sync when switching between both modes in games. 
+
 ## Libcrypt
 
 Some games are secured with Libcrypt and will not work if it's not circumvented.
@@ -81,7 +89,6 @@ List of Errors:
 - EB     - DMA and CPU interlock error 
 - EC     - DMA FIFO overflow
 - ED     - CPU Data/Bus request timeout -> will also appear if the BIOS is not found or corrupt or no SDRAM module is installed
-- EE     - Dotclock used as timer report(only relevant if game shows issues)
 
 ## Debug Options
 
@@ -145,8 +152,7 @@ Memctrl: register stubs only
 
 SIO    : register stubs only
 
-Timer  : 80%
-- dotclock base missing
+Timer  : 90%
 - accuracy for start/wraparound not tested
 
 GTE    : 90%
