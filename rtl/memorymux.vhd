@@ -3,6 +3,10 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all; 
 
 entity memorymux is
+   generic
+   (
+      is_simu               : std_logic := '0'
+   );
    port 
    (
       clk1x                : in  std_logic;
@@ -536,7 +540,7 @@ begin
                               end if;
                            else
                               state    <= IDLE;
-                              if (ram_idle = '1') then
+                              if (ram_idle = '1' and is_simu = '0') then
                                  instantwrite <= '1'; 
                                  maskram      <= '1';
                               else

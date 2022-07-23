@@ -17,6 +17,7 @@ entity cpu is
       reset                 : in  std_logic;
       
       irqRequest            : in  std_logic;
+      dmaRequest            : in  std_logic;
       
       error                 : out std_logic := '0';
       error2                : out std_logic := '0';
@@ -117,7 +118,6 @@ architecture arch of cpu is
    signal stall2                       : std_logic := '0';
    signal stall3                       : std_logic := '0';
    signal stall4                       : std_logic := '0';
-   signal stall5                       : std_logic := '0';
    signal stall                        : unsigned(4 downto 0) := (others => '0');
                      
    signal exception                    : unsigned(4 downto 0) := (others => '0');
@@ -412,7 +412,7 @@ begin
    stallNext         <= mem_request or stallNew3;
 
    -- common
-   stall        <= stall5 & stall4 & stall3 & stall2 & stall1;
+   stall        <= dmaRequest & stall4 & stall3 & stall2 & stall1;
 
    exceptionNew <= exceptionNew5 & '0' & exceptionNew3 & '0' & exceptionNew1;
    
@@ -2292,8 +2292,6 @@ begin
          debugTmr <= debugTmr + 1;
       
          if (reset = '1') then
-         
-            stall5               <= '0'; -- unused
             
             pcOld4               <= unsigned(ss_in(23));
             opcode4              <= unsigned(ss_in(18));

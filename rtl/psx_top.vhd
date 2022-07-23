@@ -1586,6 +1586,10 @@ begin
    );
 
    imemorymux : entity work.memorymux
+   generic map
+   (
+      is_simu => is_simu
+   )
    port map
    (
       clk1x                => clk1x,
@@ -1738,6 +1742,7 @@ begin
       reset             => reset_intern,
          
       irqRequest        => irqRequest,
+      dmaRequest        => dmaRequest,
       
       error             => errorCPU,
       error2            => errorCPU2,

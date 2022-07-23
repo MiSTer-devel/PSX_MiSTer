@@ -1716,6 +1716,9 @@ begin
    -- synthesis translate_off
    
    goutput : if 1 = 1 generate
+      signal gpuFifoCount     : integer := 0;
+      signal gpuDMAFifoCount  : integer := 0;
+      signal gpuCPUFifoCount  : integer := 0;
    begin
    
       process
@@ -1733,16 +1736,20 @@ begin
             
             wait until rising_edge(clk1x);
             
-            if (DMA_GPU_writeEna = '1') then
+            if (DMA_GPU_writeEna = '1' and gpuFifoCount >= 0 and gpuDMAFifoCount >= 0) then
                write(line_out, string'("Fifo: ")); 
                write(line_out, to_hstring(DMA_GPU_write));
                writeline(outfile, line_out);
+               gpuFifoCount    <= gpuFifoCount + 1;
+               gpuDMAFifoCount <= gpuDMAFifoCount + 1;
             end if;
             
-            if (bus_write = '1' and bus_addr = 0) then
+            if (bus_write = '1' and bus_addr = 0 and gpuCPUFifoCount >= 0) then
                write(line_out, string'("Fifo: ")); 
                write(line_out, to_hstring(bus_dataWrite));
                writeline(outfile, line_out);
+               gpuFifoCount    <= gpuFifoCount + 1;
+               gpuCPUFifoCount <= gpuCPUFifoCount + 1;
             end if;
             
          end loop;

@@ -253,6 +253,7 @@ begin
       PATCHSERIAL           => '0',
       noTexture             => '0',
       textureFilter         => '0',
+      dither24              => '0',
       syncVideoOut          => '0',
       syncInterlace         => '0',
       rotate180             => '0',
@@ -260,7 +261,7 @@ begin
       vCrop                 => "00",
       hCrop                 => '0',
       SPUon                 => '1',
-      SPUSDRAM              => '0',
+      SPUSDRAM              => '1',
       REVERBOFF             => '0',
       REPRODUCIBLESPUDMA    => '0',
       WIDESCREEN            => "00",
@@ -324,7 +325,7 @@ begin
       memcard1_addr         => memcard1_addr,     
       memcard1_dataIn       => memcard1_dataIn,   
       memcard1_dataOut      => memcard1_dataOut,  
-      memcard2_mounted      => '1',
+      memcard2_mounted      => '0',
       memcard2_available    => memcard2_available,
       memcard2_rd           => memcard2_rd,       
       memcard2_wr           => memcard2_wr,       
@@ -357,7 +358,7 @@ begin
       PadPortDS1            => '0',
       PadPortJustif1        => '0',
       PadPortStick1         => '0',
-      PadPortEnable2        => '1',
+      PadPortEnable2        => '0',
       PadPortDigital2       => '1',
       PadPortAnalog2        => '0',
       PadPortMouse2         => '0', 
@@ -457,7 +458,7 @@ begin
    isdram_model : entity tb.sdram_model3x 
    generic map
    (
-      DOREFRESH     => '1',
+      DOREFRESH     => '0',
       SCRIPTLOADING => '1',
       SLOWWRITE     => '0'
    )
