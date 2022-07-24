@@ -133,7 +133,7 @@ architecture arch of dma is
    signal chopsize            : unsigned(7 downto 0);
    signal chopwaittime        : unsigned(7 downto 0);
    
-   signal dmaEndWait          : unsigned(2 downto 0) := (others => '0');
+   signal dmaEndWait          : integer range 0 to 12;
          
    signal autoread            : std_logic := '0';
    signal firstword           : std_logic := '0';
@@ -396,7 +396,7 @@ begin
             -- trigger
             triggerNew     := '0';
             triggerPrio    := "111";
-            if (dmaState = OFF and dmaEndWait(2) = '1' and bus_write = '0' and bus_read = '0') then
+            if (dmaState = OFF and dmaEndWait = 0 and bus_write = '0' and bus_read = '0') then
                for i in 0 to 6 loop
                   if (triggerDMA(i) = '1' and dmaArray(i).chopwaiting = '0') then
                      if ((DPCR((i * 4) + 3) = '1' and dmaArray(i).D_CHCR(24) = '1') or dmaArray(i).channelOn = '1') then -- enable + start or already on(retrigger after busy)
@@ -413,8 +413,8 @@ begin
             end if;
             dmaRequest <= triggerNew;
             
-            if (dmaEndWait(2) = '0') then
-               dmaEndWait <= dmaEndWait + 1;
+            if (dmaState = OFF and dmaEndWait > 0) then
+               dmaEndWait <= dmaEndWait - 1;
             end if;
             
             if (dmaRequest = '1' and canDMA = '1' and dmaState = OFF) then
@@ -478,6 +478,12 @@ begin
                when OFF => null;
                
                when WAITING =>
+                  if (dmaSettings.D_CHCR(0) = '0' and activeChannel = 2 and dmaSettings.D_CHCR(10 downto 9) = "01") then
+                     dmaEndWait <= 12;
+                  else
+                     dmaEndWait <= 4;
+                  end if;
+               
                   if (waitcnt > 0 and cpuPaused = '1') then
                      waitcnt <= waitcnt - 1;
                   end if;
@@ -731,7 +737,6 @@ begin
                      if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
-                        dmaEndWait <= (others => '0');
                         dmaArray(activeChannel).D_MADR <= dmaSettings.D_MADR;
                         dmaArray(activeChannel).D_BCR  <= dmaSettings.D_BCR;
                         dmaArray(activeChannel).D_CHCR(24) <= '0';
@@ -750,7 +755,6 @@ begin
                      if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
-                        dmaEndWait <= (others => '0');
                         dmaArray(activeChannel).D_MADR <= dmaSettings.D_MADR;
                         dmaArray(activeChannel).D_BCR  <= dmaSettings.D_BCR;
                      end if;

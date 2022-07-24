@@ -1588,7 +1588,7 @@ begin
    imemorymux : entity work.memorymux
    generic map
    (
-      is_simu => is_simu
+      is_simu => '0'
    )
    port map
    (
