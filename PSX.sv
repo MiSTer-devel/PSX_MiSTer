@@ -1590,6 +1590,10 @@ reg USER_IN3_2;
 reg USER_IN4_2;
 reg USER_IN6_2;
 
+reg USER_IN3_3;
+reg USER_IN3_4;
+reg ackglitch;
+
 assign clk8Snac = bitCnt < 8 ? clk9Snac : 1'b1;
 
 always @(posedge clk_1x) 
@@ -1603,6 +1607,10 @@ begin
    USER_IN4_2 <= USER_IN4_1;
    USER_IN6_2 <= USER_IN6_1;
 
+   USER_IN3_3 <= USER_IN3_2;//glitch filter for ack	
+   USER_IN3_4 <= USER_IN3_3;	
+   ackglitch  <= ~USER_IN3_1 && ~USER_IN3_2 && ~USER_IN3_3 && ~USER_IN3_4 ? 1'b0 : 1'b1;
+
 	if (snacPort1 || snacPort2) begin
 		USER_OUT[0] <= ~selectedPort2Snac;
 		USER_OUT[1] <= ~selectedPort1Snac;
@@ -1610,7 +1618,7 @@ begin
 		USER_OUT[3] <= 1'b1; //ACK
 		USER_OUT[4] <= 1'b1; //DAT
 		USER_OUT[5] <= oldClk8;	
-		ack         <= (snacPort1 || snacPort2) ? USER_IN3_2 : 1'b1;
+		ack         <= ~ackglitch ? USER_IN3_2 : 1'b1;
 		Dat         <= USER_IN4_2;	
 		
 		if ((pad1ID == 8'h63 || pad2ID == 8'h63) && (pad1ID != 8'h31 || pad2ID != 8'h31)) begin //quirk for guncon, irq is N/C in guncon. so using irq line and outputting csync on snac for g-con. only if justifier isn't connected
@@ -1682,7 +1690,7 @@ begin
 	oldAck <= ack;
 	if(oldAck && ~ack) begin //ack received
 		actionNextPadSnac <= 1'b1;
-		ackTimer <= 8'd255;//a delay between ack and next action. too small might cause a hang. using acktimer 1-255
+		ackTimer <= 16'd255;//a delay between ack and next action. too small might cause a hang. using acktimer 1-255
 	end
 	else if(ackTimer == 1) begin //wait over
 		actionNextPadSnac <= 1'b1;
