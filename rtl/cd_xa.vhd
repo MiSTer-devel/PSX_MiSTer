@@ -53,7 +53,7 @@ architecture arch of cd_xa is
       ADPCM_CLAMP
    );
    signal AdpcmState    : tAdpcmState := ADPCM_IDLE;
-  
+   
    signal bitsPerSample  : std_logic_vector(1 downto 0);
    signal stereo         : std_logic_vector(1 downto 0);
    signal sampleRate     : std_logic;
@@ -93,6 +93,7 @@ architecture arch of cd_xa is
    signal FifoADPCM_R_Dout   : std_logic_vector(15 downto 0);
    signal FifoADPCM_Rd       : std_logic := '0';
    signal FifoADPCM_Empty    : std_logic;
+   signal FifoADPCM_NearFull : std_logic;
   
    -- resample
    type tResampleState is
@@ -196,7 +197,7 @@ begin
                   chunkCounter  <= 0;
                   chunkPtr      <= 24;
                   RamIn_addrB <= to_unsigned(16 + 2, 12);
-                  if (XA_start = '1') then
+                  if (XA_start = '1' and FifoADPCM_NearFull = '0') then -- skip sector if Fifo still has data -> e.g. used in Rugrats - Search for Reptar
                      AdpcmState  <= ADPCM_EVALEOF;
                      RamIn_addrB <= to_unsigned(16 + 3, 12);
                   end if;
@@ -293,7 +294,7 @@ begin
                when ADPCM_CALCRESULT =>
                   AdpcmState  <= ADPCM_CLAMP;
                   sample      <= resize((oldSum + adpcm_mulres + 32) / 64, 24) + resize(sampleNew, 24);
-               
+                  
                when ADPCM_CLAMP =>
                   if (sampleCounter = 27) then
                      AdpcmState   <= ADPCM_NEXTBLOCK;
@@ -352,7 +353,7 @@ begin
    (
       SIZE             => 4096,
       DATAWIDTH        => 16,
-      NEARFULLDISTANCE => 32
+      NEARFULLDISTANCE => 16
    )
    port map
    ( 
@@ -374,7 +375,7 @@ begin
    (
       SIZE             => 4096,
       DATAWIDTH        => 16,
-      NEARFULLDISTANCE => 32
+      NEARFULLDISTANCE => 16
    )
    port map
    ( 
@@ -384,7 +385,7 @@ begin
       Din      => std_logic_vector(clamped),     
       Wr       => adpcm_writeRight,      
       Full     => open,    
-      NearFull => open,
+      NearFull => FifoADPCM_NearFull,
 
       Dout     => FifoADPCM_R_Dout,    
       Rd       => FifoADPCM_Rd,      

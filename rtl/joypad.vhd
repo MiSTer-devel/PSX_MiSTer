@@ -625,7 +625,7 @@ begin
    
    begin
       process
-         constant WRITETIME            : std_logic := '1';
+         constant WRITETIME            : std_logic := '0';
          
          file outfile                  : text;
          variable f_status             : FILE_OPEN_STATUS;
@@ -683,8 +683,9 @@ begin
                write(line_out, string'("READ: "));
                if (WRITETIME = '1') then
                   write(line_out, to_hstring(clkCounter));
+                  write(line_out, string'(" ")); 
                end if;
-               write(line_out, string'(" 0")); 
+               write(line_out, string'("0")); 
                write(line_out, to_hstring(bus_addr_1));
                write(line_out, string'(" ")); 
                write(line_out, to_hstring(bus_dataRead(15 downto 0)));
@@ -698,19 +699,34 @@ begin
                write(line_out, string'("BEGINTRANSFER: "));
                if (WRITETIME = '1') then
                   write(line_out, to_hstring(clkCounter - 1));
+                  write(line_out, string'(" ")); 
                end if;
-               write(line_out, string'(" 00 00")); 
+               write(line_out, string'("00 00")); 
                write(line_out, to_hstring(transmitBuffer));
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
-            end if;             
+            end if;    
+
+            if (transmit_1 = '1' and selectedPort1 = '1') then
+               write(line_out, string'("TRANSFER: "));
+               if (WRITETIME = '1') then
+                  write(line_out, to_hstring(clkCounter + 1));
+                  write(line_out, string'(" ")); 
+               end if;
+               write(line_out, to_hstring(transmitBuffer));
+               write(line_out, string'(" 00")); 
+               write(line_out, to_hstring(receiveBuffer));
+               writeline(outfile, line_out);
+               newoutputCnt := newoutputCnt + 1;
+            end if;     
             
             if (transmit_1 = '1') then
                write(line_out, string'("TRANSMIT: "));
                if (WRITETIME = '1') then
                   write(line_out, to_hstring(clkCounter + 1));
+                  write(line_out, string'(" ")); 
                end if;
-               write(line_out, string'(" 00 00")); 
+               write(line_out, string'("00 00")); 
                write(line_out, to_hstring(receiveBuffer));
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;
@@ -721,8 +737,9 @@ begin
                write(line_out, string'("IRQ: "));
                if (WRITETIME = '1') then
                   write(line_out, to_hstring(clkCounter));
+                  write(line_out, string'(" ")); 
                end if;
-               write(line_out, string'(" 00 ")); 
+               write(line_out, string'("00 ")); 
                write(line_out, to_hstring(JOY_STAT(15 downto 0)));
                writeline(outfile, line_out);
                newoutputCnt := newoutputCnt + 1;

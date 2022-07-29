@@ -121,10 +121,6 @@ begin
          
          triggerRead    <= '0';
          triggerWrite   <= '0';
-         
-         if (receiveValid = '1') then
-            lastData <= receiveBuffer;
-         end if; 
 
          if (reset = '1' or memcard_available = '0') then
          
@@ -150,6 +146,7 @@ begin
                         receiveBuffer   <= x"FF";
                      end if;
                   elsif (isActive = '1') then
+                     lastData <= transmitValue;
                      case (state) is
                         when IDLE => 
                            if (transmitValue = x"81") then

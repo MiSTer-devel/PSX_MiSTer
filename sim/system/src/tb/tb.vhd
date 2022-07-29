@@ -172,10 +172,13 @@ architecture arch of etb is
    signal spuram_done         : std_logic;
    
    -- memcard
+   type t_memdata is array(0 to 32767) of integer;
+   signal memcardLoaded       : std_logic := '0';
    signal memcard1_load       : std_logic := '0';
    signal memcard2_load       : std_logic := '0';
+   signal memcard1_mounted    : std_logic := '0';
+   signal memcard2_mounted    : std_logic := '0';
    signal memcard_save        : std_logic := '0';
-   signal memcard1_available  : std_logic := '0';
    signal memcard1_rd         : std_logic;
    signal memcard1_wr         : std_logic;
    signal memcard1_lba        : std_logic_vector(6 downto 0);
@@ -183,8 +186,7 @@ architecture arch of etb is
    signal memcard1_write      : std_logic := '0';
    signal memcard1_addr       : std_logic_vector(8 downto 0) := (others => '0');
    signal memcard1_dataIn     : std_logic_vector(15 downto 0);
-   signal memcard1_dataOut    : std_logic_vector(15 downto 0);
-   signal memcard2_available  : std_logic := '0';               
+   signal memcard1_dataOut    : std_logic_vector(15 downto 0);              
    signal memcard2_rd         : std_logic := '0';
    signal memcard2_wr         : std_logic := '0';
    signal memcard2_lba        : std_logic_vector(6 downto 0);
@@ -315,8 +317,8 @@ begin
       memcard1_load         => memcard1_load,      
       memcard2_load         => memcard2_load,      
       memcard_save          => memcard_save,      
-      memcard1_mounted      => '1',
-      memcard1_available    => memcard1_available,
+      memcard1_mounted      => memcard1_mounted,
+      memcard1_available    => '1',
       memcard1_rd           => memcard1_rd,       
       memcard1_wr           => memcard1_wr,       
       memcard1_lba          => memcard1_lba,      
@@ -325,8 +327,8 @@ begin
       memcard1_addr         => memcard1_addr,     
       memcard1_dataIn       => memcard1_dataIn,   
       memcard1_dataOut      => memcard1_dataOut,  
-      memcard2_mounted      => '0',
-      memcard2_available    => memcard2_available,
+      memcard2_mounted      => memcard2_mounted,
+      memcard2_available    => '0',
       memcard2_rd           => memcard2_rd,       
       memcard2_wr           => memcard2_wr,       
       memcard2_lba          => memcard2_lba,      
@@ -458,7 +460,7 @@ begin
    isdram_model : entity tb.sdram_model3x 
    generic map
    (
-      DOREFRESH     => '0',
+      DOREFRESH     => '1',
       SCRIPTLOADING => '1',
       SLOWWRITE     => '0'
    )
@@ -669,25 +671,25 @@ begin
    begin
       if (0 = 1) then
       
-         wait for 5 ms;
+         wait for 2 ms;
          
-         memcard1_available <= '1';
-         memcard2_available <= '1';
+         memcard1_mounted <= '1';
+         --memcard2_mounted <= '1';
          memcard1_load      <= '1';
-         memcard2_load      <= '1';
+         --memcard2_load      <= '1';
          wait until rising_edge(clk33);
       
          memcard1_load      <= '0';
          memcard2_load      <= '0';
          wait until rising_edge(clk33);
       
-         wait for 25 ms;
-         
-         memcard_save       <= '1';
-         wait until rising_edge(clk33);
-      
-         memcard_save       <= '0';
-         wait until rising_edge(clk33);
+         --wait for 25 ms;
+         --
+         --memcard_save       <= '1';
+         --wait until rising_edge(clk33);
+         --
+         --memcard_save       <= '0';
+         --wait until rising_edge(clk33);
       
          wait;
       else
@@ -696,17 +698,53 @@ begin
    end process;
    
    process
+      variable data           : t_memdata := (others => 0);
+      file infile             : filetype;
+      variable f_status       : FILE_OPEN_STATUS;
+      variable next_int       : integer;
+      variable targetpos      : integer;
+      variable memdata        : std_logic_vector(31 downto 0);
    begin
+   
+      if (memcardLoaded = '0') then
+      
+         file_open(f_status, infile, "empty.mcd", read_mode);
+         
+         targetpos := 0;
+         
+         while (not endfile(infile)) loop
+            
+            read(infile, next_int);  
+            
+            data(targetpos) := next_int;
+            targetpos       := targetpos + 1;
+
+         end loop;
+         
+         file_close(infile);
+         
+         memcardLoaded <= '1';
+      end if;
+   
       wait until rising_edge(clk33);
    
       if (memcard1_rd = '1') then
          memcard1_ack <= '1';
          wait until rising_edge(clk33);
          
-         for i in 0 to 511 loop
+         for i in 0 to 255 loop
+            memdata := std_logic_vector(to_signed(data(to_integer(unsigned(memcard1_lba)) * 256 + i), 32));
+            
             memcard1_write  <= '1';
-            memcard1_dataIn <= std_logic_vector(to_unsigned(i, 16));
-            memcard1_addr   <= std_logic_vector(to_unsigned(i, 9));
+            memcard1_dataIn <= memdata(15 downto 0);
+            memcard1_addr   <= std_logic_vector(to_unsigned(i * 2 + 0, 9));
+            wait until rising_edge(clk33);
+            memcard1_write  <= '0';
+            wait until rising_edge(clk33);
+            
+            memcard1_write  <= '1';
+            memcard1_dataIn <= memdata(31 downto 16);
+            memcard1_addr   <= std_logic_vector(to_unsigned(i * 2 + 1, 9));
             wait until rising_edge(clk33);
             memcard1_write  <= '0';
             wait until rising_edge(clk33);
@@ -719,46 +757,23 @@ begin
          memcard1_ack <= '1';
          wait until rising_edge(clk33);
          
-         for i in 0 to 511 loop
-            memcard1_addr   <= std_logic_vector(to_unsigned(i, 9));
+         for i in 0 to 255 loop
+         
+            memcard1_addr   <= std_logic_vector(to_unsigned(i * 2 + 0, 9));
             wait until rising_edge(clk33);
+            memdata(15 downto 0) := memcard1_dataOut;
+            wait until rising_edge(clk33);
+            
+            memcard1_addr   <= std_logic_vector(to_unsigned(i * 2 + 1, 9));
+            wait until rising_edge(clk33);
+            memdata(31 downto 16) := memcard1_dataOut;
+            wait until rising_edge(clk33);
+            
+            data(to_integer(unsigned(memcard1_lba)) * 256 + i) := to_integer(signed(memdata));
+            
          end loop;
          
          memcard1_ack <= '0';
-      end if;
-         
-   end process;
-   
-   process
-   begin
-      wait until rising_edge(clk33);
-   
-      if (memcard2_rd = '1') then
-         memcard2_ack <= '1';
-         wait until rising_edge(clk33);
-         
-         for i in 0 to 511 loop
-            memcard2_write  <= '1';
-            memcard2_dataIn <= std_logic_vector(to_unsigned(i, 16));
-            memcard2_addr   <= std_logic_vector(to_unsigned(i, 9));
-            wait until rising_edge(clk33);
-            memcard2_write  <= '0';
-            wait until rising_edge(clk33);
-         end loop;
-         
-         memcard2_ack <= '0';
-      end if;
-      
-      if (memcard2_wr = '1') then
-         memcard2_ack <= '1';
-         wait until rising_edge(clk33);
-         
-         for i in 0 to 511 loop
-            memcard2_addr   <= std_logic_vector(to_unsigned(i, 9));
-            wait until rising_edge(clk33);
-         end loop;
-         
-         memcard2_ack <= '0';
       end if;
          
    end process;
