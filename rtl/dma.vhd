@@ -82,6 +82,7 @@ architecture arch of dma is
       WAITING,
       READHEADER,
       WAITREAD,
+      SLOWDOWN,
       WORKING,
       STOPPING,
       PAUSING
@@ -117,6 +118,7 @@ architecture arch of dma is
    signal wordAccu            : integer range 0 to 3 := 0;
    signal DMA_CD_read_accu    : std_logic_vector(23 downto 0);
    signal DMA_SPU_read_accu   : std_logic_vector(15 downto 0);
+   signal slowcnt             : integer range 0 to 2;
       
    signal isOn                : std_logic;
    signal activeChannel       : integer range 0 to 6;
@@ -194,25 +196,25 @@ begin
                                   '1' when (DICR(23) = '1' and (DICR(22 downto 16) and DICR_IRQs) /= "0000000") else 
                                   '0';
 
-   DMA_MDEC_writeEna <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 0 and toDevice = '1') else '0'; 
+   DMA_MDEC_writeEna <= '1' when (dmaState = WORKING and fifoIn_Valid = '1' and activeChannel = 0 and toDevice = '1') else '0'; 
    DMA_MDEC_write    <= fifoIn_Dout;  
    
-   DMA_MDEC_readEna  <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 1 and toDevice = '0') else '0';
+   DMA_MDEC_readEna  <= '1' when (dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 1 and toDevice = '0') else '0';
    
    DMA_GPU_waiting   <= '1' when (dmaOn = '1' and activeChannel = 2) else
                         '1' when (DPCR((2 * 4) + 3) = '1' and dmaArray(2).D_CHCR(24) = '1') else 
                         '0';
                         
-   DMA_GPU_readEna   <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 2 and toDevice = '0') else '0';
-   DMA_GPU_writeEna  <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 2 and toDevice = '1') else '0'; 
+   DMA_GPU_readEna   <= '1' when (dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 2 and toDevice = '0') else '0';
+   DMA_GPU_writeEna  <= '1' when (dmaState = WORKING and fifoIn_Valid = '1' and activeChannel = 2 and toDevice = '1') else '0'; 
    DMA_GPU_write     <= fifoIn_Dout;
 
-   DMA_CD_readEna    <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 3 and toDevice = '0') else '0';
+   DMA_CD_readEna    <= '1' when (dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 3 and toDevice = '0') else '0';
    
-   DMA_SPU_readEna   <= '1' when (dmaState = working and fifoOut_NearFull = '0' and activeChannel = 4 and toDevice = '0') else '0';
+   DMA_SPU_readEna   <= '1' when (dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 4 and toDevice = '0') else '0';
    
-   DMA_SPU_writeEna  <= '1' when (dmaState = working and fifoIn_Valid = '1' and activeChannel = 4 and toDevice = '1') else 
-                        '1' when ((dmaState = working or dmaState = stopping or dmaState = pausing) and fifoIn_Valid_1 = '1' and activeChannel = 4 and toDevice = '1') else 
+   DMA_SPU_writeEna  <= '1' when (dmaState = WORKING and fifoIn_Valid = '1' and activeChannel = 4 and toDevice = '1') else 
+                        '1' when ((dmaState = WORKING or dmaState = STOPPING or dmaState = PAUSING or dmaState = SLOWDOWN) and fifoIn_Valid_1 = '1' and activeChannel = 4 and toDevice = '1') else 
                         '0'; 
    DMA_SPU_write     <= fifoIn_Dout(15 downto 0) when fifoIn_Valid = '1' else fifoIn_Dout(31 downto 16);
 
@@ -617,6 +619,13 @@ begin
                
                when WAITREAD => dmaState <= WORKING;
                
+               when SLOWDOWN =>
+                  if (slowcnt > 0) then
+                     slowcnt <= slowcnt - 1;
+                  else
+                     dmaState <= WORKING;
+                  end if;
+               
                when WORKING =>
                   if (fifoIn_Valid = '1' or (toDevice = '0' and fifoOut_NearFull = '0' and wordAccu = 0 and readStall = '0')) then
                      dmacount    <= dmacount + 1;
@@ -729,6 +738,12 @@ begin
                            
                            when others => null;
                         end case;
+                     else
+                        -- todo: slowdown for SPU read and CD read/write
+                        if (activeChannel = 4 and toDevice = '1') then -- SPU access is 4 cycles per 32bit
+                           slowcnt  <= 1;
+                           dmaState <= SLOWDOWN;
+                        end if;
                      end if;
                   end if;
                

@@ -350,6 +350,12 @@ begin
                if (videoout_out.vsync = '1') then
                    vdispNew := 0;
                end if;
+               
+               -- synthesis translate_off
+               if (vdispNew >= vtotal) then
+                   vdispNew := 0; -- fix simulation issues with rollover
+               end if;
+               -- synthesis translate_on
 
                vdisp <= vdispNew;
 

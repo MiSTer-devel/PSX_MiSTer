@@ -1107,7 +1107,7 @@ begin
                            --}
                            softReset   <= '1';
                            working     <= '1';
-                           workDelay   <= 399999;
+                           workDelay   <= workDelay + 399999; -- cannot ignore old workdelay, otherwise reset after pause is too fast(e.g. GTA PAL)
                            workCommand <= nextCmd;
                            -- call here second time, so response has new values after reset?
                            cmd_delay   <= 24999 - 2;
@@ -1342,6 +1342,8 @@ begin
                      driveAck <= '1';
                   end if;
                end if;
+            elsif (workDelay > 0) then 
+               workDelay <= workDelay - 1;
             end if;
             
             if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1') then
