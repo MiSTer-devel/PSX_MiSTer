@@ -13,6 +13,7 @@ entity cd_top is
       reset                : in  std_logic;
       
       INSTANTSEEK          : in  std_logic;
+      FORCECDSPEED         : in  std_logic_vector(2 downto 0);
       hasCD                : in  std_logic;
       LIDopen              : in  std_logic;
       fastCD               : in  std_logic;
@@ -33,6 +34,8 @@ entity cd_top is
       spu_tick             : in  std_logic;
       cd_left              : out signed(15 downto 0);
       cd_right             : out signed(15 downto 0);
+      
+      mdec_idle            : in  std_logic;
       
       bus_addr             : in  unsigned(3 downto 0); 
       bus_dataWrite        : in  std_logic_vector(7 downto 0);
@@ -79,6 +82,9 @@ architecture arch of cd_top is
    
    constant READSPEED1X             : integer := 44100 * 16#300# / 75;
    constant READSPEED2X             : integer := 44100 * 16#300# / 150;
+   constant READSPEED4X             : integer := 44100 * 16#300# / 300;
+   constant READSPEED6X             : integer := 44100 * 16#300# / 450;
+   constant READSPEED8X             : integer := 44100 * 16#300# / 600;
    
    -- data fifo
    signal FifoData_reset            : std_logic := '0';
@@ -203,6 +209,8 @@ architecture arch of cd_top is
    signal driveDelay                : integer range 0 to 134217727;
    signal driveDelayNext            : integer range 0 to 134217727;
    signal driveREADSPEED            : integer range 0 to 134217727;
+   
+   signal allow_speedhack           : std_logic := '0';
    
    signal handleDrive               : std_logic := '0';
    signal startMotor                : std_logic := '0';
@@ -1328,7 +1336,6 @@ begin
                      elsif (region = "10") then -- pal
                         if (workDelay = 2) then FifoResponse_Wr <= '1'; FifoResponse_Din <= std_logic_vector(to_unsigned(natural(character'pos('E')), 8)); end if; 
                      end if;
-                     if (workDelay = 1 and CDROM_IRQFLAG /= "00000") then workDelay <= 1; end if; 
                   end if;
                else
                   working <= '0';
@@ -1345,6 +1352,9 @@ begin
             elsif (workDelay > 0) then 
                workDelay <= workDelay - 1;
             end if;
+            
+            -- don't end work command if last command isn't processed
+            if (workDelay = 11 and CDROM_IRQFLAG /= "00000") then workDelay <= 11; end if; 
             
             if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1') then
                setLocActive <= '0';
@@ -1652,6 +1662,25 @@ begin
       ss_out(i + 76)(7 downto 0) <= subdata(i);
    end generate;
    
+   process (FORCECDSPEED, allow_speedhack, modeReg)
+   begin
+      if (FORCECDSPEED = "000" or allow_speedhack = '0') then
+         if (modeReg(7) = '1') then
+            driveREADSPEED <= READSPEED2X;
+         else
+            driveREADSPEED <= READSPEED1X;
+         end if;
+      else
+         case (FORCECDSPEED) is
+            when "010"   => driveREADSPEED <= READSPEED2X;
+            when "011"   => driveREADSPEED <= READSPEED4X;
+            when "100"   => driveREADSPEED <= READSPEED6X;
+            when "101"   => driveREADSPEED <= READSPEED8X;
+            when others =>  driveREADSPEED <= READSPEED1X;
+         end case;
+      end if;
+   end process;
+   
    -- drive
    process(clk1x)
       variable skipreading     : std_logic;
@@ -1702,6 +1731,8 @@ begin
             
             calcSeekTime  <= '0';
             addSeekTime   <= '0';
+            
+            allow_speedhack <= '0';
             
          elsif (softReset = '1') then
          
@@ -1762,6 +1793,10 @@ begin
             startMotor   <= '0'; 
             
             internalStatus_1 <= internalStatus;
+            
+            if ((driveState /= DRIVE_READING and startReading = '0') or XA_write = '1' or mdec_idle = '0') then
+               allow_speedhack <= '0';
+            end if;
          
             if (driveBusy = '1') then
                if (driveDelay > 0) then
@@ -1816,9 +1851,10 @@ begin
                      internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                      if (seekOk = '1') then
                         if (readAfterSeek = '1') then
-                           startReading  <= '1';
-                           afterSeek     <= '1';
-                           readAfterSeek <= '0';
+                           startReading      <= '1';
+                           allow_speedhack   <= '1';
+                           afterSeek         <= '1';
+                           readAfterSeek     <= '0';
                         elsif (playAfterSeek = '1') then
                            startPlaying  <= '1';
                            afterSeek     <= '1';
@@ -1871,7 +1907,12 @@ begin
                               end if;
                            end if;
                            
-                           driveDelay   <= driveDelayNext;
+                           if (fastCD = '1') then
+                              driveDelay      <= 9999 - 2;
+                           else
+                              driveDelay      <= driveREADSPEED - 2;
+                           end if;
+                           
                            driveBusy    <= '1';
                            currentLBA   <= lastReadSector;
                            physicalLBA  <= lastReadSector;
@@ -1911,12 +1952,6 @@ begin
             
             seekLBA <= to_integer(setLocMinute) * FRAMES_PER_MINUTE + to_integer(setLocSecond) * FRAMES_PER_SECOND + to_integer(setLocFrame);
             
-            if (modeReg(7) = '1') then
-               driveREADSPEED <= READSPEED2X;
-            else
-               driveREADSPEED <= READSPEED1X;
-            end if;
-            
             if (seekOnDiskCmd = '1' or seekOnDiskDrive = '1' or seekOnDiskPlay = '1') then
                if (seekOnDiskPlay = '1') then
                   readLBA <= playLBA;
@@ -1955,22 +1990,24 @@ begin
             end if;    
             
             if (calcSeekTime = '1') then
-               if (diffLBA > 0) then -- don't update if diff = 0 -> leave as minimum
-                  addSeekTime <= '1';
-                  
-                  -- todo: research more accurate values
-                  if (diffLBA < 5) then
-                     seekTimeMul <= diffLBA;
-                  elsif (diffLBA < 32) then
-                     seekTimeMul <= 5;
-                  elsif (diffLBA < 75) then
-                     seekTimeMul <= 5 + diffLBA / 8; -- 5 .. 14
-                  elsif (diffLBA < 4500) then
-                     seekTimeMul <= 14 + diffLBA / 256; -- 14 .. 31
-                  else
-                     seekTimeMul <= 31 + diffLBA / 8192; -- 31 .. 73
-                  end if;
+            
+               addSeekTime <= '1';
+               
+               -- todo: research more accurate values
+               if (diffLBA < 3) then
+                  seekTimeMul <= 3;
+               elsif (diffLBA < 5) then
+                  seekTimeMul <= diffLBA;
+               elsif (diffLBA < 32) then
+                  seekTimeMul <= 5;
+               elsif (diffLBA < 75) then
+                  seekTimeMul <= 5 + diffLBA / 8; -- 5 .. 14
+               elsif (diffLBA < 4500) then
+                  seekTimeMul <= 14 + diffLBA / 256; -- 14 .. 31
+               else
+                  seekTimeMul <= 31 + diffLBA / 8192; -- 31 .. 73
                end if;
+                  
             end if;
             
             if (addSeekTime = '1') then
@@ -1986,8 +2023,9 @@ begin
                   readAfterSeek     <= '1';
                   playAfterSeek     <= '0';
                else
-                  startReading <= '1';
-                  afterSeek    <= '0';
+                  startReading      <= '1';
+                  allow_speedhack   <= '1';
+                  afterSeek         <= '0';
                end if;
             end if;
             
@@ -2014,7 +2052,7 @@ begin
                driveState     <= DRIVE_CHANGESESSION;
                driveBusy      <= '1';
                driveDelay     <= 33868800 / 2;
-            end if;
+            end if; 
             
             if (startReading = '1') then
                clearSectorBuffers <= '1';

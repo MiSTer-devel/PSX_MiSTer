@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XXXXXXXXX  XXXXXXXXXXX XXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXXXXX
+//  X XXXXXXXXX  XXXXXXXXXXX XXX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -377,7 +377,7 @@ parameter CONF_STR = {
 	"O[66],Multitap,Off,Port1: 4 x Digital;",
 	"-;",
 	"O[28],FPS Overlay,Off,On;",
-	"O[29],Error Overlay,On,Off;",
+	"O[74],Error Overlay,Off,On;",
 	"O[59],CD Slow Overlay,Off,On;",
 	"h9O[70],CD Overlay,Read,Read+Seek;",
 	"-;",
@@ -413,6 +413,7 @@ parameter CONF_STR = {
 	"P2O[58],Turbo(Cheats Off),Off,On(U);",
 	"P2O[72],Pause when CD slow,On,Off(U);",
 	"P2O[15],PAL 60Hz Hack,Off,On(U);",
+	"P2O[77:75],CD Speed,Auto,Forced 1X(U),Forced 2X(U),Hack 4X(U),Hack 6X(U),Hack 8X(U);",
 	
 	"h3-;",
 	"h3P3,Debug;",
@@ -953,13 +954,14 @@ psx
    .REPRODUCIBLEDMATIMING(status[20]),
    .DMABLOCKATONCE(status[26]),
    .INSTANTSEEK(status[21]),
+   .FORCECDSPEED(status[77:75]),
    .ditherOff(status[22]),
    .showGunCrosshairs(status[9]),
    .fpscountOn(status[28]),
    .cdslowOn(status[59]),
    .testSeek(status[70]),
    .pauseOnCDSlow(~status[72]),
-   .errorOn(~status[29]),
+   .errorOn(status[74]),
    .LBAOn(status[69]),
    .PATCHSERIAL(0), //.PATCHSERIAL(status[54]),
    .noTexture(status[27]),

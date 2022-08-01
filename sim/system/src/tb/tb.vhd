@@ -244,6 +244,7 @@ begin
       REPRODUCIBLEDMATIMING => '0',
       DMABLOCKATONCE        => '0',
       INSTANTSEEK           => '0',
+      FORCECDSPEED          => "000",
       ditherOff             => '0',
       showGunCrosshairs     => '0',
       fpscountOn            => '0',
@@ -460,7 +461,7 @@ begin
    isdram_model : entity tb.sdram_model3x 
    generic map
    (
-      DOREFRESH     => '1',
+      DOREFRESH     => '0',
       SCRIPTLOADING => '1',
       SLOWWRITE     => '0'
    )
@@ -486,7 +487,7 @@ begin
    ispu_ram : entity work.sdram_model3x 
    generic map
    (
-      DOREFRESH     => '1',
+      DOREFRESH     => '0',
       SCRIPTLOADING => '0',
       INITFILE      => "R:\spu_ram_FPSXA.bin",
       FILELOADING   => '0'

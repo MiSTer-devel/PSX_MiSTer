@@ -28,6 +28,7 @@ entity psx_top is
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
+      FORCECDSPEED          : in  std_logic_vector(2 downto 0);
       ditherOff             : in  std_logic;
       showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
@@ -1286,6 +1287,7 @@ begin
       reset                => reset_intern,
      
       INSTANTSEEK          => INSTANTSEEK,
+      FORCECDSPEED         => FORCECDSPEED,
       hasCD                => hasCD,
       fastCD               => fastCD,
       testSeek             => testSeek,
@@ -1305,6 +1307,8 @@ begin
       spu_tick             => spu_tick,
       cd_left              => cd_left,
       cd_right             => cd_right,
+      
+      mdec_idle            => SS_Idle_mdec,
                             
       bus_addr             => bus_cd_addr,     
       bus_dataWrite        => bus_cd_dataWrite,

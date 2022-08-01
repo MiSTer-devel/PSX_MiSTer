@@ -24,6 +24,7 @@ entity psx_mister is
       REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
+      FORCECDSPEED          : in  std_logic_vector(2 downto 0);
       ditherOff             : in  std_logic;
       showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
@@ -280,6 +281,7 @@ begin
       REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING,
       DMABLOCKATONCE        => DMABLOCKATONCE,
       INSTANTSEEK           => INSTANTSEEK,
+      FORCECDSPEED          => FORCECDSPEED,
       ditherOff             => ditherOff,
       showGunCrosshairs     => showGunCrosshairs,
       fpscountOn            => fpscountOn,
