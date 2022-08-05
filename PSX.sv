@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XXXXXXXXX  XXXXXXXXXXX XXX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXX
+//  X XXXXXXXXX  XXXXXXXXXXX XXX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -409,11 +409,12 @@ parameter CONF_STR = {
 	"P2O[64],Pause when OSD open,On,Off;",
 	"P2-;",
 	"P2-,(U) = unsafe -> can crash;",
-	"P2O[21],CD Fast Seek,Off,On(U);",
 	"P2O[58],Turbo(Cheats Off),Off,On(U);",
 	"P2O[72],Pause when CD slow,On,Off(U);",
 	"P2O[15],PAL 60Hz Hack,Off,On(U);",
+	"P2O[21],CD Fast Seek,Off,On(U);",
 	"P2O[77:75],CD Speed,Auto,Forced 1X(U),Forced 2X(U),Hack 4X(U),Hack 6X(U),Hack 8X(U);",
+	"P2O[78],Limit Max CD Speed,Off,On(U);",
 	
 	"h3-;",
 	"h3P3,Debug;",
@@ -955,6 +956,7 @@ psx
    .DMABLOCKATONCE(status[26]),
    .INSTANTSEEK(status[21]),
    .FORCECDSPEED(status[77:75]),
+   .LIMITREADSPEED(status[78]),
    .ditherOff(status[22]),
    .showGunCrosshairs(status[9]),
    .fpscountOn(status[28]),

@@ -14,6 +14,7 @@ entity cd_top is
       
       INSTANTSEEK          : in  std_logic;
       FORCECDSPEED         : in  std_logic_vector(2 downto 0);
+      LIMITREADSPEED       : in  std_logic;
       hasCD                : in  std_logic;
       LIDopen              : in  std_logic;
       fastCD               : in  std_logic;
@@ -1800,8 +1801,10 @@ begin
          
             if (driveBusy = '1') then
                if (driveDelay > 0) then
-                  if (sectorFetchState = SFETCH_IDLE or driveDelay > 127) then -- make sure to stop drive countdown if data isn't ready early enough so commands are still possible
-                     driveDelay <= driveDelay - 1;
+                  if ((LIMITREADSPEED = '0' or CDROM_IRQFLAG = "00000") or driveDelay > 8191) then
+                     if (sectorFetchState = SFETCH_IDLE or driveDelay > 127) then -- make sure to stop drive countdown if data isn't ready early enough so commands are still possible
+                        driveDelay <= driveDelay - 1;
+                     end if;
                   end if;
                elsif (sectorFetchState = SFETCH_IDLE and readOnDisk = '0' and readOnDisk_buffer = '0' and sectorProcessState = SPROC_IDLE and copyState = COPY_IDLE) then
                   handleDrive <= '1';

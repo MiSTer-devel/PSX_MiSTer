@@ -245,6 +245,7 @@ begin
       DMABLOCKATONCE        => '0',
       INSTANTSEEK           => '0',
       FORCECDSPEED          => "000",
+      LIMITREADSPEED        => '0',
       ditherOff             => '0',
       showGunCrosshairs     => '0',
       fpscountOn            => '0',

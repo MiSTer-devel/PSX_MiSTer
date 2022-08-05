@@ -29,6 +29,7 @@ entity psx_top is
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       FORCECDSPEED          : in  std_logic_vector(2 downto 0);
+      LIMITREADSPEED        : in  std_logic;
       ditherOff             : in  std_logic;
       showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
@@ -1288,6 +1289,7 @@ begin
      
       INSTANTSEEK          => INSTANTSEEK,
       FORCECDSPEED         => FORCECDSPEED,
+      LIMITREADSPEED       => LIMITREADSPEED,
       hasCD                => hasCD,
       fastCD               => fastCD,
       testSeek             => testSeek,
