@@ -863,6 +863,10 @@ begin
                GPUSTAT_ReadyRecCmd  <= '1';
             end if;
             
+            if (vramFill_done = '1' or cpu2vram_done = '1' or vram2vram_done = '1') then
+               pipeline_clearCache <= '1';
+            end if;
+            
             if (softReset = '1') then
                proc_idle              <= '1';
                drawMode               <= (others => '0');
