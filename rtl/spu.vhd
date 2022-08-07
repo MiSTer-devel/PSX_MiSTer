@@ -1721,6 +1721,14 @@ begin
                when VOICE_CHECKKEY =>
                   state <= VOICE_END;
                
+                  if (KEYOFF(index) = '1') then
+                     KEYOFF(index) <= '0';
+                     if (voice.adsrphase /= ADSRPHASE_OFF and voice.adsrphase /= ADSR_RELEASE) then
+                        voice.adsrphase <= ADSRPHASE_RELEASE;
+                        voice.adsrTicks <= adsr_ticks(ADSR_RELEASE);
+                     end if;
+                  end if;  
+               
                   if (KEYON(index) = '1') then
                      KEYON(index)            <= '0';
                      ENDX(index)             <= '0';
@@ -1740,14 +1748,6 @@ begin
                      adpcm_ram_address_a     <= to_unsigned(index, 5) & "000";
                      adpcm_ram_data_a        <= (others => (others => '0'));
                      adpcm_ram_wren_a        <= "0111";
-                  end if;   
-                  
-                  if (KEYOFF(index) = '1') then
-                     KEYOFF(index) <= '0';
-                     if (voice.adsrphase /= ADSRPHASE_OFF and voice.adsrphase /= ADSR_RELEASE) then
-                        voice.adsrphase <= ADSRPHASE_RELEASE;
-                        voice.adsrTicks <= adsr_ticks(ADSR_RELEASE);
-                     end if;
                   end if;   
                   
                   -- spu off
