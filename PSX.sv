@@ -1347,19 +1347,6 @@ wire [2:0] video_hResMode;
 wire ce_pix;
 wire [7:0] r,g,b;
 
-//video_mixer #(.LINE_LENGTH(800), .GAMMA(1)) video_mixer
-//(
-//	.*,
-//	.hq2x(scale==1),
-//	.HSync (hs),
-//	.VSync (vs),
-//	.HBlank(hbl),
-//	.VBlank(vbl),
-//	.R(r),
-//	.G(g),
-//	.B(b)
-//);
-
 typedef struct {
 	logic [7:0] red;
 	logic [7:0] green;
@@ -1371,16 +1358,17 @@ typedef struct {
 	logic       interlace;
 } vid_info;
 
-vid_info video;
+vid_info video_aspect;
+vid_info video_gamma;
 
 assign CE_PIXEL = ce_pix;
-assign VGA_R    = video.red;
-assign VGA_G    = video.green;
-assign VGA_B    = video.blue;
-assign VGA_VS   = video.vs;
-assign VGA_HS   = video.hs;
-assign VGA_DE   = ~(video.vb | video.hb);
-assign VGA_F1 = status[14] ? 1'b0 : (video.interlace & ~status[41]);
+assign VGA_R    = video_gamma.red;
+assign VGA_G    = video_gamma.green;
+assign VGA_B    = video_gamma.blue;
+assign VGA_VS   = video_gamma.vs;
+assign VGA_HS   = video_gamma.hs;
+assign VGA_DE   = ~(video_gamma.vb | video_gamma.hb);
+assign VGA_F1 = status[14] ? 1'b0 : (video_aspect.interlace & ~status[41]);
 assign VGA_SL = 0;
 logic [11:0] aspect_x, aspect_y;
 
@@ -1464,13 +1452,13 @@ end
 always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 	logic old_vb;
 	old_vb <= vbl;
-	video.hs <= hs;
-	video.vs <= vs;
-	video.vb <= vbl;
-	video.interlace <= video_interlace;
-	video.red <= (vbl || hbl) ? 8'd0 : r;
-	video.green <= (vbl || hbl) ? 8'd0 : g;
-	video.blue <= (vbl || hbl) ? 8'd0 : b;
+	video_aspect.hs <= hs;
+	video_aspect.vs <= vs;
+	video_aspect.vb <= vbl;
+	video_aspect.interlace <= video_interlace;
+	video_aspect.red <= (vbl || hbl) ? 8'd0 : r;
+	video_aspect.green <= (vbl || hbl) ? 8'd0 : g;
+	video_aspect.blue <= (vbl || hbl) ? 8'd0 : b;
 	{aspect_x, aspect_y} <= video_isPal ? aspect_ratio_lut_pal[v_total] : aspect_ratio_lut_ntsc[v_total];
 
 	VGA_DISABLE <= fast_forward;
@@ -1479,7 +1467,7 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 	if (~old_vb && vbl)
 		vb_pos <= 0;
 
-	if (video.hs && ~hs) begin
+	if (video_aspect.hs && ~hs) begin
 		h_pos <= 0;
 		if (~vbl)
 			v_pos <= v_pos + 1'd1;
@@ -1487,7 +1475,7 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 			vb_pos <= vb_pos + 1'd1;
 	end
 	
-	if (~video.vs && vs) begin
+	if (~video_aspect.vs && vs) begin
 		v_pos <= 0;
 
 		if (v_pos < 128)
@@ -1501,16 +1489,42 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 	end
 	
 	if (vb_pos > (video_isPal ? 161 : 135))
-		video.vb <= 0;
+		video_aspect.vb <= 0;
 
 	if (h_pos == hb_start)
-		video.hb <= 0;
+		video_aspect.hb <= 0;
 	if (h_pos == hb_end)
-		video.hb <= 1;
+		video_aspect.hb <= 1;
 	if (status[62] || (status[54:53] > 0))
-		video.hb <= hbl;
+		video_aspect.hb <= hbl;
 	
 end
+
+assign gamma_bus[21] = 1;
+gamma_corr gamma(
+	.clk_sys(gamma_bus[20]),
+	.clk_vid(CLK_VIDEO),
+	.ce_pix(CE_PIXEL),
+
+	.gamma_en(gamma_bus[19]),
+	.gamma_wr(gamma_bus[18]),
+	.gamma_wr_addr(gamma_bus[17:8]),
+	.gamma_value(gamma_bus[7:0]),
+
+	.HSync(video_aspect.hs),
+	.VSync(video_aspect.vs),
+	.HBlank(video_aspect.hb),
+	.VBlank(video_aspect.vb),
+	.RGB_in({video_aspect.red,video_aspect.green,video_aspect.blue}),
+
+	.HSync_out(video_gamma.hs),
+	.VSync_out(video_gamma.vs),
+	.HBlank_out(video_gamma.hb),
+	.VBlank_out(video_gamma.vb),
+	.RGB_out({video_gamma.red,video_gamma.green,video_gamma.blue})
+);
+
+
 
 ////////////////////////////  CODES  ///////////////////////////////////
 
