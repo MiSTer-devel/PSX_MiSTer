@@ -596,7 +596,7 @@ begin
                   if (unsigned(fifoIn_Dout(31 downto 24)) > 0) then
                      dmaSettings.D_MADR <= dmaSettings.D_MADR + 4;
                      dmaState           <= WAITREAD;           
-                  elsif (fifoIn_Dout(23) = '1' or fifoIn_Dout(23 downto 0) = x"000000" or dmaSettings.D_CHCR(0) = '0') then
+                  elsif (fifoIn_Dout(23) = '1' or dmaSettings.D_CHCR(0) = '0') then
                      dmaState <= STOPPING;
                      autoread <= '0';
                   else

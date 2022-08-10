@@ -18,6 +18,7 @@ entity gpu is
       
       allowunpause         : out std_logic;
       savestate_busy       : in  std_logic;
+      system_paused        : in  std_logic;
       
       ditherOff            : in  std_logic;
       REPRODUCIBLEGPUTIMING: in  std_logic;
@@ -1609,6 +1610,7 @@ begin
                
       allowunpause               => allowunpause,
       savestate_pause            => savestate_busy,
+      system_paused              => system_paused,
                
       videoout_settings          => videoout_settings,
       videoout_reports           => videoout_reports,

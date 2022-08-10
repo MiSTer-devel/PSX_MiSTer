@@ -17,6 +17,7 @@ entity gpu_videoout is
       
       allowunpause               : out std_logic;
       savestate_pause            : in  std_logic;
+      system_paused              : in  std_logic;
             
       videoout_settings          : in  tvideoout_settings;
       videoout_reports           : out tvideoout_reports;
@@ -192,6 +193,7 @@ begin
       reset_1x                => reset,
       softReset_1x            => softReset,
       savestate_pause_1x      => savestate_pause,
+      system_paused_1x        => system_paused,
                
       allowunpause1x          => allowunpause_a,
                

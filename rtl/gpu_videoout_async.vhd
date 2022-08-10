@@ -15,6 +15,7 @@ entity gpu_videoout_async is
       reset_1x                : in  std_logic;
       softReset_1x            : in  std_logic;
       savestate_pause_1x      : in  std_logic;
+      system_paused_1x        : in  std_logic;
       
       allowunpause1x          : out std_logic;
       
@@ -60,6 +61,10 @@ architecture arch of gpu_videoout_async is
    signal savestate_pause_s2   : std_logic;        
    signal savestate_pause_s1   : std_logic;        
    signal savestate_pause      : std_logic;    
+      
+   signal system_paused_s2     : std_logic;        
+   signal system_paused_s1     : std_logic;        
+   signal system_paused        : std_logic;    
    
    -- clkvid -> clk1x
    signal videoout_reports_s2  : tvideoout_reports;
@@ -87,6 +92,7 @@ architecture arch of gpu_videoout_async is
    signal nextHCount_pause : integer range 0 to 4095;
    signal vpos_pause       : integer range 0 to 511;
    signal field_pause      : std_logic := '0'; 
+   signal activeLSBpause   : std_logic := '0'; 
    signal unpauseCnt       : integer range 0 to 3 := 0;
    
    signal htotal           : integer range 3406 to 3413;
@@ -176,7 +182,11 @@ begin
          
          savestate_pause_s2   <= savestate_pause_1x;
          savestate_pause_s1   <= savestate_pause_s2;
-         savestate_pause      <= savestate_pause_s1;   
+         savestate_pause      <= savestate_pause_s1;           
+         
+         system_paused_s2     <= system_paused_1x;
+         system_paused_s1     <= system_paused_s2;
+         system_paused        <= system_paused_s1;   
    
       end if;
    end process;
@@ -228,13 +238,15 @@ begin
    videoout_out.isPal <= videoout_settings.GPUSTAT_PalVideoMode;
 
    process (clkvid)
-      variable mode480i                  : std_logic;
-      variable isVsync                   : std_logic;
-      variable vdispNew                  : integer range 0 to 511;
-      variable vblankFixedNew            : std_logic;
-      variable interlacedDisplayFieldNew : std_logic;
-      variable nextLineCalc              : unsigned(8 downto 0);
-      variable pal60offset               : integer range 0 to 128;
+      variable mode480i                      : std_logic;
+      variable isVsync                       : std_logic;
+      variable vdispNew                      : integer range 0 to 511;
+      variable vblankFixedNew                : std_logic;
+      variable interlacedDisplayFieldNew     : std_logic;
+      variable nextLineCalc                  : unsigned(8 downto 0);
+      variable pal60offset                   : integer range 0 to 128;
+      variable activeLineLSBMuxed            : std_logic;
+      variable interlacedDisplayFieldMuxed   : std_logic;
    begin
       if rising_edge(clkvid) then
       
@@ -297,6 +309,7 @@ begin
                nextHCount_pause <= nextHCount;
                vpos_pause       <= vpos;
                field_pause      <= videoout_reports.interlacedDisplayField;
+               activeLSBpause   <= videoout_reports.activeLineLSB;
             end if;
             
             if (unpauseCnt > 0) then
@@ -439,12 +452,19 @@ begin
                newLineTrigger <= '1';
                
                -- fetching of next line from framebuffer
+               activeLineLSBMuxed          := videoout_reports.activeLineLSB;
+               interlacedDisplayFieldMuxed := videoout_reports.interlacedDisplayField;
+               if (system_paused = '1') then
+                  activeLineLSBMuxed          := field_pause;   
+                  interlacedDisplayFieldMuxed := activeLSBpause;
+               end if;
+               
                vdispNew := vdispNew + 1;
                nextLineCalc := nextLineCalcSaved;
                if (vDisplayStart > 0) then
                   if (vdispNew >= vDisplayStart and vdispNew < vDisplayEnd) then
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
-                        if ((videoout_reports.activeLineLSB xor videoout_settings.vramRange(10)) = '1') then
+                        if ((activeLineLSBMuxed xor videoout_settings.vramRange(10)) = '1') then
                            nextLineCalc := to_unsigned(((vdispNew - vDisplayStart) * 2) + 1, 9);
                         else
                            nextLineCalc := to_unsigned((vdispNew - vDisplayStart) * 2, 9);
@@ -457,13 +477,13 @@ begin
                else  
                   if (vdispNew = vtotal) then
                      if (rotate180 = '1') then
-                        if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_reports.interlacedDisplayField = '1') then
+                        if (videoout_settings.GPUSTAT_VerRes = '1' and interlacedDisplayFieldMuxed = '1') then
                            nextLineCalc := to_unsigned((lineMax - 2), 9);
                         else
                            nextLineCalc := to_unsigned((lineMax - 1), 9);
                         end if;
                      else
-                        if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_reports.interlacedDisplayField = '1') then
+                        if (videoout_settings.GPUSTAT_VerRes = '1' and interlacedDisplayFieldMuxed = '1') then
                            nextLineCalc := to_unsigned(1, 9);
                         else
                            nextLineCalc := to_unsigned(0, 9);
@@ -472,7 +492,7 @@ begin
                      videoout_request.fetch      <= not savestate_pause;
                   elsif (vdispNew >= vDisplayStart and vdispNew < vDisplayEnd) then
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
-                        if ((videoout_reports.activeLineLSB xor videoout_settings.vramRange(10)) = '1') then
+                        if ((activeLineLSBMuxed xor videoout_settings.vramRange(10)) = '1') then
                            nextLineCalc := to_unsigned(((vdispNew - vDisplayStart) * 2) + 1, 9);
                         else
                            nextLineCalc := to_unsigned((vdispNew - vDisplayStart) * 2, 9);

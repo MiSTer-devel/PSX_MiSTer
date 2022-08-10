@@ -1356,6 +1356,7 @@ begin
       
       allowunpause         => allowunpause,
       savestate_busy       => savestate_busy,
+      system_paused        => pausing,
       
       ditherOff            => ditherOff,
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
