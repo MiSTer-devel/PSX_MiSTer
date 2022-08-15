@@ -86,6 +86,11 @@ architecture arch of etb is
    signal ram_refresh         : std_logic;   
    signal ram_idle            : std_logic;   
    
+   signal ram_dmafifo_adr     : std_logic_vector(20 downto 0);
+   signal ram_dmafifo_data    : std_logic_vector(31 downto 0);
+   signal ram_dmafifo_empty   : std_logic;
+   signal ram_dmafifo_read    : std_logic;
+   
    -- ddrram
    signal DDRAM_CLK           : std_logic;
    signal DDRAM_BUSY          : std_logic;
@@ -232,6 +237,7 @@ begin
    (
       clk1x                 => clk33,          
       clk2x                 => clk66, 
+      clk3x                 => clk100, 
       clkvid                => clkvid,
       reset                 => reset,
       -- commands 
@@ -283,6 +289,10 @@ begin
       ram_done              => ram_done,
       ram_idle              => ram_idle,
       ram_reqprocessed      => ram_reqprocessed,
+      ram_dmafifo_adr       => ram_dmafifo_adr, 
+      ram_dmafifo_data      => ram_dmafifo_data,
+      ram_dmafifo_empty     => ram_dmafifo_empty,
+      ram_dmafifo_read      => ram_dmafifo_read,    
       -- vram/ddr3 interface
       DDRAM_BUSY            => DDRAM_BUSY,      
       DDRAM_BURSTCNT        => DDRAM_BURSTCNT,  
@@ -462,27 +472,31 @@ begin
    isdram_model : entity tb.sdram_model3x 
    generic map
    (
-      DOREFRESH     => '0',
+      DOREFRESH     => '1',
       SCRIPTLOADING => '1',
       SLOWWRITE     => '0'
    )
    port map
    (
-      clk          => clk33,
-      clk3x        => clk100,
-      refresh      => ram_refresh,
-      addr(26 downto 23) => "0000",
-      addr(22 downto  0) =>  ram_Adr,
-      req          => ram_ena,
-      ram_128      => ram_128,
-      rnw          => ram_rnw,
-      be           => ram_be,
-      di           => ram_dataWrite,
-      do           => ram_dataRead,
-      do32         => ram_dataRead32,
-      done         => ram_done,
-      reqprocessed => ram_reqprocessed,
-      ram_idle     => ram_idle
+      clk                  => clk33,
+      clk3x                => clk100,
+      refresh              => ram_refresh,
+      addr(26 downto 23)   => "0000",
+      addr(22 downto  0)   =>  ram_Adr,
+      req                  => ram_ena,
+      ram_128              => ram_128,
+      rnw                  => ram_rnw,
+      be                   => ram_be,
+      di                   => ram_dataWrite,
+      do                   => ram_dataRead,
+      do32                 => ram_dataRead32,
+      done                 => ram_done,
+      reqprocessed         => ram_reqprocessed,
+      ram_idle             => ram_idle,
+      ram_dmafifo_adr      => ram_dmafifo_adr, 
+      ram_dmafifo_data     => ram_dmafifo_data,
+      ram_dmafifo_empty    => ram_dmafifo_empty,
+      ram_dmafifo_read     => ram_dmafifo_read  
    );
    
    ispu_ram : entity work.sdram_model3x 
@@ -495,21 +509,24 @@ begin
    )
    port map
    (
-      clk          => clk33,
-      clk3x        => clk100,
-      refresh      => '0',
-      addr(26 downto 19) => "00000000",
-      addr(18 downto  0) =>  spuram_Adr,
-      req          => spuram_ena,
-      ram_128      => '0',
-      rnw          => spuram_rnw,
-      be           => spuram_be,
-      di           => spuram_dataWrite,
-      do           => open,
-      do32         => spuram_dataRead,
-      done         => spuram_done,
-      reqprocessed => open,
-      ram_idle     => open
+      clk                  => clk33,
+      clk3x                => clk100,
+      refresh              => '0',
+      addr(26 downto 19)   => "00000000",
+      addr(18 downto  0)   =>  spuram_Adr,
+      req                  => spuram_ena,
+      ram_128              => '0',
+      rnw                  => spuram_rnw,
+      be                   => spuram_be,
+      di                   => spuram_dataWrite,
+      do                   => open,
+      do32                 => spuram_dataRead,
+      done                 => spuram_done,
+      reqprocessed         => open,
+      ram_idle             => open,
+      ram_dmafifo_adr      => (20 downto 0 => '0'),
+      ram_dmafifo_data     => (31 downto 0 => '0'),
+      ram_dmafifo_empty    => '1'
    );
    
       -- hps emulation

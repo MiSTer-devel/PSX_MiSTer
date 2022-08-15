@@ -137,16 +137,11 @@ GPU    : 90%
 - mask bits not implemented for cpu2vram -> nothing yet found that uses it
 - vram2vram read/modify/write race condition when copying to same line
 
-Memory : 80%
-- sdram controller needs rewrite to support fast banked read
-
 IRQ    : 90%
 - irq_SIO missing because unused        
 
 PAD    : 90%
-
-DMA    : 80%
-- DMA write performance only 32bit/2 cycles, should be 32Bit/1 cycle?
+- full configurable multitap missing
 
 Memctrl: register stubs only
 
@@ -162,5 +157,5 @@ MDEC   : 90%
 - timing slightly too fast (4996/5376)
  
 CD     : 90%
-
-SPU    : 90%
+- accurate CD access model for correct seek times should be added
+- drive and controller logic shozuld be seperated

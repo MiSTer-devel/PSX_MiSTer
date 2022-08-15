@@ -11,6 +11,7 @@ entity psx_mister is
    (
       clk1x                 : in  std_logic;  
       clk2x                 : in  std_logic;  
+      clk3x                 : in  std_logic;  
       clkvid                : in  std_logic;  
       reset                 : in  std_logic;
       isPaused              : out std_logic;
@@ -62,7 +63,11 @@ entity psx_mister is
       ram_128               : out std_logic;
       ram_done              : in  std_logic;  
       ram_idle              : in  std_logic;  
-      ram_reqprocessed      : in  std_logic;   
+      ram_reqprocessed      : in  std_logic;
+      ram_dmafifo_adr       : out std_logic_vector(20 downto 0);
+      ram_dmafifo_data      : out std_logic_vector(31 downto 0);
+      ram_dmafifo_empty     : out std_logic;
+      ram_dmafifo_read      : in  std_logic;    
       -- vram/ddr3 interface
       DDRAM_BUSY            : in  std_logic;                    
       DDRAM_BURSTCNT        : out std_logic_vector(7 downto 0); 
@@ -269,6 +274,7 @@ begin
    (
       clk1x                 => clk1x,          
       clk2x                 => clk2x,          
+      clk3x                 => clk3x,          
       clkvid                => clkvid,          
       reset                 => reset, 
       isPaused              => isPaused, 
@@ -320,7 +326,11 @@ begin
       ram_128               => ram_128,       
       ram_done              => ram_done,    
       ram_idle              => ram_idle,    
-      ram_reqprocessed      => ram_reqprocessed,     
+      ram_reqprocessed      => ram_reqprocessed,   
+      ram_dmafifo_adr       => ram_dmafifo_adr, 
+      ram_dmafifo_data      => ram_dmafifo_data,
+      ram_dmafifo_empty     => ram_dmafifo_empty,
+      ram_dmafifo_read      => ram_dmafifo_read,          
       -- vram interface
       ddr3_BUSY             => DDRAM_BUSY,      
       ddr3_DOUT             => DDRAM_DOUT,      

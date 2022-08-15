@@ -65,7 +65,12 @@ module sdram
 	input              ch3_req,     // request
 	input              ch3_rnw,     // 1 - read, 0 - write
 	input      [3:0]   ch3_be,
-	output reg         ch3_ready
+	output reg         ch3_ready,
+
+	input      [26:0]  dmafifo_adr,   
+	input      [31:0]  dmafifo_data, 
+	input              dmafifo_empty, 
+	output reg         dmafifo_read
 );
 
 assign SDRAM_nCS  = chip;
@@ -126,6 +131,8 @@ reg clk3xIndex      = 0;
 reg ram_idleNext    = 0;
 
 assign ram_idle = ram_idleNext && !ch3_req;
+
+reg [10:0] lastbank;
 
 // ch3 buffered for timing closure
 reg [26:0]  ch3buf_addr;
@@ -197,6 +204,8 @@ always @(posedge clk) begin
 	if (ch3_ready) ch3_ready_ramclock <= 0;
 	
 	if (ch1_reqprocessed) ch1_reqprocessed_ramclock <= 0;
+
+	dmafifo_read <= 0;
 
 	refreshForce_1 <= refreshForce;
 	refreshForce_req <= refreshForce_req | (refreshForce & ~refreshForce_1);
@@ -306,7 +315,18 @@ always @(posedge clk) begin
                   refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
                else
                   refresh_count <= 14'd0;
-   
+               
+            end else if(~dmafifo_empty) begin
+               {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, 1'b0, dmafifo_adr[25:1]};
+               chip         <= dmafifo_adr[26];
+               saved_data   <= dmafifo_data;
+               saved_wr     <= 1'b1;
+               saved_be     <= 4'b1111;
+               ch           <= 1;
+               command      <= CMD_ACTIVE;
+               state        <= STATE_WAIT;
+               dmafifo_read <= 1'b1;
+               lastbank     <= dmafifo_adr[20:10];
             end else if(ch1_req | ch1_rq) begin
                {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, 1'b1, ch1_addr[25:1]};
                chip       <= ch1_addr[26];
@@ -367,12 +387,19 @@ always @(posedge clk) begin
    
          STATE_RW2: begin
             if(ch == 1) begin
-               state                <= STATE_IDLE_2;
-               SDRAM_A[10]          <= 1;
                SDRAM_A[0]           <= 1;
                command              <= CMD_WRITE;
                SDRAM_DQ             <= saved_data[31:16];
                SDRAM_A[12:11]       <= ~saved_be[3:2];
+               if(~dmafifo_empty && (lastbank == dmafifo_adr[20:10])) begin
+                  cas_addr[8:0]     <= dmafifo_adr[9:1];
+                  saved_data        <= dmafifo_data;
+                  state             <= STATE_RW1;
+                  dmafifo_read      <= 1'b1;
+               end else begin
+                  state             <= STATE_IDLE_2;
+                  SDRAM_A[10]       <= 1;
+               end
             end
             else begin
                state                <= STATE_IDLE_2;

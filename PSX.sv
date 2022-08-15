@@ -942,6 +942,7 @@ psx
 (
    .clk1x(clk_1x),          
    .clk2x(clk_2x),
+   .clk3x(clk_3x),
    .clkvid(clk_vid),
    .reset(reset),
    .isPaused(isPaused),
@@ -994,6 +995,10 @@ psx
    .ram_done(sdram_ack),
    .ram_idle(sdram_idle),
    .ram_reqprocessed(sdram_reqprocessed),
+   .ram_dmafifo_adr  (sdram_dmafifo_adr),  
+   .ram_dmafifo_data (sdram_dmafifo_data), 
+   .ram_dmafifo_empty(sdram_dmafifo_empty),
+   .ram_dmafifo_read (sdram_dmafifo_read),
    // vram/ddr3
    .DDRAM_BUSY      (DDRAM_BUSY      ),
    .DDRAM_BURSTCNT  (DDRAM_BURSTCNT  ),
@@ -1204,6 +1209,12 @@ wire         sdram_writeack2;
 wire         sdram_rnw;
 wire         sdram_128;
 
+wire  [20:0] sdram_dmafifo_adr;  
+wire  [31:0] sdram_dmafifo_data; 
+wire         sdram_dmafifo_empty;
+wire         sdram_dmafifo_read; 
+
+
 wire [20:0] cheats_addr;
 wire cheats_rnw;
 wire [3:0] cheats_be;
@@ -1260,7 +1271,12 @@ sdram sdram
 	.ch3_req  ((exe_download | bios_download) ? ramdownload_wr     : cheats_ena),
 	.ch3_rnw  (cheats_rnw),
 	.ch3_be   ((exe_download | bios_download) ? 4'b1111            : cheats_be),
-	.ch3_ready(sdramCh3_done)
+	.ch3_ready(sdramCh3_done),
+
+	.dmafifo_adr  (sdram_dmafifo_adr),
+	.dmafifo_data (sdram_dmafifo_data),
+	.dmafifo_empty(sdram_dmafifo_empty),
+	.dmafifo_read (sdram_dmafifo_read)
 );
 
 wire [31:0] spuram_dataWrite;
@@ -1320,7 +1336,12 @@ sdram sdram2
 	.ch3_dout(),
 	.ch3_req(1'b0),
 	.ch3_rnw(1'b1),
-	.ch3_ready()
+	.ch3_ready(),
+
+	.dmafifo_adr  (0),
+	.dmafifo_data (0),
+	.dmafifo_empty(1'b1),
+	.dmafifo_read ()
 );
 
 `else

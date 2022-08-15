@@ -8,6 +8,8 @@ entity dma is
    port 
    (
       clk1x                : in  std_logic;
+      clk3x                : in  std_logic;
+      clk3xIndex           : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
@@ -34,6 +36,11 @@ entity dma is
       ram_128              : out std_logic := '0';
       ram_done             : in  std_logic;
       ram_reqprocessed     : in  std_logic;
+      
+      ram_dmafifo_adr      : out std_logic_vector(20 downto 0);
+      ram_dmafifo_data     : out std_logic_vector(31 downto 0);
+      ram_dmafifo_empty    : out std_logic;
+      ram_dmafifo_read     : in  std_logic;
       
       gpu_dmaRequest       : in  std_logic;
       DMA_GPU_waiting      : out std_logic := '0';
@@ -161,15 +168,12 @@ architecture arch of dma is
    signal fifoOut_reset       : std_logic := '0';
    signal fifoOut_Din         : std_logic_vector(50 downto 0);
    signal fifoOut_Wr          : std_logic; 
+   signal fifoOut_Wr_3x       : std_logic; 
    signal fifoOut_Full        : std_logic;
+   signal fifoOut_NearFull_3x : std_logic;
    signal fifoOut_NearFull    : std_logic;
    signal fifoOut_Dout        : std_logic_vector(50 downto 0);
-   signal fifoOut_Rd          : std_logic;
    signal fifoOut_Empty       : std_logic;
-   signal fifoOut_Done        : std_logic;
-      
-   signal ramwrite_pending    : std_logic;
-   signal fifoOut_Wr_1        : std_logic;
       
    -- REPRODUCIBLEDMATIMING   
    signal REP_counter         : integer;
@@ -273,6 +277,8 @@ begin
          
          requestOnFlyNew := requestOnFly;
       
+         fifoOut_NearFull <= fifoOut_NearFull_3x;
+      
          if (reset = '1') then
          
             dmaState <= OFF;
@@ -305,11 +311,9 @@ begin
             fifoIn_reset   <= '1';
             
             fifoOut_reset  <= '1';
-            fifoOut_Done   <= '1';
             
             dataCount      <= 0;
             requestOnFly   <= 0;
-            ramwrite_pending <= '0';
          
             irqOut         <= '0';
 
@@ -748,7 +752,7 @@ begin
                   end if;
                
                when STOPPING =>
-                  if (fifoOut_Done = '1' and fifoOut_Wr = '0' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
+                  if (fifoOut_Empty = '1' and fifoOut_Wr = '0' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
                      if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
@@ -766,7 +770,7 @@ begin
                   end if;
                
                when PAUSING =>
-                  if (fifoOut_Done = '1' and fifoOut_Wr = '0' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
+                  if (fifoOut_Empty = '1' and fifoOut_Wr = '0' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
                      if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
@@ -864,26 +868,6 @@ begin
             
             requestOnFly <= requestOnFlyNew;
             
-            -- fifo Out
-            if (ram_done = '1') then
-               ramwrite_pending <= '0';
-            end if;
-            
-            if (fifoOut_Rd = '1') then
-               ram_rnw          <= '0';
-               ram_ena          <= '1';
-               ram_Adr          <= "00" & fifoOut_Dout(50 downto 32) & "00";
-               ram_dataWrite    <= fifoOut_Dout(31 downto 0);
-               ramwrite_pending <= '1';
-            end if; 
-            
-            fifoOut_Wr_1 <= fifoOut_Wr;
-            if (fifoOut_Wr = '1' or fifoOut_Wr_1 = '1' ) then
-               fifoOut_Done <= '0';
-            elsif (ram_done = '1' and fifoOut_Empty = '1' and fifoOut_Rd = '0' and ram_ena = '0') then
-               fifoOut_Done <= '1';
-            end if;
-            
          end if; -- ce
          
       end if;
@@ -920,28 +904,32 @@ begin
       Empty    => fifoIn_Empty   
    );
    
-   fifoOut_Rd <= ce when (fifoOut_Empty = '0' and (ramwrite_pending = '0' or ram_done = '1')) else '0';
-   
    DMAfifoOut: entity mem.SyncFifoFallThrough
    generic map
    (
-      SIZE             => 256,
+      SIZE             => 64,
       DATAWIDTH        => 51,
-      NEARFULLDISTANCE => 250
+      NEARFULLDISTANCE => 56
    )
    port map
    ( 
-      clk      => clk1x,
+      clk      => clk3x,
       reset    => fifoOut_reset,  
       Din      => fifoOut_Din,     
-      Wr       => fifoOut_Wr,      
+      Wr       => fifoOut_Wr_3x,      
       Full     => fifoOut_Full,    
-      NearFull => fifoOut_NearFull,
+      NearFull => fifoOut_NearFull_3x,
       Dout     => fifoOut_Dout,    
-      Rd       => fifoOut_Rd,      
+      Rd       => ram_dmafifo_read,      
       Empty    => fifoOut_Empty   
    );
-
+   
+   fifoOut_Wr_3x <= clk3xIndex and fifoOut_Wr;
+   
+   ram_dmafifo_adr   <= fifoOut_Dout(50 downto 32) & "00";
+   ram_dmafifo_data  <= fifoOut_Dout(31 downto 0);
+   ram_dmafifo_empty <= fifoOut_Empty;
+   
 --##############################################################
 --############################### savestates
 --##############################################################

@@ -15,6 +15,7 @@ entity psx_top is
    (
       clk1x                 : in  std_logic;  
       clk2x                 : in  std_logic;   
+      clk3x                 : in  std_logic;   
       clkvid                : in  std_logic;   
       reset                 : in  std_logic; 
       isPaused              : out std_logic;
@@ -67,6 +68,10 @@ entity psx_top is
       ram_done              : in  std_logic;
       ram_idle              : in  std_logic;
       ram_reqprocessed      : in  std_logic;
+      ram_dmafifo_adr       : out std_logic_vector(20 downto 0);
+      ram_dmafifo_data      : out std_logic_vector(31 downto 0);
+      ram_dmafifo_empty     : out std_logic;
+      ram_dmafifo_read      : in  std_logic;
       -- vram/savestate interface
       ddr3_BUSY             : in  std_logic;                    
       ddr3_DOUT             : in  std_logic_vector(63 downto 0);
@@ -216,6 +221,10 @@ architecture arch of psx_top is
    signal clk1xToggle            : std_logic := '0';
    signal clk1xToggle2X          : std_logic := '0';
    signal clk2xIndex             : std_logic := '0';
+
+   signal clk1xToggle3X          : std_logic := '0';
+   signal clk1xToggle3X_1        : std_logic := '0';
+   signal clk3xIndex             : std_logic := '0';
    
    signal Pause_Idle             : std_logic;
    signal pausing                : std_logic := '0';
@@ -651,6 +660,18 @@ begin
          clk2xIndex    <= '0';
          if (clk1xToggle2x = clk1xToggle) then
             clk2xIndex <= '1';
+         end if;
+      end if;
+   end process;
+   
+   process (clk3x)
+   begin
+      if rising_edge(clk3x) then
+         clk1xToggle3x   <= clk1xToggle;
+         clk1xToggle3X_1 <= clk1xToggle3X;
+         clk3xIndex    <= '0';
+         if (clk1xToggle3X_1 = clk1xToggle) then
+            clk3xIndex <= '1';
          end if;
       end if;
    end process;
@@ -1151,6 +1172,8 @@ begin
    port map
    (
       clk1x                => clk1x,
+      clk3x                => clk3x,
+      clk3xIndex           => clk3xIndex,
       ce                   => ce,   
       reset                => reset_intern,
       
@@ -1177,6 +1200,11 @@ begin
       ram_128              => ram_dma_128,      
       ram_done             => ram_dma_done, 
       ram_reqprocessed     => ram_reqprocessed,
+      
+      ram_dmafifo_adr      => ram_dmafifo_adr, 
+      ram_dmafifo_data     => ram_dmafifo_data,
+      ram_dmafifo_empty    => ram_dmafifo_empty,
+      ram_dmafifo_read     => ram_dmafifo_read,     
       
       gpu_dmaRequest       => gpu_dmaRequest,  
       DMA_GPU_waiting      => DMA_GPU_waiting,
