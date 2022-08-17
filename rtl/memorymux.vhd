@@ -49,10 +49,9 @@ entity memorymux is
       mem_dataCache        : out std_logic_vector(127 downto 0); 
       mem_done             : out std_logic;
       
-      dma_Adr              : in  std_logic_vector(20 downto 0);
-      dma_data             : in  std_logic_vector(31 downto 0);
-      dma_rnw              : in  std_logic;
-      dma_ena              : in  std_logic;
+      dma_cache_Adr        : in  std_logic_vector(20 downto 0);
+      dma_cache_data       : in  std_logic_vector(31 downto 0);
+      dma_cache_write      : in  std_logic;
       
       --bus_exp1_addr        : out unsigned(22 downto 0); 
       --bus_exp1_dataWrite   : out std_logic_vector(31 downto 0);
@@ -889,17 +888,17 @@ begin
    
    dcache_write_enable <= DATACACHEON when (ram_done = '1' and maskram = '0' and readram = '1') else 
                           DATACACHEON when (ce = '1' and mem_request = '1' and mem_isData = '1' and mem_rnw = '0' and mem_addressData(28 downto 0) < 16#800000#) else 
-                          DATACACHEON when (dma_ena = '1' and dma_rnw = '0') else
+                          DATACACHEON when (dma_cache_write = '1') else
                           '0';
                           
    dcache_write_clear  <=  '1' when (ce = '1' and mem_request = '1' and mem_isData = '1' and mem_rnw = '0' and mem_writeMask /= "1111") else '0';
                           
-   dcache_write_addr   <= ram_Adr(20 downto 2) when (readram = '1') else
-                          dma_Adr(20 downto 2) when (dma_ena = '1') else
+   dcache_write_addr   <= ram_Adr(20 downto 2)       when (readram = '1') else
+                          dma_cache_Adr(20 downto 2) when (dma_cache_write = '1') else
                           std_logic_vector(mem_addressData(20 downto 2));
 
    dcache_write_data   <= ram_dataRead32 when (readram = '1') else
-                          dma_data       when (dma_ena = '1') else
+                          dma_cache_data when (dma_cache_write = '1') else
                           mem_dataWrite;
 
 

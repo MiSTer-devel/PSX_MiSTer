@@ -444,6 +444,10 @@ architecture arch of psx_top is
    signal ram_dma_128            : std_logic;
    signal ram_dma_done           : std_logic;
    
+   signal dma_cache_Adr          : std_logic_vector(20 downto 0);
+   signal dma_cache_data         : std_logic_vector(31 downto 0);
+   signal dma_cache_write        : std_logic;
+   
    signal gpu_dmaRequest         : std_logic;
    signal DMA_GPU_waiting        : std_logic;
    signal DMA_GPU_writeEna       : std_logic;
@@ -1204,7 +1208,11 @@ begin
       ram_dmafifo_adr      => ram_dmafifo_adr, 
       ram_dmafifo_data     => ram_dmafifo_data,
       ram_dmafifo_empty    => ram_dmafifo_empty,
-      ram_dmafifo_read     => ram_dmafifo_read,     
+      ram_dmafifo_read     => ram_dmafifo_read, 
+
+      dma_cache_Adr        => dma_cache_Adr,  
+      dma_cache_data       => dma_cache_data, 
+      dma_cache_write      => dma_cache_write,      
       
       gpu_dmaRequest       => gpu_dmaRequest,  
       DMA_GPU_waiting      => DMA_GPU_waiting,
@@ -1667,10 +1675,9 @@ begin
       mem_dataCache        => mem_dataCache, 
       mem_done             => mem_done,
       
-      dma_Adr              => ram_dma_Adr(20 downto 0),
-      dma_data             => ram_dma_dataWrite,
-      dma_rnw              => ram_dma_rnw,
-      dma_ena              => ram_dma_ena,
+      dma_cache_Adr        => dma_cache_Adr,  
+      dma_cache_data       => dma_cache_data, 
+      dma_cache_write      => dma_cache_write,     
 
       --bus_exp1_addr        => bus_exp1_addr,   
       --bus_exp1_dataWrite   => bus_exp1_dataWrite,

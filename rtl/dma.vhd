@@ -42,6 +42,10 @@ entity dma is
       ram_dmafifo_empty    : out std_logic;
       ram_dmafifo_read     : in  std_logic;
       
+      dma_cache_Adr        : out std_logic_vector(20 downto 0);
+      dma_cache_data       : out std_logic_vector(31 downto 0);
+      dma_cache_write      : out std_logic;
+      
       gpu_dmaRequest       : in  std_logic;
       DMA_GPU_waiting      : out std_logic := '0';
       DMA_GPU_writeEna     : out std_logic := '0';
@@ -929,6 +933,10 @@ begin
    ram_dmafifo_adr   <= fifoOut_Dout(50 downto 32) & "00";
    ram_dmafifo_data  <= fifoOut_Dout(31 downto 0);
    ram_dmafifo_empty <= fifoOut_Empty;
+   
+   dma_cache_Adr   <= fifoOut_Din(50 downto 32) & "00";
+   dma_cache_data  <= fifoOut_Din(31 downto 0);
+   dma_cache_write <= fifoOut_Wr;
    
 --##############################################################
 --############################### savestates
