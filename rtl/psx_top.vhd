@@ -436,7 +436,6 @@ architecture arch of psx_top is
    signal dmaRequest             : std_logic;
    signal canDMA                 : std_logic;
    
-   signal ram_dma_dataWrite      : std_logic_vector(31 downto 0);
    signal ram_dma_Adr            : std_logic_vector(22 downto 0);
    signal ram_dma_be             : std_logic_vector(3 downto 0);
    signal ram_dma_rnw            : std_logic;
@@ -1195,7 +1194,6 @@ begin
       irqOut               => irq_DMA,
       
       ram_refresh          => ram_refresh,
-      ram_dataWrite        => ram_dma_dataWrite,
       ram_dataRead         => ram_dataRead, 
       ram_Adr              => ram_dma_Adr,      
       ram_be               => ram_dma_be,       
@@ -1252,7 +1250,7 @@ begin
       SS_idle              => SS_idle_dma
    );
    
-   ram_dataWrite <= ram_dma_dataWrite when (cpuPaused = '1') else ram_cpu_dataWrite;
+   ram_dataWrite <= ram_cpu_dataWrite;
    ram_Adr       <= ram_dma_Adr       when (cpuPaused = '1') else ram_cpu_Adr;      
    ram_be        <= ram_dma_be        when (cpuPaused = '1') else ram_cpu_be;       
    ram_rnw       <= ram_dma_rnw       when (cpuPaused = '1') else ram_cpu_rnw;      

@@ -27,7 +27,6 @@ entity dma is
       irqOut               : out std_logic := '0';
       
       ram_refresh          : out std_logic;
-      ram_dataWrite        : out std_logic_vector(31 downto 0) := (others => '0');
       ram_dataRead         : in  std_logic_vector(127 downto 0);
       ram_Adr              : out std_logic_vector(22 downto 0) := (others => '0');
       ram_be               : out std_logic_vector(3 downto 0) := (others => '0');
@@ -887,7 +886,6 @@ begin
                 '1' when (fifoIn_Empty = '0' and toDevice = '1' and dmaState = working and (activeChannel /= 4 or fifoIn_Valid = '0')) else 
                 '0';
 
-   
    iDMAfifoIn: entity mem.Syncfifo
    generic map
    (

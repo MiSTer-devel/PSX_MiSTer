@@ -200,6 +200,7 @@ architecture arch of memorymux is
       
    signal addressBIOS_buf     : unsigned(18 downto 0);
       
+   signal buswrite_last       : std_logic := '0';
    signal bus_stall           : std_logic;
    signal dataFromBusses      : std_logic_vector(31 downto 0);
    signal rotate32            : std_logic;
@@ -244,7 +245,7 @@ architecture arch of memorymux is
    
 begin 
 
-   isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0' and maskram = '0' and dcache_hit_next = '0') else '0';
+   isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0' and maskram = '0' and dcache_hit_next = '0' and buswrite_last = '0') else '0';
 
    process (state, mem_request, mem_rnw, mem_isData, mem_addressData, mem_reqsize, mem_writeMask, mem_dataWrite, ce)
       variable address : unsigned(28 downto 0);
@@ -442,6 +443,8 @@ begin
          
          dcache_hit_next      <= '0';
          
+         buswrite_last        <= '0';
+         
          if (loadExe = '1') then
             loadExe_latched <= '1';
          end if;
@@ -591,6 +594,11 @@ begin
                               if (bus_irq_read   = '1') then rotate32 <= '1'; end if;
                               if (bus_gpu_read   = '1') then rotate32 <= '1'; end if;
                               if (bus_mdec_read  = '1') then rotate32 <= '1'; end if;
+                              if (bus_stall = '0' and mem_rnw = '0') then -- write is faster
+                                 state          <= IDLE;
+                                 mem_done_buf   <= '1';
+                                 buswrite_last  <= '1';
+                              end if;
                            end if;
                         end if;
             

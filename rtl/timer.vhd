@@ -47,15 +47,19 @@ architecture arch of timer is
       T_MODE      : unsigned(15 downto 0);
       T_TARGET    : unsigned(15 downto 0);
       irqDone     : std_logic;
+      setNext     : std_logic;
+      blockNext   : std_logic;
    end record;
   
    type ttimerArray is array (0 to 2) of timerRecord;
-   signal timerArray : ttimerArray := (others => ((others => '0'), (others => '0'), (others => '0'), '0'));
+   signal timerArray : ttimerArray := (others => ((others => '0'), (others => '0'), (others => '0'), '0', '0', '0'));
   
    signal timer2_subcount : unsigned(2 downto 0);
    signal hblank_1        : std_logic;
    signal vblank_1        : std_logic;
    signal dotclock_1      : std_logic;
+   
+   signal setValue        : unsigned(15 downto 0);
    
    -- savestates
    type t_ssarray is array(0 to 15) of std_logic_vector(31 downto 0);
@@ -91,7 +95,6 @@ begin
    process (clk1x)
       variable channel  : integer range 0 to 3;
       variable newTick  : std_logic_vector(2 downto 0);
-      variable newValue : unsigned(15 downto 0);
       variable newIRQ   : std_logic;
    begin
       if rising_edge(clk1x) then
@@ -114,6 +117,11 @@ begin
             timerArray(2).T_MODE    <= unsigned(ss_in(5)(15 downto 0)); -- x"0400";
             timerArray(2).T_TARGET  <= unsigned(ss_in(8)(15 downto 0));
             timerArray(2).irqDone   <= ss_in(9)(13);
+         
+            for i in 0 to 2 loop
+               timerArray(i).setNext   <= '0';
+               timerArray(i).blockNext <= '0';
+            end loop;
          
             timer2_subcount <= unsigned(ss_in(9)(2 downto 0));
             hblank_1        <= hblank;
@@ -186,23 +194,33 @@ begin
             
             -- apply ticks
             for i in 0 to 2 loop
-               if (newTick(i) = '1') then
-                  newValue := timerArray(i).T_CURRENT + 1;
+
+               timerArray(i).setNext   <= '0';
+               timerArray(i).blockNext <= '0';
+               
+               if (timerArray(i).setNext = '1') then -- reset from bus write
+               
+                  timerArray(i).T_CURRENT <= setValue;
+                  timerArray(i).blockNext <= '1';
+                  
+               elsif (newTick(i) = '1' and timerArray(i).blockNext = '0') then
+               
+                  timerArray(i).T_CURRENT <= timerArray(i).T_CURRENT + 1;
                   newIRQ   := '0';
                   
-                  if ((newValue = timerArray(i).T_TARGET) or (newValue > timerArray(i).T_TARGET and timerArray(i).T_TARGET = 0)) then
+                  if (timerArray(i).T_CURRENT = timerArray(i).T_TARGET) then
                      timerArray(i).T_MODE(11) <= '1';
                      if (timerArray(i).T_MODE(4) = '1') then
                         newIRQ := '1';
                      end if;
                      if (timerArray(i).T_MODE(3) = '1') then
-                        newValue := (others => '0');
+                        timerArray(i).T_CURRENT <= (others => '0');
+                        timerArray(i).blockNext <= '1';
                      end if;
                   end if;  
 
-                  if (timerArray(i).T_CURRENT = x"FFFE") then -- todo: wraparound at 0xFFFF or 0x0000 ?
+                  if (timerArray(i).T_CURRENT = x"FFFF") then
                      timerArray(i).T_MODE(12) <= '1';
-                     newValue := (others => '0');
                      if (timerArray(i).T_MODE(5) = '1') then
                         newIRQ := '1';
                      end if;
@@ -215,8 +233,7 @@ begin
                         timerArray(i).T_MODE(10) <= '0';
                      end if;
                   end if;
-                  
-                  timerArray(i).T_CURRENT <= newValue;
+
                end if;
             end loop;
             
@@ -246,7 +263,6 @@ begin
                   end if;
                end if;
             end if;
-                  
 
             -- bus interface
             bus_dataRead <= (others => '0');
@@ -272,12 +288,15 @@ begin
             if (bus_write = '1') then
                if (channel < 3) then
                   case (bus_addr(3 downto 0)) is
-                     when x"0" => timerArray(channel).T_CURRENT <= unsigned(bus_dataWrite(15 downto 0));
+                     when x"0" => 
+                        timerArray(channel).setNext <= '1';
+                        setValue                    <= unsigned(bus_dataWrite(15 downto 0));
                      when x"4" => 
                         timerArray(channel).T_MODE( 9 downto  0) <= unsigned(bus_dataWrite( 9 downto  0));
                         timerArray(channel).T_MODE(15 downto 13) <= unsigned(bus_dataWrite(15 downto 13));
-                        timerArray(channel).T_CURRENT            <= (others => '0');
                         timerArray(channel).irqDone              <= '0';
+                        timerArray(channel).setNext              <= '1';
+                        setValue                                 <= (others => '0');
                      when x"8" => timerArray(channel).T_TARGET <= unsigned(bus_dataWrite(15 downto 0));
                      when others => null;
                   end case;
