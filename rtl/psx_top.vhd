@@ -390,6 +390,7 @@ architecture arch of psx_top is
    signal mem_dataRead           : std_logic_vector(31 downto 0); 
    signal mem_dataCache          : std_logic_vector(127 downto 0); 
    signal mem_done               : std_logic;
+   signal mem_fifofull           : std_logic;
    
    signal ram_next_dma           : std_logic;
    signal ram_next_cpu           : std_logic;
@@ -1660,18 +1661,19 @@ begin
       ram_done             => ram_cpu_done,     
       ram_idle             => ram_idle,     
       
-      mem_request          => mem_request,  
-      mem_rnw              => mem_rnw,      
-      mem_isData           => mem_isData,      
-      mem_isCache          => mem_isCache,      
-      mem_addressInstr     => mem_addressInstr,  
-      mem_addressData      => mem_addressData,  
-      mem_reqsize          => mem_reqsize,  
-      mem_writeMask        => mem_writeMask,
-      mem_dataWrite        => mem_dataWrite,
+      mem_in_request       => mem_request,  
+      mem_in_rnw           => mem_rnw,      
+      mem_in_isData        => mem_isData,      
+      mem_in_isCache       => mem_isCache,      
+      mem_in_addressInstr  => mem_addressInstr,  
+      mem_in_addressData   => mem_addressData,  
+      mem_in_reqsize       => mem_reqsize,  
+      mem_in_writeMask     => mem_writeMask,
+      mem_in_dataWrite     => mem_dataWrite,
       mem_dataRead         => mem_dataRead, 
       mem_dataCache        => mem_dataCache, 
       mem_done             => mem_done,
+      mem_fifofull         => mem_fifofull,
       
       dma_cache_Adr        => dma_cache_Adr,  
       dma_cache_data       => dma_cache_data, 
@@ -1799,6 +1801,7 @@ begin
       mem_dataRead      => mem_dataRead, 
       mem_dataCache     => mem_dataCache, 
       mem_done          => mem_done,
+      mem_fifofull      => mem_fifofull,
       
       stallNext         => stallNext,
       

@@ -34,6 +34,7 @@ entity cpu is
       mem_dataRead          : in  std_logic_vector(31 downto 0); 
       mem_dataCache         : in  std_logic_vector(127 downto 0);
       mem_done              : in  std_logic;
+      mem_fifofull          : in  std_logic;
       
       stallNext             : out std_logic;
       
@@ -617,7 +618,7 @@ begin
    mem1_address    <= FetchAddr;
 
    process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, branch, PCbranch, mem4_request, mem_done, mem_dataRead, memoryMuxStage, PC, fetchReady, stall1, exceptionNew, opcode0, mem_dataCache, reset, FetchAddr, 
-            tagValid, tag_q_b, blockirqCnt, FetchLastAddr)
+            tagValid, tag_q_b, blockirqCnt, FetchLastAddr, stallNew4, stall4)
       variable request : std_logic;
    begin
       request         := '0';
@@ -651,7 +652,7 @@ begin
             blockirqNext    <= '1';
             blockirqCntNext <= 10;     
             exceptionNew5   <= '1';
-         elsif (mem_done = '1') then  
+         elsif (mem_done = '1' or (stall = "00001" and memoryMuxStage = 4)) then
             stallNew1       <= '0';
          end if;
          
@@ -677,8 +678,11 @@ begin
             
             fetchReadyNext <= '0';
             
-            if (mem4_request = '0') then
-               request := '1';
+            if (mem4_request = '0' or 
+               (stallNew4 = '0' and
+               (to_integer(unsigned(FetchAddr(31 downto 29))) = 0 or to_integer(unsigned(FetchAddr(31 downto 29))) = 4) and  -- cache hit
+               unsigned(tag_q_b) = FetchAddr(31 downto 12) and tagValid(to_integer(FetchAddr(11 downto 4))) = '1')) then
+                  request := '1';
             else
                stallNew1 <= '1';
             end if;
@@ -724,7 +728,7 @@ begin
             
          end if;
          
-         if (mem_done = '1' and memoryMuxStage = 4 and fetchReady = '0' and exception(4) = '0') then
+         if ((mem_done = '1' or stall = "00001") and memoryMuxStage = 4 and fetchReady = '0' and exception(4) = '0') then
             request := '1';
          end if;
       
@@ -1947,7 +1951,7 @@ begin
    scratchpad_dataread <= unsigned(scratchpad_q_b);
    
    process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask, 
-            SS_wren_SCP, SS_rden_SCP,
+            SS_wren_SCP, SS_rden_SCP, mem_fifofull,
 	         executeCOP0WriteEnable, executeCOP0WriteDestination, executeCOP0WriteValue)
       variable skipmem : std_logic;
    begin
@@ -2000,7 +2004,7 @@ begin
                mem4_address   <= executeMemWriteAddr;
                mem4_rnw       <= '0';
                mem4_dataWrite <= std_logic_vector(executeMemWriteData);
-               stallNew4      <= '1';
+               stallNew4      <= mem_fifofull;
             end if;
          
          end if;
@@ -2224,6 +2228,10 @@ begin
                   if (writebackMemOPisRead = '1') then
                      dataReadEna := '1';
                   end if;
+               end if;
+               
+               if (mem_fifofull = '0' and writebackMemOPisRead = '0') then
+                  stall4 <= '0';
                end if;
                
             end if;

@@ -2,6 +2,8 @@ library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all; 
 
+library mem;
+
 entity memorymux is
    generic
    (
@@ -36,18 +38,19 @@ entity memorymux is
       ram_done             : in  std_logic;
       ram_idle             : in  std_logic;
       
-      mem_request          : in  std_logic;
-      mem_rnw              : in  std_logic; 
-      mem_isData           : in  std_logic; 
-      mem_isCache          : in  std_logic; 
-      mem_addressInstr     : in  unsigned(31 downto 0); 
-      mem_addressData      : in  unsigned(31 downto 0); 
-      mem_reqsize          : in  unsigned(1 downto 0); 
-      mem_writeMask        : in  std_logic_vector(3 downto 0); 
-      mem_dataWrite        : in  std_logic_vector(31 downto 0); 
+      mem_in_request       : in  std_logic;
+      mem_in_rnw           : in  std_logic; 
+      mem_in_isData        : in  std_logic; 
+      mem_in_isCache       : in  std_logic; 
+      mem_in_addressInstr  : in  unsigned(31 downto 0); 
+      mem_in_addressData   : in  unsigned(31 downto 0); 
+      mem_in_reqsize       : in  unsigned(1 downto 0); 
+      mem_in_writeMask     : in  std_logic_vector(3 downto 0); 
+      mem_in_dataWrite     : in  std_logic_vector(31 downto 0); 
       mem_dataRead         : out std_logic_vector(31 downto 0); 
       mem_dataCache        : out std_logic_vector(127 downto 0); 
       mem_done             : out std_logic;
+      mem_fifofull         : out std_logic;
       
       dma_cache_Adr        : in  std_logic_vector(20 downto 0);
       dma_cache_data       : in  std_logic_vector(31 downto 0);
@@ -158,7 +161,8 @@ architecture arch of memorymux is
       --ERRORRAM,
       READBIOS,
       READBIOSCACHE,
-      BUSACTION,
+      BUSWRITE,
+      BUSREAD,
       CD_WRITE,
       CD_READ_WAIT,
       CD_READ,      
@@ -175,91 +179,125 @@ architecture arch of memorymux is
       EXECOPYREAD,
       EXECOPYWRITE
    );
-   signal state               : tState := IDLE;
+   signal state                  : tState := IDLE;
       
-   signal byteStep            : unsigned(1 downto 0);
-   signal waitcnt             : integer range 0 to 127;
-      
-   signal mem_dataRead_buf    : std_logic_vector(31 downto 0);
-   signal mem_done_buf        : std_logic := '0';
-      
-   signal readram             : std_logic := '0';
-   signal writeram            : std_logic := '0';
-   signal maskram             : std_logic := '0';
-   signal instantwrite        : std_logic := '0';
-      
-   signal data_ram            : std_logic_vector(31 downto 0);
-   signal data_ram_rotate     : std_logic_vector(31 downto 0);
-   signal ram_rotate_bits     : std_logic_vector(1 downto 0);
-   signal region              : std_logic_vector(1 downto 0);
-      
-   signal addressData_buf     : unsigned(31 downto 0);
-   signal dataWrite_buf       : std_logic_vector(31 downto 0);
-   signal reqsize_buf         : unsigned(1 downto 0);   
-   signal writeMask_buf       : std_logic_vector(3 downto 0);
-      
-   signal addressBIOS_buf     : unsigned(18 downto 0);
-      
-   signal buswrite_last       : std_logic := '0';
-   signal bus_stall           : std_logic;
-   signal dataFromBusses      : std_logic_vector(31 downto 0);
-   signal rotate32            : std_logic;
-   signal rotate16            : std_logic;
-      
-   signal data_cd             : std_logic_vector(31 downto 0);
-   signal data_spu            : std_logic_vector(31 downto 0);
-      
-   -- EXE handling   
-   signal loadExe_latched     : std_logic := '0';
-   signal exestep             : integer range 0 to 8;
-   signal execopycnt          : unsigned(31 downto 0);
-   signal exe_initial_pc      : unsigned(31 downto 0);
-   signal exe_initial_gp      : unsigned(31 downto 0);
-   signal exe_load_address    : unsigned(31 downto 0);
-   signal exe_file_size       : unsigned(31 downto 0);
-   signal exe_stackpointer    : unsigned(31 downto 0);
+   signal mem_request            : std_logic;
+   signal mem_rnw                : std_logic; 
+   signal mem_isData             : std_logic; 
+   signal mem_isCache            : std_logic; 
+   signal mem_addressInstr       : unsigned(31 downto 0); 
+   signal mem_addressData        : unsigned(31 downto 0); 
+   signal mem_reqsize            : unsigned(1 downto 0); 
+   signal mem_writeMask          : std_logic_vector(3 downto 0); 
+   signal mem_dataWrite          : std_logic_vector(31 downto 0); 
    
-   -- data cache
-   signal dcache_read_enable  : std_logic := '0';
-   signal dcache_read_addr    : std_logic_vector(18 downto 0) := (others => '0');
-   signal dcache_read_hit     : std_logic;
-   signal dcache_read_hit_A1  : std_logic;
-   signal dcache_read_data    : std_logic_vector(31 downto 0);
-
-   signal dcache_hit_next     : std_logic := '0';
-
-   signal dcache_write_enable : std_logic := '0';
-   signal dcache_write_clear  : std_logic := '0';
-   signal dcache_write_addr   : std_logic_vector(18 downto 0) := (others => '0');
-   signal dcache_write_data   : std_logic_vector(31 downto 0) := (others => '0');
+   signal mem_save_request       : std_logic := '0'; 
+   signal mem_save_rnw           : std_logic := '0'; 
+   signal mem_save_isData        : std_logic := '0'; 
+   signal mem_save_isCache       : std_logic := '0'; 
+   signal mem_save_addressInstr  : unsigned(31 downto 0) := (others => '0'); 
+   signal mem_save_addressData   : unsigned(31 downto 0) := (others => '0');
+   signal mem_save_reqsize       : unsigned(1 downto 0) := (others => '0'); 
+   signal mem_save_writeMask     : std_logic_vector(3 downto 0) := (others => '0');
+   signal mem_save_dataWrite     : std_logic_vector(31 downto 0) := (others => '0'); 
+   
+   signal writeFifo_Din          : std_logic_vector(69 downto 0);
+   signal writeFifo_Wr           : std_logic; 
+   signal writeFifo_NearFull     : std_logic; 
+   signal writeFifo_Dout         : std_logic_vector(69 downto 0);
+   signal writeFifo_Rd           : std_logic;
+   signal writeFifo_Empty        : std_logic;
+   signal writeFifo_busy         : std_logic;
+   signal writeFifo_Wr_1         : std_logic;
+   
+   signal byteStep               : unsigned(1 downto 0);
+   signal waitcnt                : integer range 0 to 127;
+         
+   signal mem_dataRead_buf       : std_logic_vector(31 downto 0);
+   signal mem_done_buf           : std_logic := '0';
+         
+   signal readram                : std_logic := '0';
+   signal writeram               : std_logic := '0';
+         
+   signal data_ram               : std_logic_vector(31 downto 0);
+   signal data_ram_rotate        : std_logic_vector(31 downto 0);
+   signal ram_rotate_bits        : std_logic_vector(1 downto 0);
+   signal region                 : std_logic_vector(1 downto 0);
+            
+   signal addressData_buf        : unsigned(31 downto 0);
+   signal dataWrite_buf          : std_logic_vector(31 downto 0);
+   signal reqsize_buf            : unsigned(1 downto 0);   
+   signal writeMask_buf          : std_logic_vector(3 downto 0);
+            
+   signal addressBIOS_buf        : unsigned(18 downto 0);
+            
+   signal buswrite_last          : std_logic := '0';
+   signal bus_stall              : std_logic;
+   signal dataFromBusses         : std_logic_vector(31 downto 0);
+   signal rotate32               : std_logic;
+   signal rotate16               : std_logic;
+         
+   signal data_cd                : std_logic_vector(31 downto 0);
+   signal data_spu               : std_logic_vector(31 downto 0);
+         
+   -- EXE handling      
+   signal loadExe_latched        : std_logic := '0';
+   signal exestep                : integer range 0 to 8;
+   signal execopycnt             : unsigned(31 downto 0);
+   signal exe_initial_pc         : unsigned(31 downto 0);
+   signal exe_initial_gp         : unsigned(31 downto 0);
+   signal exe_load_address       : unsigned(31 downto 0);
+   signal exe_file_size          : unsigned(31 downto 0);
+   signal exe_stackpointer       : unsigned(31 downto 0);
       
-      
-   -- debug 
-   signal stallcountRead      : integer;
-   signal stallcountReadC     : integer;
-   signal stallcountWrite     : integer;
-   signal stallcountWriteF    : integer;
-   signal stallcountIntBus    : integer;
-      
-   signal addressDataF        : std_logic := '0';
+   -- data cache  
+   signal dcache_read_enable     : std_logic := '0';
+   signal dcache_read_addr       : std_logic_vector(18 downto 0) := (others => '0');
+   signal dcache_read_hit        : std_logic;
+   signal dcache_read_data       : std_logic_vector(31 downto 0);
+   
+   signal dcache_hit_next        : std_logic := '0';
+   
+   signal dcache_write_enable    : std_logic := '0';
+   signal dcache_write_clear     : std_logic := '0';
+   signal dcache_write_addr      : std_logic_vector(18 downto 0) := (others => '0');
+   signal dcache_write_data      : std_logic_vector(31 downto 0) := (others => '0');
+         
+         
+   -- debug    
+   signal stallcountRead         : integer;
+   signal stallcountReadC        : integer;
+   signal stallcountWrite        : integer;
+   signal stallcountWriteF       : integer;
+   signal stallcountIntBus       : integer;
+         
+   signal addressDataF           : std_logic := '0';
    
 begin 
 
-   isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0' and maskram = '0' and dcache_hit_next = '0' and buswrite_last = '0') else '0';
+   isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0' and dcache_hit_next = '0' and writeFifo_busy = '0' and mem_save_request = '0') else '0';
 
-   process (state, mem_request, mem_rnw, mem_isData, mem_addressData, mem_reqsize, mem_writeMask, mem_dataWrite, ce)
-      variable address : unsigned(28 downto 0);
+   process (state, mem_request, mem_rnw, mem_isData, mem_addressData, mem_reqsize, mem_writeMask, mem_dataWrite, ce, readram, writeram, writeFifo_busy, writeFifo_Empty, ram_done)
+      variable address  : unsigned(28 downto 0);
+      variable enableRW : std_logic;
    begin
    
       address := mem_addressData(28 downto 0);
    
+      enableRW := '0';
+      if (ce = '1' and state = IDLE and mem_isData = '1') then
+         if (((readram = '0' and writeram = '0') or ram_done = '1') and ((mem_request = '1' and writeFifo_busy = '0') or writeFifo_Empty = '0')) then
+            enableRW := '1';
+         end if;
+      end if;
+         
       -- exp1
       bus_exp1_read      <= '0';
       --bus_exp1_write     <= '0';
       --bus_exp1_addr      <= address(22 downto 0);
       --bus_exp1_dataWrite <= mem_dataWrite;
       if (address >= 16#1F000000# and address < 16#1F800000#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_exp1_read  <= mem_rnw;
             --bus_exp1_write <= not mem_rnw;
          end if;
@@ -271,7 +309,7 @@ begin
       bus_memc_addr      <= address(5 downto 0);
       bus_memc_dataWrite <= mem_dataWrite;
       if (address >= 16#1F801000# and address < 16#1F801040#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_memc_read  <= mem_rnw;
             bus_memc_write <= not mem_rnw;
          end if;
@@ -284,7 +322,7 @@ begin
       bus_pad_dataWrite <= mem_dataWrite;
       bus_pad_writeMask <= mem_writeMask;
       if (address >= 16#1F801040# and address < 16#1F801050#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_pad_read  <= mem_rnw;
             bus_pad_write <= not mem_rnw;
          end if;
@@ -297,7 +335,7 @@ begin
       bus_sio_dataWrite <= mem_dataWrite;
       bus_sio_writeMask <= mem_writeMask;
       if (address >= 16#1F801050# and address < 16#1F801060#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_sio_read  <= mem_rnw;
             bus_sio_write <= not mem_rnw;
          end if;
@@ -309,7 +347,7 @@ begin
       bus_memc2_addr      <= address(3 downto 0);
       bus_memc2_dataWrite <= mem_dataWrite;
       if (address >= 16#1F801060# and address < 16#1F801070#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_memc2_read  <= mem_rnw;
             bus_memc2_write <= not mem_rnw;
          end if;
@@ -321,7 +359,7 @@ begin
       bus_irq_addr      <= address(3 downto 0);
       bus_irq_dataWrite <= mem_dataWrite;
       if (address >= 16#1F801070# and address < 16#1F801080#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_irq_read  <= mem_rnw;
             bus_irq_write <= not mem_rnw;
          end if;
@@ -333,7 +371,7 @@ begin
       bus_dma_addr      <= address(6 downto 0);
       bus_dma_dataWrite <= mem_dataWrite;
       if (address >= 16#1F801080# and address < 16#1F801100#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_dma_read  <= mem_rnw;
             bus_dma_write <= not mem_rnw;
          end if;
@@ -345,7 +383,7 @@ begin
       bus_tmr_addr      <= address(5 downto 0);
       bus_tmr_dataWrite <= mem_dataWrite;
       if (address >= 16#1F801100# and address < 16#1F801140#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_tmr_read  <= mem_rnw;
             bus_tmr_write <= not mem_rnw;
          end if;
@@ -357,7 +395,7 @@ begin
       bus_gpu_addr      <= address(3 downto 0);
       bus_gpu_dataWrite <= mem_dataWrite;
       if (address >= 16#1F801810# and address < 16#1F801820#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_gpu_read  <= mem_rnw;
             bus_gpu_write <= not mem_rnw;
          end if;
@@ -369,7 +407,7 @@ begin
       bus_mdec_addr      <= address(3 downto 0);
       bus_mdec_dataWrite <= mem_dataWrite;
       if (address >= 16#1F801820# and address < 16#1F801830#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_mdec_read  <= mem_rnw;
             bus_mdec_write <= not mem_rnw;
          end if;
@@ -382,7 +420,7 @@ begin
       bus_exp2_dataWrite <= mem_dataWrite;
       bus_exp2_writeMask <= mem_writeMask;
       if (address >= 16#1F802000# and address < 16#1F804000#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_exp2_read  <= mem_rnw;
             bus_exp2_write <= not mem_rnw;
          end if;
@@ -394,7 +432,7 @@ begin
       --bus_exp3_dataWrite <= mem_dataWrite;
       --bus_exp3_writeMask <= mem_writeMask;
       if (address = 16#1FA00000#) then
-         if (ce = '1' and mem_request = '1' and mem_isData = '1') then
+         if (enableRW = '1') then
             bus_exp3_read  <= mem_rnw;
             --bus_exp3_write <= not mem_rnw;
          end if;
@@ -419,12 +457,54 @@ begin
                         mem_dataRead_buf;
                         
    mem_done          <= '1'            when (dcache_hit_next = '1') else
-                        '1'            when (instantwrite = '1')    else
-                        '1'            when (readram = '1'  and ram_done = '1' and maskram = '0') else 
-                        '1'            when (writeram = '1' and ram_done = '1' and maskram = '0') else 
+                        '1'            when (readram = '1'  and ram_done = '1') else 
                         mem_done_buf;
    
    mem_dataCache     <= ram_dataRead;
+   
+   
+   -- write fifo
+   iwritefifo: entity mem.SyncFifoFallThrough
+   generic map
+   (
+      SIZE              => 8,
+      DATAWIDTH         => 70,
+      NEARFULLDISTANCE  => 4,
+      NEAREMPTYDISTANCE => 2
+   )
+   port map
+   ( 
+      clk         => clk1x,
+      reset       => reset,
+                  
+      Din         => writeFifo_Din,     
+      Wr          => writeFifo_Wr,      
+      Full        => open,                -- NearFull will stall cpu to have full 4 element size
+      NearFull    => writeFifo_NearFull,
+            
+      Dout        => writeFifo_Dout,     
+      Rd          => writeFifo_Rd,   
+      Empty       => writeFifo_Empty,
+      NearEmpty   => open
+   );
+   
+   writeFifo_Din <= mem_in_writeMask & std_logic_vector(mem_in_reqsize) & std_logic_vector(mem_in_addressData) & mem_in_dataWrite;
+   writeFifo_Wr  <= '1' when (mem_in_request = '1' and mem_in_rnw = '0' and (state /= IDLE or writeFifo_busy = '1' or ((readram = '1' or writeram = '1') and ram_done = '0'))) else '0';
+   
+   writeFifo_Rd  <= '1' when (state = IDLE and writeFifo_Empty = '0' and ((readram = '0' and writeram = '0') or ram_done = '1')) else '0';
+   
+   mem_fifofull  <= writeFifo_NearFull;
+   
+   -- input muxing with buffer and writefifo
+   mem_request      <= mem_in_request or mem_save_request;
+   mem_rnw          <= '0'                                    when writeFifo_Empty = '0' else mem_save_rnw          when mem_save_request = '1' else mem_in_rnw         ;
+   mem_isData       <= '1'                                    when writeFifo_Empty = '0' else mem_save_isData       when mem_save_request = '1' else mem_in_isData      ;
+   mem_isCache      <= '0'                                    when writeFifo_Empty = '0' else mem_save_isCache      when mem_save_request = '1' else mem_in_isCache     ;
+   mem_addressInstr <= unsigned(writeFifo_Dout(63 downto 32)) when writeFifo_Empty = '0' else mem_save_addressInstr when mem_save_request = '1' else mem_in_addressInstr;
+   mem_addressData  <= unsigned(writeFifo_Dout(63 downto 32)) when writeFifo_Empty = '0' else mem_save_addressData  when mem_save_request = '1' else mem_in_addressData ;
+   mem_reqsize      <= unsigned(writeFifo_Dout(65 downto 64)) when writeFifo_Empty = '0' else mem_save_reqsize      when mem_save_request = '1' else mem_in_reqsize     ;
+   mem_writeMask    <= writeFifo_Dout(69 downto 66)           when writeFifo_Empty = '0' else mem_save_writeMask    when mem_save_request = '1' else mem_in_writeMask   ;
+   mem_dataWrite    <= writeFifo_Dout(31 downto  0)           when writeFifo_Empty = '0' else mem_save_dataWrite    when mem_save_request = '1' else mem_in_dataWrite   ;
   
    process (clk1x)
       variable biosPatch  : std_logic_vector(31 downto 0);
@@ -443,33 +523,46 @@ begin
          
          dcache_hit_next      <= '0';
          
-         buswrite_last        <= '0';
-         
          if (loadExe = '1') then
             loadExe_latched <= '1';
          end if;
          
          if (ram_done = '1') then
-            maskram  <= '0';
-            if (maskram = '0') then
-               readram  <= '0';
-               writeram <= '0';
-            end if;
+            readram  <= '0';
+            writeram <= '0';
          end if;
-
-         instantwrite <= '0';
       
          if (reset = '1') then
 
-            state   <= IDLE;
-            maskram <= '0';
-            region  <= region_in;
+            state            <= IDLE;
+            region           <= region_in;
+            mem_save_request <= '0';
+            writeFifo_busy   <= '0';
 
          elsif (ce = '1') then
          
+            if (mem_in_request = '1' and mem_in_rnw = '1') then
+               mem_save_request      <= '1';
+               mem_save_rnw          <= '1';         
+               mem_save_isData       <= mem_in_isData;
+               mem_save_isCache      <= mem_in_isCache;     
+               mem_save_addressInstr <= mem_in_addressInstr;
+               mem_save_addressData  <= mem_in_addressData; 
+               mem_save_reqsize      <= mem_in_reqsize;     
+               mem_save_writeMask    <= mem_in_writeMask;   
+               mem_save_dataWrite    <= mem_in_dataWrite;   
+            end if;
+            
+            writeFifo_Wr_1 <= writeFifo_Wr;
+            if (writeFifo_Wr = '1') then
+               writeFifo_busy <= '1';
+            elsif (writeFifo_Wr_1 = '0' and writeFifo_Empty = '1') then
+               writeFifo_busy <= '0';
+            end if;
+          
             case (state) is
                when IDLE =>
-               
+                  
                   byteStep        <= (others => '0');
                   addressData_buf <= mem_addressData;
                   dataWrite_buf   <= mem_dataWrite;
@@ -483,7 +576,11 @@ begin
                      
                      state           <= EXEREADHEADER;
                
-                  elsif (mem_request = '1') then
+                  elsif (((readram = '0' and writeram = '0') or ram_done = '1') and ((mem_request = '1' and writeFifo_busy = '0') or writeFifo_Empty = '0')) then
+                  
+                     if (mem_request = '1' and writeFifo_busy = '0') then
+                        mem_save_request <= '0';
+                     end if;
                   
                      readram  <= '0';
                      writeram <= '0';
@@ -542,12 +639,7 @@ begin
                               end if;
                            else
                               state    <= IDLE;
-                              if (ram_idle = '1' and is_simu = '0') then
-                                 instantwrite <= '1'; 
-                                 maskram      <= '1';
-                              else
-                                 writeram <= '1';
-                              end if;
+                              writeram <= '1';
                            end if;
                            ram_be        <= mem_writeMask;
                            ram_dataWrite <= mem_dataWrite;
@@ -584,7 +676,11 @@ begin
                                  state   <= SPU_WRITE;
                               end if;
                            else  
-                              state <= BUSACTION;
+                              if (mem_rnw = '0') then
+                                 state <= BUSWRITE;
+                              else
+                                 state <= BUSREAD;
+                              end if;
                               if (bus_memc_read  = '1') then rotate32 <= '1'; end if;
                               if (bus_pad_read   = '1') then rotate16 <= '1'; end if;
                               if (bus_sio_read   = '1') then rotate16 <= '1'; end if;
@@ -594,11 +690,6 @@ begin
                               if (bus_irq_read   = '1') then rotate32 <= '1'; end if;
                               if (bus_gpu_read   = '1') then rotate32 <= '1'; end if;
                               if (bus_mdec_read  = '1') then rotate32 <= '1'; end if;
-                              if (bus_stall = '0' and mem_rnw = '0') then -- write is faster
-                                 state          <= IDLE;
-                                 mem_done_buf   <= '1';
-                                 buswrite_last  <= '1';
-                              end if;
                            end if;
                         end if;
             
@@ -607,7 +698,7 @@ begin
                   end if;                  
                   
                when READBIOS =>
-                  if (ram_done = '1' and maskram = '0') then
+                  if (ram_done = '1') then
                      if (fastboot = '1' and to_integer(addressBIOS_buf) >= 16#18000# and to_integer(addressBIOS_buf) <= 16#18013#) then
                         case (to_integer(addressBIOS_buf(4 downto 2))) is
                            when 0 => biosPatch := x"3C011F80";
@@ -644,11 +735,16 @@ begin
                   end if;
                   
                when READBIOSCACHE =>
-                  if (ram_done = '1' and maskram = '0') then
+                  if (ram_done = '1') then
                      state    <= WAITING;
                   end if; 
                   
-               when BUSACTION =>
+               when BUSWRITE => 
+                  if (bus_stall = '0') then
+                     state        <= IDLE;
+                  end if;
+                  
+               when BUSREAD =>
                   if (bus_stall = '0') then
                      rotate32 <= '0';
                      rotate16 <= '0';
@@ -681,7 +777,7 @@ begin
                      when "00" => if (writeMask_buf(0) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf( 7 downto  0); end if;
                      when "01" => if (writeMask_buf(1) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf(15 downto  8); end if;
                      when "10" => if (writeMask_buf(2) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf(23 downto 16); end if;
-                     when "11" => if (writeMask_buf(3) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf(31 downto 24); end if;  state <= BUSACTION; 
+                     when "11" => if (writeMask_buf(3) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf(31 downto 24); end if;  state <= IDLE; 
                      when others => null;
                   end case;
                   
@@ -696,7 +792,7 @@ begin
                      when "00" => 
                         data_cd( 7 downto  0) <= bus_cd_dataRead; 
                         if (reqsize_buf = "00") then 
-                           state <= BUSACTION; 
+                           state <= BUSREAD; 
                         else
                            bus_cd_read <= '1';
                         end if;
@@ -704,7 +800,7 @@ begin
                      when "01" => 
                         data_cd(15 downto  8) <= bus_cd_dataRead;
                         if (reqsize_buf = "01") then 
-                           state <= BUSACTION; 
+                           state <= BUSREAD; 
                         else
                            bus_cd_read <= '1';
                         end if;
@@ -715,7 +811,7 @@ begin
                         
                      when "11" => 
                         data_cd(31 downto 24) <= bus_cd_dataRead;
-                        state <= BUSACTION; 
+                        state <= BUSREAD; 
                         
                      when others => null;
                   end case;  
@@ -726,7 +822,7 @@ begin
                   bus_spu_addr <= addressData_buf(9 downto 2) & byteStep;
                   case (byteStep) is
                      when "00" => if (writeMask_buf(0) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(15 downto  0); end if;
-                     when "10" => if (writeMask_buf(2) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(31 downto 16); end if; state <= BUSACTION; 
+                     when "10" => if (writeMask_buf(2) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(31 downto 16); end if; state <= IDLE; 
                      when others => null;
                   end case;
                   
@@ -745,14 +841,14 @@ begin
                      when "00" => 
                         data_spu(15 downto  0) <= bus_spu_dataRead; 
                         if (reqsize_buf /= "10") then 
-                           state <= BUSACTION; 
+                           state <= BUSREAD; 
                         else
                            bus_spu_read <= '1';
                         end if;
                         
                      when "10" => 
                         data_spu(31 downto 16) <= bus_spu_dataRead;
-                        state <= BUSACTION; 
+                        state <= BUSREAD; 
                         
                      when others => null;
                   end case;  
@@ -894,7 +990,7 @@ begin
 --##############################################################
    
    
-   dcache_write_enable <= DATACACHEON when (ram_done = '1' and maskram = '0' and readram = '1') else 
+   dcache_write_enable <= DATACACHEON when (ram_done = '1' and readram = '1') else 
                           DATACACHEON when (ce = '1' and mem_request = '1' and mem_isData = '1' and mem_rnw = '0' and mem_addressData(28 downto 0) < 16#800000#) else 
                           DATACACHEON when (dma_cache_write = '1') else
                           '0';
@@ -966,7 +1062,7 @@ begin
                end if;
             end if;            
             
-            if (writeram = '1' or instantwrite = '1') then
+            if (writeram = '1') then
                stallcountWrite <= stallcountWrite + 1;
                if (addressDataF = '1') then
                   stallcountWriteF <= stallcountWriteF + 1;
@@ -980,7 +1076,7 @@ begin
                end if;
             end if;
             
-            if (state = BUSACTION or state = SPU_WRITE or state = SPU_READ or state = SPU_READ_WAIT or state = CD_READ or state = CD_READ_WAIT or state = CD_WRITE) then
+            if (state = BUSREAD or state = BUSWRITE or state = SPU_WRITE or state = SPU_READ or state = SPU_READ_WAIT or state = CD_READ or state = CD_READ_WAIT or state = CD_WRITE) then
                stallcountIntBus <= stallcountIntBus + 1;
             end if;
             

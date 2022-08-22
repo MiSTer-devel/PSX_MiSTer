@@ -255,8 +255,8 @@ pll_cfg pll_cfg
 
 
 wire FFrequest = joy[17] && ~FB_LL && ~DIRECT_VIDEO;
-wire syncVideoOut = status[57] && ~FB_LL && ~DIRECT_VIDEO;
-wire syncVideoClock = status[56] && ~FB_LL && ~DIRECT_VIDEO;
+wire syncVideoOut = 0; //status[57] && ~FB_LL && ~DIRECT_VIDEO;
+wire syncVideoClock = 0; //status[56] && ~FB_LL && ~DIRECT_VIDEO;
 
 always @(posedge CLK_50M) begin : cfg_block
 	reg pald = 0, pald2 = 0;
