@@ -991,22 +991,22 @@ begin
    
    
    dcache_write_enable <= DATACACHEON when (ram_done = '1' and readram = '1') else 
-                          DATACACHEON when (ce = '1' and mem_request = '1' and mem_isData = '1' and mem_rnw = '0' and mem_addressData(28 downto 0) < 16#800000#) else 
+                          DATACACHEON when (ram_ena = '1' and ram_rnw = '0') else 
                           DATACACHEON when (dma_cache_write = '1') else
                           '0';
                           
-   dcache_write_clear  <=  '1' when (ce = '1' and mem_request = '1' and mem_isData = '1' and mem_rnw = '0' and mem_writeMask /= "1111") else '0';
+   dcache_write_clear  <=  '1' when (ram_ena = '1' and ram_rnw = '0' and ram_be /= "1111") else '0';
                           
-   dcache_write_addr   <= ram_Adr(20 downto 2)       when (readram = '1') else
-                          dma_cache_Adr(20 downto 2) when (dma_cache_write = '1') else
-                          std_logic_vector(mem_addressData(20 downto 2));
+   dcache_write_addr   <= dma_cache_Adr(20 downto 2) when (dma_cache_write = '1') else
+                          ram_Adr(20 downto 2);
 
    dcache_write_data   <= ram_dataRead32 when (readram = '1') else
                           dma_cache_data when (dma_cache_write = '1') else
-                          mem_dataWrite;
+                          ram_dataWrite;
 
-
-   dcache_read_enable  <= ce when (state = IDLE and mem_request = '1' and mem_isData = '1' and mem_rnw = '1' and mem_addressData(28 downto 0) < 16#800000#) else '0';
+   dcache_read_enable  <= ce when (state = IDLE and mem_isData = '1' and mem_addressData(28 downto 0) < 16#800000# and
+                                  (((readram = '0' and writeram = '0') or ram_done = '1') and ((mem_request = '1' and writeFifo_busy = '0') or writeFifo_Empty = '0'))) else '0';
+   
    dcache_read_addr    <= std_logic_vector(mem_addressData(20 downto 2));
 
    idatacache : entity work.datacache
@@ -1022,7 +1022,7 @@ begin
       clk2x             => clk2x,
       reset             => reset,
                         
-      read_enable       => dcache_read_enable, 
+      read_enable       => dcache_read_enable,  -- only used for calculating cache hit ratio
       read_addr         => dcache_read_addr,   
       read_hit          => dcache_read_hit,   
       read_data         => dcache_read_data,   
