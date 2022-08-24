@@ -22,7 +22,7 @@ entity memorymux is
       fastboot             : in  std_logic;
       NOMEMWAIT            : in  std_logic;
       PATCHSERIAL          : in  std_logic;
-      DATACACHEON          : in  std_logic;
+      TURBO                : in  std_logic;
       region_in            : in  std_logic_vector(1 downto 0);
       
       isIdle               : out std_logic;
@@ -162,6 +162,7 @@ architecture arch of memorymux is
       READBIOS,
       READBIOSCACHE,
       BUSWRITE,
+      BUSREADREQUEST,
       BUSREAD,
       CD_WRITE,
       CD_READ_WAIT,
@@ -277,165 +278,144 @@ begin
 
    isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0' and dcache_hit_next = '0' and writeFifo_busy = '0' and mem_save_request = '0') else '0';
 
-   process (state, mem_request, mem_rnw, mem_isData, mem_addressData, mem_reqsize, mem_writeMask, mem_dataWrite, ce, readram, writeram, writeFifo_busy, writeFifo_Empty, ram_done)
+   process (state, addressData_buf, writeMask_buf, dataWrite_buf)
       variable address  : unsigned(28 downto 0);
-      variable enableRW : std_logic;
+      variable enableRead  : std_logic;
+      variable enableWrite : std_logic;
    begin
    
-      address := mem_addressData(28 downto 0);
+      address := addressData_buf(28 downto 0);
    
-      enableRW := '0';
-      if (ce = '1' and state = IDLE and mem_isData = '1') then
-         if (((readram = '0' and writeram = '0') or ram_done = '1') and ((mem_request = '1' and writeFifo_busy = '0') or writeFifo_Empty = '0')) then
-            enableRW := '1';
-         end if;
+      enableRead  := '0';
+      enableWrite := '0';
+      if (state = BUSREADREQUEST) then 
+         enableRead := '1';
+      end if;
+      if (state = BUSWRITE) then 
+         enableWrite := '1';
       end if;
          
       -- exp1
-      bus_exp1_read      <= '0';
+      bus_exp1_read        <= '0';
       --bus_exp1_write     <= '0';
       --bus_exp1_addr      <= address(22 downto 0);
-      --bus_exp1_dataWrite <= mem_dataWrite;
+      --bus_exp1_dataWrite <= dataWrite_buf;
       if (address >= 16#1F000000# and address < 16#1F800000#) then
-         if (enableRW = '1') then
-            bus_exp1_read  <= mem_rnw;
-            --bus_exp1_write <= not mem_rnw;
-         end if;
+         bus_exp1_read    <= enableRead;
+         --bus_exp1_write <= enableWrite;
       end if;
       
       -- memc
       bus_memc_read      <= '0';
       bus_memc_write     <= '0';
       bus_memc_addr      <= address(5 downto 0);
-      bus_memc_dataWrite <= mem_dataWrite;
+      bus_memc_dataWrite <= dataWrite_buf;
       if (address >= 16#1F801000# and address < 16#1F801040#) then
-         if (enableRW = '1') then
-            bus_memc_read  <= mem_rnw;
-            bus_memc_write <= not mem_rnw;
-         end if;
+         bus_memc_read  <= enableRead;
+         bus_memc_write <= enableWrite;
       end if;
       
       -- pad
       bus_pad_read      <= '0';
       bus_pad_write     <= '0';
       bus_pad_addr      <= address(3 downto 0);
-      bus_pad_dataWrite <= mem_dataWrite;
-      bus_pad_writeMask <= mem_writeMask;
+      bus_pad_dataWrite <= dataWrite_buf;
+      bus_pad_writeMask <= writeMask_buf;
       if (address >= 16#1F801040# and address < 16#1F801050#) then
-         if (enableRW = '1') then
-            bus_pad_read  <= mem_rnw;
-            bus_pad_write <= not mem_rnw;
-         end if;
+         bus_pad_read  <= enableRead;
+         bus_pad_write <= enableWrite;
       end if;
       
       -- sio
       bus_sio_read      <= '0';
       bus_sio_write     <= '0';
       bus_sio_addr      <= address(3 downto 0);
-      bus_sio_dataWrite <= mem_dataWrite;
-      bus_sio_writeMask <= mem_writeMask;
+      bus_sio_dataWrite <= dataWrite_buf;
+      bus_sio_writeMask <= writeMask_buf;
       if (address >= 16#1F801050# and address < 16#1F801060#) then
-         if (enableRW = '1') then
-            bus_sio_read  <= mem_rnw;
-            bus_sio_write <= not mem_rnw;
-         end if;
+         bus_sio_read  <= enableRead;
+         bus_sio_write <= enableWrite;
       end if;
       
       -- memc2
       bus_memc2_read      <= '0';
       bus_memc2_write     <= '0';
       bus_memc2_addr      <= address(3 downto 0);
-      bus_memc2_dataWrite <= mem_dataWrite;
+      bus_memc2_dataWrite <= dataWrite_buf;
       if (address >= 16#1F801060# and address < 16#1F801070#) then
-         if (enableRW = '1') then
-            bus_memc2_read  <= mem_rnw;
-            bus_memc2_write <= not mem_rnw;
-         end if;
+         bus_memc2_read  <= enableRead;
+         bus_memc2_write <= enableWrite;
       end if;
       
       -- irq
       bus_irq_read      <= '0';
       bus_irq_write     <= '0';
       bus_irq_addr      <= address(3 downto 0);
-      bus_irq_dataWrite <= mem_dataWrite;
+      bus_irq_dataWrite <= dataWrite_buf;
       if (address >= 16#1F801070# and address < 16#1F801080#) then
-         if (enableRW = '1') then
-            bus_irq_read  <= mem_rnw;
-            bus_irq_write <= not mem_rnw;
-         end if;
+         bus_irq_read  <= enableRead;
+         bus_irq_write <= enableWrite;
       end if;
       
       -- dma
       bus_dma_read      <= '0';
       bus_dma_write     <= '0';
       bus_dma_addr      <= address(6 downto 0);
-      bus_dma_dataWrite <= mem_dataWrite;
+      bus_dma_dataWrite <= dataWrite_buf;
       if (address >= 16#1F801080# and address < 16#1F801100#) then
-         if (enableRW = '1') then
-            bus_dma_read  <= mem_rnw;
-            bus_dma_write <= not mem_rnw;
-         end if;
+         bus_dma_read  <= enableRead;
+         bus_dma_write <= enableWrite;
       end if;
       
       -- timer
       bus_tmr_read      <= '0';
       bus_tmr_write     <= '0';
       bus_tmr_addr      <= address(5 downto 0);
-      bus_tmr_dataWrite <= mem_dataWrite;
+      bus_tmr_dataWrite <= dataWrite_buf;
       if (address >= 16#1F801100# and address < 16#1F801140#) then
-         if (enableRW = '1') then
-            bus_tmr_read  <= mem_rnw;
-            bus_tmr_write <= not mem_rnw;
-         end if;
+         bus_tmr_read  <= enableRead;
+         bus_tmr_write <= enableWrite;
       end if;
       
       -- gpu
       bus_gpu_read      <= '0';
       bus_gpu_write     <= '0';
       bus_gpu_addr      <= address(3 downto 0);
-      bus_gpu_dataWrite <= mem_dataWrite;
+      bus_gpu_dataWrite <= dataWrite_buf;
       if (address >= 16#1F801810# and address < 16#1F801820#) then
-         if (enableRW = '1') then
-            bus_gpu_read  <= mem_rnw;
-            bus_gpu_write <= not mem_rnw;
-         end if;
+         bus_gpu_read  <= enableRead;
+         bus_gpu_write <= enableWrite;
       end if;
       
       -- mdec
       bus_mdec_read      <= '0';
       bus_mdec_write     <= '0';
       bus_mdec_addr      <= address(3 downto 0);
-      bus_mdec_dataWrite <= mem_dataWrite;
+      bus_mdec_dataWrite <= dataWrite_buf;
       if (address >= 16#1F801820# and address < 16#1F801830#) then
-         if (enableRW = '1') then
-            bus_mdec_read  <= mem_rnw;
-            bus_mdec_write <= not mem_rnw;
-         end if;
+         bus_mdec_read  <= enableRead;
+         bus_mdec_write <= enableWrite;
       end if;
       
       -- exp2
       bus_exp2_read      <= '0';
       bus_exp2_write     <= '0';
       bus_exp2_addr      <= address(12 downto 0);
-      bus_exp2_dataWrite <= mem_dataWrite;
-      bus_exp2_writeMask <= mem_writeMask;
+      bus_exp2_dataWrite <= dataWrite_buf;
+      bus_exp2_writeMask <= writeMask_buf;
       if (address >= 16#1F802000# and address < 16#1F804000#) then
-         if (enableRW = '1') then
-            bus_exp2_read  <= mem_rnw;
-            bus_exp2_write <= not mem_rnw;
-         end if;
+         bus_exp2_read  <= enableRead;
+         bus_exp2_write <= enableWrite;
       end if;
       
       -- exp3
       bus_exp3_read      <= '0';
       --bus_exp3_write     <= '0';
-      --bus_exp3_dataWrite <= mem_dataWrite;
-      --bus_exp3_writeMask <= mem_writeMask;
+      --bus_exp3_dataWrite <= dataWrite_buf;
+      --bus_exp3_writeMask <= writeMask_buf;
       if (address = 16#1FA00000#) then
-         if (enableRW = '1') then
-            bus_exp3_read  <= mem_rnw;
-            --bus_exp3_write <= not mem_rnw;
-         end if;
+         bus_exp3_read    <= enableRead;
+         --bus_exp3_write <= enableWrite;
       end if;
 
    end process;
@@ -464,7 +444,7 @@ begin
    
    
    -- write fifo
-   iwritefifo: entity mem.SyncFifoFallThrough
+   iwritefifo: entity mem.SyncFifoFallThroughMLAB
    generic map
    (
       SIZE              => 8,
@@ -489,9 +469,9 @@ begin
    );
    
    writeFifo_Din <= mem_in_writeMask & std_logic_vector(mem_in_reqsize) & std_logic_vector(mem_in_addressData) & mem_in_dataWrite;
-   writeFifo_Wr  <= '1' when (mem_in_request = '1' and mem_in_rnw = '0' and (state /= IDLE or writeFifo_busy = '1' or ((readram = '1' or writeram = '1') and ram_done = '0'))) else '0';
+   writeFifo_Wr  <= '1' when (ce = '1' and mem_in_request = '1' and mem_in_rnw = '0' and (state /= IDLE or writeFifo_busy = '1' or ((readram = '1' or writeram = '1') and ram_done = '0'))) else '0';
    
-   writeFifo_Rd  <= '1' when (state = IDLE and writeFifo_Empty = '0' and ((readram = '0' and writeram = '0') or ram_done = '1')) else '0';
+   writeFifo_Rd  <= '1' when (ce = '1' and state = IDLE and writeFifo_Empty = '0' and ((readram = '0' and writeram = '0') or ram_done = '1')) else '0';
    
    mem_fifofull  <= writeFifo_NearFull;
    
@@ -631,7 +611,7 @@ begin
                            ram_rotate_bits <= std_logic_vector(mem_addressData(1 downto 0));
                            if (mem_rnw = '1') then
                               state   <= IDLE;
-                              if (dcache_read_hit = '1') then
+                              if (dcache_read_hit = '1' and TURBO = '1') then
                                  dcache_hit_next <= '1';
                                  ram_ena         <= '0';
                               else
@@ -677,19 +657,11 @@ begin
                               end if;
                            else  
                               if (mem_rnw = '0') then
-                                 state <= BUSWRITE;
+                                 state   <= BUSWRITE;
                               else
-                                 state <= BUSREAD;
+                                 state   <= BUSREADREQUEST;
+                                 waitcnt <= 0;
                               end if;
-                              if (bus_memc_read  = '1') then rotate32 <= '1'; end if;
-                              if (bus_pad_read   = '1') then rotate16 <= '1'; end if;
-                              if (bus_sio_read   = '1') then rotate16 <= '1'; end if;
-                              if (bus_memc2_read = '1') then rotate32 <= '1'; end if;
-                              if (bus_dma_read   = '1') then rotate32 <= '1'; end if;
-                              if (bus_tmr_read   = '1') then rotate32 <= '1'; end if;
-                              if (bus_irq_read   = '1') then rotate32 <= '1'; end if;
-                              if (bus_gpu_read   = '1') then rotate32 <= '1'; end if;
-                              if (bus_mdec_read  = '1') then rotate32 <= '1'; end if;
                            end if;
                         end if;
             
@@ -740,9 +712,19 @@ begin
                   end if; 
                   
                when BUSWRITE => 
-                  if (bus_stall = '0') then
-                     state        <= IDLE;
-                  end if;
+                  state        <= IDLE;
+                  
+               when BUSREADREQUEST =>
+                  state <= BUSREAD;
+                  if (bus_memc_read  = '1') then rotate32 <= '1'; end if;
+                  if (bus_pad_read   = '1') then rotate16 <= '1'; end if;
+                  if (bus_sio_read   = '1') then rotate16 <= '1'; end if;
+                  if (bus_memc2_read = '1') then rotate32 <= '1'; end if;
+                  if (bus_dma_read   = '1') then rotate32 <= '1'; end if;
+                  if (bus_tmr_read   = '1') then rotate32 <= '1'; end if;
+                  if (bus_irq_read   = '1') then rotate32 <= '1'; end if;
+                  if (bus_gpu_read   = '1') then rotate32 <= '1'; end if;
+                  if (bus_mdec_read  = '1') then rotate32 <= '1'; end if;
                   
                when BUSREAD =>
                   if (bus_stall = '0') then
@@ -765,8 +747,12 @@ begin
                      else
                         mem_dataRead_buf <= dataFromBusses;
                      end if;
-                     mem_done_buf <= '1';
-                     state        <= IDLE;
+                     if (TURBO = '1') then
+                        mem_done_buf <= '1';
+                        state        <= IDLE;
+                     else
+                        state        <= WAITING;
+                     end if;
                   end if;
                   
                -- CD
@@ -990,9 +976,9 @@ begin
 --##############################################################
    
    
-   dcache_write_enable <= DATACACHEON when (ram_done = '1' and readram = '1') else 
-                          DATACACHEON when (ram_ena = '1' and ram_rnw = '0') else 
-                          DATACACHEON when (dma_cache_write = '1') else
+   dcache_write_enable <= '1' when (ram_done = '1' and readram = '1') else 
+                          '1' when (ram_ena = '1' and ram_rnw = '0') else 
+                          '1' when (dma_cache_write = '1') else
                           '0';
                           
    dcache_write_clear  <=  '1' when (ram_ena = '1' and ram_rnw = '0' and ram_be /= "1111") else '0';

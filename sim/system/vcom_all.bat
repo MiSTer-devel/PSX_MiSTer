@@ -2,16 +2,15 @@
 vcom -93 -quiet -work  sim/tb ^
 src/tb/globals.vhd
 
-vcom -93 -quiet -work  sim/mem ^
-../../rtl/dpram.vhd ^
-../../rtl/RamMLAB.vhd ^
-../../rtl/SyncFifo.vhd ^
-../../rtl/SyncFifoFallThrough.vhd ^
-../../rtl/SyncRam.vhd
-
 vcom -93 -quiet -work sim/mem ^
 ../system/src/mem/dpram.vhd ^
 ../system/src/mem/RamMLAB.vhd
+
+vcom -93 -quiet -work  sim/mem ^
+../../rtl/SyncFifo.vhd ^
+../../rtl/SyncFifoFallThrough.vhd ^
+../../rtl/SyncFifoFallThroughMLAB.vhd ^
+../../rtl/SyncRam.vhd
 
 vcom -quiet -work  sim/rs232 ^
 src/rs232/rs232_receiver.vhd ^

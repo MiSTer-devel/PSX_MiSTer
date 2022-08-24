@@ -1646,7 +1646,7 @@ begin
       
       fastboot             => fastboot,
       NOMEMWAIT            => FASTMEM,
-      DATACACHEON          => TURBO,
+      TURBO                => TURBO,
       region_in            => biosregion,
       PATCHSERIAL          => PATCHSERIAL,
             
