@@ -157,8 +157,8 @@ architecture arch of memorymux is
    type tState is
    (
       IDLE,
-      --CHECKRAM,
-      --ERRORRAM,
+      WAITFORRAMREAD,
+      WAITFORRAMWRITE,
       READBIOS,
       READBIOSCACHE,
       BUSWRITE,
@@ -210,6 +210,9 @@ architecture arch of memorymux is
    signal writeFifo_Empty        : std_logic;
    signal writeFifo_busy         : std_logic;
    signal writeFifo_Wr_1         : std_logic;
+   
+   signal ram_page_open          : std_logic;
+   signal ram_page_addr          : unsigned(10 downto 0);
    
    signal byteStep               : unsigned(1 downto 0);
    signal waitcnt                : integer range 0 to 127;
@@ -518,6 +521,7 @@ begin
             region           <= region_in;
             mem_save_request <= '0';
             writeFifo_busy   <= '0';
+            ram_page_open    <= '0';
 
          elsif (ce = '1') then
          
@@ -564,6 +568,8 @@ begin
                   
                      readram  <= '0';
                      writeram <= '0';
+                     
+                     ram_page_open <= '0';
                   
                      if (mem_isData = '0') then
                
@@ -604,22 +610,36 @@ begin
                      else
                      
                         if (mem_addressData(28 downto 0) < 16#800000#) then -- RAM
-                           ram_ena <= '1';
                            ram_128 <= '0';
                            ram_rnw <= mem_rnw;
                            ram_Adr <= "00" & std_logic_vector(mem_addressData(20 downto 2)) & "00";
                            ram_rotate_bits <= std_logic_vector(mem_addressData(1 downto 0));
                            if (mem_rnw = '1') then
-                              state   <= IDLE;
                               if (dcache_read_hit = '1' and TURBO = '1') then
+                                 state   <= IDLE;
                                  dcache_hit_next <= '1';
-                                 ram_ena         <= '0';
-                              else
+                              elsif (TURBO = '1') then
+                                 state   <= IDLE;
+                                 ram_ena <= '1';
                                  readram <= '1';
+                              else
+                                 state   <= WAITFORRAMREAD;
+                                 waitcnt <= 1;
                               end if;
                            else
-                              state    <= IDLE;
-                              writeram <= '1';
+                              ram_page_open <= '1';
+                              ram_page_addr <= mem_addressData(20 downto 10);
+                              if (TURBO = '1' or (ram_page_open = '1' and mem_addressData(20 downto 10) = ram_page_addr)) then
+                                 state    <= IDLE;
+                                 ram_ena  <= '1';
+                                 writeram <= '1';
+                              else
+                                 state   <= WAITFORRAMWRITE;
+                                 waitcnt <= 0;
+                                 if (ram_page_open = '1' and mem_addressData(20 downto 10) /= ram_page_addr) then
+                                    waitcnt <= 3;
+                                 end if;
+                              end if;
                            end if;
                            ram_be        <= mem_writeMask;
                            ram_dataWrite <= mem_dataWrite;
@@ -667,7 +687,25 @@ begin
             
                      end if;
                      
-                  end if;                  
+                  end if;        
+
+               when WAITFORRAMREAD =>
+                  if (waitcnt > 0) then
+                     waitcnt <= waitcnt - 1;
+                  else
+                     state   <= IDLE;
+                     ram_ena <= '1';
+                     readram <= '1';
+                  end if;
+                  
+               when WAITFORRAMWRITE =>
+                  if (waitcnt > 0) then
+                     waitcnt <= waitcnt - 1;
+                  else
+                     state   <= IDLE;
+                     ram_ena  <= '1';
+                     writeram <= '1';
+                  end if;
                   
                when READBIOS =>
                   if (ram_done = '1') then
