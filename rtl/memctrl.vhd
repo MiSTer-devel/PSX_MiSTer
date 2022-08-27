@@ -21,6 +21,9 @@ entity memctrl is
       bus2_write           : in  std_logic;
       bus2_dataRead        : out std_logic_vector(31 downto 0);
       
+      spu_read_timing      : out unsigned(3 downto 0);
+      spu_write_timing     : out unsigned(3 downto 0);
+      
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(4 downto 0);
@@ -50,6 +53,11 @@ architecture arch of memctrl is
    signal ss_out : t_ssarray := (others => (others => '0')); 
 
 begin 
+
+   
+   spu_read_timing  <= unsigned(MC_SPU_DELAY(7 downto 4));
+   spu_write_timing <= unsigned(MC_SPU_DELAY(3 downto 0));
+
 
    ss_out(1)(23 downto 0) <= MC_EXP1_BASE;   
    ss_out(2)(23 downto 0) <= MC_EXP2_BASE;   

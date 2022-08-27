@@ -125,6 +125,8 @@ entity memorymux is
       bus_mdec_write       : out std_logic;
       bus_mdec_dataRead    : in  std_logic_vector(31 downto 0);
       
+      spu_read_timing      : in  unsigned(3 downto 0);
+      spu_write_timing     : in  unsigned(3 downto 0);
       bus_spu_addr         : out unsigned(9 downto 0) := (others => '0'); 
       bus_spu_dataWrite    : out std_logic_vector(15 downto 0);
       bus_spu_read         : out std_logic;
@@ -162,14 +164,13 @@ architecture arch of memorymux is
       READBIOS,
       READBIOSCACHE,
       BUSWRITE,
+      BUSWRITEEXTERNAL,
+      BUSREADEXTERNAL,
       BUSREADREQUEST,
       BUSREAD,
       CD_WRITE,
       CD_READ_WAIT,
       CD_READ,      
-      SPU_WRITE,
-      SPU_READ_WAIT,
-      SPU_READ,
       WAITING,
       
       EXEREADHEADER,
@@ -242,7 +243,6 @@ architecture arch of memorymux is
    signal rotate16               : std_logic;
          
    signal data_cd                : std_logic_vector(31 downto 0);
-   signal data_spu               : std_logic_vector(31 downto 0);
          
    -- EXE handling      
    signal loadExe_latched        : std_logic := '0';
@@ -253,7 +253,30 @@ architecture arch of memorymux is
    signal exe_load_address       : unsigned(31 downto 0);
    signal exe_file_size          : unsigned(31 downto 0);
    signal exe_stackpointer       : unsigned(31 downto 0);
-      
+   
+   -- external busses
+   type tExtState is
+   (
+      EXT_IDLE,
+      SPU_WRITE,
+      SPU_WRITE_WAIT,
+      SPU_READ_NEXT,
+      SPU_READ,
+      SPU_READ_WAIT
+   );
+   signal ext_state              : tExtState := EXT_IDLE; 
+   
+   signal ext_done               : std_logic := '0';
+   signal ext_data               : std_logic_vector(31 downto 0);
+   signal ext_dataWrite_buf      : std_logic_vector(31 downto 0);
+   signal ext_writeMask_buf      : std_logic_vector(3 downto 0);
+   
+   signal ext_byteStep           : unsigned(1 downto 0);
+   signal ext_waitcnt            : integer range 0 to 31;
+   signal ext_startwait          : integer range 0 to 15;
+   
+   signal ext_select_spu         : std_logic := '0';
+     
    -- data cache  
    signal dcache_read_enable     : std_logic := '0';
    signal dcache_read_addr       : std_logic_vector(18 downto 0) := (others => '0');
@@ -427,7 +450,7 @@ begin
    
    dataFromBusses    <= bus_exp1_dataRead or bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_memc2_dataRead or bus_irq_dataRead or 
                         bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or bus_exp2_dataRead or bus_exp3_dataRead or
-                        data_cd or data_spu;
+                        data_cd;
    
    data_ram          <= dcache_read_data when (dcache_hit_next = '1') else ram_dataRead32;
   
@@ -500,9 +523,6 @@ begin
                
          bus_cd_read          <= '0';
          bus_cd_write         <= '0';         
-               
-         bus_SPU_read         <= '0';
-         bus_SPU_write        <= '0';
          
          dcache_hit_next      <= '0';
          
@@ -554,7 +574,6 @@ begin
                   writeMask_buf   <= mem_writeMask;
                   
                   data_cd         <= (others => '0');
-                  data_spu        <= (others => '0');
                   
                   if (loadExe_latched = '1') then
                      
@@ -657,6 +676,7 @@ begin
                               when others => null;
                            end case;
                         else
+                           ext_select_spu <= '0';
                            if (mem_addressData(28 downto 0) >= 16#1F801800# and mem_addressData(28 downto 0) < 16#1F801810#) then
                               if (mem_rnw = '1') then
                                  state       <= CD_READ_WAIT;
@@ -666,14 +686,12 @@ begin
                                  state   <= CD_WRITE;
                               end if;
                            elsif (mem_addressData(28 downto 0) >= 16#1F801C00# and mem_addressData(28 downto 0) < 16#1F802000#) then
+                              ext_select_spu <= '1';
+                              rotate16       <= '1';
                               if (mem_rnw = '1') then
-                                 state        <= SPU_READ_WAIT;
-                                 bus_spu_addr <= mem_addressData(9 downto 0);
-                                 bus_spu_read <= '1';
-                                 waitcnt      <= 15;
-                                 rotate16     <= '1';
+                                 state <= BUSREADEXTERNAL;
                               else
-                                 state   <= SPU_WRITE;
+                                 state <= BUSWRITEEXTERNAL;
                               end if;
                            else  
                               if (mem_rnw = '0') then
@@ -750,7 +768,37 @@ begin
                   end if; 
                   
                when BUSWRITE => 
-                  state        <= IDLE;
+                  state        <= IDLE;               
+                  
+               when BUSWRITEEXTERNAL => 
+                  if (ext_state = EXT_IDLE or ext_done = '1') then
+                     state <= IDLE;
+                  end if;
+                  
+               when BUSREADEXTERNAL => 
+                  if (ext_done = '1') then
+                     rotate32 <= '0';
+                     rotate16 <= '0';
+                     if (rotate32 = '1') then
+                        case (addressData_buf(1 downto 0)) is
+                           when "00" => mem_dataRead_buf <= ext_data;
+                           when "01" => mem_dataRead_buf <= x"00" & ext_data(31 downto 8);
+                           when "10" => mem_dataRead_buf <= x"0000" & ext_data(31 downto 16);
+                           when "11" => mem_dataRead_buf <= x"000000" & ext_data(31 downto 24);
+                           when others => null;
+                        end case;
+                     elsif (rotate16 = '1') then
+                        if (addressData_buf(0) = '1') then
+                           mem_dataRead_buf <= x"00" & ext_data(31 downto 8);
+                        else
+                           mem_dataRead_buf <= ext_data;
+                        end if;
+                     else
+                        mem_dataRead_buf <= ext_data;
+                     end if;
+                     mem_done_buf <= '1';
+                     state        <= IDLE;
+                  end if;
                   
                when BUSREADREQUEST =>
                   state <= BUSREAD;
@@ -835,43 +883,6 @@ begin
                         
                      when "11" => 
                         data_cd(31 downto 24) <= bus_cd_dataRead;
-                        state <= BUSREAD; 
-                        
-                     when others => null;
-                  end case;  
-                  
-               -- SPU
-               when SPU_WRITE =>
-                  byteStep    <= byteStep + 2;
-                  bus_spu_addr <= addressData_buf(9 downto 2) & byteStep;
-                  case (byteStep) is
-                     when "00" => if (writeMask_buf(0) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(15 downto  0); end if;
-                     when "10" => if (writeMask_buf(2) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= dataWrite_buf(31 downto 16); end if; state <= IDLE; 
-                     when others => null;
-                  end case;
-                  
-               when SPU_READ_WAIT =>
-                  if (waitcnt > 0) then
-                     waitcnt <= waitcnt - 1;
-                  else
-                     state <= SPU_READ;
-                  end if;
-                  
-               when SPU_READ =>
-                  state        <= SPU_READ_WAIT;
-                  byteStep     <= byteStep + 2;
-                  bus_spu_addr <= bus_spu_addr + 2;
-                  case (byteStep) is
-                     when "00" => 
-                        data_spu(15 downto  0) <= bus_spu_dataRead; 
-                        if (reqsize_buf /= "10") then 
-                           state <= BUSREAD; 
-                        else
-                           bus_spu_read <= '1';
-                        end if;
-                        
-                     when "10" => 
-                        data_spu(31 downto 16) <= bus_spu_dataRead;
                         state <= BUSREAD; 
                         
                      when others => null;
@@ -1010,6 +1021,127 @@ begin
    end process;
    
 --##############################################################
+--############################### external busses
+--##############################################################
+   
+   process (clk1x)
+   begin
+      if rising_edge(clk1x) then
+      
+         ext_done             <= '0';
+      
+         bus_SPU_read         <= '0';
+         bus_SPU_write        <= '0';
+         
+         if (reset = '1') then
+
+            ext_state     <= EXT_IDLE;
+            ext_startwait <= 0;
+
+         elsif (ce = '1') then
+         
+            if (ext_startwait > 0) then
+               ext_startwait <= ext_startwait - 1;
+            end if;
+         
+            case (ext_state) is
+            
+               when EXT_IDLE =>
+                  if (ext_done = '0') then
+                     ext_dataWrite_buf <= dataWrite_buf;
+                     ext_writeMask_buf <= writeMask_buf;
+                     ext_byteStep      <= (others => '0');
+                     ext_data          <= (others => '0');
+                  
+                     if (state = BUSWRITEEXTERNAL) then
+                     
+                        ext_done <= '1';
+                        if (ext_select_spu = '1') then 
+                           ext_state    <= SPU_WRITE; 
+                           bus_spu_addr <= addressData_buf(9 downto 0);
+                        end if;
+                        
+                     elsif (state = BUSREADEXTERNAL and ext_startwait = 0) then
+                     
+                        if (ext_select_spu = '1') then
+                           ext_state    <= SPU_READ_NEXT;
+                           bus_spu_addr <= addressData_buf(9 downto 0);
+                           bus_spu_read <= '1';
+                        end if;
+                           
+                     end if;
+                  end if;
+                  
+               -- SPU
+               when SPU_WRITE =>
+                  bus_spu_addr(1 downto 0) <= ext_byteStep;
+                  case (ext_byteStep) is
+                     when "00" => if (ext_writeMask_buf(0) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= ext_dataWrite_buf(15 downto  0); end if;
+                     when "10" => if (ext_writeMask_buf(2) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= ext_dataWrite_buf(31 downto 16); end if;
+                     when others => null;
+                  end case;
+                  ext_state   <= SPU_WRITE_WAIT;
+                  if (ext_byteStep = "10") then
+                     ext_waitcnt <= to_integer(spu_write_timing) + 11; -- penalty for auto address increase?
+                  else
+                     ext_waitcnt <= to_integer(spu_write_timing);
+                  end if;
+                  
+               when SPU_WRITE_WAIT =>
+                  if (ext_waitcnt > 0) then
+                     ext_waitcnt    <= ext_waitcnt - 1;
+                  elsif (ext_byteStep = "10" or ext_writeMask_buf(2) = '0') then
+                     ext_state      <= EXT_IDLE;
+                     ext_startwait  <= 11;  -- penalty for Recovery Period ?
+                  else
+                     ext_state      <= SPU_WRITE;
+                     ext_byteStep   <= ext_byteStep + 2;
+                  end if;
+                  
+               when SPU_READ_NEXT =>
+                  ext_state <= SPU_READ;
+                  
+               when SPU_READ =>
+                  ext_state   <= SPU_READ_WAIT;
+                  ext_waitcnt <= 0;
+                  if (ext_byteStep = "10") then
+                     ext_waitcnt <= to_integer(spu_read_timing) + 10; -- penalty for auto address increase?
+                  else
+                     if (spu_read_timing >= 2) then
+                        ext_waitcnt <= to_integer(spu_read_timing) - 2;
+                     end if;
+                  end if;
+                  
+                  case (ext_byteStep) is
+                     when "00" => ext_data(15 downto  0) <= bus_spu_dataRead; 
+                     when "10" => ext_data(31 downto 16) <= bus_spu_dataRead;  
+                     when others => null;
+                  end case;  
+            
+               when SPU_READ_WAIT =>
+                  if (ext_waitcnt > 0) then
+                     ext_waitcnt <= ext_waitcnt - 1;
+                  elsif (ext_byteStep = "10" or reqsize_buf /= "10") then
+                     ext_state      <= EXT_IDLE;
+                     ext_startwait  <= 12;  -- penalty for Recovery Period ?
+                     ext_done       <= '1';
+                  else
+                     ext_state    <= SPU_READ_NEXT;
+                     bus_spu_read <= '1';
+                     ext_byteStep <= ext_byteStep + 2;
+                     bus_spu_addr <= bus_spu_addr + 2;
+                  end if;
+               
+            
+            end case;
+   
+         end if;
+         
+      end if;
+   end process;
+   
+   
+--##############################################################
 --############################### datacache
 --##############################################################
    
@@ -1100,9 +1232,9 @@ begin
                end if;
             end if;
             
-            if (state = BUSREAD or state = BUSWRITE or state = SPU_WRITE or state = SPU_READ or state = SPU_READ_WAIT or state = CD_READ or state = CD_READ_WAIT or state = CD_WRITE) then
-               stallcountIntBus <= stallcountIntBus + 1;
-            end if;
+            --if (state = BUSREAD or state = BUSWRITE or state = SPU_WRITE or state = SPU_READ or state = SPU_READ_WAIT or state = CD_READ or state = CD_READ_WAIT or state = CD_WRITE) then
+            --   stallcountIntBus <= stallcountIntBus + 1;
+            --end if;
             
          end if;
       end if;

@@ -356,6 +356,8 @@ architecture arch of psx_top is
    signal bus_mdec_write         : std_logic;
    signal bus_mdec_dataRead      : std_logic_vector(31 downto 0);
    
+   signal spu_read_timing        : unsigned(3 downto 0);
+   signal spu_write_timing       : unsigned(3 downto 0);
    signal bus_spu_addr           : unsigned(9 downto 0); 
    signal bus_spu_dataWrite      : std_logic_vector(15 downto 0);
    signal bus_spu_read           : std_logic;
@@ -950,7 +952,10 @@ begin
       bus2_read            => bus_memc2_read,     
       bus2_write           => bus_memc2_write,    
       bus2_dataRead        => bus_memc2_dataRead,
-
+      
+      spu_read_timing      => spu_read_timing, 
+      spu_write_timing     => spu_write_timing,
+      
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(4 downto 0),      
@@ -1748,6 +1753,8 @@ begin
       bus_mdec_write       => bus_mdec_write,    
       bus_mdec_dataRead    => bus_mdec_dataRead, 
       
+      spu_read_timing      => spu_read_timing, 
+      spu_write_timing     => spu_write_timing,
       bus_spu_addr         => bus_spu_addr,     
       bus_spu_dataWrite    => bus_spu_dataWrite,
       bus_spu_read         => bus_spu_read,     

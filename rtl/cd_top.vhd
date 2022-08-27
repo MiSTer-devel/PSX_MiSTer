@@ -1613,7 +1613,13 @@ begin
          if (FifoParam_reset = '1') then
             fifoParamCount <= 0;
          elsif (FifoParam_Wr = '1') then
-            fifoParamCount <= fifoParamCount + 1;
+            -- synthesis translate_off
+            if (fifoParamCount < 16) then
+            -- synthesis translate_on
+               fifoParamCount <= fifoParamCount + 1;
+            -- synthesis translate_off
+            end if;
+            -- synthesis translate_on
          elsif (FifoParam_Rd = '1') then
             fifoParamCount <= fifoParamCount - 1; 
          end if;
