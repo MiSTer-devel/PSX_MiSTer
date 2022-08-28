@@ -676,6 +676,8 @@ begin
                               when others => null;
                            end case;
                         else
+                           rotate32       <= '0';
+                           rotate16       <= '0';
                            ext_select_spu <= '0';
                            if (mem_addressData(28 downto 0) >= 16#1F801800# and mem_addressData(28 downto 0) < 16#1F801810#) then
                               if (mem_rnw = '1') then
@@ -687,11 +689,11 @@ begin
                               end if;
                            elsif (mem_addressData(28 downto 0) >= 16#1F801C00# and mem_addressData(28 downto 0) < 16#1F802000#) then
                               ext_select_spu <= '1';
-                              rotate16       <= '1';
                               if (mem_rnw = '1') then
-                                 state <= BUSREADEXTERNAL;
+                                 rotate16 <= '1';
+                                 state    <= BUSREADEXTERNAL;
                               else
-                                 state <= BUSWRITEEXTERNAL;
+                                 state    <= BUSWRITEEXTERNAL;
                               end if;
                            else  
                               if (mem_rnw = '0') then
@@ -777,8 +779,6 @@ begin
                   
                when BUSREADEXTERNAL => 
                   if (ext_done = '1') then
-                     rotate32 <= '0';
-                     rotate16 <= '0';
                      if (rotate32 = '1') then
                         case (addressData_buf(1 downto 0)) is
                            when "00" => mem_dataRead_buf <= ext_data;
@@ -814,8 +814,6 @@ begin
                   
                when BUSREAD =>
                   if (bus_stall = '0') then
-                     rotate32 <= '0';
-                     rotate16 <= '0';
                      if (rotate32 = '1') then
                         case (addressData_buf(1 downto 0)) is
                            when "00" => mem_dataRead_buf <= dataFromBusses;

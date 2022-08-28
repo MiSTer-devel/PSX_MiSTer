@@ -441,7 +441,7 @@ begin
    GPUSTAT(10)             <= GPUSTAT_DrawToDisplay;
    GPUSTAT(11)             <= GPUSTAT_SetMask;
    GPUSTAT(12)             <= GPUSTAT_DrawPixelsMask;
-   GPUSTAT(13)             <= videoout_reports.GPUSTAT_InterlaceField;
+   GPUSTAT(13)             <= not videoout_reports.GPUSTAT_InterlaceField;
    GPUSTAT(14)             <= GPUSTAT_ReverseFlag;
    GPUSTAT(15)             <= GPUSTAT_TextureDisable;
    GPUSTAT(16)             <= GPUSTAT_HorRes2;
