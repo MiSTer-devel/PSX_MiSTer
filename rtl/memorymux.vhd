@@ -125,8 +125,7 @@ entity memorymux is
       bus_mdec_write       : out std_logic;
       bus_mdec_dataRead    : in  std_logic_vector(31 downto 0);
       
-      spu_read_timing      : in  unsigned(3 downto 0);
-      spu_write_timing     : in  unsigned(3 downto 0);
+      spu_memctrl          : in  unsigned(13 downto 0);
       bus_spu_addr         : out unsigned(9 downto 0) := (others => '0'); 
       bus_spu_dataWrite    : out std_logic_vector(15 downto 0);
       bus_spu_read         : out std_logic;
@@ -144,6 +143,11 @@ entity memorymux is
       bus_exp3_read        : out std_logic;
       --bus_exp3_write       : out std_logic;
       bus_exp3_dataRead    : in  std_logic_vector(31 downto 0);
+      
+      com0_delay           : in  unsigned(3 downto 0);
+      com1_delay           : in  unsigned(3 downto 0);
+      com2_delay           : in  unsigned(3 downto 0);
+      com3_delay           : in  unsigned(3 downto 0);
       
       loading_savestate    : in  std_logic;
       SS_reset             : in  std_logic;
@@ -258,24 +262,42 @@ architecture arch of memorymux is
    type tExtState is
    (
       EXT_IDLE,
-      SPU_WRITE,
-      SPU_WRITE_WAIT,
-      SPU_READ_NEXT,
-      SPU_READ,
-      SPU_READ_WAIT
+      EXE_WRITE_PREWAIT,
+      EXT_WRITE,
+      EXT_WRITE_WAIT,
+      EXT_READ_NEXT,
+      EXT_READ,
+      EXT_READ_WAIT
    );
    signal ext_state              : tExtState := EXT_IDLE; 
    
    signal ext_done               : std_logic := '0';
+   signal ext_finished           : std_logic := '0';
+   signal ext_lastactive         : std_logic := '0';
+   signal ext_recovered          : std_logic := '0';
    signal ext_data               : std_logic_vector(31 downto 0);
    signal ext_dataWrite_buf      : std_logic_vector(31 downto 0);
    signal ext_writeMask_buf      : std_logic_vector(3 downto 0);
    
+   signal ext_bus_addr           : unsigned(9 downto 0) := (others => '0'); 
+   
+   signal ext_memctrl            : unsigned(13 downto 0);
+   signal ext_memctrl_WDelay     : unsigned(3 downto 0);
+   signal ext_memctrl_RDelay     : unsigned(3 downto 0);
+   signal ext_memctrl_RecP       : std_logic;
+   signal ext_memctrl_Hold       : std_logic;
+   signal ext_memctrl_Float      : std_logic;
+   signal ext_memctrl_PStrobe    : std_logic;
+   signal ext_memctrl_width      : std_logic;
+   signal ext_memctrl_autoinc    : std_logic;
    signal ext_byteStep           : unsigned(1 downto 0);
-   signal ext_waitcnt            : integer range 0 to 31;
-   signal ext_startwait          : integer range 0 to 15;
+   signal ext_waitcnt            : integer range 0 to 63;
+   signal ext_reccount           : integer range 0 to 15;
+   signal ext_write_ena          : std_logic;
+   signal ext_dataWrite          : std_logic_vector(15 downto 0);
    
    signal ext_select_spu         : std_logic := '0';
+   signal ext_select_spu_saved   : std_logic := '0';
      
    -- data cache  
    signal dcache_read_enable     : std_logic := '0';
@@ -459,11 +481,13 @@ begin
                         x"0000" & data_ram(31 downto 16)    when ram_rotate_bits(1 downto 0) = "10" else
                         x"000000" & data_ram(31 downto 24);
       
-   mem_dataRead      <= data_ram_rotate when ((dcache_hit_next = '1') or (readram = '1' and ram_done = '1')) else 
+   mem_dataRead      <= data_ram_rotate when ((dcache_hit_next = '1') or (readram = '1' and ram_done = '1')) else
+                        ext_data        when (ext_done = '1') else
                         mem_dataRead_buf;
                         
    mem_done          <= '1'            when (dcache_hit_next = '1') else
                         '1'            when (readram = '1'  and ram_done = '1') else 
+                        '1'            when (ext_done = '1') else 
                         mem_done_buf;
    
    mem_dataCache     <= ram_dataRead;
@@ -542,6 +566,7 @@ begin
             mem_save_request <= '0';
             writeFifo_busy   <= '0';
             ram_page_open    <= '0';
+            ext_lastactive   <= '0';
 
          elsif (ce = '1') then
          
@@ -629,6 +654,7 @@ begin
                      else
                      
                         if (mem_addressData(28 downto 0) < 16#800000#) then -- RAM
+                           ext_lastactive <= '0';
                            ram_128 <= '0';
                            ram_rnw <= mem_rnw;
                            ram_Adr <= "00" & std_logic_vector(mem_addressData(20 downto 2)) & "00";
@@ -696,6 +722,7 @@ begin
                                  state    <= BUSWRITEEXTERNAL;
                               end if;
                            else  
+                              ext_lastactive <= '0';
                               if (mem_rnw = '0') then
                                  state   <= BUSWRITE;
                               else
@@ -773,31 +800,14 @@ begin
                   state        <= IDLE;               
                   
                when BUSWRITEEXTERNAL => 
-                  if (ext_state = EXT_IDLE or ext_done = '1') then
-                     state <= IDLE;
+                  if (ext_state = EXT_IDLE) then
+                     state          <= IDLE;
                   end if;
                   
                when BUSREADEXTERNAL => 
                   if (ext_done = '1') then
-                     if (rotate32 = '1') then
-                        case (addressData_buf(1 downto 0)) is
-                           when "00" => mem_dataRead_buf <= ext_data;
-                           when "01" => mem_dataRead_buf <= x"00" & ext_data(31 downto 8);
-                           when "10" => mem_dataRead_buf <= x"0000" & ext_data(31 downto 16);
-                           when "11" => mem_dataRead_buf <= x"000000" & ext_data(31 downto 24);
-                           when others => null;
-                        end case;
-                     elsif (rotate16 = '1') then
-                        if (addressData_buf(0) = '1') then
-                           mem_dataRead_buf <= x"00" & ext_data(31 downto 8);
-                        else
-                           mem_dataRead_buf <= ext_data;
-                        end if;
-                     else
-                        mem_dataRead_buf <= ext_data;
-                     end if;
-                     mem_done_buf <= '1';
-                     state        <= IDLE;
+                     state          <= IDLE;
+                     ext_lastactive <= '1';
                   end if;
                   
                when BUSREADREQUEST =>
@@ -1022,114 +1032,220 @@ begin
 --############################### external busses
 --##############################################################
    
+   
+   ext_memctrl <= spu_memctrl when (ext_select_spu = '1') else
+                  (others => '0');
+   
+   
+   bus_spu_addr      <= ext_bus_addr;
+   bus_spu_write     <= '1' when (ext_write_ena = '1' and ext_select_spu_saved = '1') else '0';
+   bus_SPU_read      <= '1' when (ext_state = EXT_READ_NEXT and ext_select_spu_saved = '1') else '0';
+   bus_spu_dataWrite <= ext_dataWrite;
+   
    process (clk1x)
+      variable newWait : integer range 0 to 63;
    begin
       if rising_edge(clk1x) then
       
          ext_done             <= '0';
-      
-         bus_SPU_read         <= '0';
-         bus_SPU_write        <= '0';
+         ext_write_ena        <= '0';
+         ext_recovered        <= '0';
          
          if (reset = '1') then
 
             ext_state     <= EXT_IDLE;
-            ext_startwait <= 0;
+            ext_reccount  <= 0;
 
          elsif (ce = '1') then
          
-            if (ext_startwait > 0) then
-               ext_startwait <= ext_startwait - 1;
+            if (ext_reccount > 0) then
+               ext_reccount  <= ext_reccount - 1;
+               ext_recovered <= '1';
             end if;
          
             case (ext_state) is
             
                when EXT_IDLE =>
-                  if (ext_done = '0') then
-                     ext_dataWrite_buf <= dataWrite_buf;
-                     ext_writeMask_buf <= writeMask_buf;
-                     ext_byteStep      <= (others => '0');
-                     ext_data          <= (others => '0');
+                  ext_finished         <= '0';
+                  ext_dataWrite_buf    <= dataWrite_buf;
+                  ext_writeMask_buf    <= writeMask_buf;
+                  ext_byteStep         <= (others => '0');
+                  ext_data             <= (others => '0');
+                  ext_bus_addr         <= addressData_buf(9 downto 0);
                   
-                     if (state = BUSWRITEEXTERNAL) then
-                     
-                        ext_done <= '1';
-                        if (ext_select_spu = '1') then 
-                           ext_state    <= SPU_WRITE; 
-                           bus_spu_addr <= addressData_buf(9 downto 0);
-                        end if;
-                        
-                     elsif (state = BUSREADEXTERNAL and ext_startwait = 0) then
-                     
-                        if (ext_select_spu = '1') then
-                           ext_state    <= SPU_READ_NEXT;
-                           bus_spu_addr <= addressData_buf(9 downto 0);
-                           bus_spu_read <= '1';
-                        end if;
-                           
+                  ext_select_spu_saved <= ext_select_spu;
+
+                  ext_memctrl_WDelay   <= ext_memctrl(3 downto 0);
+                  ext_memctrl_RDelay   <= ext_memctrl(7 downto 4);
+                  ext_memctrl_RecP     <= ext_memctrl(8);
+                  ext_memctrl_Hold     <= ext_memctrl(9);
+                  ext_memctrl_Float    <= ext_memctrl(10);
+                  ext_memctrl_PStrobe  <= ext_memctrl(11);
+                  ext_memctrl_width    <= ext_memctrl(12);
+                  ext_memctrl_autoinc  <= ext_memctrl(13);
+                  
+                  if (state = BUSWRITEEXTERNAL) then
+                  
+                     ext_state  <= EXT_WRITE;
+                     if (ext_reccount > 1) then
+                        ext_state   <= EXE_WRITE_PREWAIT;
+                        ext_waitcnt <= ext_reccount - 1;
                      end if;
+                     
+                  elsif (state = BUSREADEXTERNAL and ext_reccount = 0 and ext_done = '0') then
+                  
+                     newWait := 0;
+                     if (ext_lastactive = '1' and ext_recovered = '0') then
+                        newWait := 1;
+                     end if;
+                     if (ext_memctrl(7 downto 4) > 0) then
+                        newWait := newWait + to_integer(ext_memctrl(7 downto 4));
+                     end if;
+                     if (ext_memctrl(11) = '1') then 
+                        newWait := newWait + to_integer(com3_delay);
+                     end if;
+                     ext_waitcnt <= newWait;
+                     
+                     if (newWait > 0) then
+                        ext_state    <= EXT_READ_WAIT;
+                     else
+                        ext_state    <= EXT_READ_NEXT;
+                     end if;
+                        
                   end if;
                   
                -- SPU
-               when SPU_WRITE =>
-                  bus_spu_addr(1 downto 0) <= ext_byteStep;
-                  case (ext_byteStep) is
-                     when "00" => if (ext_writeMask_buf(0) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= ext_dataWrite_buf(15 downto  0); end if;
-                     when "10" => if (ext_writeMask_buf(2) = '1') then bus_spu_write <= '1'; bus_spu_dataWrite <= ext_dataWrite_buf(31 downto 16); end if;
-                     when others => null;
-                  end case;
-                  ext_state   <= SPU_WRITE_WAIT;
-                  if (ext_byteStep = "10") then
-                     ext_waitcnt <= to_integer(spu_write_timing) + 11; -- penalty for auto address increase?
-                  else
-                     ext_waitcnt <= to_integer(spu_write_timing);
-                  end if;
-                  
-               when SPU_WRITE_WAIT =>
+               when EXE_WRITE_PREWAIT =>
                   if (ext_waitcnt > 0) then
                      ext_waitcnt    <= ext_waitcnt - 1;
-                  elsif (ext_byteStep = "10" or ext_writeMask_buf(2) = '0') then
-                     ext_state      <= EXT_IDLE;
-                     ext_startwait  <= 11;  -- penalty for Recovery Period ?
                   else
-                     ext_state      <= SPU_WRITE;
-                     ext_byteStep   <= ext_byteStep + 2;
+                     ext_state  <= EXT_WRITE; 
+                  end if;
+               
+               when EXT_WRITE =>
+                  case (ext_byteStep) is
+                     when "00" => if (ext_writeMask_buf(0) = '1') then ext_write_ena <= '1'; ext_dataWrite <=         ext_dataWrite_buf(15 downto  0); end if;
+                     when "01" => if (ext_writeMask_buf(1) = '1') then ext_write_ena <= '1'; ext_dataWrite <= x"00" & ext_dataWrite_buf(15 downto  8); end if;
+                     when "10" => if (ext_writeMask_buf(2) = '1') then ext_write_ena <= '1'; ext_dataWrite <=         ext_dataWrite_buf(31 downto 16); end if;
+                     when "11" => if (ext_writeMask_buf(3) = '1') then ext_write_ena <= '1'; ext_dataWrite <= x"00" & ext_dataWrite_buf(31 downto 24); end if;
+                     when others => null;
+                  end case;
+                  ext_state   <= EXT_WRITE_WAIT;
+                  
+                  newWait := to_integer(ext_memctrl_WDelay);
+                  if (ext_memctrl_PStrobe = '1') then 
+                     newWait := newWait + to_integer(com3_delay);
+                  end if;
+                  ext_waitcnt <= newWait;
+                  
+                  if (ext_memctrl_width = '0' and ext_byteStep = "11") then
+                     ext_finished       <= '1';
+                  elsif (ext_memctrl_width = '0' and ext_byteStep = "01" and ext_writeMask_buf(3 downto 2) = "00") then
+                     ext_finished       <= '1';
+                  elsif (ext_memctrl_width = '0' and ext_byteStep = "00" and ext_writeMask_buf(3 downto 1) = "000") then
+                     ext_finished       <= '1';
+                  elsif (ext_memctrl_width = '1' and (ext_byteStep = "10" or ext_writeMask_buf(2) = '0')) then
+                     ext_finished       <= '1';
                   end if;
                   
-               when SPU_READ_NEXT =>
-                  ext_state <= SPU_READ;
+                  if (ext_memctrl_RecP = '1') then 
+                     ext_reccount <= to_integer(com0_delay);
+                  end if;
                   
-               when SPU_READ =>
-                  ext_state   <= SPU_READ_WAIT;
-                  ext_waitcnt <= 0;
-                  if (ext_byteStep = "10") then
-                     ext_waitcnt <= to_integer(spu_read_timing) + 10; -- penalty for auto address increase?
+               when EXT_WRITE_WAIT =>
+                  if (ext_waitcnt > 0) then
+                     ext_waitcnt    <= ext_waitcnt - 1;
+                  elsif (ext_finished = '1') then
+                     ext_state      <= EXT_IDLE;
                   else
-                     if (spu_read_timing >= 2) then
-                        ext_waitcnt <= to_integer(spu_read_timing) - 2;
+                     
+                     if (ext_memctrl_RecP = '1' and com0_delay > 1) then 
+                        ext_state   <= EXE_WRITE_PREWAIT;
+                        ext_waitcnt <= to_integer(com0_delay) - 2; 
+                     else
+                        ext_state   <= EXT_WRITE;
+                     end if;
+                     
+                     if (ext_memctrl_width = '1') then
+                        ext_byteStep             <= ext_byteStep + 2;
+                        ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 2;
+                     else
+                        ext_byteStep             <= ext_byteStep + 1;
+                        ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 1;
                      end if;
                   end if;
                   
-                  case (ext_byteStep) is
-                     when "00" => ext_data(15 downto  0) <= bus_spu_dataRead; 
-                     when "10" => ext_data(31 downto 16) <= bus_spu_dataRead;  
-                     when others => null;
-                  end case;  
-            
-               when SPU_READ_WAIT =>
-                  if (ext_waitcnt > 0) then
-                     ext_waitcnt <= ext_waitcnt - 1;
-                  elsif (ext_byteStep = "10" or reqsize_buf /= "10") then
-                     ext_state      <= EXT_IDLE;
-                     ext_startwait  <= 12;  -- penalty for Recovery Period ?
-                     ext_done       <= '1';
-                  else
-                     ext_state    <= SPU_READ_NEXT;
-                     bus_spu_read <= '1';
-                     ext_byteStep <= ext_byteStep + 2;
-                     bus_spu_addr <= bus_spu_addr + 2;
+               when EXT_READ_NEXT =>
+                  ext_state <= EXT_READ;
+                  
+                  if (ext_memctrl_width = '0' and ext_byteStep = "11") then
+                     ext_finished       <= '1';
+                  elsif (ext_memctrl_width = '0' and ext_byteStep = "01" and reqsize_buf = "01") then
+                     ext_finished       <= '1';
+                  elsif (ext_memctrl_width = '0' and ext_byteStep = "00" and reqsize_buf = "00") then
+                     ext_finished       <= '1';
+                  elsif (ext_memctrl_width = '1' and (ext_byteStep = "10" or reqsize_buf /= "10")) then
+                     ext_finished       <= '1';
+                  end if;
+                  
+                  if (ext_memctrl_RecP = '1') then 
+                     ext_reccount <= to_integer(com0_delay);
+                  end if;
+                  
+               when EXT_READ =>
+                  if (ext_select_spu_saved = '1') then
+                     case (ext_byteStep) is
+                        when "00" => 
+                           if (addressData_buf(0) = '1') then 
+                              ext_data( 7 downto  0) <= bus_spu_dataRead(15 downto 8); 
+                           else 
+                              ext_data(15 downto  0) <= bus_spu_dataRead; 
+                           end if;
+                        when "10" => 
+                           if (addressData_buf(0) = '1') then 
+                              ext_data(23 downto  8) <= bus_spu_dataRead;
+                           else 
+                              ext_data(31 downto 16) <= bus_spu_dataRead; 
+                           end if;  
+                        when others => null;
+                     end case;
                   end if;
                
+                  if (ext_finished = '1') then
+                     ext_state      <= EXT_IDLE;
+                     ext_done       <= '1';
+                  else
+                  
+                     newWait  := to_integer(ext_memctrl_RDelay);
+                     if (ext_memctrl_RecP = '1' and com0_delay > 0) then 
+                        newWait := newWait + (to_integer(com0_delay) - 1); 
+                     end if;
+                     if (ext_memctrl_PStrobe = '1') then 
+                        newWait := newWait + to_integer(com3_delay);
+                     end if;
+                     ext_waitcnt  <= newWait;
+                  
+                     if (newWait > 0) then
+                        ext_state    <= EXT_READ_WAIT;
+                     else
+                        ext_state    <= EXT_READ_NEXT;
+                     end if;
+                     
+                     if (ext_memctrl_width = '1') then
+                        ext_byteStep             <= ext_byteStep + 2;
+                        ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 2;
+                     else
+                        ext_byteStep             <= ext_byteStep + 1;
+                        ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 1;
+                     end if;
+                  end if;
+                  
+               when EXT_READ_WAIT =>
+                  if (ext_waitcnt > 1) then
+                     ext_waitcnt <= ext_waitcnt - 1;
+                  else
+                     ext_state   <= EXT_READ_NEXT;
+                  end if;
             
             end case;
    

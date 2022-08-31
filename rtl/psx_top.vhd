@@ -356,8 +356,7 @@ architecture arch of psx_top is
    signal bus_mdec_write         : std_logic;
    signal bus_mdec_dataRead      : std_logic_vector(31 downto 0);
    
-   signal spu_read_timing        : unsigned(3 downto 0);
-   signal spu_write_timing       : unsigned(3 downto 0);
+   signal spu_memctrl            : unsigned(13 downto 0);
    signal bus_spu_addr           : unsigned(9 downto 0); 
    signal bus_spu_dataWrite      : std_logic_vector(15 downto 0);
    signal bus_spu_read           : std_logic;
@@ -376,6 +375,11 @@ architecture arch of psx_top is
    signal bus_exp3_write         : std_logic;
    signal bus_exp3_dataRead      : std_logic_vector(31 downto 0);
    signal bus_exp3_writeMask     : std_logic_vector(3 downto 0);
+   
+   signal com0_delay             : unsigned(3 downto 0);
+   signal com1_delay             : unsigned(3 downto 0);
+   signal com2_delay             : unsigned(3 downto 0);
+   signal com3_delay             : unsigned(3 downto 0);
    
    -- Memory mux
    signal memMuxIdle             : std_logic;
@@ -953,8 +957,12 @@ begin
       bus2_write           => bus_memc2_write,    
       bus2_dataRead        => bus_memc2_dataRead,
       
-      spu_read_timing      => spu_read_timing, 
-      spu_write_timing     => spu_write_timing,
+      spu_memctrl          => spu_memctrl, 
+      
+      com0_delay           => com0_delay,
+      com1_delay           => com1_delay,
+      com2_delay           => com2_delay,
+      com3_delay           => com3_delay,
       
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
@@ -1753,8 +1761,7 @@ begin
       bus_mdec_write       => bus_mdec_write,    
       bus_mdec_dataRead    => bus_mdec_dataRead, 
       
-      spu_read_timing      => spu_read_timing, 
-      spu_write_timing     => spu_write_timing,
+      spu_memctrl          => spu_memctrl, 
       bus_spu_addr         => bus_spu_addr,     
       bus_spu_dataWrite    => bus_spu_dataWrite,
       bus_spu_read         => bus_spu_read,     
@@ -1772,6 +1779,11 @@ begin
       bus_exp3_read        => bus_exp3_read,     
       --bus_exp3_write       => bus_exp3_write,    
       bus_exp3_dataRead    => bus_exp3_dataRead, 
+      
+      com0_delay           => com0_delay,
+      com1_delay           => com1_delay,
+      com2_delay           => com2_delay,
+      com3_delay           => com3_delay,
       
       loading_savestate    => loading_savestate,
       SS_reset             => SS_reset,

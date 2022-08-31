@@ -380,7 +380,7 @@ architecture arch of cpu is
    signal debugSum                     : unsigned(31 downto 0);
    signal debugTmr                     : unsigned(31 downto 0);
    
-   signal debugStallcounter            : unsigned(7 downto 0);
+   signal debugStallcounter            : unsigned(9 downto 0);
    signal debug300exception            : std_logic := '0';
    
    signal debugTrigger                 : std_logic := '0';
@@ -2580,7 +2580,7 @@ begin
                error        <= '1';
             end if;            
             
-            if (debugStallcounter(7) = '1') then
+            if (debugStallcounter(9) = '1') then
                error2       <= '1';
             end if;
             
