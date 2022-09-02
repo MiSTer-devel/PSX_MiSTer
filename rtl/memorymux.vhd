@@ -56,11 +56,14 @@ entity memorymux is
       dma_cache_data       : in  std_logic_vector(31 downto 0);
       dma_cache_write      : in  std_logic;
       
+      bios_memctrl         : in  unsigned(13 downto 0);
+      
+      ex1_memctrl          : in  unsigned(13 downto 0);
       --bus_exp1_addr        : out unsigned(22 downto 0); 
-      --bus_exp1_dataWrite   : out std_logic_vector(31 downto 0);
+      --bus_exp1_dataWrite   : out std_logic_vector(7 downto 0);
       bus_exp1_read        : out std_logic;
       --bus_exp1_write       : out std_logic;
-      bus_exp1_dataRead    : in  std_logic_vector(31 downto 0);
+      bus_exp1_dataRead    : in  std_logic_vector(7 downto 0);
       
       bus_memc_addr        : out unsigned(5 downto 0); 
       bus_memc_dataWrite   : out std_logic_vector(31 downto 0);
@@ -106,6 +109,7 @@ entity memorymux is
       bus_tmr_write        : out std_logic;
       bus_tmr_dataRead     : in  std_logic_vector(31 downto 0);
       
+      cd_memctrl           : in  unsigned(13 downto 0);
       bus_cd_addr          : out unsigned(3 downto 0); 
       bus_cd_dataWrite     : out std_logic_vector(7 downto 0);
       bus_cd_read          : out std_logic;
@@ -132,17 +136,18 @@ entity memorymux is
       bus_spu_write        : out std_logic;
       bus_spu_dataRead     : in  std_logic_vector(15 downto 0);
       
+      ex2_memctrl          : in  unsigned(13 downto 0);
       bus_exp2_addr        : out unsigned(12 downto 0); 
-      bus_exp2_dataWrite   : out std_logic_vector(31 downto 0);
+      bus_exp2_dataWrite   : out std_logic_vector(7 downto 0);
       bus_exp2_read        : out std_logic;
       bus_exp2_write       : out std_logic;
-      bus_exp2_dataRead    : in  std_logic_vector(31 downto 0);
-      bus_exp2_writeMask   : out std_logic_vector(3 downto 0);
+      bus_exp2_dataRead    : in  std_logic_vector(7 downto 0);
       
-      --bus_exp3_dataWrite   : out std_logic_vector(31 downto 0);
+      ex3_memctrl          : in  unsigned(13 downto 0);
+      --bus_exp3_dataWrite   : out std_logic_vector(7 downto 0);
       bus_exp3_read        : out std_logic;
       --bus_exp3_write       : out std_logic;
-      bus_exp3_dataRead    : in  std_logic_vector(31 downto 0);
+      bus_exp3_dataRead    : in  std_logic_vector(15 downto 0);
       
       com0_delay           : in  unsigned(3 downto 0);
       com1_delay           : in  unsigned(3 downto 0);
@@ -240,7 +245,6 @@ architecture arch of memorymux is
             
    signal addressBIOS_buf        : unsigned(18 downto 0);
             
-   signal buswrite_last          : std_logic := '0';
    signal bus_stall              : std_logic;
    signal dataFromBusses         : std_logic_vector(31 downto 0);
    signal rotate32               : std_logic;
@@ -279,7 +283,7 @@ architecture arch of memorymux is
    signal ext_dataWrite_buf      : std_logic_vector(31 downto 0);
    signal ext_writeMask_buf      : std_logic_vector(3 downto 0);
    
-   signal ext_bus_addr           : unsigned(9 downto 0) := (others => '0'); 
+   signal ext_bus_addr           : unsigned(12 downto 0) := (others => '0'); 
    
    signal ext_memctrl            : unsigned(13 downto 0);
    signal ext_memctrl_WDelay     : unsigned(3 downto 0);
@@ -292,12 +296,18 @@ architecture arch of memorymux is
    signal ext_memctrl_autoinc    : std_logic;
    signal ext_byteStep           : unsigned(1 downto 0);
    signal ext_waitcnt            : integer range 0 to 63;
-   signal ext_reccount           : integer range 0 to 15;
+   signal ext_reccount           : integer range 0 to 31;
    signal ext_write_ena          : std_logic;
    signal ext_dataWrite          : std_logic_vector(15 downto 0);
    
    signal ext_select_spu         : std_logic := '0';
    signal ext_select_spu_saved   : std_logic := '0';
+   signal ext_select_ex1         : std_logic := '0';
+   signal ext_select_ex1_saved   : std_logic := '0';   
+   signal ext_select_ex2         : std_logic := '0';
+   signal ext_select_ex2_saved   : std_logic := '0';   
+   signal ext_select_ex3         : std_logic := '0';
+   signal ext_select_ex3_saved   : std_logic := '0';
      
    -- data cache  
    signal dcache_read_enable     : std_logic := '0';
@@ -341,16 +351,6 @@ begin
       end if;
       if (state = BUSWRITE) then 
          enableWrite := '1';
-      end if;
-         
-      -- exp1
-      bus_exp1_read        <= '0';
-      --bus_exp1_write     <= '0';
-      --bus_exp1_addr      <= address(22 downto 0);
-      --bus_exp1_dataWrite <= dataWrite_buf;
-      if (address >= 16#1F000000# and address < 16#1F800000#) then
-         bus_exp1_read    <= enableRead;
-         --bus_exp1_write <= enableWrite;
       end if;
       
       -- memc
@@ -444,34 +444,13 @@ begin
          bus_mdec_read  <= enableRead;
          bus_mdec_write <= enableWrite;
       end if;
-      
-      -- exp2
-      bus_exp2_read      <= '0';
-      bus_exp2_write     <= '0';
-      bus_exp2_addr      <= address(12 downto 0);
-      bus_exp2_dataWrite <= dataWrite_buf;
-      bus_exp2_writeMask <= writeMask_buf;
-      if (address >= 16#1F802000# and address < 16#1F804000#) then
-         bus_exp2_read  <= enableRead;
-         bus_exp2_write <= enableWrite;
-      end if;
-      
-      -- exp3
-      bus_exp3_read      <= '0';
-      --bus_exp3_write     <= '0';
-      --bus_exp3_dataWrite <= dataWrite_buf;
-      --bus_exp3_writeMask <= writeMask_buf;
-      if (address = 16#1FA00000#) then
-         bus_exp3_read    <= enableRead;
-         --bus_exp3_write <= enableWrite;
-      end if;
 
    end process;
    
    bus_stall         <= bus_gpu_stall;
    
-   dataFromBusses    <= bus_exp1_dataRead or bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_memc2_dataRead or bus_irq_dataRead or 
-                        bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or bus_exp2_dataRead or bus_exp3_dataRead or
+   dataFromBusses    <= bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_memc2_dataRead or bus_irq_dataRead or 
+                        bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or
                         data_cd;
    
    data_ram          <= dcache_read_data when (dcache_hit_next = '1') else ram_dataRead32;
@@ -705,6 +684,9 @@ begin
                            rotate32       <= '0';
                            rotate16       <= '0';
                            ext_select_spu <= '0';
+                           ext_select_ex1 <= '0';
+                           ext_select_ex2 <= '0';
+                           ext_select_ex3 <= '0';
                            if (mem_addressData(28 downto 0) >= 16#1F801800# and mem_addressData(28 downto 0) < 16#1F801810#) then
                               if (mem_rnw = '1') then
                                  state       <= CD_READ_WAIT;
@@ -715,6 +697,30 @@ begin
                               end if;
                            elsif (mem_addressData(28 downto 0) >= 16#1F801C00# and mem_addressData(28 downto 0) < 16#1F802000#) then
                               ext_select_spu <= '1';
+                              if (mem_rnw = '1') then
+                                 rotate16 <= '1';
+                                 state    <= BUSREADEXTERNAL;
+                              else
+                                 state    <= BUSWRITEEXTERNAL;
+                              end if;
+                           elsif (mem_addressData(28 downto 0) >= 16#1F000000# and mem_addressData(28 downto 0) < 16#1F800000#) then
+                              ext_select_ex1 <= '1';
+                              if (mem_rnw = '1') then
+                                 rotate16 <= '1';
+                                 state    <= BUSREADEXTERNAL;
+                              else
+                                 state    <= BUSWRITEEXTERNAL;
+                              end if;                 
+                           elsif (mem_addressData(28 downto 0) >= 16#1F802000# and mem_addressData(28 downto 0) < 16#1F804000#) then
+                              ext_select_ex2 <= '1';
+                              if (mem_rnw = '1') then
+                                 rotate16 <= '1';
+                                 state    <= BUSREADEXTERNAL;
+                              else
+                                 state    <= BUSWRITEEXTERNAL;
+                              end if;                           
+                           elsif (mem_addressData(28 downto 0) = 16#1FA00000#) then
+                              ext_select_ex3 <= '1';
                               if (mem_rnw = '1') then
                                  rotate16 <= '1';
                                  state    <= BUSREADEXTERNAL;
@@ -1034,13 +1040,25 @@ begin
    
    
    ext_memctrl <= spu_memctrl when (ext_select_spu = '1') else
+                  ex1_memctrl when (ext_select_ex1 = '1') else
+                  ex2_memctrl when (ext_select_ex2 = '1') else
+                  ex3_memctrl when (ext_select_ex3 = '1') else
                   (others => '0');
    
    
-   bus_spu_addr      <= ext_bus_addr;
+   bus_spu_addr      <= ext_bus_addr(9 downto 0);
    bus_spu_write     <= '1' when (ext_write_ena = '1' and ext_select_spu_saved = '1') else '0';
-   bus_SPU_read      <= '1' when (ext_state = EXT_READ_NEXT and ext_select_spu_saved = '1') else '0';
+   bus_spu_read      <= '1' when (ext_state = EXT_READ_NEXT and ext_select_spu_saved = '1') else '0';
    bus_spu_dataWrite <= ext_dataWrite;
+   
+   bus_exp2_addr      <= ext_bus_addr;
+   bus_exp2_write     <= '1' when (ext_write_ena = '1' and ext_select_ex2_saved = '1') else '0';
+   bus_exp2_read      <= '1' when (ext_state = EXT_READ_NEXT and ext_select_ex2_saved = '1') else '0';
+   bus_exp2_dataWrite <= ext_dataWrite(7 downto 0);
+   
+   -- busses EXP1+3 are stubs that are working in general, but there is nothing connected to them, so unused parts are not implemented
+   bus_exp1_read     <= '1' when (ext_state = EXT_READ_NEXT and ext_select_ex1_saved = '1') else '0';
+   bus_exp3_read     <= '1' when (ext_state = EXT_READ_NEXT and ext_select_ex3_saved = '1') else '0';
    
    process (clk1x)
       variable newWait : integer range 0 to 63;
@@ -1071,9 +1089,12 @@ begin
                   ext_writeMask_buf    <= writeMask_buf;
                   ext_byteStep         <= (others => '0');
                   ext_data             <= (others => '0');
-                  ext_bus_addr         <= addressData_buf(9 downto 0);
+                  ext_bus_addr         <= addressData_buf(12 downto 0);
                   
                   ext_select_spu_saved <= ext_select_spu;
+                  ext_select_ex1_saved <= ext_select_ex1;
+                  ext_select_ex2_saved <= ext_select_ex2;
+                  ext_select_ex3_saved <= ext_select_ex3;
 
                   ext_memctrl_WDelay   <= ext_memctrl(3 downto 0);
                   ext_memctrl_RDelay   <= ext_memctrl(7 downto 4);
@@ -1092,6 +1113,17 @@ begin
                         ext_waitcnt <= ext_reccount - 1;
                      end if;
                      
+                     if (ext_memctrl(12) = '0' and writeMask_buf(2 downto 0) = "000") then
+                        ext_byteStep                   <= "11";
+                        ext_bus_addr(1 downto 0)       <= "11";
+                     elsif (writeMask_buf(1 downto 0) = "00") then
+                        ext_byteStep                   <= "10";
+                        ext_bus_addr(1 downto 0)       <= "10";
+                     elsif (ext_memctrl(12) = '0' and writeMask_buf(0) = '0') then
+                        ext_byteStep                   <= "01";
+                        ext_bus_addr(1 downto 0)       <= "01";
+                     end if;
+
                   elsif (state = BUSREADEXTERNAL and ext_reccount = 0 and ext_done = '0') then
                   
                      newWait := 0;
@@ -1114,7 +1146,7 @@ begin
                         
                   end if;
                   
-               -- SPU
+               -- write
                when EXE_WRITE_PREWAIT =>
                   if (ext_waitcnt > 0) then
                      ext_waitcnt    <= ext_waitcnt - 1;
@@ -1135,6 +1167,9 @@ begin
                   newWait := to_integer(ext_memctrl_WDelay);
                   if (ext_memctrl_PStrobe = '1') then 
                      newWait := newWait + to_integer(com3_delay);
+                  end if;
+                  if (ext_memctrl_Hold = '1') then
+                     newWait := newWait + to_integer(com1_delay);
                   end if;
                   ext_waitcnt <= newWait;
                   
@@ -1168,13 +1203,18 @@ begin
                      
                      if (ext_memctrl_width = '1') then
                         ext_byteStep             <= ext_byteStep + 2;
-                        ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 2;
+                        if (ext_memctrl_autoinc = '1') then
+                           ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 2;
+                        end if;
                      else
                         ext_byteStep             <= ext_byteStep + 1;
-                        ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 1;
+                        if (ext_memctrl_autoinc = '1') then
+                           ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 1;
+                        end if;
                      end if;
                   end if;
                   
+               -- read
                when EXT_READ_NEXT =>
                   ext_state <= EXT_READ;
                   
@@ -1188,9 +1228,14 @@ begin
                      ext_finished       <= '1';
                   end if;
                   
+                  newWait := 0;
                   if (ext_memctrl_RecP = '1') then 
-                     ext_reccount <= to_integer(com0_delay);
+                     newWait := newWait + to_integer(com0_delay);
                   end if;
+                  if (ext_memctrl_Float = '1') then 
+                     newWait := newWait + to_integer(com2_delay) + 1;
+                  end if;
+                  ext_reccount <= newWait;
                   
                when EXT_READ =>
                   if (ext_select_spu_saved = '1') then
@@ -1209,6 +1254,38 @@ begin
                            end if;  
                         when others => null;
                      end case;
+                  elsif (ext_select_ex1_saved = '1') then
+                     case (ext_byteStep) is
+                        when "00" => ext_data( 7 downto  0) <= bus_exp1_dataRead;
+                        when "01" => ext_data(15 downto  8) <= bus_exp1_dataRead;
+                        when "10" => ext_data(23 downto 16) <= bus_exp1_dataRead;
+                        when "11" => ext_data(31 downto 24) <= bus_exp1_dataRead;
+                        when others => null;
+                     end case;
+                  elsif (ext_select_ex2_saved = '1') then
+                     case (ext_byteStep) is
+                        when "00" => ext_data( 7 downto  0) <= bus_exp2_dataRead;
+                        when "01" => ext_data(15 downto  8) <= bus_exp2_dataRead;
+                        when "10" => ext_data(23 downto 16) <= bus_exp2_dataRead;
+                        when "11" => ext_data(31 downto 24) <= bus_exp2_dataRead;
+                        when others => null;
+                     end case;
+                  elsif (ext_select_ex3_saved = '1') then
+                     case (ext_byteStep) is
+                        when "00" => 
+                           if (addressData_buf(0) = '1') then 
+                              ext_data( 7 downto  0) <= bus_exp3_dataRead(15 downto 8); 
+                           else 
+                              ext_data(15 downto  0) <= bus_exp3_dataRead; 
+                           end if;
+                        when "10" => 
+                           if (addressData_buf(0) = '1') then 
+                              ext_data(23 downto  8) <= bus_exp3_dataRead;
+                           else 
+                              ext_data(31 downto 16) <= bus_exp3_dataRead; 
+                           end if;  
+                        when others => null;
+                     end case;
                   end if;
                
                   if (ext_finished = '1') then
@@ -1223,6 +1300,12 @@ begin
                      if (ext_memctrl_PStrobe = '1') then 
                         newWait := newWait + to_integer(com3_delay);
                      end if;
+                     if (ext_memctrl_Float = '1') then 
+                        newWait := newWait + to_integer(com2_delay);
+                     end if;
+                     if (ext_memctrl_RecP = '1' and ext_memctrl_Float = '1') then -- assumption from exp2 read test! 
+                        newWait := newWait + 1;
+                     end if;
                      ext_waitcnt  <= newWait;
                   
                      if (newWait > 0) then
@@ -1233,10 +1316,14 @@ begin
                      
                      if (ext_memctrl_width = '1') then
                         ext_byteStep             <= ext_byteStep + 2;
-                        ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 2;
+                        if (ext_memctrl_autoinc = '1') then
+                           ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 2;
+                        end if;
                      else
                         ext_byteStep             <= ext_byteStep + 1;
-                        ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 1;
+                        if (ext_memctrl_autoinc = '1') then
+                           ext_bus_addr(1 downto 0) <= ext_bus_addr(1 downto 0) + 1;
+                        end if;
                      end if;
                   end if;
                   

@@ -287,11 +287,14 @@ architecture arch of psx_top is
    signal memSPU_RD              : std_logic := '0';
 
    -- Busses
+   signal bios_memctrl           : unsigned(13 downto 0);
+   
+   signal ex1_memctrl            : unsigned(13 downto 0);
    --signal bus_exp1_addr          : unsigned(22 downto 0); 
    --signal bus_exp1_dataWrite     : std_logic_vector(31 downto 0);
    signal bus_exp1_read          : std_logic;
    --signal bus_exp1_write         : std_logic;
-   signal bus_exp1_dataRead      : std_logic_vector(31 downto 0);
+   signal bus_exp1_dataRead      : std_logic_vector(7 downto 0);
    
    signal bus_memc_addr          : unsigned(5 downto 0); 
    signal bus_memc_dataWrite     : std_logic_vector(31 downto 0);
@@ -337,6 +340,7 @@ architecture arch of psx_top is
    signal bus_tmr_write          : std_logic;
    signal bus_tmr_dataRead       : std_logic_vector(31 downto 0);
    
+   signal cd_memctrl             : unsigned(13 downto 0);
    signal bus_cd_addr            : unsigned(3 downto 0); 
    signal bus_cd_dataWrite       : std_logic_vector(7 downto 0);
    signal bus_cd_read            : std_logic;
@@ -363,18 +367,18 @@ architecture arch of psx_top is
    signal bus_spu_write          : std_logic;
    signal bus_spu_dataRead       : std_logic_vector(15 downto 0);
    
+   signal ex2_memctrl            : unsigned(13 downto 0);
    signal bus_exp2_addr          : unsigned(12 downto 0); 
-   signal bus_exp2_dataWrite     : std_logic_vector(31 downto 0);
+   signal bus_exp2_dataWrite     : std_logic_vector(7 downto 0);
    signal bus_exp2_read          : std_logic;
    signal bus_exp2_write         : std_logic;
-   signal bus_exp2_dataRead      : std_logic_vector(31 downto 0);
-   signal bus_exp2_writeMask     : std_logic_vector(3 downto 0);   
+   signal bus_exp2_dataRead      : std_logic_vector(7 downto 0);  
    
-   signal bus_exp3_dataWrite     : std_logic_vector(31 downto 0);
+   signal ex3_memctrl            : unsigned(13 downto 0);
+   --signal bus_exp3_dataWrite     : std_logic_vector(7 downto 0);
    signal bus_exp3_read          : std_logic;
-   signal bus_exp3_write         : std_logic;
-   signal bus_exp3_dataRead      : std_logic_vector(31 downto 0);
-   signal bus_exp3_writeMask     : std_logic_vector(3 downto 0);
+   --signal bus_exp3_write         : std_logic;
+   signal bus_exp3_dataRead      : std_logic_vector(15 downto 0);
    
    signal com0_delay             : unsigned(3 downto 0);
    signal com1_delay             : unsigned(3 downto 0);
@@ -958,6 +962,11 @@ begin
       bus2_dataRead        => bus_memc2_dataRead,
       
       spu_memctrl          => spu_memctrl, 
+      cd_memctrl           => cd_memctrl, 
+      bios_memctrl         => bios_memctrl, 
+      ex1_memctrl          => ex1_memctrl, 
+      ex2_memctrl          => ex2_memctrl, 
+      ex3_memctrl          => ex3_memctrl, 
       
       com0_delay           => com0_delay,
       com1_delay           => com1_delay,
@@ -1636,7 +1645,6 @@ begin
       bus_dataWrite        => bus_exp2_dataWrite,
       bus_read             => bus_exp2_read,     
       bus_write            => bus_exp2_write,    
-      bus_writeMask        => bus_exp2_writeMask, 
       bus_dataRead         => bus_exp2_dataRead
    );
 
@@ -1692,6 +1700,9 @@ begin
       dma_cache_data       => dma_cache_data, 
       dma_cache_write      => dma_cache_write,     
 
+      bios_memctrl         => bios_memctrl,
+
+      ex1_memctrl          => ex1_memctrl,
       --bus_exp1_addr        => bus_exp1_addr,   
       --bus_exp1_dataWrite   => bus_exp1_dataWrite,
       bus_exp1_read        => bus_exp1_read,   
@@ -1742,6 +1753,7 @@ begin
       bus_tmr_write        => bus_tmr_write,    
       bus_tmr_dataRead     => bus_tmr_dataRead,  
 
+      cd_memctrl           => cd_memctrl,
       bus_cd_addr          => bus_cd_addr,     
       bus_cd_dataWrite     => bus_cd_dataWrite,
       bus_cd_read          => bus_cd_read,     
@@ -1768,13 +1780,14 @@ begin
       bus_spu_write        => bus_spu_write,    
       bus_spu_dataRead     => bus_spu_dataRead, 
       
+      ex2_memctrl          => ex2_memctrl,
       bus_exp2_addr        => bus_exp2_addr,     
       bus_exp2_dataWrite   => bus_exp2_dataWrite,
       bus_exp2_read        => bus_exp2_read,     
       bus_exp2_write       => bus_exp2_write,    
-      bus_exp2_dataRead    => bus_exp2_dataRead, 
-      bus_exp2_writeMask   => bus_exp2_writeMask,
+      bus_exp2_dataRead    => bus_exp2_dataRead,
       
+      ex3_memctrl          => ex3_memctrl,
       --bus_exp3_dataWrite   => bus_exp3_dataWrite,
       bus_exp3_read        => bus_exp3_read,     
       --bus_exp3_write       => bus_exp3_write,    

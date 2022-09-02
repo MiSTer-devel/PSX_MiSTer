@@ -22,6 +22,11 @@ entity memctrl is
       bus2_dataRead        : out std_logic_vector(31 downto 0);
       
       spu_memctrl          : out unsigned(13 downto 0);
+      cd_memctrl           : out unsigned(13 downto 0);
+      bios_memctrl         : out unsigned(13 downto 0);
+      ex1_memctrl          : out unsigned(13 downto 0);
+      ex2_memctrl          : out unsigned(13 downto 0);
+      ex3_memctrl          : out unsigned(13 downto 0);
       
       com0_delay           : out unsigned(3 downto 0);
       com1_delay           : out unsigned(3 downto 0);
@@ -60,6 +65,11 @@ begin
 
    
    spu_memctrl  <= unsigned(MC_SPU_DELAY(13 downto 0));
+   cd_memctrl   <= unsigned(MC_CDROM_DELAY(13 downto 0));
+   bios_memctrl <= unsigned(MC_BIOS_DELAY(13 downto 0));
+   ex1_memctrl  <= unsigned(MC_EXP1_DELAY(13 downto 0));
+   ex2_memctrl  <= unsigned(MC_EXP2_DELAY(13 downto 0));
+   ex3_memctrl  <= unsigned(MC_EXP3_DELAY(13 downto 0));
 
    com0_delay   <= unsigned(MC_COMMON_DELAY( 3 downto  0));
    com1_delay   <= unsigned(MC_COMMON_DELAY( 7 downto  4));
