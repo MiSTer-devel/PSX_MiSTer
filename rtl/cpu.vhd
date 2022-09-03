@@ -161,10 +161,10 @@ architecture arch of cpu is
    -- stage 1          
    -- cache
    signal tag_address_a                : std_logic_vector(7 downto 0);
-   signal tag_data_a                   : std_logic_vector(19 downto 0);
+   signal tag_data_a                   : std_logic_vector(23 downto 0);
    signal tag_wren_a                   : std_logic;
    signal tag_address_b                : std_logic_vector(7 downto 0);
-   signal tag_q_b                      : std_logic_vector(19 downto 0);
+   signal tag_q_b                      : std_logic_vector(23 downto 0);
    
    signal tagValid                     : std_logic_vector(0 to 255) := (others => '0');
    
@@ -564,7 +564,7 @@ begin
       rdcontrol_aclr                      => "OFF",
       rdcontrol_reg                       => "UNREGISTERED",
       read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
-      width                               => 20,
+      width                               => 24,
       widthad                             => 8,
       width_byteena                       => 1,
       wraddress_aclr                      => "OFF",
@@ -582,7 +582,10 @@ begin
 	);
 
    tag_address_a <= std_logic_vector(FetchLastAddr(11 downto 4));
-   tag_data_a    <= std_logic_vector(FetchLastAddr(31 downto 12));
+   tag_data_a    <= "1000" & std_logic_vector(FetchLastAddr(31 downto 12)) when (FetchLastAddr(3 downto 2) = "11") else
+                    "1100" & std_logic_vector(FetchLastAddr(31 downto 12)) when (FetchLastAddr(3 downto 2) = "10") else
+                    "1110" & std_logic_vector(FetchLastAddr(31 downto 12)) when (FetchLastAddr(3 downto 2) = "01") else
+                    "1111" & std_logic_vector(FetchLastAddr(31 downto 12));
    
    tag_address_b <= std_logic_vector(FetchAddr(11 downto 4));
 
@@ -680,8 +683,9 @@ begin
             
             if (mem4_request = '0' or 
                (stallNew4 = '0' and
-               (to_integer(unsigned(FetchAddr(31 downto 29))) = 0 or to_integer(unsigned(FetchAddr(31 downto 29))) = 4) and  -- cache hit
-               unsigned(tag_q_b) = FetchAddr(31 downto 12) and tagValid(to_integer(FetchAddr(11 downto 4))) = '1')) then
+               (to_integer(unsigned(FetchAddr(31 downto 29))) = 0 or to_integer(unsigned(FetchAddr(31 downto 29))) = 4) and -- correct area
+               unsigned(tag_q_b(19 downto 0)) = FetchAddr(31 downto 12) and tagValid(to_integer(FetchAddr(11 downto 4))) = '1' and -- cache hit
+               tag_q_b(20 + to_integer(unsigned(FetchAddr(3 downto 2)))) = '1')) then
                   request := '1';
             else
                stallNew1 <= '1';
@@ -745,7 +749,8 @@ begin
          case (to_integer(unsigned(FetchAddr(31 downto 29)))) is
             
             when 0 | 4 => -- cached
-               if (unsigned(tag_q_b) = FetchAddr(31 downto 12) and tagValid(to_integer(FetchAddr(11 downto 4))) = '1') then
+               if (unsigned(tag_q_b(19 downto 0)) = FetchAddr(31 downto 12) and tagValid(to_integer(FetchAddr(11 downto 4))) = '1' and 
+                   tag_q_b(20 + to_integer(unsigned(FetchAddr(3 downto 2)))) = '1') then
                   cacheHitNext      <= '1';
                   stallNew1         <= '0';
                   PCnext            <= FetchAddr + 4;
