@@ -166,8 +166,6 @@ architecture arch of cpu is
    signal tag_address_b                : std_logic_vector(7 downto 0);
    signal tag_q_b                      : std_logic_vector(23 downto 0);
    
-   signal tagValid                     : std_logic_vector(0 to 255) := (others => '0');
-   
    signal cache_address_a              : std_logic_vector(7 downto 0);
    signal cache_data_a                 : std_logic_vector(127 downto 0);
    signal cache_wren_a                 : std_logic_vector(0 to 3);
@@ -581,8 +579,10 @@ begin
       q          => tag_q_b
 	);
 
-   tag_address_a <= std_logic_vector(FetchLastAddr(11 downto 4));
-   tag_data_a    <= "1000" & std_logic_vector(FetchLastAddr(31 downto 12)) when (FetchLastAddr(3 downto 2) = "11") else
+   tag_address_a <= std_logic_vector(writebackInvalidateCacheLine) when (writebackInvalidateCacheEna = '1') else std_logic_vector(FetchLastAddr(11 downto 4));
+   
+   tag_data_a    <= "0000" & std_logic_vector(FetchLastAddr(31 downto 12)) when (writebackInvalidateCacheEna = '1') else
+                    "1000" & std_logic_vector(FetchLastAddr(31 downto 12)) when (FetchLastAddr(3 downto 2) = "11") else
                     "1100" & std_logic_vector(FetchLastAddr(31 downto 12)) when (FetchLastAddr(3 downto 2) = "10") else
                     "1110" & std_logic_vector(FetchLastAddr(31 downto 12)) when (FetchLastAddr(3 downto 2) = "01") else
                     "1111" & std_logic_vector(FetchLastAddr(31 downto 12));
@@ -621,7 +621,7 @@ begin
    mem1_address    <= FetchAddr;
 
    process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, branch, PCbranch, mem4_request, mem_done, mem_dataRead, memoryMuxStage, PC, fetchReady, stall1, exceptionNew, opcode0, mem_dataCache, reset, FetchAddr, 
-            tagValid, tag_q_b, blockirqCnt, FetchLastAddr, stallNew4, stall4)
+            tag_q_b, blockirqCnt, FetchLastAddr, stallNew4, stall4, writebackInvalidateCacheEna)
       variable request : std_logic;
    begin
       request         := '0';
@@ -648,7 +648,10 @@ begin
          end case;
       end if;
       
-      
+      if (writebackInvalidateCacheEna = '1') then
+         tag_wren_a   <= '1';
+      end if;
+
       if (exception = 0 and blockirq = '0' and cop0_SR(0) = '1' and (cop0_SR(10 downto 8) and cop0_CAUSE(10 downto 8)) /= "000") then
       
          if (stall = 0) then
@@ -684,8 +687,7 @@ begin
             if (mem4_request = '0' or 
                (stallNew4 = '0' and
                (to_integer(unsigned(FetchAddr(31 downto 29))) = 0 or to_integer(unsigned(FetchAddr(31 downto 29))) = 4) and -- correct area
-               unsigned(tag_q_b(19 downto 0)) = FetchAddr(31 downto 12) and tagValid(to_integer(FetchAddr(11 downto 4))) = '1' and -- cache hit
-               tag_q_b(20 + to_integer(unsigned(FetchAddr(3 downto 2)))) = '1')) then
+               unsigned(tag_q_b(19 downto 0)) = FetchAddr(31 downto 12) and tag_q_b(20 + to_integer(unsigned(FetchAddr(3 downto 2)))) = '1')) then -- cache hit
                   request := '1';
             else
                stallNew1 <= '1';
@@ -749,8 +751,7 @@ begin
          case (to_integer(unsigned(FetchAddr(31 downto 29)))) is
             
             when 0 | 4 => -- cached
-               if (unsigned(tag_q_b(19 downto 0)) = FetchAddr(31 downto 12) and tagValid(to_integer(FetchAddr(11 downto 4))) = '1' and 
-                   tag_q_b(20 + to_integer(unsigned(FetchAddr(3 downto 2)))) = '1') then
+               if (unsigned(tag_q_b(19 downto 0)) = FetchAddr(31 downto 12) and tag_q_b(20 + to_integer(unsigned(FetchAddr(3 downto 2)))) = '1') then
                   cacheHitNext      <= '1';
                   stallNew1         <= '0';
                   PCnext            <= FetchAddr + 4;
@@ -784,9 +785,7 @@ begin
          ce_1 <= ce;
       
          if (reset = '1') then
-         
-            tagValid       <= (others => '0');
-                           
+                     
             stall1         <= '0';
             PC             <= unsigned(ss_in(0)); -- x"BFC00000";
                            
@@ -829,18 +828,6 @@ begin
             
             if (cacheHitNext = '1') then
                PCold0 <= FetchAddr;
-            end if;
-   
-            if (mem_done = '1' and memoryMuxStage = 1) then 
-               case (to_integer(unsigned(FetchLastAddr(31 downto 29)))) is
-                  when 0 | 4 => -- cached
-                     tagValid(to_integer(FetchLastAddr(11 downto 4))) <= '1';
-                  when others => null;
-               end case;
-            end if;
-            
-            if (writebackInvalidateCacheEna = '1') then
-               tagValid(to_integer(writebackInvalidateCacheLine)) <= '0';
             end if;
             
          elsif (ce_1 = '1') then
@@ -2043,7 +2030,7 @@ begin
       end if;
       
       if (SS_wren_SCP = '1') then
-         scratchpad_wren_a <= "1111";
+         scratchpad_wren_a     <= "1111";
       end if;
       
       if (SS_rden_SCP = '1') then
@@ -2281,6 +2268,12 @@ begin
             end if;
    
          end if;
+         
+         if (SS_wren_SCP = '1') then
+            writebackInvalidateCacheEna  <= '1';
+            writebackInvalidateCacheLine <= SS_Adr(7 downto 0);
+         end if;
+         
       end if;
    end process;
    

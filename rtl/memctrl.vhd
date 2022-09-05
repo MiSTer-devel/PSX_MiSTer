@@ -21,6 +21,8 @@ entity memctrl is
       bus2_write           : in  std_logic;
       bus2_dataRead        : out std_logic_vector(31 downto 0);
       
+      errorBuswidth        : out std_logic;
+      
       spu_memctrl          : out unsigned(13 downto 0);
       cd_memctrl           : out unsigned(13 downto 0);
       bios_memctrl         : out unsigned(13 downto 0);
@@ -63,6 +65,8 @@ architecture arch of memctrl is
 
 begin 
 
+   errorBuswidth <= '1' when (MC_SPU_DELAY(12) = '0') else 
+                    '0';
    
    spu_memctrl  <= unsigned(MC_SPU_DELAY(13 downto 0));
    cd_memctrl   <= unsigned(MC_CDROM_DELAY(13 downto 0));

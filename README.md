@@ -89,6 +89,7 @@ List of Errors:
 - EB     - DMA and CPU interlock error 
 - EC     - DMA FIFO overflow
 - ED     - CPU Data/Bus request timeout -> will also appear if the BIOS is not found or corrupt or no SDRAM module is installed
+- EF     - BusWidth for SPU was set to 8 Bit (but should be 16 bit)
 
 ## Debug Options
 

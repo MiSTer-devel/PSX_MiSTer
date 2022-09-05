@@ -523,6 +523,7 @@ architecture arch of psx_top is
    signal errorDMACPU            : std_logic;
    signal errorDMAFIFO           : std_logic;
    signal errorTimer             : std_logic;
+   signal errorBuswidth          : std_logic;
    
    signal debugmodeOn            : std_logic;
 
@@ -792,17 +793,18 @@ begin
          else
          
             if (errorEna = '0') then
-               if (errorCD      = '1') then errorEna  <= '1'; errorCode <= x"1"; end if;
-               if (errorCPU     = '1') then errorEna  <= '1'; errorCode <= x"2"; end if;
-               if (errorGPU     = '1') then errorEna  <= '1'; errorCode <= x"3"; end if;
-               if (errorMASK    = '1') then errorEna  <= '1'; errorCode <= x"7"; end if;
-               if (errorCHOP    = '1') then errorEna  <= '1'; errorCode <= x"8"; end if;
-               if (errorGPUFIFO = '1') then errorEna  <= '1'; errorCode <= x"9"; end if;
-               if (errorSPUTIME = '1') then errorEna  <= '1'; errorCode <= x"A"; end if;
-               if (errorDMACPU  = '1') then errorEna  <= '1'; errorCode <= x"B"; end if;
-               if (errorDMAFIFO = '1') then errorEna  <= '1'; errorCode <= x"C"; end if;
-               if (errorCPU2    = '1') then errorEna  <= '1'; errorCode <= x"D"; end if;
-               if (errorTimer   = '1') then errorEna  <= '1'; errorCode <= x"E"; end if;
+               if (errorCD       = '1') then errorEna  <= '1'; errorCode <= x"1"; end if;
+               if (errorCPU      = '1') then errorEna  <= '1'; errorCode <= x"2"; end if;
+               if (errorGPU      = '1') then errorEna  <= '1'; errorCode <= x"3"; end if;
+               if (errorMASK     = '1') then errorEna  <= '1'; errorCode <= x"7"; end if;
+               if (errorCHOP     = '1') then errorEna  <= '1'; errorCode <= x"8"; end if;
+               if (errorGPUFIFO  = '1') then errorEna  <= '1'; errorCode <= x"9"; end if;
+               if (errorSPUTIME  = '1') then errorEna  <= '1'; errorCode <= x"A"; end if;
+               if (errorDMACPU   = '1') then errorEna  <= '1'; errorCode <= x"B"; end if;
+               if (errorDMAFIFO  = '1') then errorEna  <= '1'; errorCode <= x"C"; end if;
+               if (errorCPU2     = '1') then errorEna  <= '1'; errorCode <= x"D"; end if;
+               if (errorTimer    = '1') then errorEna  <= '1'; errorCode <= x"E"; end if;
+               if (errorBuswidth = '1') then errorEna  <= '1'; errorCode <= x"F"; end if;
             end if;
             
             if (errorEna = '0' or errorCode = x"3") then
@@ -960,6 +962,8 @@ begin
       bus2_read            => bus_memc2_read,     
       bus2_write           => bus_memc2_write,    
       bus2_dataRead        => bus_memc2_dataRead,
+      
+      errorBuswidth        => errorBuswidth,
       
       spu_memctrl          => spu_memctrl, 
       cd_memctrl           => cd_memctrl, 
