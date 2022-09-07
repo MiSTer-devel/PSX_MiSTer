@@ -176,10 +176,7 @@ architecture arch of memorymux is
       BUSWRITEEXTERNAL,
       BUSREADEXTERNAL,
       BUSREADREQUEST,
-      BUSREAD,
-      CD_WRITE,
-      CD_READ_WAIT,
-      CD_READ,      
+      BUSREAD, 
       WAITING,
       
       EXEREADHEADER,
@@ -224,7 +221,6 @@ architecture arch of memorymux is
    signal ram_page_open          : std_logic;
    signal ram_page_addr          : unsigned(10 downto 0);
    
-   signal byteStep               : unsigned(1 downto 0);
    signal waitcnt                : integer range 0 to 127;
          
    signal mem_dataRead_buf       : std_logic_vector(31 downto 0);
@@ -249,8 +245,6 @@ architecture arch of memorymux is
    signal dataFromBusses         : std_logic_vector(31 downto 0);
    signal rotate32               : std_logic;
    signal rotate16               : std_logic;
-         
-   signal data_cd                : std_logic_vector(31 downto 0);
          
    -- EXE handling      
    signal loadExe_latched        : std_logic := '0';
@@ -301,7 +295,9 @@ architecture arch of memorymux is
    signal ext_dataWrite          : std_logic_vector(15 downto 0);
    
    signal ext_select_spu         : std_logic := '0';
-   signal ext_select_spu_saved   : std_logic := '0';
+   signal ext_select_spu_saved   : std_logic := '0';   
+   signal ext_select_cd          : std_logic := '0';
+   signal ext_select_cd_saved    : std_logic := '0';
    signal ext_select_ex1         : std_logic := '0';
    signal ext_select_ex1_saved   : std_logic := '0';   
    signal ext_select_ex2         : std_logic := '0';
@@ -450,8 +446,7 @@ begin
    bus_stall         <= bus_gpu_stall;
    
    dataFromBusses    <= bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_memc2_dataRead or bus_irq_dataRead or 
-                        bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead or
-                        data_cd;
+                        bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead;
    
    data_ram          <= dcache_read_data when (dcache_hit_next = '1') else ram_dataRead32;
   
@@ -523,10 +518,6 @@ begin
          ram_ena              <= '0';
          mem_done_buf         <= '0';
          reset_exe            <= '0';
-               
-         bus_cd_read          <= '0';
-         bus_cd_write         <= '0';         
-         
          dcache_hit_next      <= '0';
          
          if (loadExe = '1') then
@@ -570,14 +561,11 @@ begin
           
             case (state) is
                when IDLE =>
-                  
-                  byteStep        <= (others => '0');
+
                   addressData_buf <= mem_addressData;
                   dataWrite_buf   <= mem_dataWrite;
                   reqsize_buf     <= mem_reqsize;
                   writeMask_buf   <= mem_writeMask;
-                  
-                  data_cd         <= (others => '0');
                   
                   if (loadExe_latched = '1') then
                      
@@ -675,25 +663,25 @@ begin
                            state   <= READBIOS;
                            addressBIOS_buf <= mem_addressData(18 downto 0);
                            case (mem_reqsize) is
-                              when "00" => waitcnt <= 1;
-                              when "01" => waitcnt <= 4;
-                              when "10" => waitcnt <= 16;
+                              when "00" => waitcnt <= 2;
+                              when "01" => waitcnt <= 10;
+                              when "10" => waitcnt <= 26;
                               when others => null;
                            end case;
                         else
                            rotate32       <= '0';
                            rotate16       <= '0';
                            ext_select_spu <= '0';
+                           ext_select_cd  <= '0';
                            ext_select_ex1 <= '0';
                            ext_select_ex2 <= '0';
                            ext_select_ex3 <= '0';
                            if (mem_addressData(28 downto 0) >= 16#1F801800# and mem_addressData(28 downto 0) < 16#1F801810#) then
+                              ext_select_cd <= '1';
                               if (mem_rnw = '1') then
-                                 state       <= CD_READ_WAIT;
-                                 bus_cd_addr <= mem_addressData(3 downto 0);
-                                 bus_cd_read <= '1';
+                                 state    <= BUSREADEXTERNAL;
                               else
-                                 state   <= CD_WRITE;
+                                 state    <= BUSWRITEEXTERNAL;
                               end if;
                            elsif (mem_addressData(28 downto 0) >= 16#1F801C00# and mem_addressData(28 downto 0) < 16#1F802000#) then
                               ext_select_spu <= '1';
@@ -855,53 +843,6 @@ begin
                      end if;
                   end if;
                   
-               -- CD
-               when CD_WRITE =>
-                  byteStep    <= byteStep + 1;
-                  bus_cd_addr <= addressData_buf(3 downto 2) & byteStep;
-                  case (byteStep) is
-                     when "00" => if (writeMask_buf(0) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf( 7 downto  0); end if;
-                     when "01" => if (writeMask_buf(1) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf(15 downto  8); end if;
-                     when "10" => if (writeMask_buf(2) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf(23 downto 16); end if;
-                     when "11" => if (writeMask_buf(3) = '1') then bus_cd_write <= '1'; bus_cd_dataWrite <= dataWrite_buf(31 downto 24); end if;  state <= IDLE; 
-                     when others => null;
-                  end case;
-                  
-               when CD_READ_WAIT =>
-                  state <= CD_READ;
-                  
-               when CD_READ =>
-                  state       <= CD_READ_WAIT;
-                  byteStep    <= byteStep + 1;
-                  bus_cd_addr <= bus_cd_addr + 1;
-                  case (byteStep) is
-                     when "00" => 
-                        data_cd( 7 downto  0) <= bus_cd_dataRead; 
-                        if (reqsize_buf = "00") then 
-                           state <= BUSREAD; 
-                        else
-                           bus_cd_read <= '1';
-                        end if;
-                        
-                     when "01" => 
-                        data_cd(15 downto  8) <= bus_cd_dataRead;
-                        if (reqsize_buf = "01") then 
-                           state <= BUSREAD; 
-                        else
-                           bus_cd_read <= '1';
-                        end if;
-                        
-                     when "10" => 
-                        data_cd(23 downto 16) <= bus_cd_dataRead;
-                        bus_cd_read <= '1';
-                        
-                     when "11" => 
-                        data_cd(31 downto 24) <= bus_cd_dataRead;
-                        state <= BUSREAD; 
-                        
-                     when others => null;
-                  end case;  
-                  
                when WAITING =>
                   if (waitcnt > 0) then
                      waitcnt <= waitcnt - 1;
@@ -1040,6 +981,7 @@ begin
    
    
    ext_memctrl <= spu_memctrl when (ext_select_spu = '1') else
+                  cd_memctrl  when (ext_select_cd  = '1') else
                   ex1_memctrl when (ext_select_ex1 = '1') else
                   ex2_memctrl when (ext_select_ex2 = '1') else
                   ex3_memctrl when (ext_select_ex3 = '1') else
@@ -1050,6 +992,11 @@ begin
    bus_spu_write     <= '1' when (ext_write_ena = '1' and ext_select_spu_saved = '1') else '0';
    bus_spu_read      <= '1' when (ext_state = EXT_READ_NEXT and ext_select_spu_saved = '1') else '0';
    bus_spu_dataWrite <= ext_dataWrite;
+   
+   bus_cd_addr       <= ext_bus_addr(3 downto 0);
+   bus_cd_write      <= '1' when (ext_write_ena = '1' and ext_select_cd_saved = '1') else '0';
+   bus_cd_read       <= '1' when (ext_state = EXT_READ_NEXT and ext_select_cd_saved = '1') else '0';
+   bus_cd_dataWrite  <= ext_dataWrite(7 downto 0);
    
    bus_exp2_addr      <= ext_bus_addr;
    bus_exp2_write     <= '1' when (ext_write_ena = '1' and ext_select_ex2_saved = '1') else '0';
@@ -1092,6 +1039,7 @@ begin
                   ext_bus_addr         <= addressData_buf(12 downto 0);
                   
                   ext_select_spu_saved <= ext_select_spu;
+                  ext_select_cd_saved  <= ext_select_cd;
                   ext_select_ex1_saved <= ext_select_ex1;
                   ext_select_ex2_saved <= ext_select_ex2;
                   ext_select_ex3_saved <= ext_select_ex3;
@@ -1133,8 +1081,8 @@ begin
                      if (ext_memctrl(7 downto 4) > 0) then
                         newWait := newWait + to_integer(ext_memctrl(7 downto 4));
                      end if;
-                     if (ext_memctrl(11) = '1') then 
-                        newWait := newWait + to_integer(com3_delay);
+                     if (ext_memctrl(11) = '1' and com3_delay > ext_memctrl(7 downto 4)) then -- assumption from cd test! 
+                        newWait := newWait + to_integer(com3_delay) - to_integer(ext_memctrl(7 downto 4));
                      end if;
                      ext_waitcnt <= newWait;
                      
@@ -1165,8 +1113,8 @@ begin
                   ext_state   <= EXT_WRITE_WAIT;
                   
                   newWait := to_integer(ext_memctrl_WDelay);
-                  if (ext_memctrl_PStrobe = '1') then 
-                     newWait := newWait + to_integer(com3_delay);
+                  if (ext_memctrl_PStrobe = '1' and com3_delay > ext_memctrl_WDelay) then -- assumption from cd test! 
+                     newWait := newWait + to_integer(com3_delay) - to_integer(ext_memctrl_WDelay);
                   end if;
                   if (ext_memctrl_Hold = '1') then
                      newWait := newWait + to_integer(com1_delay);
@@ -1184,7 +1132,11 @@ begin
                   end if;
                   
                   if (ext_memctrl_RecP = '1') then 
-                     ext_reccount <= to_integer(com0_delay);
+                     if (ext_memctrl_PStrobe = '1') then  -- assumption from cd test! 
+                        ext_reccount <= to_integer(com0_delay) + to_integer(ext_memctrl_WDelay);
+                     else
+                        ext_reccount <= to_integer(com0_delay);
+                     end if;
                   end if;
                   
                when EXT_WRITE_WAIT =>
@@ -1254,6 +1206,14 @@ begin
                            end if;  
                         when others => null;
                      end case;
+                  elsif (ext_select_cd_saved = '1') then
+                     case (ext_byteStep) is
+                        when "00" => ext_data( 7 downto  0) <= bus_cd_dataRead;
+                        when "01" => ext_data(15 downto  8) <= bus_cd_dataRead;
+                        when "10" => ext_data(23 downto 16) <= bus_cd_dataRead;
+                        when "11" => ext_data(31 downto 24) <= bus_cd_dataRead;
+                        when others => null;
+                     end case;                 
                   elsif (ext_select_ex1_saved = '1') then
                      case (ext_byteStep) is
                         when "00" => ext_data( 7 downto  0) <= bus_exp1_dataRead;
@@ -1298,7 +1258,11 @@ begin
                         newWait := newWait + (to_integer(com0_delay) - 1); 
                      end if;
                      if (ext_memctrl_PStrobe = '1') then 
-                        newWait := newWait + to_integer(com3_delay);
+                        if (ext_memctrl_RecP = '0') then
+                           newWait := newWait + to_integer(com3_delay);
+                        elsif (com3_delay > com0_delay) then
+                           newWait := newWait + to_integer(com3_delay) - to_integer(com0_delay);  -- assumption from cd test! 
+                        end if;
                      end if;
                      if (ext_memctrl_Float = '1') then 
                         newWait := newWait + to_integer(com2_delay);

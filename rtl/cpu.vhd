@@ -2015,6 +2015,8 @@ begin
 
             if ((executeReadAddress(31 downto 29) = 0 or executeReadAddress(31 downto 29) = 4) and executeReadAddress(28 downto 10) = 16#7E000#) then
                --report "scratchpad access" severity failure;
+            elsif (executeReadAddress = x"FFFE0130") then
+               -- cachecontrol
             else 
                mem4_request   <= '1';
                mem4_address   <= executeReadAddress;
@@ -2191,6 +2193,9 @@ begin
                                  end case;
                            end case;
                         end if;
+                     elsif (executeReadAddress = x"FFFE0130") then
+                        writebackWriteEnable <= '1';
+                        writebackData        <= CACHECONTROL;
                      else
                         writebackLoadType    <= executeLoadType;
                         writebackReadAddress <= executeReadAddress;

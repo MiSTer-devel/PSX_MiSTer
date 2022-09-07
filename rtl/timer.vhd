@@ -216,7 +216,12 @@ begin
                      end if;
                   end if;
                   
+                  if (timerArray(i).irqDone = '1' and timerArray(i).T_MODE(6) = '0') then
+                     newIRQ := '0';
+                  end if;
+                  
                   if (newIRQ = '1') then
+                     timerArray(i).irqDone <= '1';
                      if (timerArray(i).T_MODE(7) = '1') then -- toggle mode
                         timerArray(i).T_MODE(10) <= not timerArray(i).T_MODE(10);
                      else
