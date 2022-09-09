@@ -17,7 +17,7 @@ entity dma is
       errorDMACPU          : out std_logic;
       errorDMAFIFO         : out std_logic;
       
-      REPRODUCIBLEDMATIMING: in  std_logic;
+      TURBO                : in  std_logic;
       DMABLOCKATONCE       : in  std_logic;
       
       canDMA               : in  std_logic;
@@ -140,7 +140,6 @@ architecture arch of dma is
    signal directionNeg        : std_logic;
    signal nextAddr            : std_logic_vector(23 downto 0);
    signal blocksleft          : unsigned(15 downto 0);
-   signal dmacount            : unsigned(9 downto 0);
          
    signal chopsize            : unsigned(7 downto 0);
    signal chopwaittime        : unsigned(7 downto 0);
@@ -177,10 +176,14 @@ architecture arch of dma is
    signal fifoOut_NearFull    : std_logic;
    signal fifoOut_Dout        : std_logic_vector(50 downto 0);
    signal fifoOut_Empty       : std_logic;
+   signal fifoOut_NearEmpty_3x: std_logic;
+   signal fifoOut_NearEmpty   : std_logic;
       
    -- REPRODUCIBLEDMATIMING   
-   signal REP_counter         : integer;
-   signal REP_target          : integer;
+   signal REP_counter         : integer range 0 to 1048575;
+   signal REP_target          : integer range 0 to 1048575;
+   signal REP_refresh         : integer range 0 to 255;
+   signal REP_first           : std_logic;
    
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
@@ -189,7 +192,9 @@ architecture arch of dma is
   
 begin 
 
-   dmaOn <= '1' when (dmaState /= OFF) else '0';
+   dmaOn <= '0' when ((dmaState = STOPPING or dmaState = PAUSING) and toDevice = '0' and fifoOut_NearEmpty = '1' and (TURBO = '1' or REP_counter >= REP_target)) else
+            '1' when (dmaState /= OFF) else 
+            '0';
 
    ram_refresh <= '1' when (reset = '1') else '0';
    ram_be      <= "1111";
@@ -280,7 +285,8 @@ begin
          
          requestOnFlyNew := requestOnFly;
       
-         fifoOut_NearFull <= fifoOut_NearFull_3x;
+         fifoOut_NearFull  <= fifoOut_NearFull_3x;
+         fifoOut_NearEmpty <= fifoOut_NearEmpty_3x;
       
          if (reset = '1') then
          
@@ -322,9 +328,8 @@ begin
 
          elsif (ce = '1') then
          
-            irqOut     <= '0';
-         
-            ram_ena    <= '0';
+            irqOut         <= '0';
+            ram_ena        <= '0';
          
             bus_dataRead <= (others => '0');
 
@@ -426,23 +431,6 @@ begin
                dmaEndWait <= dmaEndWait - 1;
             end if;
             
-            if (dmaRequest = '1' and canDMA = '1' and dmaState = OFF) then
-               dmaArray(triggerchannel).requestsPending <= '0';
-               dmaArray(triggerchannel).timeupPending   <= '0';
-               dmaArray(triggerchannel).D_CHCR(28)      <= '0';
-               dmaArray(triggerchannel).channelOn       <= '1';
-               
-               dmaState      <= WAITING;
-               waitcnt       <= 8;
-               isOn          <= '1';
-               activeChannel <= triggerchannel;
-               REP_target    <= 32;
-               
-               dmaSettings.D_CHCR <= dmaArray(triggerchannel).D_CHCR;
-               dmaSettings.D_MADR <= dmaArray(triggerchannel).D_MADR;
-               dmaSettings.D_BCR  <= dmaArray(triggerchannel).D_BCR;
-            end if;
-            
             -- accu
             if (DMA_CD_readEna = '1') then
                case (wordAccu) is
@@ -484,7 +472,25 @@ begin
             
             case (dmaState) is
             
-               when OFF => null;
+               when OFF => 
+                  if (dmaRequest = '1' and canDMA = '1') then
+                     dmaArray(triggerchannel).requestsPending <= '0';
+                     dmaArray(triggerchannel).timeupPending   <= '0';
+                     dmaArray(triggerchannel).D_CHCR(28)      <= '0';
+                     dmaArray(triggerchannel).channelOn       <= '1';
+                     
+                     dmaState      <= WAITING;
+                     waitcnt       <= 8;
+                     isOn          <= '1';
+                     activeChannel <= triggerchannel;
+                     REP_target    <= 1;
+                     REP_refresh   <= 0;
+                     REP_first     <= '1';
+                     
+                     dmaSettings.D_CHCR <= dmaArray(triggerchannel).D_CHCR;
+                     dmaSettings.D_MADR <= dmaArray(triggerchannel).D_MADR;
+                     dmaSettings.D_BCR  <= dmaArray(triggerchannel).D_BCR;
+                  end if;
                
                when WAITING =>
                   if (dmaSettings.D_CHCR(0) = '0' and activeChannel = 2 and dmaSettings.D_CHCR(10 downto 9) = "01") then
@@ -498,7 +504,6 @@ begin
                   end if;
                   
                   if (waitcnt = 8) then
-                     dmacount     <= (others => '0');
                      toDevice     <= dmaSettings.D_CHCR(0);
                      wordAccu     <= 0;
                      if (activeChannel = 3) then
@@ -556,7 +561,6 @@ begin
                      end if;    
                      
                      if (dmaSettings.D_CHCR(0) = '0') then -- from device -> can start immidiatly
-                        waitcnt <= 0;
                         case (dmaSettings.D_CHCR(10 downto 9)) is
                            when "00" => -- manual
                               dmaState    <= WORKING;
@@ -597,8 +601,6 @@ begin
                   end if;
                
                when READHEADER =>
-                  REP_target <= REP_target + 16;
-                  dmacount  <= dmacount + 1;
                   nextAddr  <= fifoIn_Dout(23 downto 0);
                   if (unsigned(fifoIn_Dout(31 downto 24)) > 0) then
                      dmaSettings.D_MADR <= dmaSettings.D_MADR + 4;
@@ -635,7 +637,6 @@ begin
                
                when WORKING =>
                   if (fifoIn_Valid = '1' or (toDevice = '0' and fifoOut_NearFull = '0' and wordAccu = 0 and readStall = '0')) then
-                     dmacount    <= dmacount + 1;
                      REP_target  <= REP_target + 1;
                      case (activeChannel) is
                      
@@ -665,11 +666,9 @@ begin
                               fifoOut_Wr                <= '1';
                               fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_CD_read & DMA_CD_read_accu;
-                              REP_target                <= REP_target + 4;
                            end if;
                            
                         when 4 =>
-                           REP_target <= REP_target + 2;
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
                               fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
@@ -685,7 +684,6 @@ begin
                               else
                                  fifoOut_Din(31 downto 0) <= x"00" & std_logic_vector(dmaSettings.D_MADR(23 downto 2) - 1) & "00";
                               end if;
-                              REP_target                <= REP_target + 3;
                            end if;
                      
                         when others => report "DMA channel not implemented" severity failure; 
@@ -695,6 +693,27 @@ begin
                         dmaSettings.D_MADR <= dmaSettings.D_MADR - 4;
                      else
                         dmaSettings.D_MADR <= dmaSettings.D_MADR + 4;
+                     end if;
+                     
+                     -- timing when hitting new bank
+                     REP_first <= '0';
+                     if (REP_first = '0') then
+                        if (directionNeg = '1')  then 
+                           if (dmaSettings.D_MADR(9 downto 2) = x"FF") then
+                              REP_target <= REP_target + 6;
+                           end if;
+                        else
+                           if (dmaSettings.D_MADR(9 downto 2) = x"00") then
+                              REP_target <= REP_target + 6;
+                           end if;
+                        end if;
+                     end if;
+                     
+                     -- timing for sdram refresh
+                     REP_refresh <= REP_refresh + 1;
+                     if (REP_refresh = 100) then
+                        REP_refresh <= 0;
+                        REP_target  <= REP_target + 6;
                      end if;
                   
                      wordcount <= wordcount - 1;
@@ -755,8 +774,8 @@ begin
                   end if;
                
                when STOPPING =>
-                  if (fifoOut_Empty = '1' and fifoOut_Wr = '0' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
-                     if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
+                  if (fifoOut_NearEmpty = '1' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
+                     if (TURBO = '1' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
                         dmaArray(activeChannel).D_MADR <= dmaSettings.D_MADR;
@@ -773,8 +792,8 @@ begin
                   end if;
                
                when PAUSING =>
-                  if (fifoOut_Empty = '1' and fifoOut_Wr = '0' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
-                     if (REPRODUCIBLEDMATIMING = '0' or REP_counter >= REP_target) then
+                  if (fifoOut_NearEmpty = '1' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
+                     if (TURBO = '1' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
                         dmaArray(activeChannel).D_MADR <= dmaSettings.D_MADR;
@@ -909,21 +928,23 @@ begin
    DMAfifoOut: entity mem.SyncFifoFallThrough
    generic map
    (
-      SIZE             => 64,
-      DATAWIDTH        => 51,
-      NEARFULLDISTANCE => 56
+      SIZE              => 64,
+      DATAWIDTH         => 51,
+      NEARFULLDISTANCE  => 56,
+      NEAREMPTYDISTANCE => 2
    )
    port map
    ( 
-      clk      => clk3x,
-      reset    => fifoOut_reset,  
-      Din      => fifoOut_Din,     
-      Wr       => fifoOut_Wr_3x,      
-      Full     => fifoOut_Full,    
-      NearFull => fifoOut_NearFull_3x,
-      Dout     => fifoOut_Dout,    
-      Rd       => ram_dmafifo_read,      
-      Empty    => fifoOut_Empty   
+      clk       => clk3x,
+      reset     => fifoOut_reset,  
+      Din       => fifoOut_Din,     
+      Wr        => fifoOut_Wr_3x,      
+      Full      => fifoOut_Full,    
+      NearFull  => fifoOut_NearFull_3x,
+      Dout      => fifoOut_Dout,    
+      Rd        => ram_dmafifo_read,      
+      Empty     => fifoOut_Empty,   
+      NearEmpty => fifoOut_NearEmpty_3x   
    );
    
    fifoOut_Wr_3x <= clk3xIndex and fifoOut_Wr;

@@ -26,7 +26,6 @@ entity psx_top is
       FASTMEM               : in  std_logic;
       TURBO                 : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
-      REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       FORCECDSPEED          : in  std_logic_vector(2 downto 0);
@@ -66,7 +65,6 @@ entity psx_top is
       ram_ena               : out std_logic;
       ram_128               : out std_logic;
       ram_done              : in  std_logic;
-      ram_idle              : in  std_logic;
       ram_reqprocessed      : in  std_logic;
       ram_dmafifo_adr       : out std_logic_vector(20 downto 0);
       ram_dmafifo_data      : out std_logic_vector(31 downto 0);
@@ -818,7 +816,6 @@ begin
          debugmodeOn <= '0';
          if (FASTMEM               = '1') then debugmodeOn <= '1'; end if;
          if (REPRODUCIBLEGPUTIMING = '1') then debugmodeOn <= '1'; end if;
-         if (REPRODUCIBLEDMATIMING = '1') then debugmodeOn <= '1'; end if;
          if (DMABLOCKATONCE        = '1') then debugmodeOn <= '1'; end if;
          if (noTexture             = '1') then debugmodeOn <= '1'; end if;
          if (SPUon                 = '0') then debugmodeOn <= '1'; end if;
@@ -1211,7 +1208,7 @@ begin
       errorDMACPU          => errorDMACPU, 
       errorDMAFIFO         => errorDMAFIFO, 
       
-      REPRODUCIBLEDMATIMING=> REPRODUCIBLEDMATIMING,
+      TURBO                => TURBO,
       DMABLOCKATONCE       => DMABLOCKATONCE,
       
       canDMA               => canDMA,
@@ -1683,8 +1680,7 @@ begin
       ram_rnw              => ram_cpu_rnw,      
       ram_ena              => ram_cpu_ena,      
       ram_128              => ram_cpu_128,      
-      ram_done             => ram_cpu_done,     
-      ram_idle             => ram_idle,     
+      ram_done             => ram_cpu_done,
       
       mem_in_request       => mem_request,  
       mem_in_rnw           => mem_rnw,      

@@ -36,7 +36,6 @@ entity memorymux is
       ram_ena              : out std_logic := '0';
       ram_128              : out std_logic := '0';
       ram_done             : in  std_logic;
-      ram_idle             : in  std_logic;
       
       mem_in_request       : in  std_logic;
       mem_in_rnw           : in  std_logic; 

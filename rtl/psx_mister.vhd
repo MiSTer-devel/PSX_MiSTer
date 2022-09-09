@@ -22,7 +22,6 @@ entity psx_mister is
       FASTMEM               : in  std_logic;
       TURBO                 : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
-      REPRODUCIBLEDMATIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       FORCECDSPEED          : in  std_logic_vector(2 downto 0);
@@ -61,8 +60,7 @@ entity psx_mister is
       ram_rnw               : out std_logic;
       ram_ena               : out std_logic;
       ram_128               : out std_logic;
-      ram_done              : in  std_logic;  
-      ram_idle              : in  std_logic;  
+      ram_done              : in  std_logic;
       ram_reqprocessed      : in  std_logic;
       ram_dmafifo_adr       : out std_logic_vector(20 downto 0);
       ram_dmafifo_data      : out std_logic_vector(31 downto 0);
@@ -285,7 +283,6 @@ begin
       FASTMEM               => FASTMEM,
       TURBO                 => TURBO,
       REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING,
-      REPRODUCIBLEDMATIMING => REPRODUCIBLEDMATIMING,
       DMABLOCKATONCE        => DMABLOCKATONCE,
       INSTANTSEEK           => INSTANTSEEK,
       FORCECDSPEED          => FORCECDSPEED,
@@ -324,8 +321,7 @@ begin
       ram_rnw               => ram_rnw,      
       ram_ena               => ram_ena,  
       ram_128               => ram_128,       
-      ram_done              => ram_done,    
-      ram_idle              => ram_idle,    
+      ram_done              => ram_done, 
       ram_reqprocessed      => ram_reqprocessed,   
       ram_dmafifo_adr       => ram_dmafifo_adr, 
       ram_dmafifo_data      => ram_dmafifo_data,
