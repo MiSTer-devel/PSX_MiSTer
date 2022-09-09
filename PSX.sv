@@ -426,7 +426,6 @@ parameter CONF_STR = {
 	"h3P3O[56],Sync Video Clock,Off,On;",
 	"h3P3O[30],Sound,On,Off;",
 	"h3P3O[19],RepTimingGPU,Off,On;",
-	"h3P3O[20],RepTimingDMA,Off,On;",
 	"h3P3O[43],RepTimingSPUDMA,Off,On;",
 	"h3P3O[26],DMAinBLOCKs,Off,On;",
 	"h3P3O[27],Textures,On,Off;",
@@ -953,7 +952,6 @@ psx
    .FASTMEM(0),
    .TURBO(status[58]),
    .REPRODUCIBLEGPUTIMING(status[19]),
-   .REPRODUCIBLEDMATIMING(status[20]),
    .DMABLOCKATONCE(status[26]),
    .INSTANTSEEK(status[21]),
    .FORCECDSPEED(status[77:75]),
@@ -993,7 +991,6 @@ psx
    .ram_ena(sdram_req), 
    .ram_128(sdram_128), 
    .ram_done(sdram_ack),
-   .ram_idle(sdram_idle),
    .ram_reqprocessed(sdram_reqprocessed),
    .ram_dmafifo_adr  (sdram_dmafifo_adr),  
    .ram_dmafifo_data (sdram_dmafifo_data), 
@@ -1200,7 +1197,6 @@ wire  [22:0] sdram_addr;
 wire   [3:0] sdram_be;
 wire         sdram_req;
 wire         sdram_ack;
-wire         sdram_idle;
 wire         sdram_reqprocessed;
 wire         sdram_readack;
 wire         sdram_readack2;
@@ -1245,7 +1241,6 @@ sdram sdram
 	.clk_base(clk_1x),
 	
 	.refreshForce(sdr_refresh),
-	.ram_idle(sdram_idle),
 
 	.ch1_addr(sdram_addr),
 	.ch1_din(),
