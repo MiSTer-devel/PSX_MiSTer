@@ -2,8 +2,7 @@ library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all;    
 
-LIBRARY altera_mf;
-USE altera_mf.altera_mf_components.all; 
+library mem;
 
 use work.pexport.all;
 
@@ -440,28 +439,11 @@ begin
 --##############################################################
 --############################### register file
 --##############################################################
-   iregisterfile1 : altdpram
+   iregisterfile1 : entity mem.RamMLAB
 	GENERIC MAP 
    (
-   	indata_aclr                         => "OFF",
-      indata_reg                          => "INCLOCK",
-      intended_device_family              => "Cyclone V",
-      lpm_type                            => "altdpram",
-      outdata_aclr                        => "OFF",
-      outdata_reg                         => "UNREGISTERED",
-      ram_block_type                      => "MLAB",
-      rdaddress_aclr                      => "OFF",
-      rdaddress_reg                       => "UNREGISTERED",
-      rdcontrol_aclr                      => "OFF",
-      rdcontrol_reg                       => "UNREGISTERED",
-      read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
       width                               => 32,
-      widthad                             => 5,
-      width_byteena                       => 1,
-      wraddress_aclr                      => "OFF",
-      wraddress_reg                       => "INCLOCK",
-      wrcontrol_aclr                      => "OFF",
-      wrcontrol_reg                       => "INCLOCK"
+      widthad                             => 5
 	)
 	PORT MAP (
       inclock    => clk1x,
@@ -479,28 +461,11 @@ begin
    regs1_address_b <= std_logic_vector(opcodeCacheMuxed(25 downto 21));
    regs2_address_b <= std_logic_vector(opcodeCacheMuxed(20 downto 16));
    
-   iregisterfile2 : altdpram
+   iregisterfile2 : entity mem.RamMLAB
 	GENERIC MAP 
    (
-   	indata_aclr                         => "OFF",
-      indata_reg                          => "INCLOCK",
-      intended_device_family              => "Cyclone V",
-      lpm_type                            => "altdpram",
-      outdata_aclr                        => "OFF",
-      outdata_reg                         => "UNREGISTERED",
-      ram_block_type                      => "MLAB",
-      rdaddress_aclr                      => "OFF",
-      rdaddress_reg                       => "UNREGISTERED",
-      rdcontrol_aclr                      => "OFF",
-      rdcontrol_reg                       => "UNREGISTERED",
-      read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
       width                               => 32,
-      widthad                             => 5,
-      width_byteena                       => 1,
-      wraddress_aclr                      => "OFF",
-      wraddress_reg                       => "INCLOCK",
-      wrcontrol_aclr                      => "OFF",
-      wrcontrol_reg                       => "INCLOCK"
+      widthad                             => 5
 	)
 	PORT MAP (
       inclock    => clk1x,
@@ -511,28 +476,11 @@ begin
       q          => regs2_q_b
 	);
    
-   iregisterfileSS : altdpram
+   iregisterfileSS : entity mem.RamMLAB
 	GENERIC MAP 
    (
-   	indata_aclr                         => "OFF",
-      indata_reg                          => "INCLOCK",
-      intended_device_family              => "Cyclone V",
-      lpm_type                            => "altdpram",
-      outdata_aclr                        => "OFF",
-      outdata_reg                         => "UNREGISTERED",
-      ram_block_type                      => "MLAB",
-      rdaddress_aclr                      => "OFF",
-      rdaddress_reg                       => "UNREGISTERED",
-      rdcontrol_aclr                      => "OFF",
-      rdcontrol_reg                       => "UNREGISTERED",
-      read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
       width                               => 32,
-      widthad                             => 5,
-      width_byteena                       => 1,
-      wraddress_aclr                      => "OFF",
-      wraddress_reg                       => "INCLOCK",
-      wrcontrol_aclr                      => "OFF",
-      wrcontrol_reg                       => "INCLOCK"
+      widthad                             => 5
 	)
 	PORT MAP (
       inclock    => clk1x,
@@ -547,37 +495,21 @@ begin
 --############################### stage 1
 --##############################################################
 
-   itagram : altdpram
-	GENERIC MAP 
+   itagram : entity mem.RamMLAB
+   generic map
    (
-   	indata_aclr                         => "OFF",
-      indata_reg                          => "INCLOCK",
-      intended_device_family              => "Cyclone V",
-      lpm_type                            => "altdpram",
-      outdata_aclr                        => "OFF",
-      outdata_reg                         => "UNREGISTERED",
-      ram_block_type                      => "MLAB",
-      rdaddress_aclr                      => "OFF",
-      rdaddress_reg                       => "UNREGISTERED",
-      rdcontrol_aclr                      => "OFF",
-      rdcontrol_reg                       => "UNREGISTERED",
-      read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
-      width                               => 24,
-      widthad                             => 8,
-      width_byteena                       => 1,
-      wraddress_aclr                      => "OFF",
-      wraddress_reg                       => "INCLOCK",
-      wrcontrol_aclr                      => "OFF",
-      wrcontrol_reg                       => "INCLOCK"
-	)
-	PORT MAP (
+      width      => 24,
+      widthad    => 8
+   )
+   port map
+   (
       inclock    => clk1x,
       wren       => tag_wren_a,
       data       => tag_data_a,
       wraddress  => tag_address_a,
       rdaddress  => tag_address_b,
       q          => tag_q_b
-	);
+   );
 
    tag_address_a <= std_logic_vector(writebackInvalidateCacheLine) when (writebackInvalidateCacheEna = '1') else std_logic_vector(FetchLastAddr(11 downto 4));
    

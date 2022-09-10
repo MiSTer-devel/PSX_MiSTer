@@ -2,8 +2,7 @@ library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all; 
 
-LIBRARY altera_mf;
-USE altera_mf.altera_mf_components.all; 
+library mem;
 
 entity gpu_pixelpipeline is
    port 
@@ -219,28 +218,11 @@ begin
    requestVRAMYPos   <= reqVRAMYPos when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else (others => '0');
    requestVRAMSize   <= reqVRAMSize when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else (others => '0');
    
-   itagram : altdpram
+   itagram : entity mem.RamMLAB
 	GENERIC MAP 
    (
-   	indata_aclr                         => "OFF",
-      indata_reg                          => "INCLOCK",
-      intended_device_family              => "Cyclone V",
-      lpm_type                            => "altdpram",
-      outdata_aclr                        => "OFF",
-      outdata_reg                         => "UNREGISTERED",
-      ram_block_type                      => "MLAB",
-      rdaddress_aclr                      => "OFF",
-      rdaddress_reg                       => "UNREGISTERED",
-      rdcontrol_aclr                      => "OFF",
-      rdcontrol_reg                       => "UNREGISTERED",
-      read_during_write_mode_mixed_ports  => "CONSTRAINED_DONT_CARE",
       width                               => 10,
-      widthad                             => 8,
-      width_byteena                       => 1,
-      wraddress_aclr                      => "OFF",
-      wraddress_reg                       => "INCLOCK",
-      wrcontrol_aclr                      => "OFF",
-      wrcontrol_reg                       => "INCLOCK"
+      widthad                             => 8
 	)
 	PORT MAP (
       inclock    => clk2x,

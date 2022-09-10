@@ -6,6 +6,9 @@ vcom -93 -quiet -work sim/mem ^
 ../system/src/mem/dpram.vhd ^
 ../system/src/mem/RamMLAB.vhd
 
+vcom -2008 -quiet -work sim/psx ^
+../system/src/mem/dpram.vhd
+
 vcom -93 -quiet -work  sim/mem ^
 ../../rtl/SyncFifo.vhd ^
 ../../rtl/SyncFifoFallThrough.vhd ^
@@ -26,7 +29,6 @@ vcom -quiet -work sim/reg_map ^
 src/reg_map/reg_tb.vhd
 
 vcom -2008 -quiet -work sim/psx ^
-../../rtl/dpram.vhd ^
 ../../rtl/export.vhd ^
 ../../rtl/divider.vhd ^
 ../../rtl/pGPU.vhd ^
