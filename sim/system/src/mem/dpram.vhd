@@ -101,7 +101,7 @@ END dpram_dif_A;
 
 architecture rtl of dpram_dif_A is
 
-   constant RATIO : integer := addr_width_b / addr_width_a;
+   constant RATIO : integer := data_width_a / data_width_b;
 
    -- Build a 2-D array type for the RAM
    subtype word_t is std_logic_vector((data_width_b-1) downto 0);
@@ -119,7 +119,7 @@ begin
          if (clken_a = '1') then
             for i in 0 to RATIO - 1 loop
                if(wren_a = '1') then
-                     ram(to_integer(unsigned(address_a)) * RATIO + i) := data_a(((i * data_width_b) + (data_width_b - 1)) downto (i *data_width_b));
+                  ram(to_integer(unsigned(address_a)) * RATIO + i) := data_a(((i * data_width_b) + (data_width_b - 1)) downto (i *data_width_b));
                end if;
                q_a(((i * data_width_b) + (data_width_b - 1)) downto (i *data_width_b)) <= ram(to_integer(unsigned(address_a)) * RATIO + i);
             end loop;
@@ -178,7 +178,7 @@ END dpram_dif_b;
 
 architecture rtl of dpram_dif_b is
 
-   constant RATIO : integer := addr_width_a / addr_width_b;
+   constant RATIO : integer := data_width_b / data_width_a;
 
    -- Build a 2-D array type for the RAM
    subtype word_t is std_logic_vector((data_width_a-1) downto 0);
@@ -283,7 +283,9 @@ begin
          wren_b      => wren_b,   
          q_b         => q_b      
       );
-   else generate
+   end generate;
+   
+   gBlarger : if data_width_a < data_width_b generate
    begin
       idpram_dif_b : entity work.dpram_dif_b
       generic map

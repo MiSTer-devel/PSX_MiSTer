@@ -6,7 +6,7 @@ vcom -93 -quiet -work sim/mem ^
 ../system/src/mem/dpram.vhd ^
 ../system/src/mem/RamMLAB.vhd
 
-vcom -2008 -quiet -work sim/psx ^
+vcom -93 -quiet -work sim/psx ^
 ../system/src/mem/dpram.vhd
 
 vcom -93 -quiet -work  sim/mem ^

@@ -140,7 +140,9 @@ architecture arch of cpu is
    signal exception_brslot             : std_logic;
    signal exception_JMPnext            : unsigned(31 downto 0);
                
-   signal memoryMuxStage               : integer range 1 to 4;
+   signal memoryMuxStage4              : std_logic := '0';
+   signal memoryMuxBusy                : std_logic := '0';
+   signal mem1_request_latched         : std_logic := '0';
                
    signal opcode0                      : unsigned(31 downto 0) := (others => '0');
    signal opcode1                      : unsigned(31 downto 0) := (others => '0');
@@ -173,6 +175,7 @@ architecture arch of cpu is
    
    signal FetchAddr                    : unsigned(31 downto 0) := (others => '0'); 
    signal FetchLastAddr                : unsigned(31 downto 0) := (others => '0'); 
+   signal FetchLastCache               : std_logic := '0';
    
    signal cacheValueLast               : unsigned(31 downto 0) := (others => '0'); 
    signal cacheHitLast                 : std_logic := '0';
@@ -188,11 +191,11 @@ architecture arch of cpu is
    signal mem1_cacherequest            : std_logic := '0';
    signal mem1_address                 : unsigned(31 downto 0) := (others => '0'); 
                
-   signal requestStall                 : std_logic := '0';
    signal PCnext                       : unsigned(31 downto 0) := (others => '0');
    signal opcodeNext                   : unsigned(31 downto 0) := (others => '0');
    signal fetchReadyNext               : std_logic := '0';
    signal fetchReadyNow                : std_logic := '0';
+   signal cacheHitTest                 : std_logic;
    signal cacheHitNext                 : std_logic := '0';
    signal blockIRQNext                 : std_logic := '0';
    signal blockIRQCntNext              : integer range 0 to 10;
@@ -397,15 +400,17 @@ architecture arch of cpu is
 begin 
 
    -- IO
-   mem_request       <= mem1_request or mem4_request;
+   mem_request       <= mem1_request or mem1_request_latched or mem4_request when (memoryMuxBusy = '0' or mem_done = '1') else '0';
+   mem_isCache       <= FetchLastCache when (mem1_request_latched = '1') else mem1_cacherequest;
+   mem_addressInstr  <= FetchLastAddr  when (mem1_request_latched = '1') else mem1_address;
    mem_isData        <= mem4_request;
-   mem_isCache       <= mem1_cacherequest;
    mem_rnw           <= mem4_rnw     when mem4_request = '1' else '1';
-   mem_addressInstr  <= mem1_address;
    mem_addressData   <= mem4_address;
    mem_reqsize       <= mem4_reqsize when mem4_request = '1' else "10";
    mem_dataWrite     <= mem4_dataWrite;
    mem_writeMask     <= executeMemWriteMask;
+
+   mem1_cacherequest <= '1' when (to_integer(FetchAddr(31 downto 29)) = 0 or to_integer(FetchAddr(31 downto 29)) = 4) else '0';
 
    stallNext         <= mem_request or stallNew3;
 
@@ -419,19 +424,33 @@ begin
       if (rising_edge(clk1x)) then
          if (reset = '1') then
          
-            memoryMuxStage <= 1; -- no ss when stalled -> not relevant for savestate
+            -- no ss when stalled -> not relevant for savestate
+            memoryMuxStage4       <= '0'; 
+            memoryMuxBusy         <= '0';
+            mem1_request_latched  <= '0';
          
          elsif (ce = '1') then
             
-            if (mem_request = '1') then
-               if (mem4_request = '1') then 
-                  memoryMuxStage <= 4;
-               else
-                  memoryMuxStage  <= 1;
-                  FetchLastAddr   <= mem1_address;
+            if (mem1_request = '1') then
+               FetchLastAddr   <= mem1_address;
+               FetchLastCache  <= mem1_cacherequest;
+               if (mem4_request = '1' or memoryMuxBusy = '1') then
+                  mem1_request_latched <= '1';
                end if;
             end if;
-   
+            
+            if (mem_done = '1') then
+               memoryMuxBusy <= '0';
+            end if;
+            
+            if (mem_request = '1' and (memoryMuxBusy = '0' or mem_done = '1')) then
+               memoryMuxStage4  <= mem_isData;
+               memoryMuxBusy    <= mem_rnw;
+               if (mem_isData = '0') then
+                  mem1_request_latched <= '0';
+               end if;
+            end if;
+
          end if;
       end if;
    end process;
@@ -549,15 +568,16 @@ begin
                       PC;
                       
    cache_address_b <= std_logic_vector(FetchAddr(11 downto 4));
+   
+   cacheHitTest    <= '1' when (unsigned(tag_q_b(19 downto 0)) = FetchAddr(31 downto 12) and tag_q_b(20 + to_integer(unsigned(FetchAddr(3 downto 2)))) = '1') else '0';
+            
 
    mem1_address    <= FetchAddr;
 
-   process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, branch, PCbranch, mem4_request, mem_done, mem_dataRead, memoryMuxStage, PC, fetchReady, stall1, exceptionNew, opcode0, mem_dataCache, reset, FetchAddr, 
-            tag_q_b, blockirqCnt, FetchLastAddr, stallNew4, stall4, writebackInvalidateCacheEna)
-      variable request : std_logic;
+   process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, mem_done, mem_dataRead, memoryMuxStage4, fetchReady, stall1, opcode0, mem_dataCache, reset, FetchAddr, 
+            tag_q_b, blockirqCnt, FetchLastAddr, writebackInvalidateCacheEna, cacheHitTest)
    begin
-      request         := '0';
-      PCnext          <= PC;
+      PCnext          <= FetchAddr;
       fetchReadyNext  <= fetchReady;
       fetchReadyNow   <= '0';
       stallNew1       <= stall1;
@@ -571,7 +591,11 @@ begin
       cache_data_a    <= mem_dataCache;
       cache_wren_a    <= "0000";
       tag_wren_a      <= '0';
-      if (mem_done = '1' and memoryMuxStage = 1) then 
+      
+      mem1_request    <= '0';
+      cacheHitNext    <= '0';
+      
+      if (mem_done = '1' and memoryMuxStage4 = '0') then 
          case (to_integer(unsigned(FetchLastAddr(31 downto 29)))) is
             when 0 | 4 => -- cached
                cache_wren_a <= "1111";
@@ -590,41 +614,47 @@ begin
             blockirqNext    <= '1';
             blockirqCntNext <= 10;     
             exceptionNew5   <= '1';
-         elsif (mem_done = '1' or (stall = "00001" and memoryMuxStage = 4)) then
-            stallNew1       <= '0';
+         elsif (stall1 = '1') then
+            if (mem_done = '1' and memoryMuxStage4 = '0') then
+               stallNew1 <= '0';
+            end if;
          end if;
          
       elsif (stall = 0) then
       
+         if (reset = '0') then
+         
+            case (to_integer(FetchAddr(31 downto 29))) is
+               
+               when 0 | 4 => -- cache
+                  if (cacheHitTest = '1') then
+                     cacheHitNext      <= '1';
+                     PCnext            <= FetchAddr + 4;
+                  else
+                     mem1_request      <= '1';
+                     stallNew1         <= '1';
+                  end if;
+                  
+               when 5 =>
+                  mem1_request      <= '1';
+                  stallNew1         <= '1';
+               
+               when others =>
+                  -- todo
+               
+            end case;
+         
+         end if;
+      
          if (exception > 0) then
       
-            request := '1';
-            if (cop0_SR(22) = '1') then
-               PCnext <= x"BFC00180";
-            else
-               PCnext <= x"80000080";
-            end if;
-            
             blockirqNext    <= '1';
             blockirqCntNext <= 10;    
             
          else 
          
-            if (branch = '1') then
-               PCnext          <= PCbranch;
-            end if;
-            
             fetchReadyNext <= '0';
-            
-            if (mem4_request = '0' or 
-               (stallNew4 = '0' and
-               (to_integer(unsigned(FetchAddr(31 downto 29))) = 0 or to_integer(unsigned(FetchAddr(31 downto 29))) = 4) and -- correct area
-               unsigned(tag_q_b(19 downto 0)) = FetchAddr(31 downto 12) and tag_q_b(20 + to_integer(unsigned(FetchAddr(3 downto 2)))) = '1')) then -- cache hit
-                  request := '1';
-            else
-               stallNew1 <= '1';
-            end if;
-            
+
             if (blockirqCnt > 0) then
                blockirqCntNext <= blockirqCnt - 1;
                if (blockirqCnt = 1) then
@@ -634,17 +664,18 @@ begin
       
          end if;
       
-      else
+      elsif (stall1 = '1') then
       
-         if (mem_done = '1' and memoryMuxStage = 1) then
+         if (mem_done = '1' and memoryMuxStage4 = '0') then
             
-            case (to_integer(unsigned(FetchLastAddr(31 downto 29)))) is
+            stallNew1      <= '0';
+            PCnext         <= FetchAddr + 4;
+            fetchReadyNext <= '1';
+            fetchReadyNow  <= '1';
+            
+            case (to_integer(FetchLastAddr(31 downto 29))) is
             
                when 0 | 4 => -- cached
-                  stallNew1      <= '0';
-                  PCnext         <= PC + 4;
-                  fetchReadyNext <= '1';
-                  fetchReadyNow  <= '1';
                   case (FetchLastAddr(3 downto 2)) is
                      when "00" => opcodeNext <= unsigned(mem_dataCache( 31 downto  0));
                      when "01" => opcodeNext <= unsigned(mem_dataCache( 63 downto 32));
@@ -653,55 +684,13 @@ begin
                   when others => null;
                end case;
                   
-               when 5 =>
-                  stallNew1      <= '0';
-                  PCnext         <= PC + 4;
-                  fetchReadyNext <= '1';
-                  fetchReadyNow  <= '1';
-                  opcodeNext <= unsigned(mem_dataRead);
+               when 5 => opcodeNext <= unsigned(mem_dataRead);
                
                when others => report "should never happen" severity failure; 
                
             end case;
             
          end if;
-         
-         if ((mem_done = '1' or stall = "00001") and memoryMuxStage = 4 and fetchReady = '0' and exception(4) = '0') then
-            request := '1';
-         end if;
-      
-      end if;
-      
-      requestStall      <= '0';
-      mem1_request      <= '0';
-      mem1_cacherequest <= '0';
-      
-      cacheHitNext      <= '0';
-      
-      if (request = '1' and reset = '0') then
-      
-         case (to_integer(unsigned(FetchAddr(31 downto 29)))) is
-            
-            when 0 | 4 => -- cached
-               if (unsigned(tag_q_b(19 downto 0)) = FetchAddr(31 downto 12) and tag_q_b(20 + to_integer(unsigned(FetchAddr(3 downto 2)))) = '1') then
-                  cacheHitNext      <= '1';
-                  stallNew1         <= '0';
-                  PCnext            <= FetchAddr + 4;
-               else
-                  mem1_request      <= '1';
-                  requestStall      <= '1';
-                  mem1_cacherequest <= '1';
-               end if;
-               
-            when 5 =>
-               mem1_request      <= '1';
-               requestStall      <= '1';
-               mem1_cacherequest <= '0';
-            
-            when others =>
-               -- todo
-            
-         end case;
       
       end if;
       
@@ -734,7 +723,7 @@ begin
             
             fetchReady     <= fetchReadyNext;
             PC             <= PCnext;
-            stall1         <= stallNew1 or requestStall;
+            stall1         <= stallNew1;
             
             blockirq       <= blockirqNext;   
             blockirqCnt    <= blockirqCntNext;
@@ -2152,7 +2141,7 @@ begin
                
             else
 
-               if (mem_done = '1' and memoryMuxStage = 4) then
+               if (mem_done = '1' and memoryMuxStage4 = '1') then
                   stall4 <= '0';
                   if (writebackMemOPisRead = '1') then
                      dataReadEna := '1';

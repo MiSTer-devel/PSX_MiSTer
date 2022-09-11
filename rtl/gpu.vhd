@@ -395,7 +395,7 @@ architecture arch of gpu is
    signal reqVRAMwrap               : unsigned(7 downto 0);
    signal reqVRAMnext               : unsigned(7 downto 0);
    signal reqVRAMaddr               : unsigned(7 downto 0) := (others => '0');
-   signal reqVRAMStore              : std_logic;        
+   signal reqVRAMStore              : std_logic := '0';        
    
    signal vramLineAddr              : unsigned(9 downto 0);
    
@@ -1545,7 +1545,7 @@ begin
       end if;
    end process;
    
-   ilineram: entity work.dpram_dif
+   ilineram: entity mem.dpram_dif
    generic map 
    ( 
       addr_width_a  => 8,

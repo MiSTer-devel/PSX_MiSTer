@@ -536,14 +536,15 @@ begin
    begin
 
       file_open(f_status, infile, "R:\cdtracks.txt", read_mode);
-   
       count := 1;
-      while (not endfile(infile)) loop
-         readline(infile,inLine);
-         tracknames(count) <= (others => ' ');
-         tracknames(count)(1 to inLine'length) <= inLine(1 to inLine'length); 
-         count := count + 1;
-      end loop;
+      if (f_status = open_ok) then 
+         while (not endfile(infile)) loop
+            readline(infile,inLine);
+            tracknames(count) <= (others => ' ');
+            tracknames(count)(1 to inLine'length) <= inLine(1 to inLine'length); 
+            count := count + 1;
+         end loop;
+      end if;
       trackcount <= count;
       
       file_close(infile);
@@ -594,33 +595,34 @@ begin
    begin
       
       if (cdLoaded = '0') then
-      
          file_open(f_status, infile, "R:\\cuedata.bin", read_mode);
+         if (f_status = open_ok) then 
          
-         targetpos := 0;
-         
-         while (not endfile(infile)) loop
+            targetpos := 0;
             
-            read(infile, next_int);  
+            while (not endfile(infile)) loop
+               
+               read(infile, next_int);  
+               
+               data(targetpos) := next_int;
+               targetpos       := targetpos + 1;
+   
+            end loop;
             
-            data(targetpos) := next_int;
-            targetpos       := targetpos + 1;
-
-         end loop;
-         
-         file_close(infile);
-         
-         wait for 10 us;
-         for i in 0 to 400 loop
-            trackinfo_data  <= std_logic_vector(to_signed(data(i), 32));
-            trackinfo_addr  <= std_logic_vector(to_unsigned(i, 9));
-            trackinfo_write <= '1';
-            wait until rising_edge(clk33);
-            trackinfo_write <= '0';
-            wait until rising_edge(clk33);
-         end loop;
-
-         cdLoaded <= '1';
+            file_close(infile);
+            
+            wait for 10 us;
+            for i in 0 to 400 loop
+               trackinfo_data  <= std_logic_vector(to_signed(data(i), 32));
+               trackinfo_addr  <= std_logic_vector(to_unsigned(i, 9));
+               trackinfo_write <= '1';
+               wait until rising_edge(clk33);
+               trackinfo_write <= '0';
+               wait until rising_edge(clk33);
+            end loop;
+   
+            cdLoaded <= '1';
+         end if; 
       end if;
    
    
