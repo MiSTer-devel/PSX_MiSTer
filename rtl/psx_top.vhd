@@ -1694,11 +1694,7 @@ begin
       mem_dataRead         => mem_dataRead, 
       mem_dataCache        => mem_dataCache, 
       mem_done             => mem_done,
-      mem_fifofull         => mem_fifofull,
-      
-      dma_cache_Adr        => dma_cache_Adr,  
-      dma_cache_data       => dma_cache_data, 
-      dma_cache_write      => dma_cache_write,     
+      mem_fifofull         => mem_fifofull,   
 
       bios_memctrl         => bios_memctrl,
 
@@ -1814,6 +1810,8 @@ begin
       ce                => ce_cpu,   
       ce_system         => ce,
       reset             => reset_intern,
+      
+      TURBO             => TURBO,
          
       irqRequest        => irqRequest,
       dmaRequest        => dmaRequest,
@@ -1836,6 +1834,13 @@ begin
       mem_fifofull      => mem_fifofull,
       
       stallNext         => stallNext,
+      
+      dma_cache_Adr     => dma_cache_Adr,  
+      dma_cache_data    => dma_cache_data, 
+      dma_cache_write   => dma_cache_write,  
+      
+      ram_dataRead      => ram_dataRead32,    
+      ram_done          => ram_cpu_done,
       
       gte_busy          => gte_busy, 
       gte_readEna       => gte_readEna,

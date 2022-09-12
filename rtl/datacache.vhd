@@ -70,7 +70,7 @@ begin
    generic map ( addr_width => SIZEBITS, data_width => BITWIDTH)
    port map
    (
-      clock_a     => clk1x,
+      clock_a     => clk2x,
       address_a   => memory_addr_a,
       data_a      => (memory_dataout'range => '0'),
       wren_a      => '0',

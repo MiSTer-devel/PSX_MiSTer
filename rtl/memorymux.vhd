@@ -51,10 +51,6 @@ entity memorymux is
       mem_done             : out std_logic;
       mem_fifofull         : out std_logic;
       
-      dma_cache_Adr        : in  std_logic_vector(20 downto 0);
-      dma_cache_data       : in  std_logic_vector(31 downto 0);
-      dma_cache_write      : in  std_logic;
-      
       bios_memctrl         : in  unsigned(13 downto 0);
       
       ex1_memctrl          : in  unsigned(13 downto 0);
@@ -302,21 +298,7 @@ architecture arch of memorymux is
    signal ext_select_ex2         : std_logic := '0';
    signal ext_select_ex2_saved   : std_logic := '0';   
    signal ext_select_ex3         : std_logic := '0';
-   signal ext_select_ex3_saved   : std_logic := '0';
-     
-   -- data cache  
-   signal dcache_read_enable     : std_logic := '0';
-   signal dcache_read_addr       : std_logic_vector(18 downto 0) := (others => '0');
-   signal dcache_read_hit        : std_logic;
-   signal dcache_read_data       : std_logic_vector(31 downto 0);
-   
-   signal dcache_hit_next        : std_logic := '0';
-   
-   signal dcache_write_enable    : std_logic := '0';
-   signal dcache_write_clear     : std_logic := '0';
-   signal dcache_write_addr      : std_logic_vector(18 downto 0) := (others => '0');
-   signal dcache_write_data      : std_logic_vector(31 downto 0) := (others => '0');
-         
+   signal ext_select_ex3_saved   : std_logic := '0';     
          
    -- debug    
    signal stallcountRead         : integer;
@@ -329,7 +311,7 @@ architecture arch of memorymux is
    
 begin 
 
-   isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0' and dcache_hit_next = '0' and writeFifo_busy = '0' and mem_save_request = '0') else '0';
+   isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0' and writeFifo_busy = '0' and mem_save_request = '0') else '0';
 
    process (state, addressData_buf, writeMask_buf, dataWrite_buf)
       variable address  : unsigned(28 downto 0);
@@ -447,19 +429,18 @@ begin
    dataFromBusses    <= bus_memc_dataRead or bus_pad_dataRead or bus_sio_dataRead or bus_memc2_dataRead or bus_irq_dataRead or 
                         bus_dma_dataRead or bus_tmr_dataRead or bus_gpu_dataRead or bus_mdec_dataRead;
    
-   data_ram          <= dcache_read_data when (dcache_hit_next = '1') else ram_dataRead32;
+   data_ram          <= ram_dataRead32;
   
    data_ram_rotate   <= data_ram                            when ram_rotate_bits(1 downto 0) = "00" else
                         x"00" & data_ram(31 downto 8)       when ram_rotate_bits(1 downto 0) = "01" else
                         x"0000" & data_ram(31 downto 16)    when ram_rotate_bits(1 downto 0) = "10" else
                         x"000000" & data_ram(31 downto 24);
       
-   mem_dataRead      <= data_ram_rotate when ((dcache_hit_next = '1') or (readram = '1' and ram_done = '1')) else
+   mem_dataRead      <= data_ram_rotate when (readram = '1' and ram_done = '1') else
                         ext_data        when (ext_done = '1') else
                         mem_dataRead_buf;
                         
-   mem_done          <= '1'            when (dcache_hit_next = '1') else
-                        '1'            when (readram = '1'  and ram_done = '1') else 
+   mem_done          <= '1'            when (readram = '1'  and ram_done = '1') else 
                         '1'            when (ext_done = '1') else 
                         mem_done_buf;
    
@@ -517,7 +498,6 @@ begin
          ram_ena              <= '0';
          mem_done_buf         <= '0';
          reset_exe            <= '0';
-         dcache_hit_next      <= '0';
          
          if (loadExe = '1') then
             loadExe_latched <= '1';
@@ -626,10 +606,7 @@ begin
                            ram_Adr <= "00" & std_logic_vector(mem_addressData(20 downto 2)) & "00";
                            ram_rotate_bits <= std_logic_vector(mem_addressData(1 downto 0));
                            if (mem_rnw = '1') then
-                              if (dcache_read_hit = '1' and TURBO = '1') then
-                                 state   <= IDLE;
-                                 dcache_hit_next <= '1';
-                              elsif (TURBO = '1') then
+                              if (TURBO = '1') then
                                  state   <= IDLE;
                                  ram_ena <= '1';
                                  readram <= '1';
@@ -1303,55 +1280,6 @@ begin
          
       end if;
    end process;
-   
-   
---##############################################################
---############################### datacache
---##############################################################
-   
-   
-   dcache_write_enable <= '1' when (ram_done = '1' and readram = '1') else 
-                          '1' when (ram_ena = '1' and ram_rnw = '0') else 
-                          '1' when (dma_cache_write = '1') else
-                          '0';
-                          
-   dcache_write_clear  <=  '1' when (ram_ena = '1' and ram_rnw = '0' and ram_be /= "1111") else '0';
-                          
-   dcache_write_addr   <= dma_cache_Adr(20 downto 2) when (dma_cache_write = '1') else
-                          ram_Adr(20 downto 2);
-
-   dcache_write_data   <= ram_dataRead32 when (readram = '1') else
-                          dma_cache_data when (dma_cache_write = '1') else
-                          ram_dataWrite;
-
-   dcache_read_enable  <= ce when (state = IDLE and mem_isData = '1' and mem_addressData(28 downto 0) < 16#800000# and
-                                  (((readram = '0' and writeram = '0') or ram_done = '1') and ((mem_request = '1' and writeFifo_busy = '0') or writeFifo_Empty = '0'))) else '0';
-   
-   dcache_read_addr    <= std_logic_vector(mem_addressData(20 downto 2));
-
-   idatacache : entity work.datacache
-   generic map
-   (
-      SIZE              => 16384,
-      SIZEBASEBITS      => 19,
-      BITWIDTH          => 32
-   )
-   port map
-   (
-      clk1x             => clk1x,
-      clk2x             => clk2x,
-      reset             => reset,
-                        
-      read_enable       => dcache_read_enable,  -- only used for calculating cache hit ratio
-      read_addr         => dcache_read_addr,   
-      read_hit          => dcache_read_hit,   
-      read_data         => dcache_read_data,   
-
-      write_enable      => dcache_write_enable,
-      write_clear       => dcache_write_clear,
-      write_addr        => dcache_write_addr,  
-      write_data        => dcache_write_data 
-   );
    
 --##############################################################
 --############################### debug
