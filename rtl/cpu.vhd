@@ -156,14 +156,19 @@ architecture arch of cpu is
    signal opcode0                      : unsigned(31 downto 0) := (others => '0');
    signal opcode1                      : unsigned(31 downto 0) := (others => '0');
    signal opcode2                      : unsigned(31 downto 0) := (others => '0');
+-- synthesis translate_off
    signal opcode3                      : unsigned(31 downto 0) := (others => '0');
    signal opcode4                      : unsigned(31 downto 0) := (others => '0');
-               
+-- synthesis translate_on  
+  
    signal PCold0                       : unsigned(31 downto 0) := (others => '0');
    signal PCold1                       : unsigned(31 downto 0) := (others => '0');
+   
+-- synthesis translate_off
    signal PCold2                       : unsigned(31 downto 0) := (others => '0');
    signal PCold3                       : unsigned(31 downto 0) := (others => '0');
    signal PCold4                       : unsigned(31 downto 0) := (others => '0');
+-- synthesis translate_on
    
    signal value1                       : unsigned(31 downto 0) := (others => '0');
    signal value2                       : unsigned(31 downto 0) := (others => '0');
@@ -400,20 +405,20 @@ architecture arch of cpu is
    signal ss_scp_rden_1                : std_logic;              
    
    -- debug
+-- synthesis translate_off
    signal debugCnt                     : unsigned(31 downto 0);
    signal debugSum                     : unsigned(31 downto 0);
    signal debugTmr                     : unsigned(31 downto 0);
-   
-   signal debugStallcounter            : unsigned(9 downto 0);
-   signal debug300exception            : std_logic := '0';
-   
-   signal debugTrigger                 : std_logic := '0';
    
    signal stallcountNo                 : integer;
    signal stallcount1                  : integer;
    signal stallcount3                  : integer;
    signal stallcount4                  : integer;
    signal stallcountDMA                : integer;
+-- synthesis translate_on
+   
+   signal debugStallcounter            : unsigned(9 downto 0);
+   signal debug300exception            : std_logic := '0';
    
    -- export
 -- synthesis translate_off
@@ -922,7 +927,7 @@ begin
    
       value1 <= decodeValue1;
       if    (decodeSource1 > 0 and resultTarget    = decodeSource1 and resultWriteEnable    = '1' and execute_lastreadCOP = '0') then value1 <= resultData;
-      elsif (decodeSource1 > 0 and writebackTarget = decodeSource1 and writebackWriteEnable = '1')                               then value1 <= writebackData;
+      elsif (decodeSource1 > 0 and writebackTarget = decodeSource1 and writebackWriteEnable = '1' and blockLoadforward = '0')    then value1 <= writebackData;
       elsif (decodeSource1 > 0 and writeDoneTarget = decodeSource1 and writeDoneWriteEnable = '1')                               then value1 <= writeDoneData;
       end if;
       
@@ -1558,7 +1563,7 @@ begin
    ss_out(13)               <= std_logic_vector(cop0_PRID);  
    
    ss_out(16) <= std_logic_vector(opcode2);
-   ss_out(21) <= std_logic_vector(pcOld2);
+   --ss_out(21) <= std_logic_vector(pcOld2);
    
    ss_out(24)(13)           <= blockLoadforward;           
     
@@ -1612,7 +1617,7 @@ begin
             cop0_EPC                      <= unsigned(ss_in(12));
             cop0_PRID                     <= unsigned(ss_in(13)); -- x"00000002";
                        
-            pcOld2                        <= unsigned(ss_in(21));
+            --pcOld2                        <= unsigned(ss_in(21));
             opcode2                       <= unsigned(ss_in(16));
                         
             blockLoadforward              <= ss_in(24)(13);
@@ -1709,9 +1714,12 @@ begin
                   executeStalltype              <= EXESTALLTYPE_NONE;
                         
                else     
+               
+-- synthesis translate_off
+                  pcOld2                        <= pcOld1;
+-- synthesis translate_on
                      
                   executeException              <= decodeException;
-                  pcOld2                        <= pcOld1;
                   opcode2                       <= opcode1;
                         
                   stall3                        <= stallNew3;
@@ -2039,8 +2047,8 @@ begin
       
    end process;
    
-   ss_out(22)               <= std_logic_vector(pcOld3);                     
-   ss_out(17)               <= std_logic_vector(opcode3);                                     
+   --ss_out(22)               <= std_logic_vector(pcOld3);                     
+   --ss_out(17)               <= std_logic_vector(opcode3);                                     
                                                  
    ss_out(56)               <= std_logic_vector(CACHECONTROL);               
                                              
@@ -2070,8 +2078,8 @@ begin
          
             stall4                           <= '0';
                               
-            pcOld3                           <= unsigned(ss_in(22));
-            opcode3                          <= unsigned(ss_in(17));
+            --pcOld3                           <= unsigned(ss_in(22));
+            --opcode3                          <= unsigned(ss_in(17));
                               
             CACHECONTROL                     <= unsigned(ss_in(56));
                         
@@ -2108,9 +2116,11 @@ begin
                   writebackException           <= '1'; 
                   
                else
-               
+-- synthesis translate_off
                   pcOld3                       <= pcOld2;
                   opcode3                      <= opcode2;
+-- synthesis translate_on
+               
                   writebackTarget              <= resultTarget;
                   writebackData                <= resultData;
                   
@@ -2281,8 +2291,8 @@ begin
       end if;
    end process;
    
-   ss_out(23)              <= std_logic_vector(pcOld4);
-   ss_out(18)              <= std_logic_vector(opcode4);
+   --ss_out(23)              <= std_logic_vector(pcOld4);
+   --ss_out(18)              <= std_logic_vector(opcode4);
    
    ss_out(50)(12 downto 8) <= std_logic_vector(writeDoneTarget);
    ss_out(49)              <= std_logic_vector(writeDoneData);
@@ -2297,30 +2307,34 @@ begin
       
 -- synthesis translate_off
          cpu_done <= '0';
--- synthesis translate_on
          
          debugTmr <= debugTmr + 1;
+-- synthesis translate_on
       
          if (reset = '1') then
             
-            pcOld4               <= unsigned(ss_in(23));
-            opcode4              <= unsigned(ss_in(18));
+            --pcOld4               <= unsigned(ss_in(23));
+            --opcode4              <= unsigned(ss_in(18));
             
             writeDoneTarget      <= unsigned(ss_in(50)(12 downto 8));
             writeDoneData        <= unsigned(ss_in(49));
             writeDoneWriteEnable <= ss_in(50)(16);
             
+-- synthesis translate_off
             debugCnt             <= (others => '0');
             debugSum             <= (others => '0');
             debugTmr             <= (others => '0');
+-- synthesis translate_on
          
          elsif (ce = '1') then
             
             if (stall = 0) then
             
+-- synthesis translate_off
                pcOld4               <= pcOld3;
                opcode4              <= opcode3;
-               
+-- synthesis translate_on
+            
                writeDoneTarget      <= writebackTarget;     
                writeDoneData        <= writebackData;       
                writeDoneWriteEnable <= writebackWriteEnable;
@@ -2330,13 +2344,14 @@ begin
                   if (writebackTarget > 0) then
 -- synthesis translate_off
                      regs(to_integer(writebackTarget)) <= writebackData;
--- synthesis translate_on
                      debugSum <= debugSum + writebackData;
+-- synthesis translate_on
                   end if;
                end if;
                
-               debugCnt          <= debugCnt+ 1;
 -- synthesis translate_off
+               debugCnt          <= debugCnt+ 1;
+
                cpu_done          <= '1';
                cpu_export.pc     <= pcOld4;
                cpu_export.opcode <= opcode4;
@@ -2344,21 +2359,15 @@ begin
                for i in 0 to 31 loop
                   cpu_export.regs(i) <= regs(i);
                end loop;
--- synthesis translate_on
                
-               -- todo: REMOVE!
-               if (debugCnt(31) = '1' and debugSum(31) = '1' and debugTmr(31) = '1' and debugTrigger = '1' and writebackTarget = 0) then
+               if (debugCnt(31) = '1' and debugSum(31) = '1' and debugTmr(31) = '1' and writebackTarget = 0) then
                   writeDoneWriteEnable <= '0';
                end if;
+-- synthesis translate_on
                
             end if;
    
          end if;
-         
-         --if (debug_firstGTE = '1') then
-         --   debugCnt <= (others => '0');
-         --   debugSum <= (others => '0');
-         --end if;
          
          -- export
 -- synthesis translate_off
@@ -2554,15 +2563,16 @@ begin
       
          if (reset = '1') then
          
-            debugTrigger      <= '0';
             debugStallcounter <= (others => '0');
             debug300exception <= '0';
             
+-- synthesis translate_off
             stallcountNo      <= 0;
             stallcount1       <= 0;
             stallcount3       <= 0;
             stallcount4       <= 0;
             stallcountDMA     <= 0;
+-- synthesis translate_on
       
          elsif (ce = '1') then
          
@@ -2578,13 +2588,14 @@ begin
             end if;
             
             if (debug300exception = '1') then
-               debugTrigger <= '1';
                error        <= '1';
             end if;            
             
             if (debugStallcounter(9) = '1') then
                error2       <= '1';
             end if;
+            
+-- synthesis translate_off
             
             if (stallcountNo = 0 and stallcount4 = 0 and stallcount3 = 0 and stallcount1 = 0 and stallcountDMA = 0) then
                stallcountNo <= 0;
@@ -2605,7 +2616,10 @@ begin
             
             stallcountDMA <= stallcountDMA + 1;
             
+-- synthesis translate_on
+            
          end if;
+         
       end if;
    end process;
    
