@@ -269,6 +269,7 @@ architecture arch of memorymux is
    signal ext_lastactive         : std_logic := '0';
    signal ext_recovered          : std_logic := '0';
    signal ext_data               : std_logic_vector(31 downto 0);
+   signal ext_data_new           : std_logic_vector(31 downto 0);
    signal ext_dataWrite_buf      : std_logic_vector(31 downto 0);
    signal ext_writeMask_buf      : std_logic_vector(3 downto 0);
    
@@ -437,7 +438,7 @@ begin
                         x"000000" & data_ram(31 downto 24);
       
    mem_dataRead      <= data_ram_rotate when (readram = '1' and ram_done = '1') else
-                        ext_data        when (ext_done = '1') else
+                        ext_data_new    when (ext_done = '1') else
                         mem_dataRead_buf;
                         
    mem_done          <= '1'            when (readram = '1'  and ram_done = '1') else 
@@ -612,7 +613,7 @@ begin
                                  readram <= '1';
                               else
                                  state   <= WAITFORRAMREAD;
-                                 waitcnt <= 1;
+                                 waitcnt <= 0;
                               end if;
                            else
                               ram_page_open <= '1';
@@ -639,14 +640,12 @@ begin
                            state   <= READBIOS;
                            addressBIOS_buf <= mem_addressData(18 downto 0);
                            case (mem_reqsize) is
-                              when "00" => waitcnt <= 2;
-                              when "01" => waitcnt <= 10;
-                              when "10" => waitcnt <= 26;
+                              when "00" => waitcnt <= 1;
+                              when "01" => waitcnt <= 9;
+                              when "10" => waitcnt <= 25;
                               when others => null;
                            end case;
                         else
-                           rotate32       <= '0';
-                           rotate16       <= '0';
                            ext_select_spu <= '0';
                            ext_select_cd  <= '0';
                            ext_select_ex1 <= '0';
@@ -662,7 +661,6 @@ begin
                            elsif (mem_addressData(28 downto 0) >= 16#1F801C00# and mem_addressData(28 downto 0) < 16#1F802000#) then
                               ext_select_spu <= '1';
                               if (mem_rnw = '1') then
-                                 rotate16 <= '1';
                                  state    <= BUSREADEXTERNAL;
                               else
                                  state    <= BUSWRITEEXTERNAL;
@@ -670,7 +668,6 @@ begin
                            elsif (mem_addressData(28 downto 0) >= 16#1F000000# and mem_addressData(28 downto 0) < 16#1F800000#) then
                               ext_select_ex1 <= '1';
                               if (mem_rnw = '1') then
-                                 rotate16 <= '1';
                                  state    <= BUSREADEXTERNAL;
                               else
                                  state    <= BUSWRITEEXTERNAL;
@@ -678,7 +675,6 @@ begin
                            elsif (mem_addressData(28 downto 0) >= 16#1F802000# and mem_addressData(28 downto 0) < 16#1F804000#) then
                               ext_select_ex2 <= '1';
                               if (mem_rnw = '1') then
-                                 rotate16 <= '1';
                                  state    <= BUSREADEXTERNAL;
                               else
                                  state    <= BUSWRITEEXTERNAL;
@@ -686,7 +682,6 @@ begin
                            elsif (mem_addressData(28 downto 0) = 16#1FA00000#) then
                               ext_select_ex3 <= '1';
                               if (mem_rnw = '1') then
-                                 rotate16 <= '1';
                                  state    <= BUSREADEXTERNAL;
                               else
                                  state    <= BUSWRITEEXTERNAL;
@@ -782,6 +777,8 @@ begin
                   
                when BUSREADREQUEST =>
                   state <= BUSREAD;
+                  rotate32       <= '0';
+                  rotate16       <= '0';
                   if (bus_memc_read  = '1') then rotate32 <= '1'; end if;
                   if (bus_pad_read   = '1') then rotate16 <= '1'; end if;
                   if (bus_sio_read   = '1') then rotate16 <= '1'; end if;
@@ -811,12 +808,8 @@ begin
                      else
                         mem_dataRead_buf <= dataFromBusses;
                      end if;
-                     if (TURBO = '1') then
-                        mem_done_buf <= '1';
-                        state        <= IDLE;
-                     else
-                        state        <= WAITING;
-                     end if;
+                     mem_done_buf <= '1';
+                     state        <= IDLE;
                   end if;
                   
                when WAITING =>
@@ -983,12 +976,82 @@ begin
    bus_exp1_read     <= '1' when (ext_state = EXT_READ_NEXT and ext_select_ex1_saved = '1') else '0';
    bus_exp3_read     <= '1' when (ext_state = EXT_READ_NEXT and ext_select_ex3_saved = '1') else '0';
    
+   ext_done          <= '1' when (ext_state = EXT_READ and ext_finished = '1') else '0';
+   
+   
+   process (ext_select_spu_saved, ext_select_cd_saved, ext_select_ex1_saved, ext_select_ex2_saved, ext_select_ex3_saved,
+            bus_spu_dataRead, bus_cd_dataRead, bus_exp1_dataRead, bus_exp2_dataRead, bus_exp3_dataRead,
+            ext_byteStep, addressData_buf, ext_data)
+   begin
+   
+      ext_data_new <= ext_data;
+   
+      if (ext_select_spu_saved = '1') then
+         case (ext_byteStep) is
+            when "00" => 
+               if (addressData_buf(0) = '1') then 
+                  ext_data_new( 7 downto  0) <= bus_spu_dataRead(15 downto 8); 
+               else 
+                  ext_data_new(15 downto  0) <= bus_spu_dataRead; 
+               end if;
+            when "10" => 
+               if (addressData_buf(0) = '1') then 
+                  ext_data_new(23 downto  8) <= bus_spu_dataRead;
+               else 
+                  ext_data_new(31 downto 16) <= bus_spu_dataRead; 
+               end if;  
+            when others => null;
+         end case;
+      elsif (ext_select_cd_saved = '1') then
+         case (ext_byteStep) is
+            when "00" => ext_data_new( 7 downto  0) <= bus_cd_dataRead;
+            when "01" => ext_data_new(15 downto  8) <= bus_cd_dataRead;
+            when "10" => ext_data_new(23 downto 16) <= bus_cd_dataRead;
+            when "11" => ext_data_new(31 downto 24) <= bus_cd_dataRead;
+            when others => null;
+         end case;                 
+      elsif (ext_select_ex1_saved = '1') then
+         case (ext_byteStep) is
+            when "00" => ext_data_new( 7 downto  0) <= bus_exp1_dataRead;
+            when "01" => ext_data_new(15 downto  8) <= bus_exp1_dataRead;
+            when "10" => ext_data_new(23 downto 16) <= bus_exp1_dataRead;
+            when "11" => ext_data_new(31 downto 24) <= bus_exp1_dataRead;
+            when others => null;
+         end case;
+      elsif (ext_select_ex2_saved = '1') then
+         case (ext_byteStep) is
+            when "00" => ext_data_new( 7 downto  0) <= bus_exp2_dataRead;
+            when "01" => ext_data_new(15 downto  8) <= bus_exp2_dataRead;
+            when "10" => ext_data_new(23 downto 16) <= bus_exp2_dataRead;
+            when "11" => ext_data_new(31 downto 24) <= bus_exp2_dataRead;
+            when others => null;
+         end case;
+      elsif (ext_select_ex3_saved = '1') then
+         case (ext_byteStep) is
+            when "00" => 
+               if (addressData_buf(0) = '1') then 
+                  ext_data_new( 7 downto  0) <= bus_exp3_dataRead(15 downto 8); 
+               else 
+                  ext_data_new(15 downto  0) <= bus_exp3_dataRead; 
+               end if;
+            when "10" => 
+               if (addressData_buf(0) = '1') then 
+                  ext_data_new(23 downto  8) <= bus_exp3_dataRead;
+               else 
+                  ext_data_new(31 downto 16) <= bus_exp3_dataRead; 
+               end if;  
+            when others => null;
+         end case;
+      end if;
+ 
+   end process;
+   
+   
    process (clk1x)
       variable newWait : integer range 0 to 63;
    begin
       if rising_edge(clk1x) then
       
-         ext_done             <= '0';
          ext_write_ena        <= '0';
          ext_recovered        <= '0';
          
@@ -1048,7 +1111,7 @@ begin
                         ext_bus_addr(1 downto 0)       <= "01";
                      end if;
 
-                  elsif (state = BUSREADEXTERNAL and ext_reccount = 0 and ext_done = '0') then
+                  elsif (state = BUSREADEXTERNAL and ext_reccount = 0) then
                   
                      newWait := 0;
                      if (ext_lastactive = '1' and ext_recovered = '0') then
@@ -1166,67 +1229,11 @@ begin
                   ext_reccount <= newWait;
                   
                when EXT_READ =>
-                  if (ext_select_spu_saved = '1') then
-                     case (ext_byteStep) is
-                        when "00" => 
-                           if (addressData_buf(0) = '1') then 
-                              ext_data( 7 downto  0) <= bus_spu_dataRead(15 downto 8); 
-                           else 
-                              ext_data(15 downto  0) <= bus_spu_dataRead; 
-                           end if;
-                        when "10" => 
-                           if (addressData_buf(0) = '1') then 
-                              ext_data(23 downto  8) <= bus_spu_dataRead;
-                           else 
-                              ext_data(31 downto 16) <= bus_spu_dataRead; 
-                           end if;  
-                        when others => null;
-                     end case;
-                  elsif (ext_select_cd_saved = '1') then
-                     case (ext_byteStep) is
-                        when "00" => ext_data( 7 downto  0) <= bus_cd_dataRead;
-                        when "01" => ext_data(15 downto  8) <= bus_cd_dataRead;
-                        when "10" => ext_data(23 downto 16) <= bus_cd_dataRead;
-                        when "11" => ext_data(31 downto 24) <= bus_cd_dataRead;
-                        when others => null;
-                     end case;                 
-                  elsif (ext_select_ex1_saved = '1') then
-                     case (ext_byteStep) is
-                        when "00" => ext_data( 7 downto  0) <= bus_exp1_dataRead;
-                        when "01" => ext_data(15 downto  8) <= bus_exp1_dataRead;
-                        when "10" => ext_data(23 downto 16) <= bus_exp1_dataRead;
-                        when "11" => ext_data(31 downto 24) <= bus_exp1_dataRead;
-                        when others => null;
-                     end case;
-                  elsif (ext_select_ex2_saved = '1') then
-                     case (ext_byteStep) is
-                        when "00" => ext_data( 7 downto  0) <= bus_exp2_dataRead;
-                        when "01" => ext_data(15 downto  8) <= bus_exp2_dataRead;
-                        when "10" => ext_data(23 downto 16) <= bus_exp2_dataRead;
-                        when "11" => ext_data(31 downto 24) <= bus_exp2_dataRead;
-                        when others => null;
-                     end case;
-                  elsif (ext_select_ex3_saved = '1') then
-                     case (ext_byteStep) is
-                        when "00" => 
-                           if (addressData_buf(0) = '1') then 
-                              ext_data( 7 downto  0) <= bus_exp3_dataRead(15 downto 8); 
-                           else 
-                              ext_data(15 downto  0) <= bus_exp3_dataRead; 
-                           end if;
-                        when "10" => 
-                           if (addressData_buf(0) = '1') then 
-                              ext_data(23 downto  8) <= bus_exp3_dataRead;
-                           else 
-                              ext_data(31 downto 16) <= bus_exp3_dataRead; 
-                           end if;  
-                        when others => null;
-                     end case;
-                  end if;
+               
+                  ext_data <= ext_data_new;
                
                   if (ext_finished = '1') then
                      ext_state      <= EXT_IDLE;
-                     ext_done       <= '1';
                   else
                   
                      newWait  := to_integer(ext_memctrl_RDelay);

@@ -379,12 +379,20 @@ architecture arch of cpu is
    signal writebackInvalidateCacheEna  : std_logic := '0';
    signal writebackInvalidateCacheLine : unsigned(7 downto 0) := (others => '0');
    signal WBgte_writeAddr              : unsigned(5 downto 0);
+   
+   signal lateReadTarget               : unsigned(4 downto 0) := (others => '0');
+   signal lateRead                     : std_logic := '0';
+   signal lateReadOldData              : unsigned(31 downto 0) := (others => '0');
+   signal lateReadData                 : unsigned(31 downto 0) := (others => '0');
+   signal lateReadWrite                : std_logic := '0';
+   signal lateReadBypass               : std_logic := '0';
          
    -- wire     
    signal mem4_request                 : std_logic := '0';
    signal mem4_address                 : unsigned(31 downto 0) := (others => '0');
    signal mem4_reqsize                 : unsigned(1 downto 0) := (others => '0');
    signal mem4_rnw                     : std_logic := '0';
+   signal mem4_pending                 : std_logic := '0';
    signal mem4_dataWrite               : std_logic_vector(31 downto 0) := (others => '0');
    signal WBCACHECONTROL               : unsigned(31 downto 0) := (others => '0');
    signal WBinvalidateCacheEna         : std_logic := '0';
@@ -448,6 +456,8 @@ begin
 
    exceptionNew <= exceptionNew5 & '0' & exceptionNew3 & '0' & exceptionNew1;
    
+   mem4_pending <= memoryMuxBusy and memoryMuxStage4;
+   
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
@@ -502,9 +512,19 @@ begin
       q          => regs1_q_b
 	);
    
-   regs_wren_a    <= '1' when (ss_regs_load = '1' or (ce = '1' and stall = 0 and writebackWriteEnable = '1' and writebackException = '0' and writebackTarget > 0)) else '0';
-   regs_data_a    <= ss_regs_data                               when (ss_regs_load = '1') else std_logic_vector(writebackData);
-   regs_address_a <= std_logic_vector(ss_regs_addr) when (ss_regs_load = '1') else std_logic_vector(writebackTarget);
+   regs_wren_a    <= '1' when (ss_regs_load = '1') else
+                     '1' when (lateReadWrite = '1') else
+                     '1' when (ce = '1' and stall = 0 and writebackWriteEnable = '1' and writebackException = '0' and writebackTarget > 0) else 
+                     '0';
+   
+   regs_data_a    <= ss_regs_data when (ss_regs_load = '1') else 
+                     std_logic_vector(lateReadData) when (lateReadWrite = '1') else 
+                     std_logic_vector(writebackData);
+                     
+   regs_address_a <= std_logic_vector(ss_regs_addr) when (ss_regs_load = '1') else 
+                     std_logic_vector(lateReadTarget) when (lateReadWrite = '1') else 
+                     std_logic_vector(writebackTarget);
+   
    
    regs1_address_b <= std_logic_vector(opcodeCacheMuxed(25 downto 21));
    regs2_address_b <= std_logic_vector(opcodeCacheMuxed(20 downto 16));
@@ -922,17 +942,20 @@ begin
 --############################### stage 3
 --##############################################################
 
-   process (decodeValue1, decodeValue2, decodeSource1, decodeSource2, resultTarget, writebackTarget, writeDoneTarget, resultWriteEnable, writebackWriteEnable, writeDoneWriteEnable, resultData, writebackData, writeDoneData, blockLoadforward, execute_lastreadCOP)
+   process (decodeValue1, decodeValue2, decodeSource1, decodeSource2, resultTarget, writebackTarget, writeDoneTarget, resultWriteEnable, writebackWriteEnable, writeDoneWriteEnable, 
+            resultData, writebackData, writeDoneData, blockLoadforward, execute_lastreadCOP, lateReadBypass, lateReadTarget, lateReadData)
    begin
    
       value1 <= decodeValue1;
       if    (decodeSource1 > 0 and resultTarget    = decodeSource1 and resultWriteEnable    = '1' and execute_lastreadCOP = '0') then value1 <= resultData;
+      elsif (decodeSource1 = lateReadTarget and lateReadBypass = '1' and blockLoadforward = '0' )                                then value1 <= lateReadData;
       elsif (decodeSource1 > 0 and writebackTarget = decodeSource1 and writebackWriteEnable = '1' and blockLoadforward = '0')    then value1 <= writebackData;
       elsif (decodeSource1 > 0 and writeDoneTarget = decodeSource1 and writeDoneWriteEnable = '1')                               then value1 <= writeDoneData;
       end if;
       
       value2 <= decodeValue2;
       if    (decodeSource2 > 0 and resultTarget    = decodeSource2 and resultWriteEnable    = '1' and execute_lastreadCOP = '0') then value2 <= resultData;
+      elsif (decodeSource2 = lateReadTarget and lateReadBypass = '1' and blockLoadforward = '0' )                                then value2 <= lateReadData;
       elsif (decodeSource2 > 0 and writebackTarget = decodeSource2 and writebackWriteEnable = '1' and blockLoadforward = '0'   ) then value2 <= writebackData;
       elsif (decodeSource2 > 0 and writeDoneTarget = decodeSource2 and writeDoneWriteEnable = '1')                               then value2 <= writeDoneData;
       end if;
@@ -1948,7 +1971,8 @@ begin
                           unsigned(dcache_read_data);
    
    process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask, 
-            SS_wren_SCP, SS_rden_SCP, mem_fifofull, executeCOP0WriteEnable, executeCOP0WriteDestination, executeCOP0WriteValue, dcache_read_hit, TURBO)
+            SS_wren_SCP, SS_rden_SCP, mem_fifofull, executeCOP0WriteEnable, executeCOP0WriteDestination, executeCOP0WriteValue, dcache_read_hit, TURBO, writebackGTEReadEnable,
+            mem_done, memoryMuxStage4)
       variable skipmem : std_logic;
    begin
    
@@ -2037,6 +2061,11 @@ begin
          
       end if;
       
+      -- stalling because of pending read need to be processed first
+      if (mem_done = '1' and memoryMuxStage4 = '1' and writebackGTEReadEnable = '0') then
+         stallNew4   <= '1';
+      end if;
+      
       if (SS_wren_SCP = '1') then
          scratchpad_wren_a     <= "1111";
       end if;
@@ -2062,9 +2091,7 @@ begin
    ss_out(48)(5 downto 0)   <= std_logic_vector(WBgte_writeAddr);          
    
    process (clk1x)
-      variable dataReadEna  : std_logic;
       variable dataReadData : unsigned(31 downto 0);
-      variable dataReadType : CPU_LOADTYPE;
       variable oldData      : unsigned(31 downto 0);
    begin
       if (rising_edge(clk1x)) then
@@ -2097,12 +2124,13 @@ begin
             gte_writeEna                     <= '0';
             gte_cmdEna                       <= '0';
             
+            lateReadWrite                    <= '0';
+            lateReadBypass                   <= '0';
+            
          elsif (ce = '1') then
          
             stall4         <= stallNew4;
-            dataReadEna    := '0';
             dataReadData   := unsigned(mem_dataRead);
-            dataReadType   := writebackLoadType;
             oldData        := writebackData;
             
             writebackInvalidateCacheEna  <= WBinvalidateCacheEna; 
@@ -2110,6 +2138,8 @@ begin
             
             
             if (stall = 0) then
+            
+               lateReadBypass <= '0';
             
                if (exception(4 downto 3) > 0) then
                
@@ -2132,6 +2162,13 @@ begin
                   
                   writebackGTEReadEnable       <= executeGTEReadEnable;
                   WBgte_writeAddr              <= '0' & executeGTETarget;
+                  
+                  oldData := resultData;
+                  if (lateReadTarget = resultTarget and lateReadBypass = '1') then
+                     oldData := lateReadData;
+                  elsif (writebackTarget = resultTarget and writebackWriteEnable = '1') then
+                     oldData := writebackData;
+                  end if;
                   
                   writebackWriteEnable <= '0';
                   if (executeReadEnable = '1') then
@@ -2208,6 +2245,8 @@ begin
                      else
                         writebackLoadType    <= executeLoadType;
                         writebackReadAddress <= executeReadAddress;
+                        lateReadTarget       <= resultTarget;
+                        lateReadOldData      <= oldData;
                      end if;
                   else
                      writebackWriteEnable <= resultWriteEnable;
@@ -2229,57 +2268,58 @@ begin
                
             else
 
-               if (mem_done = '1' and memoryMuxStage4 = '1') then
+               if (mem_fifofull = '0' and mem4_pending = '0') then
                   stall4 <= '0';
-                  if (writebackMemOPisRead = '1') then
-                     dataReadEna := '1';
-                  end if;
                end if;
                
-               if (mem_fifofull = '0' and writebackMemOPisRead = '0') then
-                  stall4 <= '0';
+               lateReadWrite <= '0';
+               
+               if (lateReadWrite = '1') then
+                  lateReadBypass <= '1';
                end if;
                
             end if;
             
-            if (dataReadEna = '1') then
+            if (mem_done = '1' and memoryMuxStage4 = '1') then
                if (writebackGTEReadEnable = '1') then
                   gte_writeAddr <= WBgte_writeAddr;
                   gte_writeData <= dataReadData;
                   gte_writeEna  <= '1';
                else
-                  writebackWriteEnable <= '1';
-                  if (writeDoneTarget = writebackTarget and writeDoneWriteEnable = '1') then
-                     oldData := writeDoneData;
+                  if (lateReadTarget > 0) then
+                     lateReadWrite <= '1';
                   end if;
-                  case (dataReadType) is
+
+                  case (writebackLoadType) is
                      
-                     when LOADTYPE_SBYTE => writebackData <= unsigned(resize(signed(dataReadData(7 downto 0)), 32));
-                     when LOADTYPE_SWORD => writebackData <= unsigned(resize(signed(dataReadData(15 downto 0)), 32));
+                     when LOADTYPE_SBYTE => lateReadData <= unsigned(resize(signed(dataReadData(7 downto 0)), 32));
+                     when LOADTYPE_SWORD => lateReadData <= unsigned(resize(signed(dataReadData(15 downto 0)), 32));
                      when LOADTYPE_LEFT =>
                         case (to_integer(writebackReadAddress(1 downto 0))) is
-                           when 0 => writebackData <= dataReadData( 7 downto 0) & oldData(23 downto 0);
-                           when 1 => writebackData <= dataReadData(15 downto 0) & oldData(15 downto 0);
-                           when 2 => writebackData <= dataReadData(23 downto 0) & oldData( 7 downto 0); 
-                           when 3 => writebackData <= dataReadData;
+                           when 0 => lateReadData <= dataReadData( 7 downto 0) & lateReadOldData(23 downto 0);
+                           when 1 => lateReadData <= dataReadData(15 downto 0) & lateReadOldData(15 downto 0);
+                           when 2 => lateReadData <= dataReadData(23 downto 0) & lateReadOldData( 7 downto 0); 
+                           when 3 => lateReadData <= dataReadData;
                            when others => null;
                         end case;
                            
-                     when LOADTYPE_DWORD => writebackData <= dataReadData;
-                     when LOADTYPE_BYTE  => writebackData <= x"000000" & dataReadData(7 downto 0);
-                     when LOADTYPE_WORD  => writebackData <= x"0000" & dataReadData(15 downto 0);
+                     when LOADTYPE_DWORD => lateReadData <= dataReadData;
+                     when LOADTYPE_BYTE  => lateReadData <= x"000000" & dataReadData(7 downto 0);
+                     when LOADTYPE_WORD  => lateReadData <= x"0000" & dataReadData(15 downto 0);
                      when LOADTYPE_RIGHT =>
                         case (to_integer(writebackReadAddress(1 downto 0))) is
-                           when 0 => writebackData <= dataReadData;
-                           when 1 => writebackData <= oldData(31 downto 24) & dataReadData(31 downto  8);
-                           when 2 => writebackData <= oldData(31 downto 16) & dataReadData(31 downto 16);
-                           when 3 => writebackData <= oldData(31 downto  8) & dataReadData(31 downto 24);
+                           when 0 => lateReadData <= dataReadData;
+                           when 1 => lateReadData <= lateReadOldData(31 downto 24) & dataReadData(31 downto  8);
+                           when 2 => lateReadData <= lateReadOldData(31 downto 16) & dataReadData(31 downto 16);
+                           when 3 => lateReadData <= lateReadOldData(31 downto  8) & dataReadData(31 downto 24);
                            when others => null;
                         end case;
                         
                   end case;
                end if;   
             end if;
+            
+            
    
          end if;
          
@@ -2366,6 +2406,12 @@ begin
 -- synthesis translate_on
                
             end if;
+            
+-- synthesis translate_off
+            if (lateReadBypass = '1') then
+               regs(to_integer(lateReadTarget)) <= lateReadData;
+            end if;
+-- synthesis translate_on
    
          end if;
          
@@ -2526,7 +2572,7 @@ begin
          -- also check this?
          -- cop0_SR(10 downto 8) and cop0_CAUSE(10 downto 8)) /= "000"
          SS_idle <= '0';
-         if (hiloWait = 0 and blockIRQ = '0' and (irqRequest = '0' or cop0_SR(0) = '0')) then
+         if (hiloWait = 0 and blockIRQ = '0' and (irqRequest = '0' or cop0_SR(0) = '0') and mem_done = '0' and lateReadWrite = '0' and lateReadBypass = '0') then
             SS_idle <= '1';
          end if;
       
