@@ -230,8 +230,25 @@ architecture arch of cpu is
    signal decodeJumpTarget             : unsigned(25 downto 0) := (others => '0');
    signal decode_gte_readAddr          : unsigned(5 downto 0) := (others => '0');
    
+   signal decodeReqSource1             : std_logic := '0';
+   signal decodeReqSource2             : std_logic := '0';
+   signal decodeLateStall              : std_logic := '0';
+   
    -- wires
    signal opcodeCacheMuxed             : unsigned(31 downto 0) := (others => '0');
+   
+   signal decImmData                   : unsigned(15 downto 0);
+   signal decSource1                   : unsigned(4 downto 0);
+   signal decSource2                   : unsigned(4 downto 0);
+   signal decOP                        : unsigned(5 downto 0);
+   signal decFunct                     : unsigned(5 downto 0);
+   signal decShamt                     : unsigned(4 downto 0);
+   signal decRD                        : unsigned(4 downto 0);
+   signal decTarget                    : unsigned(4 downto 0);
+   signal decJumpTarget                : unsigned(25 downto 0);
+   
+   signal decReqSource1                : std_logic;
+   signal decReqSource2                : std_logic;
             
    -- stage 3    
    type CPU_LOADTYPE is
@@ -373,7 +390,6 @@ architecture arch of cpu is
    signal writebackData                : unsigned(31 downto 0) := (others => '0');
    signal writebackWriteEnable         : std_logic := '0';
    signal writebackGTEReadEnable       : std_logic := '0';
-   signal writebackMemOPisRead         : std_logic := '0';
    signal writebackLoadType            : CPU_LOADTYPE;
    signal writebackReadAddress         : unsigned(31 downto 0) := (others => '0');
    signal writebackInvalidateCacheEna  : std_logic := '0';
@@ -381,11 +397,12 @@ architecture arch of cpu is
    signal WBgte_writeAddr              : unsigned(5 downto 0);
    
    signal lateReadTarget               : unsigned(4 downto 0) := (others => '0');
-   signal lateRead                     : std_logic := '0';
    signal lateReadOldData              : unsigned(31 downto 0) := (others => '0');
    signal lateReadData                 : unsigned(31 downto 0) := (others => '0');
    signal lateReadWrite                : std_logic := '0';
    signal lateReadBypass               : std_logic := '0';
+   signal lateReadReqDone              : std_logic := '0';
+   signal lateReadWriteAfterWrite      : std_logic := '0';
          
    -- wire     
    signal mem4_request                 : std_logic := '0';
@@ -526,8 +543,8 @@ begin
                      std_logic_vector(writebackTarget);
    
    
-   regs1_address_b <= std_logic_vector(opcodeCacheMuxed(25 downto 21));
-   regs2_address_b <= std_logic_vector(opcodeCacheMuxed(20 downto 16));
+   regs1_address_b <= std_logic_vector(decSource1);
+   regs2_address_b <= std_logic_vector(decSource2);
    
    iregisterfile2 : entity mem.RamMLAB
 	GENERIC MAP 
@@ -830,6 +847,114 @@ begin
                        unsigned(cache_q_b(127 downto 96)) when (cacheHit = '1' and PCold0(3 downto 2) = "11") else
                        opcode0;
                        
+                       
+                       
+   decImmData    <= opcodeCacheMuxed(15 downto 0);
+   decJumpTarget <= opcodeCacheMuxed(25 downto 0);
+   decSource1    <= opcodeCacheMuxed(25 downto 21);
+   decSource2    <= opcodeCacheMuxed(20 downto 16);
+   decOP         <= opcodeCacheMuxed(31 downto 26);
+   decFunct      <= opcodeCacheMuxed(5 downto 0);
+   decShamt      <= opcodeCacheMuxed(10 downto 6);
+   decRD         <= opcodeCacheMuxed(15 downto 11);
+   decTarget     <= opcodeCacheMuxed(20 downto 16) when (opcodeCacheMuxed(31 downto 26) > 0) else opcodeCacheMuxed(15 downto 11);                 
+               
+   -- find which value is required by which opcode for blocking
+   process (decSource1, decSource2, decOP, decFunct, decShamt, decRD)
+   begin
+   
+      decReqSource1 <= '0';
+      decReqSource2 <= '0';
+
+      case (to_integer(decOP)) is
+      
+         when 16#00# =>
+            case (to_integer(decFunct)) is
+      
+               when 16#08# | -- JR 
+                    16#09# | -- JALR
+                    16#11# | -- MTHI
+                    16#13#   -- MTLO
+               => decReqSource1 <= '1'; 
+               
+               when 16#00# | -- SLL
+                    16#02# | -- SRL
+                    16#03#   -- SRA
+               => decReqSource2 <= '1'; 
+                        
+               when 16#04# | -- SLLV
+                    16#06# | -- SRLV
+                    16#07# | -- SRAV
+                    16#18# | -- MULT
+                    16#19# | -- MULTU
+                    16#1A# | -- DIV
+                    16#1B# | -- DIVU
+                    16#20# | -- ADD
+                    16#21# | -- ADDU
+                    16#22# | -- SUB
+                    16#23# | -- SUBU
+                    16#24# | -- AND
+                    16#25# | -- OR
+                    16#26# | -- XOR
+                    16#27# | -- NOR
+                    16#2A# | -- SLT
+                    16#2B#   -- SLTI
+               => decReqSource1 <= '1';
+                  decReqSource2 <= '1';                   
+                  
+               when others => null;
+                  
+            end case;
+            
+         when 16#01# | -- B: BLTZ, BGEZ, BLTZAL, BGEZAL
+              16#06# | -- BLEZ
+              16#07# | -- BGTZ
+              16#08# | -- ADDI
+              16#09# | -- ADDIU
+              16#0A# | -- SLTI
+              16#0B# | -- SLTIU
+              16#0C# | -- ANDI
+              16#0D# | -- ORI
+              16#0E# | -- XORI
+              16#20# | -- LB
+              16#21# | -- LH
+              16#23# | -- LW
+              16#24# | -- LBU
+              16#25# | -- LHU
+              16#32# | -- LWC2
+              16#3A#   -- SWC2
+            => decReqSource1 <= '1';
+
+         when 16#04# | -- BEQ
+              16#05# | -- BNE
+              16#28# | -- SB
+              16#29# | -- SH
+              16#2A# | -- SWL
+              16#2B# | -- SW
+              16#2E# | -- SWR
+              16#22# | -- LWL
+              16#26#   -- LWR
+            => decReqSource1 <= '1';
+               decReqSource2 <= '1';  
+         
+         
+         when 16#10# => -- COP0
+            if (to_integer(decSource1) = 4) then
+               decReqSource2 <= '1';   
+            end if;
+            
+         when 16#12# => -- COP2
+            if (to_integer(decSource1) = 4 or to_integer(decSource1) = 6) then
+               decReqSource2 <= '1';   
+            end if;   
+
+         when others => 
+            null;
+      
+      end case;
+      
+   end process;
+                
    ss_out(14) <= std_logic_vector(opcodeCacheMuxed);
    ss_out(19) <= std_logic_vector(PCold0);
 
@@ -855,7 +980,7 @@ begin
       if (rising_edge(clk1x)) then
          if (reset = '1') then
          
-            stall2     <= '0'; -- unused
+            stall2     <= '0';
             
             pcOld1  <= unsigned(ss_in(20));
             opcode1 <= unsigned(ss_in(15));
@@ -878,6 +1003,9 @@ begin
             else
                decode_gte_readAddr <= '0' & unsigned(ss_in(31)(12 downto 8)); -- decodeSource2
             end if;
+            
+            decodeReqSource1 <= '0'; -- no savestate required, cannot save while load is pending
+            decodeReqSource2 <= '0';
          
          elsif (ce = '1') then
             
@@ -906,22 +1034,19 @@ begin
    
                   pcOld1  <= pcOld0;
                   opcode1 <= opcodeCacheMuxed;
-   
-                  decodeImmData    <= opcodeCacheMuxed(15 downto 0);
-                  decodeJumpTarget <= opcodeCacheMuxed(25 downto 0);
-                  decodeSource1    <= opcodeCacheMuxed(25 downto 21);
-                  decodeSource2    <= opcodeCacheMuxed(20 downto 16);
+                  
                   decodeValue1     <= unsigned(regs1_q_b);
                   decodeValue2     <= unsigned(regs2_q_b);
-                  decodeOP         <= opcodeCacheMuxed(31 downto 26);
-                  decodeFunct      <= opcodeCacheMuxed(5 downto 0);
-                  decodeShamt      <= opcodeCacheMuxed(10 downto 6);
-                  decodeRD         <= opcodeCacheMuxed(15 downto 11);
-                  if (opcodeCacheMuxed(31 downto 26) > 0) then
-                     decodeTarget  <= opcodeCacheMuxed(20 downto 16);
-                  else
-                     decodeTarget  <= opcodeCacheMuxed(15 downto 11);
-                  end if;
+   
+                  decodeImmData    <= decImmData;   
+                  decodeJumpTarget <= decJumpTarget;
+                  decodeSource1    <= decSource1;
+                  decodeSource2    <= decSource2;
+                  decodeOP         <= decOP;
+                  decodeFunct      <= decFunct;     
+                  decodeShamt      <= decShamt;     
+                  decodeRD         <= decRD;        
+                  decodeTarget     <= decTarget;    
                                      
                   if (opcodeCacheMuxed(31 downto 26) = 16#12#) then
                      decode_gte_readAddr <= opcodeCacheMuxed(22) & opcodeCacheMuxed(15 downto 11); -- decodeSource1(1) & decodeRD 
@@ -929,8 +1054,24 @@ begin
                      decode_gte_readAddr <= '0' & opcodeCacheMuxed(20 downto 16); -- decodeSource2
                   end if;
                   
+                  decodeReqSource1 <= decReqSource1;
+                  decodeReqSource2 <= decReqSource2;
+                  
                end if;
       
+            end if;
+            
+            if (mem4_pending = '1') then
+               if ((decReqSource1    = '1' and decSource1    = lateReadTarget) or (decodeReqSource1 = '1' and decodeSource1 = lateReadTarget) or
+                   (decReqSource2    = '1' and decSource2    = lateReadTarget) or (decodeReqSource2 = '1' and decodeSource2 = lateReadTarget)) then
+                  stall2          <= '1'; 
+                  -- for some reason the original cpu stalls 1 cycle longer than needed if the value is required by next op...need to compensate
+                  if (stall2 = '0') then
+                     decodeLateStall <= not stall4;
+                  end if;
+               end if;
+            elsif (TURBO = '1' or stall4 = '0' or decodeLateStall = '0') then
+               stall2 <= '0';
             end if;
             
          end if;
@@ -1922,19 +2063,19 @@ begin
    
    
    -- datacache ###############################################
-   dcache_write_enable <= '1' when (ram_done = '1' and writebackMemOPisRead = '1' and stall4 = '1' and writebackReadAddress(28 downto 0) < 16#800000#) else 
+   dcache_write_enable <= '1' when (ram_done = '1' and mem4_pending = '1' and writebackReadAddress(28 downto 0) < 16#800000#) else 
                           '1' when (mem4_request = '1' and mem4_rnw = '0') else 
                           '1' when (dma_cache_write = '1') else
                           '0';
                           
    dcache_write_clear  <=  '1' when (mem4_request = '1' and mem4_rnw = '0' and executeMemWriteMask /= "1111") else '0';
                           
-   dcache_write_addr   <= dma_cache_Adr(20 downto 2) when (dma_cache_write = '1') else
+   dcache_write_addr   <= dma_cache_Adr(20 downto 2)                         when (dma_cache_write = '1') else
                           std_logic_vector(executeMemWriteAddr(20 downto 2)) when (mem4_request = '1' and mem4_rnw = '0') else 
                           std_logic_vector(writebackReadAddress(20 downto 2));
 
-   dcache_write_data   <= dma_cache_data when (dma_cache_write = '1') else
-                          ram_dataRead when (writebackMemOPisRead = '1' and stall4 = '1') else
+   dcache_write_data   <= dma_cache_data  when (dma_cache_write = '1') else
+                          ram_dataRead    when (ram_done = '1' and mem4_pending = '1') else
                           mem4_dataWrite;
 
    dcache_read_enable  <= ce when (stall = 0 and executeReadEnable = '1' and executeReadAddress(28 downto 0) < 16#800000#) else '0';
@@ -1972,7 +2113,7 @@ begin
    
    process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask, 
             SS_wren_SCP, SS_rden_SCP, mem_fifofull, executeCOP0WriteEnable, executeCOP0WriteDestination, executeCOP0WriteValue, dcache_read_hit, TURBO, writebackGTEReadEnable,
-            mem_done, memoryMuxStage4)
+            mem_done, memoryMuxStage4, mem4_pending, lateReadReqDone, exceptionNew, EXEReadEnable, EXEMemWriteEnable)
       variable skipmem : std_logic;
    begin
    
@@ -1990,6 +2131,40 @@ begin
       WBinvalidateCacheLine <= executeMemWriteAddr(11 downto 4);
       
       scratchpad_wren_a    <= "0000";
+      
+      -- ############
+      -- stall handling for data load pipeline
+      -- ############
+      if (mem4_pending = '1') then
+         -- unstalling possible after read request has been sent, but only if next command is no read/write and data is not going to GTE
+         if (lateReadReqDone = '1' and executeReadEnable = '0' and writebackGTEReadEnable = '0' and executeMemWriteEnable = '0') then 
+            stallNew4 <= '0';
+         end if;
+         
+         -- stall when exception happens next
+         if (exceptionNew /= 0) then
+            stallNew4 <= '1';
+         end if;
+         
+         -- stall when next action would be a read/write request
+         if (EXEReadEnable = '1' or EXEMemWriteEnable = '1') then
+            stallNew4 <= '1';
+         end if;
+         
+         -- stall when GTE would be accessed ?
+         --if (EXEgte_writeEna = '1' or EXEgte_cmdEna = '1') then
+         --   stallNew4 <= '1';
+         --end if;
+         
+         -- must stall for 1 cycle when data is received to have a spot in register write
+         if (mem_done = '1' and memoryMuxStage4 = '1' and writebackGTEReadEnable = '0') then 
+            stallNew4   <= '1';
+         end if;
+      end if;
+      
+      -- ############
+      -- Load/Store
+      -- ############
       
       if (exception(4 downto 3) = 0 and stall = 0) then
       
@@ -2061,11 +2236,7 @@ begin
          
       end if;
       
-      -- stalling because of pending read need to be processed first
-      if (mem_done = '1' and memoryMuxStage4 = '1' and writebackGTEReadEnable = '0') then
-         stallNew4   <= '1';
-      end if;
-      
+      -- savestate scratchpad handling
       if (SS_wren_SCP = '1') then
          scratchpad_wren_a     <= "1111";
       end if;
@@ -2126,6 +2297,7 @@ begin
             
             lateReadWrite                    <= '0';
             lateReadBypass                   <= '0';
+            lateReadReqDone                  <= '0';
             
          elsif (ce = '1') then
          
@@ -2136,11 +2308,19 @@ begin
             writebackInvalidateCacheEna  <= WBinvalidateCacheEna; 
             writebackInvalidateCacheLine <= WBinvalidateCacheLine;   
             
+            lateReadReqDone <= '0';
+            if (mem4_request = '1' and mem4_rnw = '1') then
+               lateReadReqDone <= '1';
+            end if;
+            
+            if (resultWriteEnable = '1' and mem4_pending = '1' and resultTarget = lateReadTarget) then
+               lateReadWriteAfterWrite <= '1';
+            end if;
             
             if (stall = 0) then
             
                lateReadBypass <= '0';
-            
+
                if (exception(4 downto 3) > 0) then
                
                   writebackException           <= '1'; 
@@ -2157,8 +2337,6 @@ begin
                   writebackException           <= executeException;
                            
                   CACHECONTROL                 <= WBCACHECONTROL;
-                  
-                  writebackMemOPisRead         <= executeReadEnable;
                   
                   writebackGTEReadEnable       <= executeGTEReadEnable;
                   WBgte_writeAddr              <= '0' & executeGTETarget;
@@ -2180,11 +2358,7 @@ begin
                            gte_writeEna  <= '1';
                         else
                            writebackWriteEnable <= '1';
-                           oldData := resultData;
-                           if (writebackTarget = resultTarget and writebackWriteEnable = '1') then
-                              oldData := writebackData;
-                           end if;
-   
+
                            case (executeLoadType) is
                               when LOADTYPE_SBYTE => 
                                  case (executeReadAddress(1 downto 0)) is 
@@ -2243,10 +2417,11 @@ begin
                         writebackWriteEnable <= '1';
                         writebackData        <= CACHECONTROL;
                      else
-                        writebackLoadType    <= executeLoadType;
-                        writebackReadAddress <= executeReadAddress;
-                        lateReadTarget       <= resultTarget;
-                        lateReadOldData      <= oldData;
+                        writebackLoadType       <= executeLoadType;
+                        writebackReadAddress    <= executeReadAddress;
+                        lateReadTarget          <= resultTarget;
+                        lateReadOldData         <= oldData;
+                        lateReadWriteAfterWrite <= '0';
                      end if;
                   else
                      writebackWriteEnable <= resultWriteEnable;
@@ -2286,8 +2461,10 @@ begin
                   gte_writeData <= dataReadData;
                   gte_writeEna  <= '1';
                else
-                  if (lateReadTarget > 0) then
-                     lateReadWrite <= '1';
+                  if (lateReadTarget > 0 and lateReadWriteAfterWrite = '0') then
+                     if (resultWriteEnable = '0' or resultTarget /= lateReadTarget) then -- write after write in same cycle -> ignore
+                        lateReadWrite <= '1';
+                     end if;
                   end if;
 
                   case (writebackLoadType) is
