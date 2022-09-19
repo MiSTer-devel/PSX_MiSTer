@@ -48,9 +48,14 @@ module sdram
 	input              ch1_req,     // request
 	input              ch1_rnw,     // 1 - read, 0 - write
 	input              ch1_128,     // 1 - read 128bit, 0 - read 32 bit
+	input              ch1_cache,   // 1 - read 128bit for cache
 	output reg         ch1_ready,
 	output reg         ch1_reqprocessed,
-                      
+	output reg [ 3:0]  cache_wr,    
+	output reg [31:0]  cache_data,  
+	output reg [ 7:0]  cache_addr,  
+
+
 	input      [26:0]  ch2_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
 	output reg [31:0]  ch2_dout,    // data output to cpu
 	input      [31:0]  ch2_din,     // data input from cpu
@@ -171,6 +176,15 @@ reg ch1_reqprocessed_ramclock = 0;
 
 reg req128    = 0;
 
+reg cache_buffer      = 0;
+reg cache_buffer_next = 0;
+
+reg cache_done_0  = 0;
+reg cache_done_1  = 0;
+reg cache_done_2  = 0;
+reg cache_done_3  = 0;
+reg [3:0] cache_wr_next = 0;
+
 reg  [3:0] state = STATE_STARTUP;
 
 reg ch1_rq, ch2_rq, ch3_rq, refreshForce_req;
@@ -217,7 +231,17 @@ always @(posedge clk) begin
 	data_ready_delay3 <= data_ready_delay3>>1;
 
 	dq_reg <= SDRAM_DQ;
-
+   
+   cache_wr     <= 0;
+   cache_done_0 <= 0;
+   cache_done_1 <= 0;
+   cache_done_2 <= 0;
+   cache_done_3 <= 0;
+   if (cache_done_0) begin cache_data <= ch1_dout[ 31: 0]; cache_wr <= cache_wr_next; cache_wr_next <= { cache_wr_next[2:0], 1'b0 }; end
+   if (cache_done_1) begin cache_data <= ch1_dout[ 63:32]; cache_wr <= cache_wr_next; cache_wr_next <= { cache_wr_next[2:0], 1'b0 }; end
+   if (cache_done_2) begin cache_data <= ch1_dout[ 95:64]; cache_wr <= cache_wr_next; cache_wr_next <= { cache_wr_next[2:0], 1'b0 }; end
+   if (cache_done_3) begin cache_data <= ch1_dout[127:96]; cache_wr <= cache_wr_next; cache_wr_next <= { cache_wr_next[2:0], 1'b0 }; end
+      
    if(data_ready_delay1[7]) ch1_dout[ 15: 00]  <= dq_reg;
    if(data_ready_delay1[6]) ch1_dout[ 31: 16]  <= dq_reg;
    if(data_ready_delay1[5]) ch1_dout[ 47: 32]  <= dq_reg;
@@ -226,8 +250,15 @@ always @(posedge clk) begin
    if(data_ready_delay1[2]) ch1_dout[ 95: 80]  <= dq_reg;
    if(data_ready_delay1[1]) ch1_dout[111: 96]  <= dq_reg;
    if(data_ready_delay1[0]) ch1_dout[127:112]  <= dq_reg;
-   if(data_ready_delay1[2] &&  req128) ch1_ready_ramclock <= 1;
-   if(data_ready_delay1[6] && ~req128) ch1_ready_ramclock <= 1;
+   if(data_ready_delay1[2] &&  req128 && ~cache_buffer_next) ch1_ready_ramclock <= 1;
+   if(data_ready_delay1[6] && ~req128 && ~cache_buffer_next) ch1_ready_ramclock <= 1;
+   if(data_ready_delay1[4] && cache_buffer_next)             ch1_ready_ramclock <= 1;
+
+   if(data_ready_delay1[7]) cache_buffer_next <= cache_buffer;
+   if(data_ready_delay1[6] && cache_buffer_next) cache_done_0 <= 1;
+   if(data_ready_delay1[4] && cache_buffer_next) cache_done_1 <= 1;
+   if(data_ready_delay1[2] && cache_buffer_next) cache_done_2 <= 1;
+   if(data_ready_delay1[0] && cache_buffer_next) cache_done_3 <= 1;
 
 	if(data_ready_delay2[7]) ch2_dout[15:00]    <= dq_reg;
 	if(data_ready_delay2[6]) ch2_dout[31:16]    <= dq_reg;
@@ -329,14 +360,20 @@ always @(posedge clk) begin
                lastbank     <= dmafifo_adr[20:10];
             end else if(ch1_req | ch1_rq) begin
                {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, 1'b1, ch1_addr[25:1]};
-               chip       <= ch1_addr[26];
-               saved_data <= ch1_din;
-               saved_wr   <= ~ch1_rnw;
-               ch         <= 0;
-               ch1_rq     <= 0;
-               command    <= CMD_ACTIVE;
-               state      <= STATE_WAIT;
-               req128     <= ch1_128;
+               chip         <= ch1_addr[26];
+               saved_data   <= ch1_din;
+               saved_wr     <= ~ch1_rnw;
+               ch           <= 0;
+               ch1_rq       <= 0;
+               command      <= CMD_ACTIVE;
+               state        <= STATE_WAIT;
+               req128       <= ch1_128;
+               cache_buffer <= ch1_cache;
+               cache_addr   <= ch1_addr[11:4];
+               if (ch1_addr[3:2] == 2'b00) cache_wr_next <= 4'b0001;
+               if (ch1_addr[3:2] == 2'b01) cache_wr_next <= 4'b0010;
+               if (ch1_addr[3:2] == 2'b10) cache_wr_next <= 4'b0100;
+               if (ch1_addr[3:2] == 2'b11) cache_wr_next <= 4'b1000;
                ch1_reqprocessed_ramclock <= ch1_rnw;
             end else if(ch2_req | ch2_rq) begin
                {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch2_be[1:0], ch2_rnw, ch2_addr[25:1]};

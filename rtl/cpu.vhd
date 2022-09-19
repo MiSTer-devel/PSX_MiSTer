@@ -11,6 +11,7 @@ entity cpu is
    (
       clk1x                 : in  std_logic;
       clk2x                 : in  std_logic;
+      clk3x                 : in  std_logic;
       ce                    : in  std_logic;
       ce_system             : in  std_logic;
       reset                 : in  std_logic;
@@ -33,9 +34,12 @@ entity cpu is
       mem_writeMask         : out std_logic_vector(3 downto 0); 
       mem_dataWrite         : out std_logic_vector(31 downto 0); 
       mem_dataRead          : in  std_logic_vector(31 downto 0); 
-      mem_dataCache         : in  std_logic_vector(127 downto 0);
       mem_done              : in  std_logic;
       mem_fifofull          : in  std_logic;
+      
+      cache_wr              : in  std_logic_vector(3 downto 0);
+      cache_data            : in  std_logic_vector(31 downto 0);
+      cache_addr            : in  std_logic_vector(7 downto 0);
       
       stallNext             : out std_logic;
       
@@ -181,9 +185,6 @@ architecture arch of cpu is
    signal tag_address_b                : std_logic_vector(7 downto 0);
    signal tag_q_b                      : std_logic_vector(23 downto 0);
    
-   signal cache_address_a              : std_logic_vector(7 downto 0);
-   signal cache_data_a                 : std_logic_vector(127 downto 0);
-   signal cache_wren_a                 : std_logic_vector(0 to 3);
    signal cache_address_b              : std_logic_vector(7 downto 0);
    signal cache_q_b                    : std_logic_vector(127 downto 0);
    
@@ -612,11 +613,10 @@ begin
       generic map ( addr_width => 8, data_width => 32)
       port map
       (
-         clock_a     => clk1x,
-         clken_a     => ce,
-         address_a   => cache_address_a,
-         data_a      => cache_data_a((32*i) + 31 downto (32*i)),
-         wren_a      => cache_wren_a(i),
+         clock_a     => clk3x,
+         address_a   => cache_addr,
+         data_a      => cache_data,
+         wren_a      => cache_wr(i),
          
          clock_b     => clk1x,
          address_b   => cache_address_b,
@@ -625,8 +625,6 @@ begin
          q_b         => cache_q_b((32*i) + 31 downto (32*i))
       );
    end generate; 
-   
-   cache_address_a <= std_logic_vector(FetchLastAddr(11 downto 4));
    
    FetchAddr       <= x"BFC00180" when (exception > 0 and cop0_SR(22) = '1') else
                       x"80000080" when (exception > 0 and cop0_SR(22) = '0') else
@@ -640,7 +638,7 @@ begin
 
    mem1_address    <= FetchAddr;
 
-   process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, mem_done, mem_dataRead, memoryMuxStage4, fetchReady, stall1, opcode0, mem_dataCache, reset, FetchAddr, 
+   process (blockirq, cop0_SR, cop0_CAUSE, exception, stall, mem_done, mem_dataRead, memoryMuxStage4, fetchReady, stall1, opcode0, reset, FetchAddr, 
             tag_q_b, blockirqCnt, FetchLastAddr, writebackInvalidateCacheEna, cacheHitTest)
    begin
       PCnext          <= FetchAddr;
@@ -654,8 +652,6 @@ begin
       exceptionNew1   <= '0';
       exceptionNew5   <= '0';
 
-      cache_data_a    <= mem_dataCache;
-      cache_wren_a    <= "0000";
       tag_wren_a      <= '0';
       
       mem1_request    <= '0';
@@ -664,7 +660,6 @@ begin
       if (mem_done = '1' and memoryMuxStage4 = '0') then 
          case (to_integer(unsigned(FetchLastAddr(31 downto 29)))) is
             when 0 | 4 => -- cached
-               cache_wren_a <= "1111";
                tag_wren_a   <= '1';
             when others => null;
          end case;
@@ -738,23 +733,7 @@ begin
             PCnext         <= FetchAddr + 4;
             fetchReadyNext <= '1';
             fetchReadyNow  <= '1';
-            
-            case (to_integer(FetchLastAddr(31 downto 29))) is
-            
-               when 0 | 4 => -- cached
-                  case (FetchLastAddr(3 downto 2)) is
-                     when "00" => opcodeNext <= unsigned(mem_dataCache( 31 downto  0));
-                     when "01" => opcodeNext <= unsigned(mem_dataCache( 63 downto 32));
-                     when "10" => opcodeNext <= unsigned(mem_dataCache( 95 downto 64));
-                     when "11" => opcodeNext <= unsigned(mem_dataCache(127 downto 96));
-                  when others => null;
-               end case;
-                  
-               when 5 => opcodeNext <= unsigned(mem_dataRead);
-               
-               when others => report "should never happen" severity failure; 
-               
-            end case;
+            opcodeNext     <= unsigned(mem_dataRead);
             
          end if;
       

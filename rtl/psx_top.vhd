@@ -64,12 +64,16 @@ entity psx_top is
       ram_rnw               : out std_logic;
       ram_ena               : out std_logic;
       ram_128               : out std_logic;
+      ram_cache             : out std_logic;
       ram_done              : in  std_logic;
       ram_reqprocessed      : in  std_logic;
       ram_dmafifo_adr       : out std_logic_vector(20 downto 0);
       ram_dmafifo_data      : out std_logic_vector(31 downto 0);
       ram_dmafifo_empty     : out std_logic;
       ram_dmafifo_read      : in  std_logic;
+      cache_wr              : in  std_logic_vector(3 downto 0);
+      cache_data            : in  std_logic_vector(31 downto 0);
+      cache_addr            : in  std_logic_vector(7 downto 0);
       -- vram/savestate interface
       ddr3_BUSY             : in  std_logic;                    
       ddr3_DOUT             : in  std_logic_vector(63 downto 0);
@@ -396,7 +400,6 @@ architecture arch of psx_top is
    signal mem_writeMask          : std_logic_vector(3 downto 0);
    signal mem_dataWrite          : std_logic_vector(31 downto 0); 
    signal mem_dataRead           : std_logic_vector(31 downto 0); 
-   signal mem_dataCache          : std_logic_vector(127 downto 0); 
    signal mem_done               : std_logic;
    signal mem_fifofull           : std_logic;
    
@@ -409,6 +412,7 @@ architecture arch of psx_top is
    signal ram_cpu_rnw            : std_logic;
    signal ram_cpu_ena            : std_logic;
    signal ram_cpu_128            : std_logic;
+   signal ram_cpu_cache          : std_logic;
    signal ram_cpu_done           : std_logic;
    
    -- gpu
@@ -1280,6 +1284,7 @@ begin
    ram_rnw       <= ram_dma_rnw       when (cpuPaused = '1') else ram_cpu_rnw;      
    ram_ena       <= ram_dma_ena       when (cpuPaused = '1') else ram_cpu_ena;      
    ram_128       <= ram_dma_128       when (cpuPaused = '1') else ram_cpu_128;      
+   ram_cache     <= '0'               when (cpuPaused = '1') else ram_cpu_cache;    
    
    process (clk1x)
    begin
@@ -1680,6 +1685,7 @@ begin
       ram_rnw              => ram_cpu_rnw,      
       ram_ena              => ram_cpu_ena,      
       ram_128              => ram_cpu_128,      
+      ram_cache            => ram_cpu_cache,      
       ram_done             => ram_cpu_done,
       
       mem_in_request       => mem_request,  
@@ -1692,7 +1698,6 @@ begin
       mem_in_writeMask     => mem_writeMask,
       mem_in_dataWrite     => mem_dataWrite,
       mem_dataRead         => mem_dataRead, 
-      mem_dataCache        => mem_dataCache, 
       mem_done             => mem_done,
       mem_fifofull         => mem_fifofull,   
 
@@ -1807,6 +1812,7 @@ begin
    (
       clk1x             => clk1x,
       clk2x             => clk2x,
+      clk3x             => clk3x,
       ce                => ce_cpu,   
       ce_system         => ce,
       reset             => reset_intern,
@@ -1829,9 +1835,12 @@ begin
       mem_writeMask     => mem_writeMask,
       mem_dataWrite     => mem_dataWrite,
       mem_dataRead      => mem_dataRead, 
-      mem_dataCache     => mem_dataCache, 
       mem_done          => mem_done,
       mem_fifofull      => mem_fifofull,
+      
+      cache_wr          => cache_wr,  
+      cache_data        => cache_data,
+      cache_addr        => cache_addr,
       
       stallNext         => stallNext,
       

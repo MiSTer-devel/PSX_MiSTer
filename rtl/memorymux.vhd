@@ -35,6 +35,7 @@ entity memorymux is
       ram_rnw              : out std_logic := '0';
       ram_ena              : out std_logic := '0';
       ram_128              : out std_logic := '0';
+      ram_cache            : out std_logic := '0';
       ram_done             : in  std_logic;
       
       mem_in_request       : in  std_logic;
@@ -47,7 +48,6 @@ entity memorymux is
       mem_in_writeMask     : in  std_logic_vector(3 downto 0); 
       mem_in_dataWrite     : in  std_logic_vector(31 downto 0); 
       mem_dataRead         : out std_logic_vector(31 downto 0); 
-      mem_dataCache        : out std_logic_vector(127 downto 0); 
       mem_done             : out std_logic;
       mem_fifofull         : out std_logic;
       
@@ -166,7 +166,6 @@ architecture arch of memorymux is
       WAITFORRAMREAD,
       WAITFORRAMWRITE,
       READBIOS,
-      READBIOSCACHE,
       BUSWRITE,
       BUSWRITEEXTERNAL,
       BUSREADEXTERNAL,
@@ -445,8 +444,6 @@ begin
                         '1'            when (ext_done = '1') else 
                         mem_done_buf;
    
-   mem_dataCache     <= ram_dataRead;
-   
    
    -- write fifo
    iwritefifo: entity mem.SyncFifoFallThroughMLAB
@@ -565,34 +562,36 @@ begin
                      if (mem_isData = '0') then
                
                         if (mem_addressInstr(28 downto 0) < 16#800000#) then -- RAM
-                           ram_ena <= '1';
-                           ram_128 <= '0';
-                           ram_rnw <= '1';
-                           ram_Adr <= "00" & std_logic_vector(mem_addressInstr(20 downto 0));
-                           state   <= IDLE;
-                           readram <= '1';
+                           ram_ena     <= '1';
+                           ram_128     <= '0';
+                           ram_cache   <= '0';
+                           ram_rnw     <= '1';
+                           ram_Adr     <= "00" & std_logic_vector(mem_addressInstr(20 downto 0));
+                           state       <= IDLE;
+                           readram     <= '1';
                            ram_rotate_bits <= "00";
                            if (mem_isCache = '1') then
-                              ram_Adr(3 downto 0) <= (others => '0');
-                              ram_128             <= '1';
+                              ram_cache   <= '1';
                            end if;
                         elsif (mem_addressInstr(28 downto 0) >= 16#1FC00000# and mem_addressInstr(28 downto 0) < 16#1FC80000#) then -- BIOS
-                           ram_ena <= '1';
-                           ram_128 <= '0';
-                           ram_rnw <= '1';
-                           ram_Adr <= "01" & region & std_logic_vector(mem_addressInstr(18 downto 0));
-                           state   <= READBIOS;
+                           ram_ena     <= '1';
+                           ram_128     <= '0';
+                           ram_cache   <= '0';
+                           ram_rnw     <= '1';
+                           ram_Adr     <= "01" & region & std_logic_vector(mem_addressInstr(18 downto 0));
+                           state       <= READBIOS;
                            addressBIOS_buf <= mem_addressInstr(18 downto 0);
                            waitcnt <= 16;
                            if (mem_isCache = '1') then
-                              ram_Adr(3 downto 0) <= (others => '0');
-                              state               <= READBIOSCACHE;
-                              waitcnt             <= 87;
-                              ram_128             <= '1';
-                              if (NOMEMWAIT = '1') then
-                                 state   <= IDLE;
-                                 readram <= '1';
-                              end if;
+                              ram_ena    <= '0';
+                              readram    <= '0';
+                              state      <= WAITFORRAMREAD;
+                              waitcnt    <= 87;
+                              ram_cache  <= '1';
+                              --if (NOMEMWAIT = '1') then
+                              --   state   <= IDLE;
+                              --   readram <= '1';
+                              --end if;
                            end if;
                         else
                            report "should never happen" severity failure; 
@@ -601,10 +600,11 @@ begin
                      else
                      
                         if (mem_addressData(28 downto 0) < 16#800000#) then -- RAM
-                           ext_lastactive <= '0';
-                           ram_128 <= '0';
-                           ram_rnw <= mem_rnw;
-                           ram_Adr <= "00" & std_logic_vector(mem_addressData(20 downto 2)) & "00";
+                           ext_lastactive  <= '0';
+                           ram_128         <= '0';
+                           ram_cache       <= '0';
+                           ram_rnw         <= mem_rnw;
+                           ram_Adr         <= "00" & std_logic_vector(mem_addressData(20 downto 2)) & "00";
                            ram_rotate_bits <= std_logic_vector(mem_addressData(1 downto 0));
                            if (mem_rnw = '1') then
                               if (TURBO = '1') then
@@ -633,11 +633,12 @@ begin
                            ram_be        <= mem_writeMask;
                            ram_dataWrite <= mem_dataWrite;
                         elsif (mem_rnw = '1' and mem_addressData(28 downto 0) >= 16#1FC00000# and mem_addressData(28 downto 0) < 16#1FC80000#) then -- BIOS
-                           ram_ena <= '1';
-                           ram_128 <= '0';
-                           ram_rnw <= '1';
-                           ram_Adr <= "01" & region & std_logic_vector(mem_addressData(18 downto 0));
-                           state   <= READBIOS;
+                           ram_ena     <= '1';
+                           ram_128     <= '0';
+                           ram_cache   <= '0';
+                           ram_rnw     <= '1';
+                           ram_Adr     <= "01" & region & std_logic_vector(mem_addressData(18 downto 0));
+                           state       <= READBIOS;
                            addressBIOS_buf <= mem_addressData(18 downto 0);
                            case (mem_reqsize) is
                               when "00" => waitcnt <= 1;
@@ -755,11 +756,6 @@ begin
                         state    <= WAITING;
                      end if;
                   end if;
-                  
-               when READBIOSCACHE =>
-                  if (ram_done = '1') then
-                     state    <= WAITING;
-                  end if; 
                   
                when BUSWRITE => 
                   state        <= IDLE;               

@@ -990,12 +990,16 @@ psx
    .ram_rnw(sdram_rnw),  
    .ram_ena(sdram_req), 
    .ram_128(sdram_128), 
+   .ram_cache(sdram_cache), 
    .ram_done(sdram_ack),
    .ram_reqprocessed(sdram_reqprocessed),
    .ram_dmafifo_adr  (sdram_dmafifo_adr),  
    .ram_dmafifo_data (sdram_dmafifo_data), 
    .ram_dmafifo_empty(sdram_dmafifo_empty),
    .ram_dmafifo_read (sdram_dmafifo_read),
+   .cache_wr(cache_wr),  
+   .cache_data(cache_data),
+   .cache_addr(cache_addr),
    // vram/ddr3
    .DDRAM_BUSY      (DDRAM_BUSY      ),
    .DDRAM_BURSTCNT  (DDRAM_BURSTCNT  ),
@@ -1204,6 +1208,10 @@ wire         sdram_writeack;
 wire         sdram_writeack2;
 wire         sdram_rnw;
 wire         sdram_128;
+wire         sdram_cache;
+wire [ 3:0]  cache_wr;
+wire [31:0]  cache_data;
+wire [ 7:0]  cache_addr;
 
 wire  [20:0] sdram_dmafifo_adr;  
 wire  [31:0] sdram_dmafifo_data; 
@@ -1249,8 +1257,12 @@ sdram sdram
 	.ch1_req(sdram_req & sdram_rnw),
 	.ch1_rnw(1'b1),
 	.ch1_128(sdram_128),
+	.ch1_cache(sdram_cache),
 	.ch1_ready(sdram_readack),
 	.ch1_reqprocessed(sdram_reqprocessed),
+	.cache_wr(cache_wr),  
+	.cache_data(cache_data),
+	.cache_addr(cache_addr),
 
 	.ch2_addr (sdram_addr),
 	.ch2_din  (sdr_sdram_din),
@@ -1315,6 +1327,7 @@ sdram sdram2
 	.ch1_req(spuram_ena & spuram_rnw),
 	.ch1_rnw(1'b1),
 	.ch1_128(1'b0),
+	.ch1_cache(1'b0),
 	.ch1_ready(sdram_readack2),
 	.ch1_reqprocessed(),
 
