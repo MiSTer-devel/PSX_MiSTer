@@ -38,7 +38,12 @@ entity sdram_model3x is
       ram_dmafifo_data  : in  std_logic_vector(31 downto 0);
       ram_dmafifo_empty : in  std_logic;
       ram_dmafifo_read  : out std_logic := '0';
-      fileSize          : out unsigned(29 downto 0) := (others => '0')
+      fileSize          : out unsigned(29 downto 0) := (others => '0');
+      exe_initial_pc    : out unsigned(31 downto 0);
+      exe_initial_gp    : out unsigned(31 downto 0);
+      exe_load_address  : out unsigned(31 downto 0);
+      exe_file_size     : out unsigned(31 downto 0);
+      exe_stackpointer  : out unsigned(31 downto 0)
    );
 end entity;
 
@@ -376,7 +381,17 @@ begin
             file_close(infile);
          
             COMMAND_FILE_ACK_1 <= '1';
-         
+            
+            targetpos := COMMAND_FILE_TARGET;
+            
+            exe_initial_pc   <= to_unsigned(data(targetpos + 16#13#), 8) & to_unsigned(data(targetpos + 16#12#), 8) & to_unsigned(data(targetpos + 16#11#), 8) & to_unsigned(data(targetpos + 16#10#), 8);
+            exe_initial_gp   <= to_unsigned(data(targetpos + 16#17#), 8) & to_unsigned(data(targetpos + 16#16#), 8) & to_unsigned(data(targetpos + 16#15#), 8) & to_unsigned(data(targetpos + 16#14#), 8);
+            exe_load_address <= to_unsigned(data(targetpos + 16#1B#), 8) & to_unsigned(data(targetpos + 16#1A#), 8) & to_unsigned(data(targetpos + 16#19#), 8) & to_unsigned(data(targetpos + 16#18#), 8);
+            exe_file_size    <= to_unsigned(data(targetpos + 16#1F#), 8) & to_unsigned(data(targetpos + 16#1E#), 8) & to_unsigned(data(targetpos + 16#1D#), 8) & to_unsigned(data(targetpos + 16#1C#), 8);
+            
+            exe_stackpointer <= (to_unsigned(data(targetpos + 16#33#), 8) & to_unsigned(data(targetpos + 16#32#), 8) & to_unsigned(data(targetpos + 16#31#), 8) & to_unsigned(data(targetpos + 16#30#), 8)) + 
+                                (to_unsigned(data(targetpos + 16#37#), 8) & to_unsigned(data(targetpos + 16#36#), 8) & to_unsigned(data(targetpos + 16#35#), 8) & to_unsigned(data(targetpos + 16#34#), 8));
+            
          end if;
       end if;
       

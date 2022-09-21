@@ -21,7 +21,13 @@ entity psx_top is
       isPaused              : out std_logic;
       -- commands 
       pause                 : in  std_logic;
+      hps_busy              : in  std_logic;
       loadExe               : in  std_logic;
+      exe_initial_pc        : in  unsigned(31 downto 0);
+      exe_initial_gp        : in  unsigned(31 downto 0);
+      exe_load_address      : in  unsigned(31 downto 0);
+      exe_file_size         : in  unsigned(31 downto 0);
+      exe_stackpointer      : in  unsigned(31 downto 0);
       fastboot              : in  std_logic;
       FASTMEM               : in  std_logic;
       TURBO                 : in  std_logic;
@@ -411,7 +417,6 @@ architecture arch of psx_top is
    signal ram_cpu_be             : std_logic_vector(3 downto 0);
    signal ram_cpu_rnw            : std_logic;
    signal ram_cpu_ena            : std_logic;
-   signal ram_cpu_128            : std_logic;
    signal ram_cpu_cache          : std_logic;
    signal ram_cpu_done           : std_logic;
    
@@ -1283,7 +1288,7 @@ begin
    ram_be        <= ram_dma_be        when (cpuPaused = '1') else ram_cpu_be;       
    ram_rnw       <= ram_dma_rnw       when (cpuPaused = '1') else ram_cpu_rnw;      
    ram_ena       <= ram_dma_ena       when (cpuPaused = '1') else ram_cpu_ena;      
-   ram_128       <= ram_dma_128       when (cpuPaused = '1') else ram_cpu_128;      
+   ram_128       <= ram_dma_128       when (cpuPaused = '1') else '0';      
    ram_cache     <= '0'               when (cpuPaused = '1') else ram_cpu_cache;    
    
    process (clk1x)
@@ -1655,10 +1660,6 @@ begin
    );
 
    imemorymux : entity work.memorymux
-   generic map
-   (
-      is_simu => '0'
-   )
    port map
    (
       clk1x                => clk1x,
@@ -1669,6 +1670,11 @@ begin
       isIdle               => memMuxIdle,
          
       loadExe              => loadExe,
+      exe_initial_pc       => exe_initial_pc,  
+      exe_initial_gp       => exe_initial_gp,  
+      exe_load_address     => exe_load_address,
+      exe_file_size        => exe_file_size,   
+      exe_stackpointer     => exe_stackpointer,
       reset_exe            => reset_exe,
       
       fastboot             => fastboot,
@@ -1678,13 +1684,11 @@ begin
       PATCHSERIAL          => PATCHSERIAL,
             
       ram_dataWrite        => ram_cpu_dataWrite,
-      ram_dataRead         => ram_dataRead, 
-      ram_dataRead32       => ram_dataRead32, 
+      ram_dataRead         => ram_dataRead32,  
       ram_Adr              => ram_cpu_Adr,  
       ram_be               => ram_cpu_be,        
       ram_rnw              => ram_cpu_rnw,      
-      ram_ena              => ram_cpu_ena,      
-      ram_128              => ram_cpu_128,      
+      ram_ena              => ram_cpu_ena,   
       ram_cache            => ram_cpu_cache,      
       ram_done             => ram_cpu_done,
       
@@ -2019,6 +2023,7 @@ begin
       reset_out               => reset_intern,
       ss_reset                => SS_reset,
       
+      hps_busy                => hps_busy,
       loadExe                 => loadExe,
            
       load_done               => state_loaded,

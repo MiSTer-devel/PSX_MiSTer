@@ -33,8 +33,8 @@ entity cd_top is
       irqOut               : out std_logic := '0';
       
       spu_tick             : in  std_logic;
-      cd_left              : out signed(15 downto 0);
-      cd_right             : out signed(15 downto 0);
+      cd_left              : out signed(15 downto 0) := (others => '0');
+      cd_right             : out signed(15 downto 0) := (others => '0');
       
       mdec_idle            : in  std_logic;
       
@@ -399,20 +399,20 @@ architecture arch of cd_top is
    signal ackRead_data              : std_logic := '0';
       
    -- cd audio volume
-   signal cdvol_next00              : std_logic_vector(7 downto 0);
-   signal cdvol_next01              : std_logic_vector(7 downto 0);
-   signal cdvol_next10              : std_logic_vector(7 downto 0);
-   signal cdvol_next11              : std_logic_vector(7 downto 0);
-   signal cdvol_00                  : std_logic_vector(7 downto 0);
-   signal cdvol_01                  : std_logic_vector(7 downto 0);
-   signal cdvol_10                  : std_logic_vector(7 downto 0);
-   signal cdvol_11                  : std_logic_vector(7 downto 0);
+   signal cdvol_next00              : std_logic_vector(7 downto 0) := (others => '0');
+   signal cdvol_next01              : std_logic_vector(7 downto 0) := (others => '0');
+   signal cdvol_next10              : std_logic_vector(7 downto 0) := (others => '0');
+   signal cdvol_next11              : std_logic_vector(7 downto 0) := (others => '0');
+   signal cdvol_00                  : std_logic_vector(7 downto 0) := (others => '0');
+   signal cdvol_01                  : std_logic_vector(7 downto 0) := (others => '0');
+   signal cdvol_10                  : std_logic_vector(7 downto 0) := (others => '0');
+   signal cdvol_11                  : std_logic_vector(7 downto 0) := (others => '0');
    
    signal cd_volume_step            : integer range 0 to 7;
-   signal soundmulresult            : signed(16 downto 0);
-   signal soundmul1                 : signed(15 downto 0);
-   signal soundmul2                 : unsigned(7 downto 0);
-   signal soundsum                  : signed(17 downto 0);
+   signal soundmulresult            : signed(16 downto 0) := (others => '0');
+   signal soundmul1                 : signed(15 downto 0) := (others => '0');
+   signal soundmul2                 : unsigned(7 downto 0) := (others => '0');
+   signal soundsum                  : signed(17 downto 0) := (others => '0');
       
    -- track infos
    --signal totalLBAs                 : integer range 0 to 524287; 

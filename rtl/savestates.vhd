@@ -18,6 +18,7 @@ entity savestates is
       reset_out               : out std_logic := '0';
       ss_reset                : out std_logic := '0';
          
+      hps_busy                : in  std_logic;
       loadExe                 : in  std_logic;
          
       load_done               : out std_logic := '0';
@@ -162,7 +163,7 @@ architecture arch of savestates is
    signal SS_wren_2x          : std_logic_vector(SAVETYPESCOUNT - 1 downto 0);
    signal SS_rden_2x          : std_logic_vector(SAVETYPESCOUNT - 1 downto 0);
    
-   signal unstallwait         : integer range 0 to 16777215 := 0;
+   signal unstallwait         : integer range 0 to 67108863 := 0;
    
    signal ddr3_ADDR_save      : std_logic_vector(25 downto 0) := (others => '0');
    signal ddr3_DOUT_saved     : std_logic_vector(63 downto 0);
@@ -479,12 +480,14 @@ begin
                if (DDR3_busy = '0') then
                   state       <= SAVEWAITHPSDONE;
                   if (increaseSSHeaderCount = '1') then
-                     unstallwait <= 16777215;
+                     unstallwait <= 67108863;
                   end if;
                end if;
              
             when SAVEWAITHPSDONE =>
-               if (unstallwait > 0) then
+               if (hps_busy = '1') then
+                  unstallwait <= 67108863;
+               elsif (unstallwait > 0) then
                   unstallwait <= unstallwait - 1;
                else
                   state            <= IDLE;

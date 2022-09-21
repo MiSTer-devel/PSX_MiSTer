@@ -24,8 +24,8 @@ entity cd_xa is
       
       XA_eof               : out std_logic := '0';
       
-      cdaudio_left         : out signed(15 downto 0);
-      cdaudio_right        : out signed(15 downto 0)
+      cdaudio_left         : out signed(15 downto 0) := (others => '0');
+      cdaudio_right        : out signed(15 downto 0) := (others => '0')
    );
 end entity;
 

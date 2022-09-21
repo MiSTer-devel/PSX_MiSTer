@@ -96,6 +96,12 @@ architecture arch of etb is
    signal ram_dmafifo_empty   : std_logic;
    signal ram_dmafifo_read    : std_logic;
    
+   signal exe_initial_pc      : unsigned(31 downto 0);
+   signal exe_initial_gp      : unsigned(31 downto 0);
+   signal exe_load_address    : unsigned(31 downto 0);
+   signal exe_file_size       : unsigned(31 downto 0);
+   signal exe_stackpointer    : unsigned(31 downto 0);
+   
    -- ddrram
    signal DDRAM_CLK           : std_logic;
    signal DDRAM_BUSY          : std_logic;
@@ -247,7 +253,13 @@ begin
       reset                 => reset,
       -- commands 
       pause                 => pause,
+      hps_busy              => '0',
       loadExe               => psx_LoadExe(0),
+      exe_initial_pc        => exe_initial_pc,  
+      exe_initial_gp        => exe_initial_gp,  
+      exe_load_address      => exe_load_address,
+      exe_file_size         => exe_file_size,   
+      exe_stackpointer      => exe_stackpointer,
       fastboot              => '1',
       FASTMEM               => '0',
       TURBO                 => '0',
@@ -507,7 +519,12 @@ begin
       ram_dmafifo_adr      => ram_dmafifo_adr, 
       ram_dmafifo_data     => ram_dmafifo_data,
       ram_dmafifo_empty    => ram_dmafifo_empty,
-      ram_dmafifo_read     => ram_dmafifo_read  
+      ram_dmafifo_read     => ram_dmafifo_read,
+      exe_initial_pc       => exe_initial_pc,  
+      exe_initial_gp       => exe_initial_gp,  
+      exe_load_address     => exe_load_address,
+      exe_file_size        => exe_file_size,   
+      exe_stackpointer     => exe_stackpointer    
    );
    
    ispu_ram : entity work.sdram_model3x 

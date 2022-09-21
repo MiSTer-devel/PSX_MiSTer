@@ -17,7 +17,13 @@ entity psx_mister is
       isPaused              : out std_logic;
       -- commands 
       pause                 : in  std_logic;
+      hps_busy              : in  std_logic;
       loadExe               : in  std_logic;
+      exe_initial_pc        : in  unsigned(31 downto 0);
+      exe_initial_gp        : in  unsigned(31 downto 0);
+      exe_load_address      : in  unsigned(31 downto 0);
+      exe_file_size         : in  unsigned(31 downto 0);
+      exe_stackpointer      : in  unsigned(31 downto 0);
       fastboot              : in  std_logic;
       FASTMEM               : in  std_logic;
       TURBO                 : in  std_logic;
@@ -282,7 +288,13 @@ begin
       isPaused              => isPaused, 
       -- commands 
       pause                 => pause,
+      hps_busy              => hps_busy,
       loadExe               => loadExe,
+      exe_initial_pc        => exe_initial_pc,  
+      exe_initial_gp        => exe_initial_gp,  
+      exe_load_address      => exe_load_address,
+      exe_file_size         => exe_file_size,   
+      exe_stackpointer      => exe_stackpointer,
       fastboot              => fastboot,
       FASTMEM               => FASTMEM,
       TURBO                 => TURBO,

@@ -590,6 +590,15 @@ assign sd_wr[0] = 0;
 assign sd_wr[1] = 0;
 
 wire [35:0] EXT_BUS;
+wire        heartbeat;
+
+hps_ext hps_ext
+(
+	.clk_sys(clk_1x),
+	.EXT_BUS(EXT_BUS),
+	.heartbeat(heartbeat)
+);
+
 
 //////////////////////////  ROM DETECT  /////////////////////////////////
 
@@ -650,6 +659,12 @@ wire [1:0] region_out;
 reg        isPal;
 reg biosMod = 0;
 
+reg [31:0] exe_initial_pc;  
+reg [31:0] exe_initial_gp;  
+reg [31:0] exe_load_address;
+reg [31:0] exe_file_size;   
+reg [31:0] exe_stackpointer;
+
 always @(posedge clk_1x) begin
 	ramdownload_wr <= 0;
 	if(exe_download | bios_download | cdinfo_download) begin
@@ -672,6 +687,15 @@ always @(posedge clk_1x) begin
 	end
    exe_download_1  <= exe_download;
    loadExe         <= exe_download_1 & ~exe_download;  
+
+   if (exe_download & ramdownload_wr) begin
+      if (ramdownload_wraddr[20:0] == 'h10) exe_initial_pc     <= ramdownload_wrdata;
+      if (ramdownload_wraddr[20:0] == 'h14) exe_initial_gp     <= ramdownload_wrdata;
+      if (ramdownload_wraddr[20:0] == 'h18) exe_load_address   <= ramdownload_wrdata;
+      if (ramdownload_wraddr[20:0] == 'h1C) exe_file_size      <= ramdownload_wrdata;
+      if (ramdownload_wraddr[20:0] == 'h30) exe_stackpointer   <= ramdownload_wrdata;
+      if (ramdownload_wraddr[20:0] == 'h34) exe_stackpointer   <= exe_stackpointer + ramdownload_wrdata;
+   end
 
    if (loadExe) biosMod <= 1'b1;
      
@@ -895,6 +919,10 @@ reg [9:0] unpause = 0;
 reg status1_1;
 wire isPaused;
 
+reg [20:0] aliveCnt = 0;
+reg heartbeat_1 = 0;
+reg hps_busy = 0;
+
 reg reset = 0;
 
 reg buttonpause_1 = 0;
@@ -926,10 +954,24 @@ always @(posedge clk_1x) begin
       unpause <= unpause - 1'd1;
    end
    
+   // pause from heartbeat -> only used for savestate
+   hps_busy    <= 0;
+   heartbeat_1 <= heartbeat;
+   if (heartbeat == heartbeat_1) begin
+      if (aliveCnt[20] == 0) begin
+         aliveCnt <= aliveCnt + 1'b1;
+      end else begin
+         hps_busy <= 1;
+      end
+   end else begin
+      aliveCnt <= 0;
+   end
+   
    // reset
    reset <= 0;
    if (reset_or) begin
       reset    <= 1;
+      aliveCnt <= 0;
    end
 
 end
@@ -947,7 +989,13 @@ psx
    .isPaused(isPaused),
    // commands 
    .pause(paused),
+   .hps_busy(hps_busy),
    .loadExe(loadExe),
+   .exe_initial_pc(exe_initial_pc),
+   .exe_initial_gp(exe_initial_gp), 
+   .exe_load_address(exe_load_address),
+   .exe_file_size(exe_file_size),   
+   .exe_stackpointer(exe_stackpointer),
    .fastboot(status[16]),
    .FASTMEM(0),
    .TURBO(status[58]),
