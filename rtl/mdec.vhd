@@ -293,7 +293,7 @@ architecture arch of mdec is
 begin 
 
    FifoIn_Din <= dma_writedata when (dma_write = '1') else bus_dataWrite;
-   FifoIn_Wr  <= '1' when ((bus_write = '1' and bus_addr = x"0") or dma_write = '1') else '0';
+   FifoIn_Wr  <= ce when ((bus_write = '1' and bus_addr = x"0") or dma_write = '1') else '0';
 
    ififoIn: entity mem.SyncFifoFallThrough
    generic map

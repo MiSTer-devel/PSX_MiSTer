@@ -2246,7 +2246,7 @@ begin
             end if;
          end if;
          
-         if (dma_write = '1') then
+         if (dma_write = '1' and ce = '1') then
             if (FifoIn_Full = '0') then
                FifoIn_Wr  <= '1';
                FifoIn_Din <= dma_writedata;

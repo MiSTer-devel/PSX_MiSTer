@@ -21,7 +21,7 @@ entity sdram_model3x is
       refresh           : in  std_logic;
       addr              : in  std_logic_vector(26 downto 0);
       req               : in  std_logic;
-      ram_128           : in  std_logic;
+      ram_dma           : in  std_logic;
       ram_iscache       : in  std_logic;
       rnw               : in  std_logic;
       be                : in  std_logic_vector(3 downto 0);
@@ -32,6 +32,8 @@ entity sdram_model3x is
       cache_wr          : out std_logic_vector(3 downto 0) := (others => '0');
       cache_data        : out std_logic_vector(31 downto 0) := (others => '0');
       cache_addr        : out std_logic_vector(7 downto 0) := (others => '0');
+      dma_wr            : buffer std_logic := '0';
+      dma_data          : out std_logic_vector(31 downto 0) := (others => '0');
       reqprocessed      : buffer std_logic := '0';
       ram_idle          : out std_logic := '0';
       ram_dmafifo_adr   : in  std_logic_vector(20 downto 0);
@@ -67,7 +69,6 @@ architecture arch of sdram_model3x is
    signal req_buffer             : std_logic := '0';
    signal refresh_buffer         : std_logic := '0';
    signal addr_buffer            : std_logic_vector(26 downto 0);
-   signal ram_128_buffer         : std_logic := '0';
    signal rnw_buffer             : std_logic := '0';
    
    signal lastbank               : std_logic_vector(10 downto 0);
@@ -89,6 +90,14 @@ architecture arch of sdram_model3x is
    signal cache_done_2           : std_logic := '0';
    signal cache_done_3           : std_logic := '0';
    signal cache_wr_next          : std_logic_vector(3 downto 0);
+   
+   signal dma_buffer             : std_logic := '0';
+   signal dma_done               : std_logic := '0';
+   signal dma_ack                : std_logic := '0';
+   signal dma_count_3x           : unsigned(1 downto 0);
+   signal dma_count              : unsigned(1 downto 0);
+   signal dma_counter            : unsigned(1 downto 0);
+   signal dma_do                 : std_logic_vector(127 downto 0);
    
    type tstate is
    (
@@ -134,6 +143,28 @@ begin
          else
             do32 <= do(31 downto 0);
          end if;
+      end if;
+      
+      dma_wr  <= '0';
+      dma_ack <= '0';
+
+      if (dma_wr = '1') then
+         if (dma_counter < dma_count) then
+            dma_wr      <= '1';
+            dma_counter <= dma_counter + 1;
+            if (dma_counter = 0) then dma_data <= dma_do( 63 downto 32); end if;
+            if (dma_counter = 1) then dma_data <= dma_do( 95 downto 64); end if;
+            if (dma_counter = 2) then dma_data <= dma_do(127 downto 96); end if;
+         end if;
+      end if;
+      
+      if (dma_done = '1') then
+         dma_ack     <= '1';
+         dma_wr      <= '1';
+         dma_data    <= do( 31 downto  0);
+         dma_do      <= do;
+         dma_counter <= (others => '0');
+         dma_count   <= dma_count_3x;
       end if;
    
    end process;
@@ -194,6 +225,10 @@ begin
          done_3x <= '0';
       end if;
       
+      if (dma_ack = '1') then
+         dma_done <= '0';
+      end if;
+      
       cache_wr     <= (others => '0');
       cache_done_0 <= '0';
       cache_done_1 <= '0';
@@ -225,9 +260,9 @@ begin
       
       data_ready_delay1 <= '0' & data_ready_delay1(10 downto 1);
 
-      if(data_ready_delay1(2) = '1' and ram_128_buffer = '1' and cache_buffer_next = '0') then done_3x <= '1'; end if;
-      if(data_ready_delay1(6) = '1' and ram_128_buffer = '0' and cache_buffer_next = '0') then done_3x <= '1'; end if;
-      if(data_ready_delay1(4) = '1' and cache_buffer_next = '1')                          then done_3x <= '1'; end if;
+      if(data_ready_delay1(6) = '1' and dma_buffer = '0' and cache_buffer_next = '0') then done_3x  <= '1'; end if;
+      if(data_ready_delay1(4) = '1' and cache_buffer_next = '1')                      then done_3x  <= '1'; end if;
+      if(data_ready_delay1(6) = '1' and dma_buffer = '1')                             then dma_done <= '1'; end if;
       
       if(data_ready_delay1(7) = '1') then cache_buffer_next <= cache_buffer; end if;
       if(data_ready_delay1(6) = '1' and cache_buffer_next = '1') then cache_done_0 <= '1'; end if;
@@ -283,16 +318,22 @@ begin
             elsif ((req = '1' or req_buffer = '1') and rnw = '1') then
                reqprocessed_3x <= '1';
                req_buffer      <= '0';
-               addr_buffer     <= addr;
-               ram_128_buffer  <= ram_128;
-               cache_buffer    <= ram_iscache;
-               cache_addr      <= addr(11 downto 4);
+               addr_buffer     <= addr; 
                rnw_buffer      <= '1';
                state           <= STATE_WAIT;
+               
+               cache_buffer    <= ram_iscache;
+               cache_addr      <= addr(11 downto 4);
                if (addr(3 downto 2) = "00") then cache_wr_next <= "0001"; end if;
                if (addr(3 downto 2) = "01") then cache_wr_next <= "0010"; end if;
                if (addr(3 downto 2) = "10") then cache_wr_next <= "0100"; end if;
                if (addr(3 downto 2) = "11") then cache_wr_next <= "1000"; end if;
+               
+               dma_buffer      <= ram_dma;
+               if (addr(3 downto 2) = "00") then dma_count_3x <= "11"; end if;
+               if (addr(3 downto 2) = "01") then dma_count_3x <= "10"; end if;
+               if (addr(3 downto 2) = "10") then dma_count_3x <= "01"; end if;
+               if (addr(3 downto 2) = "11") then dma_count_3x <= "00"; end if;
             end if;
          
          when STATE_WAIT => 

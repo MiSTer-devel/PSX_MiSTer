@@ -59,13 +59,12 @@ entity psx_mister is
       biosregion            : in  std_logic_vector(1 downto 0);  
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
-      ram_dataRead          : in  std_logic_vector(127 downto 0);
       ram_dataRead32        : in  std_logic_vector(31 downto 0);
       ram_Adr               : out std_logic_vector(22 downto 0);
       ram_be                : out std_logic_vector(3 downto 0) := (others => '0');
       ram_rnw               : out std_logic;
       ram_ena               : out std_logic;
-      ram_128               : out std_logic;
+      ram_dma               : out std_logic;
       ram_cache             : out std_logic;
       ram_done              : in  std_logic;
       ram_reqprocessed      : in  std_logic;
@@ -75,7 +74,9 @@ entity psx_mister is
       ram_dmafifo_read      : in  std_logic; 
       cache_wr              : in  std_logic_vector(3 downto 0);
       cache_data            : in  std_logic_vector(31 downto 0);
-      cache_addr            : in  std_logic_vector(7 downto 0);      
+      cache_addr            : in  std_logic_vector(7 downto 0);  
+      dma_wr                : in  std_logic;
+      dma_data              : in  std_logic_vector(31 downto 0);      
       -- vram/ddr3 interface
       DDRAM_BUSY            : in  std_logic;                    
       DDRAM_BURSTCNT        : out std_logic_vector(7 downto 0); 
@@ -330,13 +331,12 @@ begin
       biosregion            => biosregion,
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
-      ram_dataRead          => ram_dataRead, 
       ram_dataRead32        => ram_dataRead32, 
       ram_Adr               => ram_Adr, 
       ram_be                => ram_be,        
       ram_rnw               => ram_rnw,      
       ram_ena               => ram_ena,  
-      ram_128               => ram_128,       
+      ram_dma               => ram_dma,       
       ram_cache             => ram_cache,       
       ram_done              => ram_done, 
       ram_reqprocessed      => ram_reqprocessed,   
@@ -346,7 +346,9 @@ begin
       ram_dmafifo_read      => ram_dmafifo_read,   
       cache_wr              => cache_wr,  
       cache_data            => cache_data,
-      cache_addr            => cache_addr,      
+      cache_addr            => cache_addr,     
+      dma_wr                => dma_wr,  
+      dma_data              => dma_data,      
       -- vram interface
       ddr3_BUSY             => DDRAM_BUSY,      
       ddr3_DOUT             => DDRAM_DOUT,      

@@ -59,7 +59,6 @@ entity savestates is
             
       loading_savestate       : out std_logic := '0';
       saving_savestate        : out std_logic := '0';
-      sleep_savestate         : out std_logic := '0';
       
       ddr3_BUSY               : in  std_logic;                    
       ddr3_DOUT               : in  std_logic_vector(63 downto 0);
@@ -121,8 +120,8 @@ architecture arch of savestates is
    type tstate is
    (
       IDLE,
-      SAVE_WAITPAUSE,
-      SAVE_WAITIDLE,
+      WAITPAUSE,
+      WAITIDLE,
       SAVE_WAITSETTLE,
       SAVEMEMORY_NEXT,
       SAVEMEMORY_STARTREAD,
@@ -184,6 +183,7 @@ architecture arch of savestates is
    signal header_amount       : unsigned(31 downto 0) := to_unsigned(1, 32);
    
    signal resetMode           : std_logic := '0';
+   signal savemode            : std_logic := '0';
    
    signal reset_in_1          : std_logic := '0';
    
@@ -296,53 +296,69 @@ begin
             when IDLE =>
                savestate_pause   <= '0';
                ddr3_savestate    <= '0';
+               unstallwait       <= 1048575;
                if (reset_in_1 = '1' and reset_in = '0') then
-                  state                <= LOAD_WAITSETTLE;
+                  state                <= WAITPAUSE;
+                  reset_2x             <= '1';
                   resetMode            <= '1';
+                  savemode             <= '0';
                   savetype_counter     <= 12;
                   settle               <= 0;
-                  sleep_savestate      <= '1';
                elsif (save = '1') then
                   resetMode            <= '0';
+                  savemode             <= '1';
                   savetype_counter     <= 0;
-                  state                <= SAVE_WAITPAUSE;
+                  state                <= WAITPAUSE;
                   header_amount        <= header_amount + 1;
                elsif (load = '1') then
-                  state                <= LOAD_WAITSETTLE;
+                  state                <= WAITPAUSE;
+                  reset_2x             <= '1';
                   resetMode            <= '0';
+                  savemode             <= '0';
                   savetype_counter     <= 0;
                   settle               <= 0;
-                  sleep_savestate      <= '1';
+               end if;
+            
+            when WAITPAUSE =>
+               if (settle < 8) then
+                  settle        <= settle + 1;
+               else
+                  savestate_pause  <= '1';
+                  if (system_paused = '1') then
+                     state                <= WAITIDLE;
+                     settle               <= 0;
+                  elsif (unstallwait > 0) then
+                     unstallwait <= unstallwait - 1;
+                  elsif (savemode = '0') then
+                     reset_2x    <= '1';
+                     unstallwait <= 1048575;
+                  end if;
+               end if;
+            
+            when WAITIDLE =>
+               if (settle < 8) then
+                  settle <= settle + 1;
+               else
+                  if (SS_idle = '1') then
+                     if (savemode = '1') then
+                        state             <= SAVE_WAITSETTLE;
+                     else
+                        state             <= LOAD_WAITSETTLE;
+                     end if;
+                     settle            <= 0;
+                  else
+                     state             <= WAITPAUSE;
+                     settle            <= 0;
+                     savestate_pause   <= '0';
+                     if (savemode = '0') then
+                        reset_2x       <= '1';
+                     end if;
+                  end if;
                end if;
                
             -- #################
             -- SAVE
             -- #################
-            
-            when SAVE_WAITPAUSE =>
-               if (settle < 8) then
-                  settle <= settle + 1;
-               else
-                  savestate_pause  <= '1';
-                  if (system_paused = '1') then
-                     state                <= SAVE_WAITIDLE;
-                     settle               <= 0;
-                  end if;
-               end if;
-            
-            when SAVE_WAITIDLE =>
-               if (settle < 8) then
-                  settle <= settle + 1;
-               else
-                  if (SS_idle = '1') then
-                     state             <= SAVE_WAITSETTLE;
-                     settle            <= 0;
-                  else
-                     state             <= SAVE_WAITPAUSE;
-                     settle            <= 0;
-                     savestate_pause   <= '0';
-                  end if;
-               end if;
             
             when SAVE_WAITSETTLE =>
                if (settle < SETTLECOUNT) then
@@ -523,7 +539,6 @@ begin
                      ss_reset_2x          <= '1';
                   else
                      state                <= IDLE;
-                     sleep_savestate      <= '0';
                      ddr3_savestate       <= '0';
                   end if;
                end if;
@@ -544,7 +559,6 @@ begin
                   ddr3_savestate    <= '0';
                   reset_2x          <= '1';
                   loading_ss_2x     <= '0';
-                  sleep_savestate   <= '0';
                   load_done_2x      <= not resetMode;
                end if;
             

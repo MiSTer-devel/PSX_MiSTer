@@ -1031,13 +1031,12 @@ psx
    .biosregion(biosregion),
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),
-   .ram_dataRead(sdr_sdram_dout),
    .ram_dataRead32(sdr_sdram_dout32),
    .ram_Adr(sdram_addr),
    .ram_be(sdram_be), 
    .ram_rnw(sdram_rnw),  
    .ram_ena(sdram_req), 
-   .ram_128(sdram_128), 
+   .ram_dma(sdram_dma), 
    .ram_cache(sdram_cache), 
    .ram_done(sdram_ack),
    .ram_reqprocessed(sdram_reqprocessed),
@@ -1048,6 +1047,8 @@ psx
    .cache_wr(cache_wr),  
    .cache_data(cache_data),
    .cache_addr(cache_addr),
+   .dma_wr(dma_wr),  
+   .dma_data(dma_data),
    // vram/ddr3
    .DDRAM_BUSY      (DDRAM_BUSY      ),
    .DDRAM_BURSTCNT  (DDRAM_BURSTCNT  ),
@@ -1239,9 +1240,7 @@ localparam ROM_START = (65536+131072)*4;
 
 wire         sdr_refresh;
 wire  [31:0] sdr_sdram_din;
-wire [127:0] sdr_sdram_dout;
 wire  [31:0] sdr_sdram_dout32;
-wire [127:0] sdr_sdram_dout2;
 wire  [15:0] sdr_bram_din;
 wire         sdr_sdram_ack;
 wire         sdr_bram_ack;
@@ -1255,11 +1254,13 @@ wire         sdram_readack2;
 wire         sdram_writeack;
 wire         sdram_writeack2;
 wire         sdram_rnw;
-wire         sdram_128;
+wire         sdram_dma;
 wire         sdram_cache;
 wire [ 3:0]  cache_wr;
 wire [31:0]  cache_data;
 wire [ 7:0]  cache_addr;
+wire         dma_wr;
+wire [31:0]  dma_data;
 
 wire  [20:0] sdram_dmafifo_adr;  
 wire  [31:0] sdram_dmafifo_data; 
@@ -1300,17 +1301,19 @@ sdram sdram
 
 	.ch1_addr(sdram_addr),
 	.ch1_din(),
-	.ch1_dout(sdr_sdram_dout),
+	.ch1_dout(),
 	.ch1_dout32(sdr_sdram_dout32),
 	.ch1_req(sdram_req & sdram_rnw),
 	.ch1_rnw(1'b1),
-	.ch1_128(sdram_128),
+	.ch1_dma(sdram_dma),
 	.ch1_cache(sdram_cache),
 	.ch1_ready(sdram_readack),
 	.ch1_reqprocessed(sdram_reqprocessed),
 	.cache_wr(cache_wr),  
 	.cache_data(cache_data),
 	.cache_addr(cache_addr),
+	.dma_wr(dma_wr),  
+	.dma_data(dma_data),
 
 	.ch2_addr (sdram_addr),
 	.ch2_din  (sdr_sdram_din),
@@ -1342,7 +1345,6 @@ wire        spuram_ena;
 wire [31:0] spuram_dataRead;
 wire        spuram_done;
 
-assign spuram_dataRead = sdr_sdram_dout2[31:0];
 assign spuram_done     = sdram_readack2 | sdram_writeack2;
 
 `ifdef MISTER_DUAL_SDRAM
@@ -1371,10 +1373,11 @@ sdram sdram2
 
 	.ch1_addr(spuram_Adr),
 	.ch1_din(),
-	.ch1_dout(sdr_sdram_dout2),
+	.ch1_dout(),
+	.ch1_dout32(spuram_dataRead),
 	.ch1_req(spuram_ena & spuram_rnw),
 	.ch1_rnw(1'b1),
-	.ch1_128(1'b0),
+	.ch1_dma(1'b0),
 	.ch1_cache(1'b0),
 	.ch1_ready(sdram_readack2),
 	.ch1_reqprocessed(),
@@ -1404,7 +1407,7 @@ sdram sdram2
 
 wire SDRAM2_EN = 0;
 
-assign sdr_sdram_dout2 = '0;
+assign spuram_dataRead = '0;
 assign sdram_readack2 = '0;
 assign sdram_writeack2 = '0;
 

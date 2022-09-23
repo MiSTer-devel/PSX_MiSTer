@@ -26,15 +26,11 @@ entity dma is
       dmaOn                : out std_logic;
       irqOut               : out std_logic := '0';
       
-      ram_refresh          : out std_logic;
-      ram_dataRead         : in  std_logic_vector(127 downto 0);
-      ram_Adr              : out std_logic_vector(22 downto 0) := (others => '0');
-      ram_be               : out std_logic_vector(3 downto 0) := (others => '0');
-      ram_rnw              : out std_logic := '0';
+      ram_Adr              : out std_logic_vector(20 downto 0) := (others => '0');
       ram_ena              : out std_logic := '0';
-      ram_128              : out std_logic := '0';
-      ram_done             : in  std_logic;
       ram_reqprocessed     : in  std_logic;
+      dma_wr               : in  std_logic;
+      dma_data             : in  std_logic_vector(31 downto 0);
       
       ram_dmafifo_adr      : out std_logic_vector(20 downto 0);
       ram_dmafifo_data     : out std_logic_vector(31 downto 0);
@@ -146,13 +142,10 @@ architecture arch of dma is
    
    signal dmaEndWait          : integer range 0 to 12;
          
+   signal ram_reqprocessed_1  : std_logic := '0';
+   signal ram_reqprocessed_2  : std_logic := '0';
    signal autoread            : std_logic := '0';
    signal firstword           : std_logic := '0';
-      
-   signal dataNext            : std_logic_vector(95 downto 0);
-   signal dataCount           : integer range 0 to 3 := 0;
-   signal firstsize           : integer range 0 to 3 := 0;
-   signal requestOnFly        : integer range 0 to 2;
    
    signal requestedDwords     : integer range 0 to 65536;
    signal requiredDwords      : integer range 0 to 65536;
@@ -195,10 +188,6 @@ begin
    dmaOn <= '0' when ((dmaState = STOPPING or dmaState = PAUSING) and toDevice = '0' and fifoOut_NearEmpty = '1' and (TURBO = '1' or REP_counter >= REP_target)) else
             '1' when (dmaState /= OFF) else 
             '0';
-
-   ram_refresh <= '1' when (reset = '1') else '0';
-   ram_be      <= "1111";
-   ram_128     <= '1';
 
    DICR_readback( 5 downto  0) <= DICR( 5 downto 0);
    DICR_readback(14 downto  6) <= "000000000";
@@ -261,7 +250,6 @@ begin
       variable channel         : integer range 0 to 7;
       variable triggerNew      : std_logic;
       variable triggerPrio     : unsigned(2 downto 0);
-      variable requestOnFlyNew : integer range 0 to 2;
    begin
       if rising_edge(clk1x) then
       
@@ -282,8 +270,6 @@ begin
          errorCHOP      <= '0';
          errorDMACPU    <= '0';
          errorDMAFIFO   <= '0';
-         
-         requestOnFlyNew := requestOnFly;
       
          fifoOut_NearFull  <= fifoOut_NearFull_3x;
          fifoOut_NearEmpty <= fifoOut_NearEmpty_3x;
@@ -320,9 +306,6 @@ begin
             fifoIn_reset   <= '1';
             
             fifoOut_reset  <= '1';
-            
-            dataCount      <= 0;
-            requestOnFly   <= 0;
          
             irqOut         <= '0';
 
@@ -518,43 +501,47 @@ begin
                      end if;
                      
                      if (dmaSettings.D_CHCR(0) = '1') then
-                        if (requestOnFly = 0) then
-                           ram_rnw         <= '1';
+                        if (autoread = '0') then
                            ram_ena         <= '1';
-                           ram_Adr         <= "00" & std_logic_vector(dmaSettings.D_MADR(20 downto 2)) & "00";
+                           ram_Adr         <= std_logic_vector(dmaSettings.D_MADR(20 downto 2)) & "00";
                            autoread        <= '1';
-                           requestOnFlyNew := 1;
                         else
                            waitcnt <= waitcnt;
                         end if;
-                     else
-                        case (dmaSettings.D_CHCR(10 downto 9)) is
-                           when "00" => -- manual
-                              if (dmaSettings.D_CHCR(8) = '1') then -- chopping
-                                 wordcount <= resize(chopsize, 17);
-                                 if (dmaSettings.D_BCR(15 downto 0) = 0) then
-                                    dmaSettings.D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
-                                 elsif (dmaSettings.D_BCR(15 downto 0) > chopsize) then
-                                    dmaSettings.D_BCR(15 downto 0) <= dmaSettings.D_BCR(15 downto 0) - chopsize;
-                                 else
-                                    wordcount                                  <= '0' & dmaSettings.D_BCR(15 downto 0);
-                                    dmaSettings.D_BCR(15 downto 0) <= (others => '0');
-                                 end if;
-                              else
-                                 if (dmaSettings.D_BCR(15 downto 0) = 0) then
-                                    wordcount <= '1' & x"0000";
-                                 else
-                                    wordcount <= '0' & dmaSettings.D_BCR(15 downto 0);
-                                 end if;
-                              end if;
-                           
-                           when "01" => -- request
-                              blocksleft  <= dmaSettings.D_BCR(31 downto 16) - 1;
-                              wordcount   <= '0' & dmaSettings.D_BCR(15 downto 0);
-                           
-                           when others => null;
-                        end case;
                      end if;
+                     
+                     case (dmaSettings.D_CHCR(10 downto 9)) is
+                        when "00" => -- manual
+                           if (dmaSettings.D_CHCR(8) = '1') then -- chopping
+                              wordcount      <= resize(chopsize, 17);
+                              requiredDwords <= to_integer(chopsize);
+                              if (dmaSettings.D_BCR(15 downto 0) = 0) then
+                                 dmaSettings.D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
+                              elsif (dmaSettings.D_BCR(15 downto 0) > chopsize) then
+                                 dmaSettings.D_BCR(15 downto 0) <= dmaSettings.D_BCR(15 downto 0) - chopsize;
+                              else
+                                 wordcount                                  <= '0' & dmaSettings.D_BCR(15 downto 0);
+                                 requiredDwords                             <= to_integer(dmaSettings.D_BCR(15 downto 0));
+                                 dmaSettings.D_BCR(15 downto 0)             <= (others => '0');
+                              end if;
+                           else
+                              if (dmaSettings.D_BCR(15 downto 0) = 0) then
+                                 wordcount <= '1' & x"0000";
+                                 requiredDwords <= 16#10000#;
+                              else
+                                 wordcount      <= '0' & dmaSettings.D_BCR(15 downto 0);
+                                 requiredDwords <= to_integer(dmaSettings.D_BCR(15 downto 0));
+                              end if;
+                           end if;
+                        
+                        when "01" => -- request
+                           blocksleft     <= dmaSettings.D_BCR(31 downto 16) - 1;
+                           wordcount      <= '0' & dmaSettings.D_BCR(15 downto 0);
+                           requiredDwords <= to_integer(dmaSettings.D_BCR(15 downto 0));
+                        
+                        when others => null;
+                     end case;
+                     
                      directionNeg <= '0';
                      if (dmaSettings.D_CHCR(10) = '0' and dmaSettings.D_CHCR(1) = '1') then
                         directionNeg <= '1';
@@ -774,7 +761,7 @@ begin
                   end if;
                
                when STOPPING =>
-                  if (fifoOut_NearEmpty = '1' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
+                  if (fifoOut_NearEmpty = '1') then
                      if (TURBO = '1' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
@@ -792,7 +779,7 @@ begin
                   end if;
                
                when PAUSING =>
-                  if (fifoOut_NearEmpty = '1' and (requestOnFly = 0 or (requestOnFly = 1 and ram_done = '1'))) then
+                  if (fifoOut_NearEmpty = '1') then
                      if (TURBO = '1' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
@@ -807,97 +794,49 @@ begin
 --############################### ram handling
 --##############################################################
          
-            if (ram_done = '1' and toDevice = '1') then
-               requestOnFlyNew := requestOnFlyNew - 1;
-               dataNext        <= ram_dataRead(127 downto 32);
-               dataCount       <= 3;
-            
-               if (firstword = '1') then
-                  firstword       <= '0';
-                  dataCount       <= firstsize;
-                  case (dmaSettings.D_CHCR(10 downto 9)) is
-                     when "00" => -- manual
-                        if (dmaSettings.D_CHCR(8) = '1') then -- chopping
-                           wordcount      <= resize(chopsize, 17);
-                           requiredDwords <= to_integer(chopsize);
-                           if (dmaSettings.D_BCR(15 downto 0) = 0) then
-                              dmaSettings.D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
-                           elsif (dmaSettings.D_BCR(15 downto 0) > chopsize) then
-                              dmaSettings.D_BCR(15 downto 0) <= dmaSettings.D_BCR(15 downto 0) - chopsize;
-                           else
-                              wordcount                                  <= '0' & dmaSettings.D_BCR(15 downto 0);
-                              requiredDwords                             <= to_integer(dmaSettings.D_BCR(15 downto 0));
-                              dmaSettings.D_BCR(15 downto 0)             <= (others => '0');
-                           end if;
-                        else
-                           if (dmaSettings.D_BCR(15 downto 0) = 0) then
-                              wordcount <= '1' & x"0000";
-                              requiredDwords <= 16#10000#;
-                           else
-                              wordcount      <= '0' & dmaSettings.D_BCR(15 downto 0);
-                              requiredDwords <= to_integer(dmaSettings.D_BCR(15 downto 0));
-                           end if;
-                        end if;
-                     
-                     when "01" => -- request
-                        blocksleft     <= dmaSettings.D_BCR(31 downto 16) - 1;
-                        wordcount      <= '0' & dmaSettings.D_BCR(15 downto 0);
-                        requiredDwords <= to_integer(dmaSettings.D_BCR(15 downto 0));
-                     
-                     when "10" => -- linked list
-                        wordcount      <= "0" & x"00" & unsigned(ram_dataRead(31 downto 24)); 
-                        requiredDwords <= to_integer(unsigned(ram_dataRead(31 downto 24))) + 1;
-                        if (ram_dataRead(31 downto 24) = x"00") then
-                           autoread <= '0';
-                        end if;
-                     
-                     when others => null;
-                  end case;
-               end if;
-            end if;
-            
             if (DMABLOCKATONCE = '0' and firstword = '0' and autoread = '1' and requestedDwords >= requiredDwords) then
                autoread <= '0';
             end if;
             
-            if (ram_reqprocessed = '1' and autoread = '1') then
-               if (ram_done = '1' and toDevice = '1' and firstword = '1' and dmaSettings.D_CHCR(10 downto 9) = "10" and ram_dataRead(31 downto 24) = x"00") then
-                  autoread <= '0'; -- stop third read for empty linked list
+            ram_reqprocessed_1 <= ram_reqprocessed;
+            ram_reqprocessed_2 <= ram_reqprocessed_1; -- delay by 2, so data is ready and we can stop early depending on header content 
+            if (ram_reqprocessed_2 = '1' and autoread = '1') then
+               ram_ena         <= '1';
+               if (DMABLOCKATONCE = '0') then
+                  requestedDwords <= requestedDwords + 4;
+               end if;
+               if (directionNeg = '1') then
+                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(20 downto 4)) & "0000") - 16); 
                else
-                  ram_ena         <= '1';
-                  requestOnFlyNew := requestOnFlyNew + 1;
-                  if (DMABLOCKATONCE = '0') then
-                     requestedDwords <= requestedDwords + 4;
-                  end if;
-                  if (directionNeg = '1') then
-                     ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
-                  else
-                     ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") + 16); 
+                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(20 downto 4)) & "0000") + 16); 
+               end if;
+            end if;
+            
+            if (dma_wr = '1' and toDevice = '1' and firstword = '1') then
+               firstword       <= '0';
+               if (dmaSettings.D_CHCR(10 downto 9) = "10") then
+                  wordcount      <= "0" & x"00" & unsigned(dma_data(31 downto 24)); 
+                  requiredDwords <= to_integer(unsigned(dma_data(31 downto 24))) + 1;
+                  if (dma_data(31 downto 24) = x"00") then
+                     autoread <= '0';
+                     ram_ena  <= '0';
                   end if;
                end if;
             end if;
             
             if (dmaState = WAITING and waitcnt = 8) then
                firstword        <= '1';
-               firstsize        <= to_integer(3 - dmaSettings.D_MADR(3 downto 2));
                requestedDwords  <= to_integer(4 - dmaSettings.D_MADR(3 downto 2));
                fifoIn_reset     <= '1';
-               dataCount        <= 0;
-            elsif (dataCount > 0) then
-               dataCount <= dataCount - 1;
-               dataNext  <= x"00000000" & dataNext(95 downto 32);
             end if;
-            
-            requestOnFly <= requestOnFlyNew;
             
          end if; -- ce
          
       end if;
    end process;
    
-   fifoIn_Wr  <= ce when (toDevice = '1' and (ram_done = '1' or dataCount > 0)) else '0'; 
-   
-   fifoIn_Din <= ram_dataRead(31 downto 0) when ram_done = '1' else dataNext(31 downto 0);
+   fifoIn_Wr  <= ce when (toDevice = '1' and (dma_wr = '1')) else '0'; 
+   fifoIn_Din <= dma_data(31 downto 0);
    
    
    fifoIn_Rd <= '1' when (fifoIn_Empty = '0' and toDevice = '1' and dmaState = WAITING and waitcnt = 1) else

@@ -74,13 +74,12 @@ architecture arch of etb is
       
    --sdram access 
    signal ram_dataWrite       : std_logic_vector(31 downto 0);
-   signal ram_dataRead        : std_logic_vector(127 downto 0);
    signal ram_dataRead32      : std_logic_vector(31 downto 0);
    signal ram_Adr             : std_logic_vector(22 downto 0);
    signal ram_be              : std_logic_vector(3 downto 0);
    signal ram_rnw             : std_logic;
    signal ram_ena             : std_logic;
-   signal ram_128             : std_logic;
+   signal ram_dma             : std_logic;
    signal ram_iscache         : std_logic;
    signal ram_done            : std_logic;   
    signal ram_reqprocessed    : std_logic;   
@@ -90,6 +89,9 @@ architecture arch of etb is
    signal cache_wr            : std_logic_vector(3 downto 0);
    signal cache_data          : std_logic_vector(31 downto 0);
    signal cache_addr          : std_logic_vector(7 downto 0);
+   
+   signal dma_wr              : std_logic;
+   signal dma_data            : std_logic_vector(31 downto 0);
    
    signal ram_dmafifo_adr     : std_logic_vector(20 downto 0);
    signal ram_dmafifo_data    : std_logic_vector(31 downto 0);
@@ -295,13 +297,12 @@ begin
       biosregion            => "00",
       ram_refresh           => ram_refresh,
       ram_dataWrite         => ram_dataWrite,
-      ram_dataRead          => ram_dataRead, 
       ram_dataRead32        => ram_dataRead32, 
       ram_Adr               => ram_Adr,      
       ram_be                => ram_be,      
       ram_rnw               => ram_rnw,      
       ram_ena               => ram_ena,      
-      ram_128               => ram_128,      
+      ram_dma               => ram_dma,      
       ram_cache             => ram_iscache,      
       ram_done              => ram_done,
       ram_reqprocessed      => ram_reqprocessed,
@@ -312,6 +313,8 @@ begin
       cache_wr              => cache_wr,  
       cache_data            => cache_data,
       cache_addr            => cache_addr,
+      dma_wr                => dma_wr,  
+      dma_data              => dma_data,
       -- vram/ddr3 interface
       DDRAM_BUSY            => DDRAM_BUSY,      
       DDRAM_BURSTCNT        => DDRAM_BURSTCNT,  
@@ -503,17 +506,19 @@ begin
       addr(26 downto 23)   => "0000",
       addr(22 downto  0)   => ram_Adr,
       req                  => ram_ena,
-      ram_128              => ram_128,
+      ram_dma              => ram_dma,
       ram_iscache          => ram_iscache,
       rnw                  => ram_rnw,
       be                   => ram_be,
       di                   => ram_dataWrite,
-      do                   => ram_dataRead,
+      do                   => open,
       do32                 => ram_dataRead32,
       done                 => ram_done,
       cache_wr             => cache_wr,  
       cache_data           => cache_data,
       cache_addr           => cache_addr,
+      dma_wr               => dma_wr,  
+      dma_data             => dma_data,
       reqprocessed         => ram_reqprocessed,
       ram_idle             => open,
       ram_dmafifo_adr      => ram_dmafifo_adr, 
@@ -541,9 +546,9 @@ begin
       clk3x                => clk100,
       refresh              => '0',
       addr(26 downto 19)   => "00000000",
-      addr(18 downto  0)   =>  spuram_Adr,
+      addr(18 downto  0)   => spuram_Adr,
       req                  => spuram_ena,
-      ram_128              => '0',
+      ram_dma              => '0',
       ram_iscache          => '0',
       rnw                  => spuram_rnw,
       be                   => spuram_be,

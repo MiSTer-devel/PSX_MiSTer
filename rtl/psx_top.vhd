@@ -63,13 +63,12 @@ entity psx_top is
       biosregion            : in  std_logic_vector(1 downto 0);      
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
-      ram_dataRead          : in  std_logic_vector(127 downto 0);
       ram_dataRead32        : in  std_logic_vector(31 downto 0);
       ram_Adr               : out std_logic_vector(22 downto 0);
       ram_be                : out std_logic_vector(3 downto 0) := (others => '0');
       ram_rnw               : out std_logic;
       ram_ena               : out std_logic;
-      ram_128               : out std_logic;
+      ram_dma               : out std_logic;
       ram_cache             : out std_logic;
       ram_done              : in  std_logic;
       ram_reqprocessed      : in  std_logic;
@@ -80,6 +79,8 @@ entity psx_top is
       cache_wr              : in  std_logic_vector(3 downto 0);
       cache_data            : in  std_logic_vector(31 downto 0);
       cache_addr            : in  std_logic_vector(7 downto 0);
+      dma_wr                : in  std_logic;
+      dma_data              : in  std_logic_vector(31 downto 0);
       -- vram/savestate interface
       ddr3_BUSY             : in  std_logic;                    
       ddr3_DOUT             : in  std_logic_vector(63 downto 0);
@@ -409,7 +410,6 @@ architecture arch of psx_top is
    signal mem_done               : std_logic;
    signal mem_fifofull           : std_logic;
    
-   signal ram_next_dma           : std_logic;
    signal ram_next_cpu           : std_logic;
    
    signal ram_cpu_dataWrite      : std_logic_vector(31 downto 0);
@@ -454,12 +454,8 @@ architecture arch of psx_top is
    signal dmaRequest             : std_logic;
    signal canDMA                 : std_logic;
    
-   signal ram_dma_Adr            : std_logic_vector(22 downto 0);
-   signal ram_dma_be             : std_logic_vector(3 downto 0);
-   signal ram_dma_rnw            : std_logic;
+   signal ram_dma_Adr            : std_logic_vector(20 downto 0);
    signal ram_dma_ena            : std_logic;
-   signal ram_dma_128            : std_logic;
-   signal ram_dma_done           : std_logic;
    
    signal dma_cache_Adr          : std_logic_vector(20 downto 0);
    signal dma_cache_data         : std_logic_vector(31 downto 0);
@@ -577,8 +573,6 @@ architecture arch of psx_top is
 
    -- savestates
    signal loading_savestate      : std_logic;
-   signal sleep_savestate        : std_logic;
-   signal sleep_rewind           : std_logic;
    signal savestate_pause        : std_logic;
    signal ddr3_savestate         : std_logic;
    
@@ -729,7 +723,7 @@ begin
    begin
       if rising_edge(clk1x) then
       
-         if (reset = '1' or pausing = '1' or sleep_savestate = '1' or sleep_rewind = '1') then
+         if (reset = '1' or pausing = '1') then
          
             ce        <= '0';
             ce_cpu    <= '0';
@@ -1226,15 +1220,11 @@ begin
       dmaOn                => dmaOn,
       irqOut               => irq_DMA,
       
-      ram_refresh          => ram_refresh,
-      ram_dataRead         => ram_dataRead, 
-      ram_Adr              => ram_dma_Adr,      
-      ram_be               => ram_dma_be,       
-      ram_rnw              => ram_dma_rnw,      
-      ram_ena              => ram_dma_ena,      
-      ram_128              => ram_dma_128,      
-      ram_done             => ram_dma_done, 
+      ram_Adr              => ram_dma_Adr,  
+      ram_ena              => ram_dma_ena,
       ram_reqprocessed     => ram_reqprocessed,
+      dma_wr               => dma_wr,  
+      dma_data             => dma_data,
       
       ram_dmafifo_adr      => ram_dmafifo_adr, 
       ram_dmafifo_data     => ram_dmafifo_data,
@@ -1283,24 +1273,23 @@ begin
       SS_idle              => SS_idle_dma
    );
    
-   ram_dataWrite <= ram_cpu_dataWrite;
-   ram_Adr       <= ram_dma_Adr       when (cpuPaused = '1') else ram_cpu_Adr;      
-   ram_be        <= ram_dma_be        when (cpuPaused = '1') else ram_cpu_be;       
-   ram_rnw       <= ram_dma_rnw       when (cpuPaused = '1') else ram_cpu_rnw;      
-   ram_ena       <= ram_dma_ena       when (cpuPaused = '1') else ram_cpu_ena;      
-   ram_128       <= ram_dma_128       when (cpuPaused = '1') else '0';      
-   ram_cache     <= '0'               when (cpuPaused = '1') else ram_cpu_cache;    
+   ram_refresh   <= reset_intern;
+   
+   ram_dataWrite <=                                                ram_cpu_dataWrite;
+   ram_Adr       <= "00" & ram_dma_Adr when (cpuPaused = '1') else ram_cpu_Adr;      
+   ram_be        <=                                                ram_cpu_be;       
+   ram_rnw       <= '1'                when (cpuPaused = '1') else ram_cpu_rnw;      
+   ram_ena       <= ram_dma_ena        when (cpuPaused = '1') else ram_cpu_ena;      
+   ram_dma       <= '1'                when (cpuPaused = '1') else '0';      
+   ram_cache     <= '0'                when (cpuPaused = '1') else ram_cpu_cache;    
    
    process (clk1x)
    begin
       if rising_edge(clk1x) then
       
          if (ram_ena = '1') then
-            ram_next_dma <= '0';
             ram_next_cpu <= '0';
-            if (cpuPaused = '1') then
-               ram_next_dma <= '1';
-            else
+            if (cpuPaused = '0') then
                ram_next_cpu <= '1';
             end if;
          end if;
@@ -1308,7 +1297,6 @@ begin
       end if;
    end process;
    
-   ram_dma_done <= ram_done and ram_next_dma;
    ram_cpu_done <= ram_done and ram_next_cpu;
    
    itimer : entity work.timer
@@ -2064,7 +2052,6 @@ begin
       
       loading_savestate       => loading_savestate,
       saving_savestate        => open,
-      sleep_savestate         => sleep_savestate,
             
       ddr3_BUSY               => ddr3_BUSY,      
       ddr3_DOUT               => ddr3_DOUT,      
@@ -2077,7 +2064,7 @@ begin
       ddr3_RD                 => ss_ram_RD,
 
       ram_done                => ram_cpu_done,   
-      ram_data                => ram_dataRead(31 downto 0),
+      ram_data                => ram_dataRead32,
       
       SS_SPURAM_dataWrite     => SS_SPURAM_dataWrite,
       SS_SPURAM_Adr           => SS_SPURAM_Adr,      
@@ -2106,7 +2093,7 @@ begin
       save                => save_state,
       load                => load_state,
                        
-      sleep_rewind        => sleep_rewind,
+      sleep_rewind        => open,
       vsync               => IRQ_VBlank,
       system_idle         => '1',
                  
