@@ -50,11 +50,11 @@ module sdram
 	input              ch1_dma,     // 1 - read 128bit for dma
 	input              ch1_cache,   // 1 - read 128bit for cache
 	output reg         ch1_ready,
-	output reg         ch1_reqprocessed,
 	output reg [ 3:0]  cache_wr,    
 	output reg [31:0]  cache_data,  
 	output reg [ 7:0]  cache_addr,  
-   output reg         dma_wr,  
+	output reg         dma_wr,  
+	output reg         dma_reqprocessed,  
 	output reg [31:0]  dma_data,  
 
 	input      [26:0]  ch2_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
@@ -152,7 +152,7 @@ always @(posedge clk_base) begin
 	ch2_ready <= ch2_ready_ramclock;
 	ch3_ready <= ch3_ready_ramclock;
 
-	ch1_reqprocessed <= ch1_reqprocessed_ramclock;
+	dma_reqprocessed <= dma_reqprocessed_ramclock;
    
    clk1xToggle <= !clk1xToggle;
       
@@ -195,8 +195,6 @@ reg ch2_ready_ramclock = 0;
 reg ch3_ready_ramclock = 0;
 reg refreshForce_1 = 0;
 
-reg ch1_reqprocessed_ramclock = 0;
-
 reg cache_buffer      = 0;
 reg cache_buffer_next = 0;
 
@@ -212,6 +210,7 @@ reg       dma_ack       = 0;
 reg [1:0] dma_count_3x  = 0;
 reg [1:0] dma_count     = 0;
 reg [1:0] dma_counter   = 0;
+reg       dma_reqprocessed_ramclock = 0;
 
 reg  [3:0] state = STATE_STARTUP;
 
@@ -247,7 +246,7 @@ always @(posedge clk) begin
 	
 	if (dma_ack) dma_done <= 0;
 
-	if (ch1_reqprocessed) ch1_reqprocessed_ramclock <= 0;
+	if (dma_reqprocessed) dma_reqprocessed_ramclock <= 0;
 
 	dmafifo_read <= 0;
 
@@ -397,8 +396,7 @@ always @(posedge clk) begin
                ch1_rq       <= 0;
                command      <= CMD_ACTIVE;
                state        <= STATE_WAIT;
-               ch1_reqprocessed_ramclock <= ch1_rnw;
-               
+
                cache_buffer <= ch1_cache;
                cache_addr   <= ch1_addr[11:4];
                if (ch1_addr[3:2] == 2'b00) cache_wr_next <= 4'b0001;
@@ -406,7 +404,8 @@ always @(posedge clk) begin
                if (ch1_addr[3:2] == 2'b10) cache_wr_next <= 4'b0100;
                if (ch1_addr[3:2] == 2'b11) cache_wr_next <= 4'b1000;
                
-               dma_buffer   <= ch1_dma;
+               dma_buffer                <= ch1_dma;
+               dma_reqprocessed_ramclock <= ch1_dma;
                if (ch1_addr[3:2] == 2'b00) dma_count_3x <= 2'b11;
                if (ch1_addr[3:2] == 2'b01) dma_count_3x <= 2'b10;
                if (ch1_addr[3:2] == 2'b10) dma_count_3x <= 2'b01;

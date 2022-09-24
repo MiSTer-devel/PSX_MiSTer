@@ -9,7 +9,6 @@ entity sdram_model3x is
    generic
    (
       DOREFRESH         : std_logic := '0';
-      SLOWWRITE         : std_logic := '0';
       INITFILE          : string := "NONE";
       SCRIPTLOADING     : std_logic := '0';
       FILELOADING       : std_logic := '0'
@@ -308,15 +307,10 @@ begin
                if (be(0) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 0) := to_integer(unsigned(di( 7 downto  0))); end if;
                req_buffer      <= '0';
                rnw_buffer      <= '0';
-               if (SLOWWRITE = '1') then
-                  reqprocessed_3x <= '1';
-               else
-                  done_3x         <= '1';
-               end if;
+               done_3x         <= '1';
                state           <= STATE_WAIT;
                
             elsif ((req = '1' or req_buffer = '1') and rnw = '1') then
-               reqprocessed_3x <= '1';
                req_buffer      <= '0';
                addr_buffer     <= addr; 
                rnw_buffer      <= '1';
@@ -330,6 +324,7 @@ begin
                if (addr(3 downto 2) = "11") then cache_wr_next <= "1000"; end if;
                
                dma_buffer      <= ram_dma;
+               reqprocessed_3x <= ram_dma;
                if (addr(3 downto 2) = "00") then dma_count_3x <= "11"; end if;
                if (addr(3 downto 2) = "01") then dma_count_3x <= "10"; end if;
                if (addr(3 downto 2) = "10") then dma_count_3x <= "01"; end if;
@@ -357,9 +352,6 @@ begin
                state            <= STATE_RW1;
             else
                state   <= STATE_IDLE_2;
-               if (SLOWWRITE = '1') then
-                  done_3x         <= '1';
-               end if;
             end if;
          
          when STATE_IDLE_9 => state <= STATE_IDLE_8;

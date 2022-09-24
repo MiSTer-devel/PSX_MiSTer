@@ -866,7 +866,7 @@ begin
             cd_next_left         <= (others => '0');
             cd_next_right        <= (others => '0');
                
-            sampleticks          <= (others => '0'); --unsigned(ss_in(1)(9 downto 0));
+            sampleticks          <= to_unsigned(512, 10); --unsigned(ss_in(1)(9 downto 0));
             capturePosition      <= unsigned(ss_in(2)(9 downto 0));
             ramTransferAddr      <= unsigned(ss_in(3)(18 downto 0));
             reverbCurrentAddress <= unsigned(ss_in(4)(17 downto 0));

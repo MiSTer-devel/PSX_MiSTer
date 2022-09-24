@@ -71,7 +71,6 @@ entity psx_top is
       ram_dma               : out std_logic;
       ram_cache             : out std_logic;
       ram_done              : in  std_logic;
-      ram_reqprocessed      : in  std_logic;
       ram_dmafifo_adr       : out std_logic_vector(20 downto 0);
       ram_dmafifo_data      : out std_logic_vector(31 downto 0);
       ram_dmafifo_empty     : out std_logic;
@@ -80,6 +79,7 @@ entity psx_top is
       cache_data            : in  std_logic_vector(31 downto 0);
       cache_addr            : in  std_logic_vector(7 downto 0);
       dma_wr                : in  std_logic;
+      dma_reqprocessed      : in  std_logic;
       dma_data              : in  std_logic_vector(31 downto 0);
       -- vram/savestate interface
       ddr3_BUSY             : in  std_logic;                    
@@ -1222,8 +1222,9 @@ begin
       
       ram_Adr              => ram_dma_Adr,  
       ram_ena              => ram_dma_ena,
-      ram_reqprocessed     => ram_reqprocessed,
-      dma_wr               => dma_wr,  
+      
+      dma_wr               => dma_wr, 
+      dma_reqprocessed     => dma_reqprocessed,      
       dma_data             => dma_data,
       
       ram_dmafifo_adr      => ram_dmafifo_adr, 

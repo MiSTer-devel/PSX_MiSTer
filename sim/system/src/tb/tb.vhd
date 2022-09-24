@@ -82,7 +82,6 @@ architecture arch of etb is
    signal ram_dma             : std_logic;
    signal ram_iscache         : std_logic;
    signal ram_done            : std_logic;   
-   signal ram_reqprocessed    : std_logic;   
    signal ram_refresh         : std_logic;   
    signal ram_idle            : std_logic;   
    
@@ -91,6 +90,7 @@ architecture arch of etb is
    signal cache_addr          : std_logic_vector(7 downto 0);
    
    signal dma_wr              : std_logic;
+   signal dma_reqprocessed    : std_logic;
    signal dma_data            : std_logic_vector(31 downto 0);
    
    signal ram_dmafifo_adr     : std_logic_vector(20 downto 0);
@@ -305,7 +305,6 @@ begin
       ram_dma               => ram_dma,      
       ram_cache             => ram_iscache,      
       ram_done              => ram_done,
-      ram_reqprocessed      => ram_reqprocessed,
       ram_dmafifo_adr       => ram_dmafifo_adr, 
       ram_dmafifo_data      => ram_dmafifo_data,
       ram_dmafifo_empty     => ram_dmafifo_empty,
@@ -314,6 +313,7 @@ begin
       cache_data            => cache_data,
       cache_addr            => cache_addr,
       dma_wr                => dma_wr,  
+      dma_reqprocessed      => dma_reqprocessed,
       dma_data              => dma_data,
       -- vram/ddr3 interface
       DDRAM_BUSY            => DDRAM_BUSY,      
@@ -495,8 +495,7 @@ begin
    generic map
    (
       DOREFRESH     => '1',
-      SCRIPTLOADING => '1',
-      SLOWWRITE     => '0'
+      SCRIPTLOADING => '1'
    )
    port map
    (
@@ -519,7 +518,7 @@ begin
       cache_addr           => cache_addr,
       dma_wr               => dma_wr,  
       dma_data             => dma_data,
-      reqprocessed         => ram_reqprocessed,
+      reqprocessed         => dma_reqprocessed,
       ram_idle             => open,
       ram_dmafifo_adr      => ram_dmafifo_adr, 
       ram_dmafifo_data     => ram_dmafifo_data,

@@ -296,10 +296,11 @@ begin
             when IDLE =>
                savestate_pause   <= '0';
                ddr3_savestate    <= '0';
-               unstallwait       <= 1048575;
+               unstallwait       <= 1023;
                if (reset_in_1 = '1' and reset_in = '0') then
                   state                <= WAITPAUSE;
                   reset_2x             <= '1';
+                  ss_reset_2x          <= '1';
                   resetMode            <= '1';
                   savemode             <= '0';
                   savetype_counter     <= 12;
@@ -313,6 +314,7 @@ begin
                elsif (load = '1') then
                   state                <= WAITPAUSE;
                   reset_2x             <= '1';
+                  ss_reset_2x          <= '1';
                   resetMode            <= '0';
                   savemode             <= '0';
                   savetype_counter     <= 0;
@@ -329,9 +331,10 @@ begin
                      settle               <= 0;
                   elsif (unstallwait > 0) then
                      unstallwait <= unstallwait - 1;
-                  elsif (savemode = '0') then
+                  elsif (savemode = '0' and exeMode = '0') then
                      reset_2x    <= '1';
-                     unstallwait <= 1048575;
+                     ss_reset_2x <= '1';
+                     unstallwait <= 1023;
                   end if;
                end if;
             
@@ -672,7 +675,7 @@ begin
          
          reset_in_1 <= reset_in;
          if (reset_in = '1' and reset_in_1 = '0') then
-            state           <= IDLE;
+            state    <= IDLE;
          end if;
          
       end if;

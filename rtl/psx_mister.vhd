@@ -67,7 +67,6 @@ entity psx_mister is
       ram_dma               : out std_logic;
       ram_cache             : out std_logic;
       ram_done              : in  std_logic;
-      ram_reqprocessed      : in  std_logic;
       ram_dmafifo_adr       : out std_logic_vector(20 downto 0);
       ram_dmafifo_data      : out std_logic_vector(31 downto 0);
       ram_dmafifo_empty     : out std_logic;
@@ -76,6 +75,7 @@ entity psx_mister is
       cache_data            : in  std_logic_vector(31 downto 0);
       cache_addr            : in  std_logic_vector(7 downto 0);  
       dma_wr                : in  std_logic;
+      dma_reqprocessed      : in  std_logic;
       dma_data              : in  std_logic_vector(31 downto 0);      
       -- vram/ddr3 interface
       DDRAM_BUSY            : in  std_logic;                    
@@ -339,7 +339,6 @@ begin
       ram_dma               => ram_dma,       
       ram_cache             => ram_cache,       
       ram_done              => ram_done, 
-      ram_reqprocessed      => ram_reqprocessed,   
       ram_dmafifo_adr       => ram_dmafifo_adr, 
       ram_dmafifo_data      => ram_dmafifo_data,
       ram_dmafifo_empty     => ram_dmafifo_empty,
@@ -348,6 +347,7 @@ begin
       cache_data            => cache_data,
       cache_addr            => cache_addr,     
       dma_wr                => dma_wr,  
+      dma_reqprocessed      => dma_reqprocessed,  
       dma_data              => dma_data,      
       -- vram interface
       ddr3_BUSY             => DDRAM_BUSY,      

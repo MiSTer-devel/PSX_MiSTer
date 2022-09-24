@@ -28,8 +28,9 @@ entity dma is
       
       ram_Adr              : out std_logic_vector(20 downto 0) := (others => '0');
       ram_ena              : out std_logic := '0';
-      ram_reqprocessed     : in  std_logic;
+      
       dma_wr               : in  std_logic;
+      dma_reqprocessed     : in  std_logic;
       dma_data             : in  std_logic_vector(31 downto 0);
       
       ram_dmafifo_adr      : out std_logic_vector(20 downto 0);
@@ -85,6 +86,7 @@ architecture arch of dma is
    type tdmaState is
    (
       OFF,
+      STARTING,
       WAITING,
       READHEADER,
       WAITREAD,
@@ -130,7 +132,7 @@ architecture arch of dma is
    signal activeChannel       : integer range 0 to 6;
    signal paused              : std_logic;
    signal gpupaused           : std_logic;
-   signal waitcnt             : integer range 0 to 15;
+   signal waitcnt             : integer range 0 to 5;
    signal wordcount           : unsigned(16 downto 0);
    signal toDevice            : std_logic;
    signal directionNeg        : std_logic;
@@ -142,8 +144,8 @@ architecture arch of dma is
    
    signal dmaEndWait          : integer range 0 to 12;
          
-   signal ram_reqprocessed_1  : std_logic := '0';
-   signal ram_reqprocessed_2  : std_logic := '0';
+   signal dma_reqprocessed_1  : std_logic := '0';
+   signal dma_reqprocessed_2  : std_logic := '0';
    signal autoread            : std_logic := '0';
    signal firstword           : std_logic := '0';
    
@@ -462,8 +464,7 @@ begin
                      dmaArray(triggerchannel).D_CHCR(28)      <= '0';
                      dmaArray(triggerchannel).channelOn       <= '1';
                      
-                     dmaState      <= WAITING;
-                     waitcnt       <= 8;
+                     dmaState      <= STARTING;
                      isOn          <= '1';
                      activeChannel <= triggerchannel;
                      REP_target    <= 1;
@@ -475,99 +476,99 @@ begin
                      dmaSettings.D_BCR  <= dmaArray(triggerchannel).D_BCR;
                   end if;
                
-               when WAITING =>
+               when STARTING =>
+                  dmaState      <= WAITING;
+                  waitcnt       <= 5;
+                  
                   if (dmaSettings.D_CHCR(0) = '0' and activeChannel = 2 and dmaSettings.D_CHCR(10 downto 9) = "01") then
                      dmaEndWait <= 12;
                   else
                      dmaEndWait <= 4;
                   end if;
+                  
+                  toDevice     <= dmaSettings.D_CHCR(0);
+                  wordAccu     <= 0;
+                  if (activeChannel = 3) then
+                     wordAccu <= 3;
+                  end if;
+                  if (activeChannel = 4) then
+                     wordAccu <= 1;
+                  end if;
+                  
+                  if (dmaSettings.D_CHCR(8) = '1' and activeChannel /= 3 and activeChannel /= 6) then
+                     errorCHOP <= '1';
+                  end if;
+                  
+                  if (dmaSettings.D_CHCR(0) = '1') then
+                     if (autoread = '0') then
+                        ram_ena         <= '1';
+                        ram_Adr         <= std_logic_vector(dmaSettings.D_MADR(20 downto 2)) & "00";
+                        autoread        <= '1';
+                     end if;
+                  end if;
+                  
+                  case (dmaSettings.D_CHCR(10 downto 9)) is
+                     when "00" => -- manual
+                        if (dmaSettings.D_CHCR(8) = '1') then -- chopping
+                           wordcount      <= resize(chopsize, 17);
+                           requiredDwords <= to_integer(chopsize);
+                           if (dmaSettings.D_BCR(15 downto 0) = 0) then
+                              dmaSettings.D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
+                           elsif (dmaSettings.D_BCR(15 downto 0) > chopsize) then
+                              dmaSettings.D_BCR(15 downto 0) <= dmaSettings.D_BCR(15 downto 0) - chopsize;
+                           else
+                              wordcount                                  <= '0' & dmaSettings.D_BCR(15 downto 0);
+                              requiredDwords                             <= to_integer(dmaSettings.D_BCR(15 downto 0));
+                              dmaSettings.D_BCR(15 downto 0)             <= (others => '0');
+                           end if;
+                        else
+                           if (dmaSettings.D_BCR(15 downto 0) = 0) then
+                              wordcount <= '1' & x"0000";
+                              requiredDwords <= 16#10000#;
+                           else
+                              wordcount      <= '0' & dmaSettings.D_BCR(15 downto 0);
+                              requiredDwords <= to_integer(dmaSettings.D_BCR(15 downto 0));
+                           end if;
+                        end if;
+                     
+                     when "01" => -- request
+                        blocksleft     <= dmaSettings.D_BCR(31 downto 16) - 1;
+                        wordcount      <= '0' & dmaSettings.D_BCR(15 downto 0);
+                        requiredDwords <= to_integer(dmaSettings.D_BCR(15 downto 0));
+                     
+                     when others => null;
+                  end case;
+                  
+                  directionNeg <= '0';
+                  if (dmaSettings.D_CHCR(10) = '0' and dmaSettings.D_CHCR(1) = '1') then
+                     directionNeg <= '1';
+                  end if;    
+                  
+                  if (dmaSettings.D_CHCR(0) = '0') then -- from device -> can start immidiatly
+                     case (dmaSettings.D_CHCR(10 downto 9)) is
+                        when "00" => -- manual
+                           dmaState    <= WORKING;
+                        
+                        when "01" => -- request
+                           dmaState    <= WORKING;
+                           
+                        when "10" => -- linked list -> forbidden
+                           dmaState <= OFF;
+                           isOn     <= '0';
+                        
+                        when others => 
+                           dmaState <= OFF;
+                           isOn     <= '0';
+                     end case;
+                  end if;
                
+               when WAITING =>
                   if (waitcnt > 0 and cpuPaused = '1') then
                      waitcnt <= waitcnt - 1;
                   end if;
                   
-                  if (waitcnt = 8) then
-                     toDevice     <= dmaSettings.D_CHCR(0);
-                     wordAccu     <= 0;
-                     if (activeChannel = 3) then
-                        wordAccu <= 3;
-                     end if;
-                     if (activeChannel = 4) then
-                        wordAccu <= 1;
-                     end if;
-                     
-                     if (dmaSettings.D_CHCR(8) = '1' and activeChannel /= 3 and activeChannel /= 6) then
-                        errorCHOP <= '1';
-                     end if;
-                     
-                     if (dmaSettings.D_CHCR(0) = '1') then
-                        if (autoread = '0') then
-                           ram_ena         <= '1';
-                           ram_Adr         <= std_logic_vector(dmaSettings.D_MADR(20 downto 2)) & "00";
-                           autoread        <= '1';
-                        else
-                           waitcnt <= waitcnt;
-                        end if;
-                     end if;
-                     
-                     case (dmaSettings.D_CHCR(10 downto 9)) is
-                        when "00" => -- manual
-                           if (dmaSettings.D_CHCR(8) = '1') then -- chopping
-                              wordcount      <= resize(chopsize, 17);
-                              requiredDwords <= to_integer(chopsize);
-                              if (dmaSettings.D_BCR(15 downto 0) = 0) then
-                                 dmaSettings.D_BCR(16 downto 0) <= to_unsigned(16#10000#, 17) - chopsize;
-                              elsif (dmaSettings.D_BCR(15 downto 0) > chopsize) then
-                                 dmaSettings.D_BCR(15 downto 0) <= dmaSettings.D_BCR(15 downto 0) - chopsize;
-                              else
-                                 wordcount                                  <= '0' & dmaSettings.D_BCR(15 downto 0);
-                                 requiredDwords                             <= to_integer(dmaSettings.D_BCR(15 downto 0));
-                                 dmaSettings.D_BCR(15 downto 0)             <= (others => '0');
-                              end if;
-                           else
-                              if (dmaSettings.D_BCR(15 downto 0) = 0) then
-                                 wordcount <= '1' & x"0000";
-                                 requiredDwords <= 16#10000#;
-                              else
-                                 wordcount      <= '0' & dmaSettings.D_BCR(15 downto 0);
-                                 requiredDwords <= to_integer(dmaSettings.D_BCR(15 downto 0));
-                              end if;
-                           end if;
-                        
-                        when "01" => -- request
-                           blocksleft     <= dmaSettings.D_BCR(31 downto 16) - 1;
-                           wordcount      <= '0' & dmaSettings.D_BCR(15 downto 0);
-                           requiredDwords <= to_integer(dmaSettings.D_BCR(15 downto 0));
-                        
-                        when others => null;
-                     end case;
-                     
-                     directionNeg <= '0';
-                     if (dmaSettings.D_CHCR(10) = '0' and dmaSettings.D_CHCR(1) = '1') then
-                        directionNeg <= '1';
-                     end if;    
-                     
-                     if (dmaSettings.D_CHCR(0) = '0') then -- from device -> can start immidiatly
-                        case (dmaSettings.D_CHCR(10 downto 9)) is
-                           when "00" => -- manual
-                              dmaState    <= WORKING;
-                           
-                           when "01" => -- request
-                              dmaState    <= WORKING;
-                              
-                           when "10" => -- linked list -> forbidden
-                              dmaState <= OFF;
-                              isOn     <= '0';
-                           
-                           when others => 
-                              dmaState <= OFF;
-                              isOn     <= '0';
-                        end case;
-                     end if;
-                  end if;
-                  
                   if (waitcnt = 1) then
-                     if (fifoIn_Empty = '1' and toDevice = '1') then
+                     if (fifoIn_Empty = '1') then
                         waitcnt <= waitcnt;
                      else
                         case (dmaSettings.D_CHCR(10 downto 9)) is
@@ -602,8 +603,7 @@ begin
                         autoread <= '0';
                      else
                         if (DMABLOCKATONCE = '1' and gpu_dmaRequest = '1') then
-                           waitcnt   <= 8;
-                           dmaState  <= WAITING;
+                           dmaState  <= STARTING;
                            autoread  <= '0';
                         else
                            dmaState    <= PAUSING;
@@ -739,8 +739,7 @@ begin
                                  autoread <= '0';
                               else
                                  if (DMABLOCKATONCE = '1' and gpu_dmaRequest = '1') then
-                                    dmaState <= WAITING;
-                                    waitcnt  <= 8;
+                                    dmaState <= STARTING;
                                     autoread <= '0';
                                  else
                                     dmaState <= PAUSING;
@@ -791,20 +790,17 @@ begin
             end case;
 
 --##############################################################
---############################### ram handling
+--############################### ram read handling
 --##############################################################
          
             if (DMABLOCKATONCE = '0' and firstword = '0' and autoread = '1' and requestedDwords >= requiredDwords) then
                autoread <= '0';
             end if;
             
-            ram_reqprocessed_1 <= ram_reqprocessed;
-            ram_reqprocessed_2 <= ram_reqprocessed_1; -- delay by 2, so data is ready and we can stop early depending on header content 
-            if (ram_reqprocessed_2 = '1' and autoread = '1') then
+            dma_reqprocessed_1 <= dma_reqprocessed;
+            dma_reqprocessed_2 <= dma_reqprocessed_1; -- delay by 2, so data is ready and we can stop early depending on header content 
+            if (dma_reqprocessed_2 = '1' and autoread = '1') then
                ram_ena         <= '1';
-               if (DMABLOCKATONCE = '0') then
-                  requestedDwords <= requestedDwords + 4;
-               end if;
                if (directionNeg = '1') then
                   ram_Adr <= std_logic_vector((unsigned(ram_Adr(20 downto 4)) & "0000") - 16); 
                else
@@ -817,17 +813,24 @@ begin
                if (dmaSettings.D_CHCR(10 downto 9) = "10") then
                   wordcount      <= "0" & x"00" & unsigned(dma_data(31 downto 24)); 
                   requiredDwords <= to_integer(unsigned(dma_data(31 downto 24))) + 1;
-                  if (dma_data(31 downto 24) = x"00") then
+                  if (requestedDwords >= (unsigned(dma_data(31 downto 24)) + 1)) then
                      autoread <= '0';
                      ram_ena  <= '0';
                   end if;
+               elsif (DMABLOCKATONCE = '0' and requestedDwords >= requiredDwords) then
+                  autoread <= '0';
+                  ram_ena  <= '0';
                end if;
             end if;
             
-            if (dmaState = WAITING and waitcnt = 8) then
+            if (dmaState = STARTING) then
                firstword        <= '1';
                requestedDwords  <= to_integer(4 - dmaSettings.D_MADR(3 downto 2));
                fifoIn_reset     <= '1';
+            end if;
+            
+            if (ram_ena = '1' and firstword = '0') then
+               requestedDwords <= requestedDwords + 4;
             end if;
             
          end if; -- ce
