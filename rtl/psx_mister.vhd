@@ -26,7 +26,10 @@ entity psx_mister is
       exe_stackpointer      : in  unsigned(31 downto 0);
       fastboot              : in  std_logic;
       FASTMEM               : in  std_logic;
-      TURBO                 : in  std_logic;
+      TURBO_MEM             : in  std_logic;
+      TURBO_COMP            : in  std_logic;
+      TURBO_CACHE           : in  std_logic;
+      TURBO_CACHE50         : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
@@ -298,7 +301,10 @@ begin
       exe_stackpointer      => exe_stackpointer,
       fastboot              => fastboot,
       FASTMEM               => FASTMEM,
-      TURBO                 => TURBO,
+      TURBO_MEM             => TURBO_MEM,
+      TURBO_COMP            => TURBO_COMP,
+      TURBO_CACHE           => TURBO_CACHE,
+      TURBO_CACHE50         => TURBO_CACHE50,
       REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING,
       DMABLOCKATONCE        => DMABLOCKATONCE,
       INSTANTSEEK           => INSTANTSEEK,

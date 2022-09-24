@@ -30,7 +30,10 @@ entity psx_top is
       exe_stackpointer      : in  unsigned(31 downto 0);
       fastboot              : in  std_logic;
       FASTMEM               : in  std_logic;
-      TURBO                 : in  std_logic;
+      TURBO_MEM             : in  std_logic;
+      TURBO_COMP            : in  std_logic;
+      TURBO_CACHE           : in  std_logic;
+      TURBO_CACHE50         : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
       DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
@@ -1211,7 +1214,7 @@ begin
       errorDMACPU          => errorDMACPU, 
       errorDMAFIFO         => errorDMAFIFO, 
       
-      TURBO                => TURBO,
+      TURBO                => TURBO_COMP,
       DMABLOCKATONCE       => DMABLOCKATONCE,
       
       canDMA               => canDMA,
@@ -1668,7 +1671,7 @@ begin
       
       fastboot             => fastboot,
       NOMEMWAIT            => FASTMEM,
-      TURBO                => TURBO,
+      TURBO                => TURBO_MEM,
       region_in            => biosregion,
       PATCHSERIAL          => PATCHSERIAL,
             
@@ -1810,7 +1813,9 @@ begin
       ce_system         => ce,
       reset             => reset_intern,
       
-      TURBO             => TURBO,
+      TURBO             => TURBO_COMP,
+      TURBO_CACHE       => TURBO_CACHE,
+      TURBO_CACHE50     => TURBO_CACHE50,
          
       irqRequest        => irqRequest,
       dmaRequest        => dmaRequest,
@@ -1883,7 +1888,7 @@ begin
       reset                => reset_intern,     
       
       WIDESCREEN           => WIDESCREEN,
-      TURBO                => TURBO,
+      TURBO                => TURBO_COMP,
       
       gte_busy             => gte_busy,     
       gte_readAddr         => gte_readAddr, 

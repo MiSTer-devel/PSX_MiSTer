@@ -17,6 +17,8 @@ entity cpu is
       reset                 : in  std_logic;
       
       TURBO                 : in  std_logic;
+      TURBO_CACHE           : in  std_logic;
+      TURBO_CACHE50         : in  std_logic;
       
       irqRequest            : in  std_logic;
       dmaRequest            : in  std_logic;
@@ -2073,6 +2075,7 @@ begin
       clk1x             => clk1x,
       clk2x             => clk2x,
       reset             => reset,
+      halfrate          => TURBO_CACHE50,
                         
       read_enable       => dcache_read_enable,  -- only used for calculating cache hit ratio
       read_addr         => dcache_read_addr,   
@@ -2091,7 +2094,7 @@ begin
                           unsigned(dcache_read_data);
    
    process (stall, exception, executeMemWriteEnable, executeMemWriteAddr, executeMemWriteData, cop0_SR, CACHECONTROL, stall4, executeReadEnable, executeReadAddress, executeLoadType, executeMemWriteMask, 
-            SS_wren_SCP, SS_rden_SCP, mem_fifofull, executeCOP0WriteEnable, executeCOP0WriteDestination, executeCOP0WriteValue, dcache_read_hit, TURBO, writebackGTEReadEnable,
+            SS_wren_SCP, SS_rden_SCP, mem_fifofull, executeCOP0WriteEnable, executeCOP0WriteDestination, executeCOP0WriteValue, dcache_read_hit, TURBO_CACHE, writebackGTEReadEnable,
             mem_done, memoryMuxStage4, mem4_pending, lateReadReqDone, exceptionNew, EXEReadEnable, EXEMemWriteEnable)
       variable skipmem : std_logic;
    begin
@@ -2197,7 +2200,7 @@ begin
 
             if ((executeReadAddress(31 downto 29) = 0 or executeReadAddress(31 downto 29) = 4) and executeReadAddress(28 downto 10) = 16#7E000#) then
                --report "scratchpad access" severity failure;
-            elsif (TURBO = '1' and executeReadAddress(28 downto 0) < 16#800000# and dcache_read_hit = '1') then
+            elsif (TURBO_CACHE = '1' and executeReadAddress(28 downto 0) < 16#800000# and dcache_read_hit = '1') then
                -- cache hit
             elsif (executeReadAddress = x"FFFE0130") then
                -- cachecontrol
@@ -2330,7 +2333,7 @@ begin
                   writebackWriteEnable <= '0';
                   if (executeReadEnable = '1') then
                      if (((executeReadAddress(31 downto 29) = 0 or executeReadAddress(31 downto 29) = 4) and executeReadAddress(28 downto 10) = 16#7E000#) or -- scratchpad read
-                        (TURBO = '1' and executeReadAddress(28 downto 0) < 16#800000# and dcache_read_hit = '1')) then -- data cache read
+                        (TURBO_CACHE = '1' and executeReadAddress(28 downto 0) < 16#800000# and dcache_read_hit = '1')) then -- data cache read
                         if (executeGTEReadEnable = '1') then
                            gte_writeAddr <= '0' & executeGTETarget;
                            gte_writeData <= spad_cache_dataread;

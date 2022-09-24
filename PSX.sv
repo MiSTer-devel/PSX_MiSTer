@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XXXXXXXXX  XXXXXXXXXXX XXX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXXX
+//  X XXXXXXXXX  XXXXXXXXXXX XXX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -409,7 +409,7 @@ parameter CONF_STR = {
 	"P2O[64],Pause when OSD open,On,Off;",
 	"P2-;",
 	"P2-,(U) = unsafe -> can crash;",
-	"P2O[58],Turbo(Cheats Off),Off,On(U);",
+	"P2O[80:79],Turbo(Cheats Off),Off,Low(U),Medium(U),High(U);",
 	"P2O[72],Pause when CD slow,On,Off(U);",
 	"P2O[15],PAL 60Hz Hack,Off,On(U);",
 	"P2O[21],CD Fast Seek,Off,On(U);",
@@ -928,6 +928,11 @@ reg reset = 0;
 reg buttonpause_1 = 0;
 reg button_paused = 0;
 
+reg TURBO_MEM;
+reg TURBO_COMP;
+reg TURBO_CACHE;
+reg TURBO_CACHE50;
+
 always @(posedge clk_1x) begin
 
    paused <= 0;
@@ -973,6 +978,14 @@ always @(posedge clk_1x) begin
       reset    <= 1;
       aliveCnt <= 0;
    end
+   
+   // 1 => low    -> only MEM
+   // 2 => medium -> MEM + 50% cache
+   // 3 => high   -> everything
+   TURBO_MEM      <= status[80:79] > 0;
+   TURBO_COMP     <= status[80:79] == 2'b11;
+   TURBO_CACHE    <= status[80];
+   TURBO_CACHE50  <= status[80:79] == 2'b10;
 
 end
 
@@ -998,7 +1011,10 @@ psx
    .exe_stackpointer(exe_stackpointer),
    .fastboot(status[16]),
    .FASTMEM(0),
-   .TURBO(status[58]),
+   .TURBO_MEM(TURBO_MEM),
+   .TURBO_COMP(TURBO_COMP),
+   .TURBO_CACHE(TURBO_CACHE),
+   .TURBO_CACHE50(TURBO_CACHE50),
    .REPRODUCIBLEGPUTIMING(status[19]),
    .DMABLOCKATONCE(status[26]),
    .INSTANTSEEK(status[21]),
