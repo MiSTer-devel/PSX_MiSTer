@@ -369,8 +369,11 @@ begin
                else
                   state            <= SAVEMEMORY_NEXT;
                   saving_savestate <= '1';
-                  ddr3_savestate   <= '1';
-               end if;            
+               end if;  
+
+               if (settle > (SETTLECOUNT / 2)) then
+                  ddr3_savestate    <= '1';
+               end if;               
             
             when SAVEMEMORY_NEXT =>
                if (savetype_counter < SAVETYPESCOUNT) then
@@ -511,7 +514,6 @@ begin
                else
                   state            <= IDLE;
                   saving_savestate <= '0';
-                  ddr3_savestate   <= '0';
                end if;
 
             -- #################
@@ -523,9 +525,12 @@ begin
                   settle <= settle + 1;
                else
                   state             <= LOAD_HEADERAMOUNTCHECK;
-                  ddr3_savestate    <= '1';
                   ddr3_ADDR         <= std_logic_vector(to_unsigned(savestate_address, 26));
                   ddr3_RD           <= not resetMode;
+               end if;
+               
+               if (settle > (SETTLECOUNT / 2)) then
+                  ddr3_savestate    <= '1';
                end if;
                
             when LOAD_HEADERAMOUNTCHECK =>
@@ -542,7 +547,6 @@ begin
                      ss_reset_2x          <= '1';
                   else
                      state                <= IDLE;
-                     ddr3_savestate       <= '0';
                   end if;
                end if;
             
@@ -559,7 +563,6 @@ begin
                   dwordcounter   <= 0;
                else
                   state             <= IDLE;
-                  ddr3_savestate    <= '0';
                   reset_2x          <= '1';
                   loading_ss_2x     <= '0';
                   load_done_2x      <= not resetMode;

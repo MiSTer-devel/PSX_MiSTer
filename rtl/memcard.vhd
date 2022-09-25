@@ -117,7 +117,6 @@ begin
                   if (loadLatched = '1' and mounted = '1') then
                      state        <= LOAD_WAITPAUSED;
                      pause        <= '1';
-                     loadLatched  <= '0';
                      anyChangeBuf <= '0';
                   elsif (saveLatched = '1') then
                      if (anyChangeBuf = '1') then
@@ -170,8 +169,9 @@ begin
                      mem_request <= '0';
                      if (unsigned(mem_addrA) = 127) then
                         if (blockCnt = 127) then
-                           state <= IDLE;
-                           pause <= '0';
+                           state        <= IDLE;
+                           pause        <= '0';
+                           loadLatched  <= '0';
                         else
                            blockCnt <= blockCnt + 1;
                            state    <= LOAD_REQREAD;

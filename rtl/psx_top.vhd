@@ -870,7 +870,7 @@ begin
                   end if;
                   
                when WAITGPUPAUSED =>
-                  if (vram_paused = '1') then
+                  if (vram_paused = '1' and ddr3_savestate = '0') then
                      ddr3state      <= REQUEST; 
                      arbiter_active <= '1';
                      if (memDDR3card1_request = '1') then
