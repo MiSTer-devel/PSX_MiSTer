@@ -1010,7 +1010,6 @@ psx
    .exe_file_size(exe_file_size),   
    .exe_stackpointer(exe_stackpointer),
    .fastboot(status[16]),
-   .FASTMEM(0),
    .TURBO_MEM(TURBO_MEM),
    .TURBO_COMP(TURBO_COMP),
    .TURBO_CACHE(TURBO_CACHE),

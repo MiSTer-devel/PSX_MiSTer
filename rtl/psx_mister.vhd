@@ -25,7 +25,6 @@ entity psx_mister is
       exe_file_size         : in  unsigned(31 downto 0);
       exe_stackpointer      : in  unsigned(31 downto 0);
       fastboot              : in  std_logic;
-      FASTMEM               : in  std_logic;
       TURBO_MEM             : in  std_logic;
       TURBO_COMP            : in  std_logic;
       TURBO_CACHE           : in  std_logic;
@@ -300,7 +299,6 @@ begin
       exe_file_size         => exe_file_size,   
       exe_stackpointer      => exe_stackpointer,
       fastboot              => fastboot,
-      FASTMEM               => FASTMEM,
       TURBO_MEM             => TURBO_MEM,
       TURBO_COMP            => TURBO_COMP,
       TURBO_CACHE           => TURBO_CACHE,

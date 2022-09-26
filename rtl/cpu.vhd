@@ -30,6 +30,7 @@ entity cpu is
       mem_rnw               : out std_logic; 
       mem_isData            : out std_logic; 
       mem_isCache           : out std_logic; 
+      mem_oldtagvalids      : out std_logic_vector(3 downto 0);
       mem_addressInstr      : out unsigned(31 downto 0); 
       mem_addressData       : out unsigned(31 downto 0); 
       mem_reqsize           : out unsigned(1 downto 0); 
@@ -38,6 +39,7 @@ entity cpu is
       mem_dataRead          : in  std_logic_vector(31 downto 0); 
       mem_done              : in  std_logic;
       mem_fifofull          : in  std_logic;
+      mem_tagvalids         : in  std_logic_vector(3 downto 0);
       
       cache_wr              : in  std_logic_vector(3 downto 0);
       cache_data            : in  std_logic_vector(31 downto 0);
@@ -193,6 +195,7 @@ architecture arch of cpu is
    signal FetchAddr                    : unsigned(31 downto 0) := (others => '0'); 
    signal FetchLastAddr                : unsigned(31 downto 0) := (others => '0'); 
    signal FetchLastCache               : std_logic := '0';
+   signal FetchLastTagvalids           : std_logic_vector(3 downto 0);
    
    signal cacheValueLast               : unsigned(31 downto 0) := (others => '0'); 
    signal cacheHitLast                 : std_logic := '0';
@@ -206,6 +209,7 @@ architecture arch of cpu is
    -- wires          
    signal mem1_request                 : std_logic := '0';
    signal mem1_cacherequest            : std_logic := '0';
+   signal mem1_tagvalids               : std_logic_vector(3 downto 0);
    signal mem1_address                 : unsigned(31 downto 0) := (others => '0'); 
                
    signal PCnext                       : unsigned(31 downto 0) := (others => '0');
@@ -458,8 +462,9 @@ begin
 
    -- IO
    mem_request       <= mem1_request or mem1_request_latched or mem4_request when (memoryMuxBusy = '0' or mem_done = '1') else '0';
-   mem_isCache       <= FetchLastCache when (mem1_request_latched = '1') else mem1_cacherequest;
-   mem_addressInstr  <= FetchLastAddr  when (mem1_request_latched = '1') else mem1_address;
+   mem_isCache       <= FetchLastCache     when (mem1_request_latched = '1') else mem1_cacherequest;
+   mem_oldtagvalids  <= FetchLastTagvalids when (mem1_request_latched = '1') else mem1_tagvalids;
+   mem_addressInstr  <= FetchLastAddr      when (mem1_request_latched = '1') else mem1_address;
    mem_isData        <= mem4_request;
    mem_rnw           <= mem4_rnw     when mem4_request = '1' else '1';
    mem_addressData   <= mem4_address;
@@ -491,8 +496,9 @@ begin
          elsif (ce = '1') then
             
             if (mem1_request = '1') then
-               FetchLastAddr   <= mem1_address;
-               FetchLastCache  <= mem1_cacherequest;
+               FetchLastAddr      <= mem1_address;
+               FetchLastCache     <= mem1_cacherequest;
+               FetchLastTagvalids <= mem1_tagvalids;
                if (mem4_request = '1' or memoryMuxBusy = '1') then
                   mem1_request_latched <= '1';
                end if;
@@ -601,11 +607,8 @@ begin
 
    tag_address_a <= std_logic_vector(writebackInvalidateCacheLine) when (writebackInvalidateCacheEna = '1') else std_logic_vector(FetchLastAddr(11 downto 4));
    
-   tag_data_a    <= "0000" & std_logic_vector(FetchLastAddr(31 downto 12)) when (writebackInvalidateCacheEna = '1') else
-                    "1000" & std_logic_vector(FetchLastAddr(31 downto 12)) when (FetchLastAddr(3 downto 2) = "11") else
-                    "1100" & std_logic_vector(FetchLastAddr(31 downto 12)) when (FetchLastAddr(3 downto 2) = "10") else
-                    "1110" & std_logic_vector(FetchLastAddr(31 downto 12)) when (FetchLastAddr(3 downto 2) = "01") else
-                    "1111" & std_logic_vector(FetchLastAddr(31 downto 12));
+   tag_data_a    <= "0000"        & std_logic_vector(FetchLastAddr(31 downto 12)) when (writebackInvalidateCacheEna = '1') else
+                    mem_tagvalids & std_logic_vector(FetchLastAddr(31 downto 12));
    
    tag_address_b <= std_logic_vector(FetchAddr(11 downto 4));
 
@@ -658,6 +661,7 @@ begin
       
       mem1_request    <= '0';
       cacheHitNext    <= '0';
+      mem1_tagvalids  <= "0000";
       
       if (mem_done = '1' and memoryMuxStage4 = '0') then 
          case (to_integer(unsigned(FetchLastAddr(31 downto 29)))) is
@@ -696,6 +700,9 @@ begin
                   else
                      mem1_request      <= '1';
                      stallNew1         <= '1';
+                     if (unsigned(tag_q_b(19 downto 0)) = FetchAddr(31 downto 12)) then
+                        mem1_tagvalids <= tag_q_b(23 downto 20);
+                     end if;
                   end if;
                   
                when 5 =>

@@ -263,7 +263,6 @@ begin
       exe_file_size         => exe_file_size,   
       exe_stackpointer      => exe_stackpointer,
       fastboot              => '1',
-      FASTMEM               => '0',
       TURBO_MEM             => '0',
       TURBO_COMP            => '0',
       TURBO_CACHE           => '0',

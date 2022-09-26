@@ -21,7 +21,6 @@ entity memorymux is
       reset_exe            : out std_logic := '0';
       
       fastboot             : in  std_logic;
-      NOMEMWAIT            : in  std_logic;
       PATCHSERIAL          : in  std_logic;
       TURBO                : in  std_logic;
       region_in            : in  std_logic_vector(1 downto 0);
@@ -40,7 +39,8 @@ entity memorymux is
       mem_in_request       : in  std_logic;
       mem_in_rnw           : in  std_logic; 
       mem_in_isData        : in  std_logic; 
-      mem_in_isCache       : in  std_logic; 
+      mem_in_isCache       : in  std_logic;
+      mem_in_oldtagvalids  : in  std_logic_vector(3 downto 0);      
       mem_in_addressInstr  : in  unsigned(31 downto 0); 
       mem_in_addressData   : in  unsigned(31 downto 0); 
       mem_in_reqsize       : in  unsigned(1 downto 0); 
@@ -49,6 +49,7 @@ entity memorymux is
       mem_dataRead         : out std_logic_vector(31 downto 0); 
       mem_done             : out std_logic;
       mem_fifofull         : out std_logic;
+      mem_tagvalids        : out std_logic_vector(3 downto 0);
       
       bios_memctrl         : in  unsigned(13 downto 0);
       
@@ -183,6 +184,7 @@ architecture arch of memorymux is
    signal mem_rnw                : std_logic; 
    signal mem_isData             : std_logic; 
    signal mem_isCache            : std_logic; 
+   signal mem_oldtagvalids       : std_logic_vector(3 downto 0);
    signal mem_addressInstr       : unsigned(31 downto 0); 
    signal mem_addressData        : unsigned(31 downto 0); 
    signal mem_reqsize            : unsigned(1 downto 0); 
@@ -193,6 +195,7 @@ architecture arch of memorymux is
    signal mem_save_rnw           : std_logic := '0'; 
    signal mem_save_isData        : std_logic := '0'; 
    signal mem_save_isCache       : std_logic := '0'; 
+   signal mem_save_oldtagvalids  : std_logic_vector(3 downto 0) := (others => '0');
    signal mem_save_addressInstr  : unsigned(31 downto 0) := (others => '0'); 
    signal mem_save_addressData   : unsigned(31 downto 0) := (others => '0');
    signal mem_save_reqsize       : unsigned(1 downto 0) := (others => '0'); 
@@ -208,6 +211,7 @@ architecture arch of memorymux is
    signal writeFifo_busy         : std_logic;
    signal writeFifo_Wr_1         : std_logic;
    
+   signal bios_page_open         : std_logic;
    signal ram_page_open          : std_logic;
    signal ram_page_addr          : unsigned(10 downto 0);
    
@@ -473,6 +477,7 @@ begin
    mem_rnw          <= '0'                                    when writeFifo_Empty = '0' else mem_save_rnw          when mem_save_request = '1' else mem_in_rnw         ;
    mem_isData       <= '1'                                    when writeFifo_Empty = '0' else mem_save_isData       when mem_save_request = '1' else mem_in_isData      ;
    mem_isCache      <= '0'                                    when writeFifo_Empty = '0' else mem_save_isCache      when mem_save_request = '1' else mem_in_isCache     ;
+   mem_oldtagvalids <= "0000"                                 when writeFifo_Empty = '0' else mem_save_oldtagvalids when mem_save_request = '1' else mem_in_oldtagvalids; 
    mem_addressInstr <= unsigned(writeFifo_Dout(63 downto 32)) when writeFifo_Empty = '0' else mem_save_addressInstr when mem_save_request = '1' else mem_in_addressInstr;
    mem_addressData  <= unsigned(writeFifo_Dout(63 downto 32)) when writeFifo_Empty = '0' else mem_save_addressData  when mem_save_request = '1' else mem_in_addressData ;
    mem_reqsize      <= unsigned(writeFifo_Dout(65 downto 64)) when writeFifo_Empty = '0' else mem_save_reqsize      when mem_save_request = '1' else mem_in_reqsize     ;
@@ -513,6 +518,7 @@ begin
                mem_save_rnw          <= '1';         
                mem_save_isData       <= mem_in_isData;
                mem_save_isCache      <= mem_in_isCache;     
+               mem_save_oldtagvalids <= mem_in_oldtagvalids;     
                mem_save_addressInstr <= mem_in_addressInstr;
                mem_save_addressData  <= mem_in_addressData; 
                mem_save_reqsize      <= mem_in_reqsize;     
@@ -550,21 +556,36 @@ begin
                      readram  <= '0';
                      writeram <= '0';
                      
-                     ram_page_open <= '0';
+                     ram_page_open  <= '0';
+                     bios_page_open <= '0';
                   
                      if (mem_isData = '0') then
                
                         if (mem_addressInstr(28 downto 0) < 16#800000#) then -- RAM
                            ram_ena     <= '1';
-                           ram_cache   <= '0';
+                           ram_cache   <= mem_isCache;
                            ram_rnw     <= '1';
                            ram_Adr     <= "00" & std_logic_vector(mem_addressInstr(20 downto 2)) & "00";
                            state       <= IDLE;
                            readram     <= '1';
                            ram_rotate_bits <= "00";
-                           if (mem_isCache = '1') then
-                              ram_cache   <= '1';
+                           if (mem_isCache = '0') then
+                              if (TURBO = '0') then
+                                 state   <= WAITFORRAMREAD;
+                                 waitcnt <= 0;
+                                 ram_ena <= '0';
+                                 readram <= '0';
+                              end if;
                            end if;
+                           
+                           case (mem_addressInstr(3 downto 2)) is
+                              when "00" => mem_tagvalids <= "1111";
+                              when "01" => mem_tagvalids <= "1110";
+                              when "10" => mem_tagvalids <= "1100";
+                              when "11" => mem_tagvalids <= "1000";
+                              when others => null;
+                           end case;
+                           
                         elsif (mem_addressInstr(28 downto 0) >= 16#1FC00000# and mem_addressInstr(28 downto 0) < 16#1FC80000#) then -- BIOS
                            ram_ena         <= '1';
                            ram_cache       <= '0';
@@ -573,18 +594,21 @@ begin
                            state           <= READBIOS;
                            addressBIOS_buf <= mem_addressInstr(18 downto 0);
                            ram_rotate_bits <= "00";
-                           waitcnt         <= 16;
-                           if (mem_isCache = '1') then
-                              ram_ena    <= '0';
-                              readram    <= '0';
-                              state      <= WAITFORRAMREAD;
-                              waitcnt    <= 87;
-                              ram_cache  <= '1';
-                              --if (NOMEMWAIT = '1') then
-                              --   state   <= IDLE;
-                              --   readram <= '1';
-                              --end if;
+                           if (bios_page_open = '1') then
+                              waitcnt        <= 25;
+                           else
+                              waitcnt        <= 26;
+                              bios_page_open <= '1';
                            end if;
+                           
+                           mem_tagvalids <= mem_oldtagvalids;
+                           case (mem_addressInstr(3 downto 2)) is
+                              when "00" => mem_tagvalids(0) <= '1';
+                              when "01" => mem_tagvalids(1) <= '1';
+                              when "10" => mem_tagvalids(2) <= '1';
+                              when "11" => mem_tagvalids(3) <= '1';
+                              when others => null;
+                           end case;
                         else
                            report "should never happen" severity failure; 
                         end if;
@@ -736,12 +760,7 @@ begin
                         mem_dataRead_buf <= data_ram_rotate;
                      end if;
                         
-                     if (NOMEMWAIT = '1') then
-                        mem_done_buf <= '1';
-                        state        <= IDLE;
-                     else
-                        state    <= WAITING;
-                     end if;
+                     state    <= WAITING;
                   end if;
                   
                when BUSWRITE => 

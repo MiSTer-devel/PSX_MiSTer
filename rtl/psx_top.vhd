@@ -29,7 +29,6 @@ entity psx_top is
       exe_file_size         : in  unsigned(31 downto 0);
       exe_stackpointer      : in  unsigned(31 downto 0);
       fastboot              : in  std_logic;
-      FASTMEM               : in  std_logic;
       TURBO_MEM             : in  std_logic;
       TURBO_COMP            : in  std_logic;
       TURBO_CACHE           : in  std_logic;
@@ -404,6 +403,7 @@ architecture arch of psx_top is
    signal mem_rnw                : std_logic; 
    signal mem_isData             : std_logic; 
    signal mem_isCache            : std_logic; 
+   signal mem_oldtagvalids       : std_logic_vector(3 downto 0);
    signal mem_addressInstr       : unsigned(31 downto 0); 
    signal mem_addressData        : unsigned(31 downto 0); 
    signal mem_reqsize            : unsigned(1 downto 0); 
@@ -412,6 +412,7 @@ architecture arch of psx_top is
    signal mem_dataRead           : std_logic_vector(31 downto 0); 
    signal mem_done               : std_logic;
    signal mem_fifofull           : std_logic;
+   signal mem_tagvalids          : std_logic_vector(3 downto 0);
    
    signal ram_next_cpu           : std_logic;
    
@@ -820,7 +821,6 @@ begin
          end if;
          
          debugmodeOn <= '0';
-         if (FASTMEM               = '1') then debugmodeOn <= '1'; end if;
          if (REPRODUCIBLEGPUTIMING = '1') then debugmodeOn <= '1'; end if;
          if (DMABLOCKATONCE        = '1') then debugmodeOn <= '1'; end if;
          if (noTexture             = '1') then debugmodeOn <= '1'; end if;
@@ -1670,7 +1670,6 @@ begin
       reset_exe            => reset_exe,
       
       fastboot             => fastboot,
-      NOMEMWAIT            => FASTMEM,
       TURBO                => TURBO_MEM,
       region_in            => biosregion,
       PATCHSERIAL          => PATCHSERIAL,
@@ -1688,6 +1687,7 @@ begin
       mem_in_rnw           => mem_rnw,      
       mem_in_isData        => mem_isData,      
       mem_in_isCache       => mem_isCache,      
+      mem_in_oldtagvalids  => mem_oldtagvalids,  
       mem_in_addressInstr  => mem_addressInstr,  
       mem_in_addressData   => mem_addressData,  
       mem_in_reqsize       => mem_reqsize,  
@@ -1695,7 +1695,8 @@ begin
       mem_in_dataWrite     => mem_dataWrite,
       mem_dataRead         => mem_dataRead, 
       mem_done             => mem_done,
-      mem_fifofull         => mem_fifofull,   
+      mem_fifofull         => mem_fifofull,  
+      mem_tagvalids        => mem_tagvalids,
 
       bios_memctrl         => bios_memctrl,
 
@@ -1826,7 +1827,8 @@ begin
       mem_request       => mem_request,  
       mem_rnw           => mem_rnw,      
       mem_isData        => mem_isData,      
-      mem_isCache       => mem_isCache,      
+      mem_isCache       => mem_isCache, 
+      mem_oldtagvalids  => mem_oldtagvalids,      
       mem_addressInstr  => mem_addressInstr,  
       mem_addressData   => mem_addressData,  
       mem_reqsize       => mem_reqsize,  
@@ -1835,6 +1837,7 @@ begin
       mem_dataRead      => mem_dataRead, 
       mem_done          => mem_done,
       mem_fifofull      => mem_fifofull,
+      mem_tagvalids     => mem_tagvalids,
       
       cache_wr          => cache_wr,  
       cache_data        => cache_data,
