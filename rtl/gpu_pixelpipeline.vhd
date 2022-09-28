@@ -85,7 +85,6 @@ architecture arch of gpu_pixelpipeline is
    signal tagValid            : std_logic_vector(0 to 255) := (others => '0');
       
    signal cache_address_a     : unsigned(7 downto 0) := (others => '0');
-   signal cache_data_a        : std_logic_vector(63 downto 0) := (others => '0');
    signal cache_wren_a        : std_logic := '0';
    signal cache_address_b     : unsigned(7 downto 0);
    signal cache_q_b           : std_logic_vector(63 downto 0);
@@ -96,8 +95,6 @@ architecture arch of gpu_pixelpipeline is
    signal CLUTwrenA           : std_logic;
    signal CLUTaddrB           : std_logic_vector(7 downto 0);
    signal CLUTDataB           : std_logic_vector(15 downto 0);
-   
-   signal CLUTDataB_S         : std_logic_vector(15 downto 0) := (others => '0');
   
    signal clearCacheBuffer    : std_logic := '0';
    
@@ -168,8 +165,6 @@ architecture arch of gpu_pixelpipeline is
    signal stage1_cb           : unsigned(7 downto 0) := (others => '0');
    signal stage1_u            : unsigned(7 downto 0) := (others => '0');
    signal stage1_oldPixel     : std_logic_vector(15 downto 0);
-   signal stage1_texdata      : std_logic_vector(15 downto 0) := (others => '0');
-   signal stage1_cachehit     : std_logic;
    
    signal stage1_u_mux        : unsigned(1 downto 0) := (others => '0');
    signal texdata_raw         : std_logic_vector(15 downto 0) := (others => '0');
@@ -251,15 +246,13 @@ begin
                                     (drawMode(3 downto 0) & "000000") + stage0_u;
    
    
-   cache_address_b <= tag_addr;
-   
    icache: entity work.dpram
    generic map ( addr_width => 8, data_width => 64)
    port map
    (
       clock_a     => clk2x,
       address_a   => std_logic_vector(cache_address_a),
-      data_a      => cache_data_a,
+      data_a      => vram_DOUT,
       wren_a      => cache_wren_a,
       
       clock_b     => clk2x,
@@ -269,14 +262,17 @@ begin
       q_b         => cache_q_b
    );
    
+   cache_wren_a    <= '1' when (vram_DOUT_READY = '1' and state = WAITTEXTURE) else '0';
+   
+   cache_address_b <= cache_address_a when (pipeline_stall = '1') else tag_addr;
+   
    cachehit <= '1' when (unsigned(tag_q_b) = tag_data and tagValid(to_integer(tag_addr)) = '1') else '0';
    
    stage1_u_mux <= stage1_u(3 downto 2) when drawMode(8 downto 7) = "00" else
                    stage1_u(2 downto 1) when drawMode(8 downto 7) = "01" else
                    stage1_u(1 downto 0);
    
-   texdata_raw  <= stage1_texdata          when (stage1_cachehit = '0') else
-                   cache_q_b(15 downto  0) when (stage1_u_mux = "00")   else
+   texdata_raw  <= cache_q_b(15 downto  0) when (stage1_u_mux = "00")   else
                    cache_q_b(31 downto 16) when (stage1_u_mux = "01")   else
                    cache_q_b(47 downto 32) when (stage1_u_mux = "10")   else
                    cache_q_b(63 downto 48);
@@ -297,6 +293,7 @@ begin
       wren_a      => CLUTwrenA,
       
       clock_b     => clk2x,
+      enable_b    => (not pipeline_stall),
       address_b   => CLUTaddrB,
       data_b      => x"0000",
       wren_b      => '0',
@@ -313,9 +310,7 @@ begin
                 texdata_raw(15 downto 8);
    
    
-   texdata_palette <= stage2_texdata when (drawMode(8) = '1')      else
-                      CLUTDataB_S    when (pipeline_stall_1 = '1') else 
-                      CLUTDataB;
+   texdata_palette <= stage2_texdata when (drawMode(8) = '1') else CLUTDataB;
    
    pipeline_busy <= pipeline_stall or stage0_valid or stage1_valid or stage2_valid or stage3_valid or stage4_valid;
    
@@ -339,7 +334,6 @@ begin
       if rising_edge(clk2x) then
          
          tag_wren_a    <= '0';
-         cache_wren_a  <= '0';
          
          -- must be done here, so it also is effected when ce is off = paused
          if (state = WAITTEXTURE) then
@@ -348,16 +342,7 @@ begin
             end if;
             if (vram_DOUT_READY = '1') then
                tag_wren_a    <= '1';
-               cache_wren_a  <= '1';
-               cache_data_a  <= vram_DOUT;
                tagValid(to_integer(tag_address_a)) <= '1';
-               case (stage1_u_mux) is
-                  when "00" => stage1_texdata <= vram_DOUT(15 downto  0);
-                  when "01" => stage1_texdata <= vram_DOUT(31 downto 16);
-                  when "10" => stage1_texdata <= vram_DOUT(47 downto 32);
-                  when "11" => stage1_texdata <= vram_DOUT(63 downto 48);
-                  when others => null;
-               end case;
             end if;
          end if;
                
@@ -491,8 +476,6 @@ begin
                stageS_u             <= pipeline_u; 
                stageS_v             <= pipeline_v;
                stageS_oldPixel      <= vramLineData;
-               
-               CLUTDataB_S          <= CLUTDataB;
             end if;
             
             if (pipeline_stall = '0') then
@@ -540,8 +523,7 @@ begin
                stage1_cg          <= stage0_cg;         
                stage1_cb          <= stage0_cb; 
                stage1_u           <= stage0_u;
-               stage1_oldPixel    <= stage0_oldPixel;
-               stage1_cachehit    <= cachehit;          
+               stage1_oldPixel    <= stage0_oldPixel;       
             
                -- stage 2 - texture palette reading
                stage2_valid       <= stage1_valid;      

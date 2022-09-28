@@ -1,7 +1,6 @@
 vcom -93 -quiet -work  sim/mem ^
-../../rtl/SyncFifo.vhd ^
-../../rtl/SyncFifoFallThrough.vhd ^
-../../rtl/SyncRam.vhd
+../system/src/mem/dpram.vhd ^
+../system/src/mem/RamMLAB.vhd
 
 vcom -2008 -quiet -work sim/psx ^
 ../../rtl/dpram.vhd ^
@@ -25,10 +24,6 @@ vcom -2008 -quiet -work sim/psx ^
 ../../rtl/justifier_sensor.vhd ^
 ../../rtl/gpu_videoout.vhd ^
 ../../rtl/gpu.vhd
-
-vcom -93 -quiet -work sim/mem ^
-../system/src/mem/dpram.vhd ^
-../system/src/mem/RamMLAB.vhd
 
 vcom -quiet -work sim/tb ^
 ../system/src/tb/globals.vhd ^
