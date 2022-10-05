@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XXXXXXXXX  XXXXXXXXXXX XXX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXXXXX
+//  X XX XXXXXX XXXXXX XXXXX XXX XX XXXXXXXXXXXXXXXXXXXXXXXX  XXX XX XXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -392,12 +392,14 @@ parameter CONF_STR = {
 	"d5P1O[4:3],Vertical Crop,Off,On(224/270),On(216/256);",
 	"P1O[67],Horizontal Crop,Off,On;",
 	"P1O[22],Dithering,On,Off;",
+	"P1O[73],Dither 24 Bit for VGA,Off,On;",
 	"P1O[41],Deinterlacing,Weave,Bob;",
 	"P1O[60],Sync 480i for HDMI,Off,On;",
 	"P1O[24],Rotate,Off,On;",
+	"P1-;",
 	"P1O[54:53],Widescreen Hack,Off,3:2,5:3,16:9;",
-	"P1O[5],Texture Filter,Off,On;",
-	"P1O[73],Dither 24 Bit for VGA,Off,On;",
+	"P1O[82:81],Texture Filter,Off,All Polygon,Dithered,Dith+Shaded;",
+	"hDP1O[83],Filter 2D Detect,Off,On;",
 	"P1-;",
 	"d1P1O[44],SPU RAM select,DDR3,SDRAM2;",
 	"P1O[8:7],Stereo Mix,None,25%,50%,100%;",
@@ -422,10 +424,7 @@ parameter CONF_STR = {
 	"h3P3O[14],DDR3 Framebuffer,Off,On;",
 	"h3P3O[10],DDR3 FB Color,16,24;",
 	"h3P3O[11],VRAMViewer,Off,On;",
-	"h3P3O[57],Sync Video Out,Off,On;",
-	"h3P3O[56],Sync Video Clock,Off,On;",
 	"h3P3O[30],Sound,On,Off;",
-	"h3P3O[19],RepTimingGPU,Off,On;",
 	"h3P3O[43],RepTimingSPUDMA,Off,On;",
 	"h3P3O[26],DMAinBLOCKs,Off,On;",
 	"h3P3O[27],Textures,On,Off;",
@@ -466,7 +465,7 @@ parameter CONF_STR = {
 reg dbg_enabled = 0;
 wire  [1:0] buttons;
 wire [127:0] status;
-wire [15:0] status_menumask = {saving_memcard, (bk_pending | saving_memcard), bk_pending, status[59], multitap, biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {filter_on, saving_memcard, (bk_pending | saving_memcard), bk_pending, status[59], multitap, biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -517,6 +516,8 @@ wire [15:0] joystick2_rumble;
 wire [15:0] joystick3_rumble;
 wire [15:0] joystick4_rumble;
 wire [32:0] RTC_time;
+
+wire filter_on = (status[82:81] == 2'b00) ? 1'b0 : 1'b1; 
 
 wire [127:0] status_in = {status[127:39],ss_slot,status[36:19], 2'b00, status[16:0]};
 
@@ -1014,7 +1015,7 @@ psx
    .TURBO_COMP(TURBO_COMP),
    .TURBO_CACHE(TURBO_CACHE),
    .TURBO_CACHE50(TURBO_CACHE50),
-   .REPRODUCIBLEGPUTIMING(status[19]),
+   .REPRODUCIBLEGPUTIMING(0),
    .DMABLOCKATONCE(status[26]),
    .INSTANTSEEK(status[21]),
    .FORCECDSPEED(status[77:75]),
@@ -1029,7 +1030,8 @@ psx
    .LBAOn(status[69]),
    .PATCHSERIAL(0), //.PATCHSERIAL(status[54]),
    .noTexture(status[27]),
-   .textureFilter(status[5]),
+   .textureFilter(status[82:81]),
+   .textureFilter2DOff(status[83]),
    .dither24(status[73]),
    .syncVideoOut(syncVideoOut),
    .syncInterlace(status[60]),

@@ -44,7 +44,8 @@ entity psx_mister is
       LBAOn                 : in  std_logic;
       PATCHSERIAL           : in  std_logic;
       noTexture             : in  std_logic;
-      textureFilter         : in  std_logic;
+      textureFilter         : in  std_logic_vector(1 downto 0);
+      textureFilter2DOff    : in  std_logic;
       dither24              : in  std_logic;
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
@@ -319,6 +320,7 @@ begin
       PATCHSERIAL           => PATCHSERIAL,
       noTexture             => noTexture,
       textureFilter         => textureFilter,
+      textureFilter2DOff    => textureFilter2DOff,
       dither24              => dither24,
       syncVideoOut          => syncVideoOut,
       syncInterlace         => syncInterlace,

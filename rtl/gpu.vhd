@@ -27,7 +27,8 @@ entity gpu is
       pal60                : in  std_logic;
       fpscountOn           : in  std_logic;
       noTexture            : in  std_logic;
-      textureFilter        : in  std_logic;
+      textureFilter        : in  std_logic_vector(1 downto 0);
+      textureFilter2DOff   : in  std_logic;
       dither24             : in  std_logic;
       debugmodeOn          : in  std_logic;
       syncVideoOut         : in  std_logic;
@@ -319,6 +320,8 @@ architecture arch of gpu is
    signal poly_pipeline_cb          : unsigned(7 downto 0);
    signal poly_pipeline_u           : unsigned(7 downto 0);
    signal poly_pipeline_v           : unsigned(7 downto 0);
+   signal poly_pipeline_u11         : unsigned(7 downto 0);
+   signal poly_pipeline_v11         : unsigned(7 downto 0);
    signal poly_reqVRAMEnable        : std_logic;
    signal poly_reqVRAMXPos          : unsigned(9 downto 0);
    signal poly_reqVRAMYPos          : unsigned(8 downto 0);
@@ -353,6 +356,11 @@ architecture arch of gpu is
    signal pipeline_cb               : unsigned(7 downto 0);
    signal pipeline_u                : unsigned(7 downto 0);
    signal pipeline_v                : unsigned(7 downto 0);
+   signal pipeline_filter           : std_logic;   
+   signal pipeline_u11              : unsigned(7 downto 0);
+   signal pipeline_v11              : unsigned(7 downto 0);
+   signal pipeline_uAcc             : unsigned(7 downto 0);
+   signal pipeline_vAcc             : unsigned(7 downto 0);
    
    signal pipeline_clearCache       : std_logic;
    
@@ -1162,6 +1170,7 @@ begin
 
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,    
       textureFilter        => textureFilter,
+      textureFilter2DOff   => textureFilter2DOff,
 
       error                => errorPOLY,
       
@@ -1200,7 +1209,12 @@ begin
       pipeline_cg          => poly_pipeline_cg,         
       pipeline_cb          => poly_pipeline_cb,         
       pipeline_u           => poly_pipeline_u,         
-      pipeline_v           => poly_pipeline_v,         
+      pipeline_v           => poly_pipeline_v, 
+      pipeline_filter      => pipeline_filter,
+      pipeline_u11         => poly_pipeline_u11,   
+      pipeline_v11         => poly_pipeline_v11,         
+      pipeline_uAcc        => pipeline_uAcc,
+      pipeline_vAcc        => pipeline_vAcc,
       
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 
@@ -1238,6 +1252,10 @@ begin
    pipeline_u           <= ((rect_pipeline_u or poly_pipeline_u) and textureWindow_AND_X) or textureWindow_OR_X;
    pipeline_v           <= ((rect_pipeline_v or poly_pipeline_v) and textureWindow_AND_Y) or textureWindow_OR_Y;
    
+   pipeline_u11         <= (poly_pipeline_u11 and textureWindow_AND_X) or textureWindow_OR_X;
+   pipeline_v11         <= (poly_pipeline_v11 and textureWindow_AND_Y) or textureWindow_OR_Y;
+   
+   
    pipeline_textPalNew  <= rect_textPalNew or poly_textPalNew;
    pipeline_textPalX    <= rect_textPalX   or poly_textPalX  ;
    pipeline_textPalY    <= rect_textPalY   or poly_textPalY  ;
@@ -1272,7 +1290,12 @@ begin
       pipeline_cg          => pipeline_cg,         
       pipeline_cb          => pipeline_cb,         
       pipeline_u           => pipeline_u,          
-      pipeline_v           => pipeline_v,          
+      pipeline_v           => pipeline_v, 
+      pipeline_filter      => pipeline_filter,
+      pipeline_u11         => pipeline_u11,   
+      pipeline_v11         => pipeline_v11, 
+      pipeline_uAcc        => pipeline_uAcc,
+      pipeline_vAcc        => pipeline_vAcc,      
       
       requestVRAMEnable    => pipeline_reqVRAMEnable,
       requestVRAMXPos      => pipeline_reqVRAMXPos,  
