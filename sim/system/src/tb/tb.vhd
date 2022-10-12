@@ -75,7 +75,7 @@ architecture arch of etb is
    --sdram access 
    signal ram_dataWrite       : std_logic_vector(31 downto 0);
    signal ram_dataRead32      : std_logic_vector(31 downto 0);
-   signal ram_Adr             : std_logic_vector(22 downto 0);
+   signal ram_Adr             : std_logic_vector(24 downto 0);
    signal ram_be              : std_logic_vector(3 downto 0);
    signal ram_rnw             : std_logic;
    signal ram_ena             : std_logic;
@@ -93,7 +93,7 @@ architecture arch of etb is
    signal dma_reqprocessed    : std_logic;
    signal dma_data            : std_logic_vector(31 downto 0);
    
-   signal ram_dmafifo_adr     : std_logic_vector(20 downto 0);
+   signal ram_dmafifo_adr     : std_logic_vector(22 downto 0);
    signal ram_dmafifo_data    : std_logic_vector(31 downto 0);
    signal ram_dmafifo_empty   : std_logic;
    signal ram_dmafifo_read    : std_logic;
@@ -263,6 +263,7 @@ begin
       exe_file_size         => exe_file_size,   
       exe_stackpointer      => exe_stackpointer,
       fastboot              => '1',
+      ram8mb                => '0',
       TURBO_MEM             => '0',
       TURBO_COMP            => '0',
       TURBO_CACHE           => '0',
@@ -285,6 +286,7 @@ begin
       textureFilter         => "00",
       textureFilter2DOff    => '0',
       dither24              => '0',
+      render24              => '1',
       syncVideoOut          => '0',
       syncInterlace         => '0',
       rotate180             => '0',
@@ -505,8 +507,8 @@ begin
       clk                  => clk33,
       clk3x                => clk100,
       refresh              => ram_refresh,
-      addr(26 downto 23)   => "0000",
-      addr(22 downto  0)   => ram_Adr,
+      addr(26 downto 25)   => "00",
+      addr(24 downto  0)   => ram_Adr,
       req                  => ram_ena,
       ram_dma              => ram_dma,
       ram_iscache          => ram_iscache,
@@ -560,7 +562,7 @@ begin
       done                 => spuram_done,
       reqprocessed         => open,
       ram_idle             => open,
-      ram_dmafifo_adr      => (20 downto 0 => '0'),
+      ram_dmafifo_adr      => (22 downto 0 => '0'),
       ram_dmafifo_data     => (31 downto 0 => '0'),
       ram_dmafifo_empty    => '1'
    );

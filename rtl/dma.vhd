@@ -26,14 +26,14 @@ entity dma is
       dmaOn                : out std_logic;
       irqOut               : out std_logic := '0';
       
-      ram_Adr              : out std_logic_vector(20 downto 0) := (others => '0');
+      ram_Adr              : out std_logic_vector(22 downto 0) := (others => '0');
       ram_ena              : out std_logic := '0';
       
       dma_wr               : in  std_logic;
       dma_reqprocessed     : in  std_logic;
       dma_data             : in  std_logic_vector(31 downto 0);
       
-      ram_dmafifo_adr      : out std_logic_vector(20 downto 0);
+      ram_dmafifo_adr      : out std_logic_vector(22 downto 0);
       ram_dmafifo_data     : out std_logic_vector(31 downto 0);
       ram_dmafifo_empty    : out std_logic;
       ram_dmafifo_read     : in  std_logic;
@@ -163,13 +163,13 @@ architecture arch of dma is
    signal fifoIn_Valid_1      : std_logic;   
       
    signal fifoOut_reset       : std_logic := '0';
-   signal fifoOut_Din         : std_logic_vector(50 downto 0);
+   signal fifoOut_Din         : std_logic_vector(52 downto 0);
    signal fifoOut_Wr          : std_logic; 
    signal fifoOut_Wr_3x       : std_logic; 
    signal fifoOut_Full        : std_logic;
    signal fifoOut_NearFull_3x : std_logic;
    signal fifoOut_NearFull    : std_logic;
-   signal fifoOut_Dout        : std_logic_vector(50 downto 0);
+   signal fifoOut_Dout        : std_logic_vector(52 downto 0);
    signal fifoOut_Empty       : std_logic;
    signal fifoOut_NearEmpty_3x: std_logic;
    signal fifoOut_NearEmpty   : std_logic;
@@ -502,7 +502,7 @@ begin
                   if (dmaSettings.D_CHCR(0) = '1') then
                      if (autoread = '0') then
                         ram_ena         <= '1';
-                        ram_Adr         <= std_logic_vector(dmaSettings.D_MADR(20 downto 2)) & "00";
+                        ram_Adr         <= std_logic_vector(dmaSettings.D_MADR(22 downto 2)) & "00";
                         autoread        <= '1';
                      end if;
                   end if;
@@ -635,7 +635,7 @@ begin
                         when 1 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
+                              fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_MDEC_read;
                            else
                               report "write to MDEC out not possible" severity failure;
@@ -644,28 +644,28 @@ begin
                         when 2 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
+                              fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_GPU_read;
                            end if;
                            
                         when 3 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
+                              fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_CD_read & DMA_CD_read_accu;
                            end if;
                            
                         when 4 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
+                              fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_SPU_read & DMA_SPU_read_accu;
                            end if;
                            
                         when 6 =>
                            if (toDevice = '0') then
                               fifoOut_Wr                <= '1';
-                              fifoOut_Din(50 downto 32) <= std_logic_vector(dmaSettings.D_MADR(20 downto 2));
+                              fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               if (wordcount = 1) then
                                  fifoOut_Din(31 downto 0) <= x"00FFFFFF";
                               else
@@ -802,9 +802,9 @@ begin
             if (dma_reqprocessed_2 = '1' and autoread = '1') then
                ram_ena         <= '1';
                if (directionNeg = '1') then
-                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(20 downto 4)) & "0000") - 16); 
+                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
                else
-                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(20 downto 4)) & "0000") + 16); 
+                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") + 16); 
                end if;
             end if;
             
@@ -871,7 +871,7 @@ begin
    generic map
    (
       SIZE              => 64,
-      DATAWIDTH         => 51,
+      DATAWIDTH         => 53,
       NEARFULLDISTANCE  => 56,
       NEAREMPTYDISTANCE => 2
    )
@@ -891,7 +891,7 @@ begin
    
    fifoOut_Wr_3x <= clk3xIndex and fifoOut_Wr;
    
-   ram_dmafifo_adr   <= fifoOut_Dout(50 downto 32) & "00";
+   ram_dmafifo_adr   <= fifoOut_Dout(52 downto 32) & "00";
    ram_dmafifo_data  <= fifoOut_Dout(31 downto 0);
    ram_dmafifo_empty <= fifoOut_Empty;
    

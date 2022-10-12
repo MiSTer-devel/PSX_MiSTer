@@ -25,6 +25,7 @@ entity psx_mister is
       exe_file_size         : in  unsigned(31 downto 0);
       exe_stackpointer      : in  unsigned(31 downto 0);
       fastboot              : in  std_logic;
+      ram8mb                : in  std_logic;
       TURBO_MEM             : in  std_logic;
       TURBO_COMP            : in  std_logic;
       TURBO_CACHE           : in  std_logic;
@@ -47,6 +48,7 @@ entity psx_mister is
       textureFilter         : in  std_logic_vector(1 downto 0);
       textureFilter2DOff    : in  std_logic;
       dither24              : in  std_logic;
+      render24              : in  std_logic;
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
       rotate180             : in  std_logic;
@@ -63,14 +65,14 @@ entity psx_mister is
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
       ram_dataRead32        : in  std_logic_vector(31 downto 0);
-      ram_Adr               : out std_logic_vector(22 downto 0);
+      ram_Adr               : out std_logic_vector(24 downto 0);
       ram_be                : out std_logic_vector(3 downto 0) := (others => '0');
       ram_rnw               : out std_logic;
       ram_ena               : out std_logic;
       ram_dma               : out std_logic;
       ram_cache             : out std_logic;
       ram_done              : in  std_logic;
-      ram_dmafifo_adr       : out std_logic_vector(20 downto 0);
+      ram_dmafifo_adr       : out std_logic_vector(22 downto 0);
       ram_dmafifo_data      : out std_logic_vector(31 downto 0);
       ram_dmafifo_empty     : out std_logic;
       ram_dmafifo_read      : in  std_logic; 
@@ -300,6 +302,7 @@ begin
       exe_file_size         => exe_file_size,   
       exe_stackpointer      => exe_stackpointer,
       fastboot              => fastboot,
+      ram8mb                => ram8mb,
       TURBO_MEM             => TURBO_MEM,
       TURBO_COMP            => TURBO_COMP,
       TURBO_CACHE           => TURBO_CACHE,
@@ -322,6 +325,7 @@ begin
       textureFilter         => textureFilter,
       textureFilter2DOff    => textureFilter2DOff,
       dither24              => dither24,
+      render24              => render24,
       syncVideoOut          => syncVideoOut,
       syncInterlace         => syncInterlace,
       rotate180             => rotate180,

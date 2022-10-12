@@ -3,7 +3,6 @@ vcom -93 -quiet -work  sim/mem ^
 ../system/src/mem/RamMLAB.vhd
 
 vcom -2008 -quiet -work sim/psx ^
-../../rtl/dpram.vhd ^
 ../../rtl/divider.vhd ^
 ../../rtl/pGPU.vhd ^
 ../../rtl/mul32u.vhd ^

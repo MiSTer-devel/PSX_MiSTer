@@ -50,6 +50,7 @@ entity gpu_videoout is
       LBAdisplay                 : in  unsigned(19 downto 0);
          
       requestVRAMEnable          : out std_logic := '0';
+      requestVRAMMirror          : out std_logic := '0';
       requestVRAMXPos            : out unsigned(9 downto 0);
       requestVRAMYPos            : out unsigned(8 downto 0);
       requestVRAMSize            : out unsigned(10 downto 0);
@@ -96,13 +97,16 @@ architecture arch of gpu_videoout is
    signal videoout_request_clkvid   : tvideoout_request;
    signal videoout_readAddr         : unsigned(10 downto 0);
    signal videoout_pixelRead        : std_logic_vector(15 downto 0);
+   signal videoout_pixelRead2       : std_logic_vector(15 downto 0);
    
    type tState is
    (
       WAITNEWLINE,
       WAITREQUEST,
       REQUEST,
-      WAITREAD
+      REQUEST2,
+      WAITREAD,
+      WAITREAD2
    );
    signal state : tState := WAITNEWLINE;
    
@@ -113,7 +117,9 @@ architecture arch of gpu_videoout is
    signal reqSize             : unsigned(10 downto 0) := (others => '0');
    signal lineAct             : unsigned(8 downto 0) := (others => '0');
    signal fillAddr            : unsigned(8 downto 0) := (others => '0');
+   signal fillAddr2           : unsigned(8 downto 0) := (others => '0');
    signal store               : std_logic := '0';
+   signal store2              : std_logic := '0';
    
    -- overlay
    signal overlay_data        : std_logic_vector(23 downto 0);
@@ -204,6 +210,7 @@ begin
       videoout_request_vid    => videoout_request_aa, 
       videoout_readAddr       => videoout_readAddr_a,  
       videoout_pixelRead      => videoout_pixelRead,   
+      videoout_pixelRead2     => videoout_pixelRead2,   
 
       overlay_data            => overlay_data,
       overlay_ena             => overlay_ena,                     
@@ -215,10 +222,10 @@ begin
    );
    
    -- vram reading
-   requestVRAMEnable <= '1'     when (state = REQUEST and requestVRAMIdle = '1') else '0';
-   requestVRAMXPos   <= reqPosX when (state = REQUEST and requestVRAMIdle = '1') else (others => '0');
-   requestVRAMYPos   <= reqPosY when (state = REQUEST and requestVRAMIdle = '1') else (others => '0');
-   requestVRAMSize   <= reqSize when (state = REQUEST and requestVRAMIdle = '1') else (others => '0');
+   requestVRAMEnable <= '1'     when ((state = REQUEST or state = REQUEST2) and requestVRAMIdle = '1') else '0';
+   requestVRAMXPos   <= reqPosX when ((state = REQUEST or state = REQUEST2) and requestVRAMIdle = '1') else (others => '0');
+   requestVRAMYPos   <= reqPosY when ((state = REQUEST or state = REQUEST2) and requestVRAMIdle = '1') else (others => '0');
+   requestVRAMSize   <= reqSize when ((state = REQUEST or state = REQUEST2) and requestVRAMIdle = '1') else (others => '0');
    
    DisplayOffsetX <= videoout_settings.vramRange(9 downto 0);
    
@@ -248,13 +255,23 @@ begin
             end if;
          end if;
          
-         if (state =  WAITREAD) then
+         if (state =  WAITREAD or state =  WAITREAD2) then
             if (vram_DOUT_READY = '1') then
-               fillAddr <= fillAddr + 1;
+               if (state =  WAITREAD) then
+                  fillAddr <= fillAddr + 1;
+               else
+                  fillAddr2 <= fillAddr2 + 1;
+               end if;
             end if;
             if (requestVRAMDone = '1') then
-               state <= WAITNEWLINE; 
-               store <= '0';
+               store  <= '0';
+               store2 <= '0';
+               if (state =  WAITREAD and videoout_settings.render24 = '1') then
+                  requestVRAMMirror <= '1';
+                  state <= REQUEST2;
+               else
+                  state <= WAITNEWLINE; 
+               end if;
             end if;
          end if;
          
@@ -268,6 +285,7 @@ begin
             case (state) is
             
                when WAITNEWLINE =>
+                  requestVRAMMirror <= '0';
                   if (videoout_on = '1' and videoout_request_clk2x.lineInNext /= lineAct and videoout_request_clk2x.fetch = '1' and videoout_settings.GPUSTAT_DisplayDisable = '0') then
                      waitcnt <= 3;
                      state   <= WAITREQUEST;
@@ -282,8 +300,10 @@ begin
                      reqPosX   <= DisplayOffsetX;
                      reqPosY   <= videoout_request_clk2x.lineInNext + DisplayOffsetY;
                      fillAddr  <= videoout_request_clk2x.lineInNext(0) & x"00";
+                     fillAddr2 <= videoout_request_clk2x.lineInNext(0) & x"00";
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
-                        fillAddr(8) <= videoout_request_clk2x.lineInNext(1);
+                        fillAddr(8)  <= videoout_request_clk2x.lineInNext(1);
+                        fillAddr2(8) <= videoout_request_clk2x.lineInNext(1);
                      end if;
                      if (videoout_settings.GPUSTAT_ColorDepth24 = '1') then
                         reqSize <= resize(videoout_request_clk2x.fetchsize, 11) + resize(videoout_request_clk2x.fetchsize(9 downto 1), 11);
@@ -298,7 +318,15 @@ begin
                      store <= '1';
                   end if;
                   
-               when WAITREAD => null; -- handled outside due to savestate_pause
+               when WAITREAD  => null; -- handled outside due to savestate_pause
+               
+               when REQUEST2 =>
+                  if (requestVRAMIdle = '1') then
+                     state <= WAITREAD2;
+                     store2 <= '1';
+                  end if;
+               
+               when WAITREAD2 => null; -- handled outside due to savestate_pause
             
             end case;
          
@@ -327,6 +355,28 @@ begin
       data_b      => x"0000",
       wren_b      => '0',
       q_b         => videoout_pixelRead
+   );   
+   
+   ilineram2: entity work.dpram_dif
+   generic map 
+   ( 
+      addr_width_a  => 9,
+      data_width_a  => 64,
+      addr_width_b  => 11,
+      data_width_b  => 16
+   )
+   port map
+   (
+      clock_a     => clk2x,
+      address_a   => std_logic_vector(fillAddr2),
+      data_a      => vram_DOUT,
+      wren_a      => (vram_DOUT_READY and store2),
+      
+      clock_b     => clkvid,
+      address_b   => std_logic_vector(videoout_readAddr),
+      data_b      => x"0000",
+      wren_b      => '0',
+      q_b         => videoout_pixelRead2
    );
   
   

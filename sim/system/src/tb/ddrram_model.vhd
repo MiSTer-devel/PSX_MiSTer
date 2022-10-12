@@ -13,7 +13,8 @@ entity ddrram_model is
    (
       loadVram     : std_logic := '0';
       SLOWTIMING   : integer := 0;
-      RANDOMTIMING : std_logic := '0'
+      RANDOMTIMING : std_logic := '0';
+      outputVRAM2  : std_logic := '0'
    );
    port 
    (
@@ -177,7 +178,7 @@ begin
          end if;  
          
          if (DDRAM_WE = '1') then
-            --DDRAM_BUSY       <= '1';
+            DDRAM_BUSY       <= '1';
             cmd_address_save := intern_addr;
             cmd_burst_save   := DDRAM_BURSTCNT;
             cmd_din_save     := DDRAM_DIN;
@@ -208,7 +209,7 @@ begin
                   data(to_integer(unsigned(cmd_address_save)) + (i * 2) + 1) := to_integer(signed(DDRAM_DIN(63 downto 48)) & readval(15 downto 0));
                end if;
                
-               if (DDRAM_ADDR(28 downto 24) = "00110") then
+               if ((outputVRAM2 = '0' and DDRAM_ADDR(28 downto 17) = "001100000000") or (outputVRAM2 = '1' and DDRAM_ADDR(28 downto 17) = "001100000100")) then
                   for i in 0 to 3 loop
                      if (cmd_be_save(i * 2) = '1') then
                         color := x"00" & cmd_din_save((i * 16) + 4 downto (i * 16)) & "000" & cmd_din_save((i * 16) + 9 downto (i * 16) + 5) & "000" & cmd_din_save((i * 16) + 14 downto (i * 16) + 10) & "000";
@@ -239,6 +240,13 @@ begin
                --wait until rising_edge(DDRAM_CLK);
             end loop;
             --wait for 200 ns;
+            if (RANDOMTIMING = '1') then
+               uniform(seed1, seed2, rnd);
+               waittiming := integer(floor(rnd * 100.0));
+            end if;
+            for i in 97 to waittiming loop
+               wait until rising_edge(DDRAM_CLK);
+            end loop;
             DDRAM_BUSY       <= '0';
          end if;  
          

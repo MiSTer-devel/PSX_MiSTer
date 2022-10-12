@@ -391,11 +391,13 @@ parameter CONF_STR = {
 	"P1O[55],Fixed VBlank,Off,On;",
 	"d5P1O[4:3],Vertical Crop,Off,On(224/270),On(216/256);",
 	"P1O[67],Horizontal Crop,Off,On;",
-	"P1O[22],Dithering,On,Off;",
-	"P1O[73],Dither 24 Bit for VGA,Off,On;",
 	"P1O[41],Deinterlacing,Weave,Bob;",
 	"P1O[60],Sync 480i for HDMI,Off,On;",
 	"P1O[24],Rotate,Off,On;",
+	"P1-;",
+	"P1O[22],Dithering,On,Off;",
+	"P1O[84],Render 24 Bit,Off,On;",
+	"P1O[73],Dither 24 Bit for VGA,Off,On;",
 	"P1-;",
 	"P1O[54:53],Widescreen Hack,Off,3:2,5:3,16:9;",
 	"P1O[82:81],Texture Filter,Off,All Polygon,Dithered,Dith+Shaded;",
@@ -417,6 +419,7 @@ parameter CONF_STR = {
 	"P2O[21],CD Fast Seek,Off,On(U);",
 	"P2O[77:75],CD Speed,Auto,Forced 1X(U),Forced 2X(U),Hack 4X(U),Hack 6X(U),Hack 8X(U);",
 	"P2O[78],Limit Max CD Speed,Off,On(U);",
+	"P2O[85],RAM(Homebrew),2 MByte,8 MByte(U);",
 	
 	"h3-;",
 	"h3P3,Debug;",
@@ -618,8 +621,8 @@ always @(posedge clk_1x) begin
 	end
 end
 
-localparam EXE_START = 4194304;
-localparam BIOS_START = 2097152;
+localparam EXE_START = 16777216;
+localparam BIOS_START = 8388608;
 
 reg [26:0] ramdownload_wraddr;
 reg [31:0] ramdownload_wrdata;
@@ -672,8 +675,8 @@ always @(posedge clk_1x) begin
       if (ioctl_wr) begin
          if(~ioctl_addr[1]) begin
             ramdownload_wrdata[15:0] <= ioctl_dout;
-            if (bios_download)         ramdownload_wraddr  <= {6'd1, ioctl_index[7:6], ioctl_addr[18:0]};
-            else if (exe_download)     ramdownload_wraddr  <= ioctl_addr[20:0] + EXE_START[26:0];                              
+            if (bios_download)         ramdownload_wraddr  <= {4'd1, ioctl_index[7:6], 2'b00, ioctl_addr[18:0]};
+            else if (exe_download)     ramdownload_wraddr  <= ioctl_addr[22:0] + EXE_START[26:0];                              
             else if (cdinfo_download)  ramdownload_wraddr  <= ioctl_addr[26:0];      
          end else begin
             ramdownload_wrdata[31:16] <= ioctl_dout;
@@ -690,12 +693,12 @@ always @(posedge clk_1x) begin
    loadExe         <= exe_download_1 & ~exe_download;  
 
    if (exe_download & ramdownload_wr) begin
-      if (ramdownload_wraddr[20:0] == 'h10) exe_initial_pc     <= ramdownload_wrdata;
-      if (ramdownload_wraddr[20:0] == 'h14) exe_initial_gp     <= ramdownload_wrdata;
-      if (ramdownload_wraddr[20:0] == 'h18) exe_load_address   <= ramdownload_wrdata;
-      if (ramdownload_wraddr[20:0] == 'h1C) exe_file_size      <= ramdownload_wrdata;
-      if (ramdownload_wraddr[20:0] == 'h30) exe_stackpointer   <= ramdownload_wrdata;
-      if (ramdownload_wraddr[20:0] == 'h34) exe_stackpointer   <= exe_stackpointer + ramdownload_wrdata;
+      if (ramdownload_wraddr[22:0] == 'h10) exe_initial_pc     <= ramdownload_wrdata;
+      if (ramdownload_wraddr[22:0] == 'h14) exe_initial_gp     <= ramdownload_wrdata;
+      if (ramdownload_wraddr[22:0] == 'h18) exe_load_address   <= ramdownload_wrdata;
+      if (ramdownload_wraddr[22:0] == 'h1C) exe_file_size      <= ramdownload_wrdata;
+      if (ramdownload_wraddr[22:0] == 'h30) exe_stackpointer   <= ramdownload_wrdata;
+      if (ramdownload_wraddr[22:0] == 'h34) exe_stackpointer   <= exe_stackpointer + ramdownload_wrdata;
    end
 
    if (loadExe) biosMod <= 1'b1;
@@ -1011,6 +1014,7 @@ psx
    .exe_file_size(exe_file_size),   
    .exe_stackpointer(exe_stackpointer),
    .fastboot(status[16]),
+   .ram8mb(status[85]),
    .TURBO_MEM(TURBO_MEM),
    .TURBO_COMP(TURBO_COMP),
    .TURBO_CACHE(TURBO_CACHE),
@@ -1033,6 +1037,7 @@ psx
    .textureFilter(status[82:81]),
    .textureFilter2DOff(status[83]),
    .dither24(status[73]),
+   .render24(status[84]),
    .syncVideoOut(syncVideoOut),
    .syncInterlace(status[60]),
    .rotate180(status[24]),
@@ -1261,7 +1266,7 @@ wire  [31:0] sdr_sdram_dout32;
 wire  [15:0] sdr_bram_din;
 wire         sdr_sdram_ack;
 wire         sdr_bram_ack;
-wire  [22:0] sdram_addr;
+wire  [24:0] sdram_addr;
 wire   [3:0] sdram_be;
 wire         sdram_req;
 wire         sdram_ack;
@@ -1279,7 +1284,7 @@ wire         dma_wr;
 wire         dma_reqprocessed;
 wire [31:0]  dma_data;
 
-wire  [20:0] sdram_dmafifo_adr;  
+wire  [22:0] sdram_dmafifo_adr;  
 wire  [31:0] sdram_dmafifo_data; 
 wire         sdram_dmafifo_empty;
 wire         sdram_dmafifo_read; 

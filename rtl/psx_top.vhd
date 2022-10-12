@@ -29,6 +29,7 @@ entity psx_top is
       exe_file_size         : in  unsigned(31 downto 0);
       exe_stackpointer      : in  unsigned(31 downto 0);
       fastboot              : in  std_logic;
+      ram8mb                : in  std_logic;
       TURBO_MEM             : in  std_logic;
       TURBO_COMP            : in  std_logic;
       TURBO_CACHE           : in  std_logic;
@@ -51,6 +52,7 @@ entity psx_top is
       textureFilter         : in  std_logic_vector(1 downto 0);
       textureFilter2DOff    : in  std_logic;
       dither24              : in  std_logic;
+      render24              : in  std_logic;
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
       rotate180             : in  std_logic;
@@ -67,14 +69,14 @@ entity psx_top is
       ram_refresh           : out std_logic;
       ram_dataWrite         : out std_logic_vector(31 downto 0);
       ram_dataRead32        : in  std_logic_vector(31 downto 0);
-      ram_Adr               : out std_logic_vector(22 downto 0);
+      ram_Adr               : out std_logic_vector(24 downto 0);
       ram_be                : out std_logic_vector(3 downto 0) := (others => '0');
       ram_rnw               : out std_logic;
       ram_ena               : out std_logic;
       ram_dma               : out std_logic;
       ram_cache             : out std_logic;
       ram_done              : in  std_logic;
-      ram_dmafifo_adr       : out std_logic_vector(20 downto 0);
+      ram_dmafifo_adr       : out std_logic_vector(22 downto 0);
       ram_dmafifo_data      : out std_logic_vector(31 downto 0);
       ram_dmafifo_empty     : out std_logic;
       ram_dmafifo_read      : in  std_logic;
@@ -418,7 +420,7 @@ architecture arch of psx_top is
    signal ram_next_cpu           : std_logic;
    
    signal ram_cpu_dataWrite      : std_logic_vector(31 downto 0);
-   signal ram_cpu_Adr            : std_logic_vector(22 downto 0);
+   signal ram_cpu_Adr            : std_logic_vector(24 downto 0);
    signal ram_cpu_be             : std_logic_vector(3 downto 0);
    signal ram_cpu_rnw            : std_logic;
    signal ram_cpu_ena            : std_logic;
@@ -433,7 +435,7 @@ architecture arch of psx_top is
    signal vram_pause             : std_logic; 
    signal vram_paused            : std_logic; 
    signal vram_BURSTCNT          : std_logic_vector(7 downto 0) := (others => '0'); 
-   signal vram_ADDR              : std_logic_vector(19 downto 0) := (others => '0');                       
+   signal vram_ADDR              : std_logic_vector(27 downto 0) := (others => '0');                       
    signal vram_DIN               : std_logic_vector(63 downto 0) := (others => '0');
    signal vram_BE                : std_logic_vector(7 downto 0) := (others => '0'); 
    signal vram_WE                : std_logic := '0';
@@ -459,7 +461,7 @@ architecture arch of psx_top is
    signal dmaRequest             : std_logic;
    signal canDMA                 : std_logic;
    
-   signal ram_dma_Adr            : std_logic_vector(20 downto 0);
+   signal ram_dma_Adr            : std_logic_vector(22 downto 0);
    signal ram_dma_ena            : std_logic;
    
    signal dma_cache_Adr          : std_logic_vector(20 downto 0);
@@ -1281,12 +1283,16 @@ begin
    ram_refresh   <= reset_intern;
    
    ram_dataWrite <=                                                ram_cpu_dataWrite;
-   ram_Adr       <= "00" & ram_dma_Adr when (cpuPaused = '1') else ram_cpu_Adr;      
    ram_be        <=                                                ram_cpu_be;       
    ram_rnw       <= '1'                when (cpuPaused = '1') else ram_cpu_rnw;      
    ram_ena       <= ram_dma_ena        when (cpuPaused = '1') else ram_cpu_ena;      
    ram_dma       <= '1'                when (cpuPaused = '1') else '0';      
    ram_cache     <= '0'                when (cpuPaused = '1') else ram_cpu_cache;    
+   
+   ram_Adr       <=   "00" & ram_dma_Adr(22 downto 0) when (cpuPaused = '1' and ram8mb = '1') else 
+                    "0000" & ram_dma_Adr(20 downto 0) when (cpuPaused = '1' and ram8mb = '0') else 
+                    ram_cpu_Adr(24 downto 23) &        ram_cpu_Adr(22 downto 0) when (ram8mb = '1') else
+                    ram_cpu_Adr(24 downto 23) & "00" & ram_cpu_Adr(20 downto 0);
    
    process (clk1x)
    begin
@@ -1429,6 +1435,7 @@ begin
       textureFilter        => textureFilter,
       textureFilter2DOff   => textureFilter2DOff,
       dither24             => dither24,
+      render24             => render24,
       debugmodeOn          => debugmodeOn,
       syncVideoOut         => syncVideoOut,
       syncInterlace        => syncInterlace,
@@ -1918,7 +1925,7 @@ begin
    );
    
    ddr3_BURSTCNT <= ss_ram_BURSTCNT     when (ddr3_savestate = '1') else arbiter_BURSTCNT when (arbiter_active = '1') else  vram_BURSTCNT;  
-   ddr3_ADDR     <= ss_ram_ADDR & "00"  when (ddr3_savestate = '1') else arbiter_ADDR     when (arbiter_active = '1') else  x"00" & vram_ADDR;      
+   ddr3_ADDR     <= ss_ram_ADDR & "00"  when (ddr3_savestate = '1') else arbiter_ADDR     when (arbiter_active = '1') else  vram_ADDR;      
    ddr3_DIN      <= ss_ram_DIN          when (ddr3_savestate = '1') else arbiter_DIN      when (arbiter_active = '1') else  vram_DIN;       
    ddr3_BE       <= ss_ram_BE           when (ddr3_savestate = '1') else arbiter_BE       when (arbiter_active = '1') else  vram_BE;        
    ddr3_WE       <= ss_ram_WE           when (ddr3_savestate = '1') else arbiter_WE       when (arbiter_active = '1') else  vram_WE;        

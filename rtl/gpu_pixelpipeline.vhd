@@ -13,6 +13,7 @@ entity gpu_pixelpipeline is
       reset                : in  std_logic;
       
       noTexture            : in  std_logic;
+      render24             : in  std_logic;
       
       drawMode_in          : in  unsigned(13 downto 0) := (others => '0');
       DrawPixelsMask_in    : in  std_logic;
@@ -51,6 +52,7 @@ entity gpu_pixelpipeline is
       vram_DOUT_READY      : in  std_logic;
       
       vramLineData         : in  std_logic_vector(15 downto 0);
+      vramLineData2        : in  std_logic_vector(15 downto 0);
       
       textPalInNew         : in  std_logic;
       textPalInX           : in  unsigned(9 downto 0);   
@@ -58,6 +60,7 @@ entity gpu_pixelpipeline is
       
       pixelStall           : in  std_logic;
       pixelColor           : out std_logic_vector(15 downto 0);
+      pixelColor2          : out std_logic_vector(15 downto 0);
       pixelAddr            : out unsigned(19 downto 0);
       pixelWrite           : out std_logic
    );
@@ -158,6 +161,7 @@ architecture arch of gpu_pixelpipeline is
    signal stageS_uAcc         : unsigned(7 downto 0) := (others => '0');
    signal stageS_vAcc         : unsigned(7 downto 0) := (others => '0');
    signal stageS_oldPixel     : std_logic_vector(15 downto 0) := (others => '0');
+   signal stageS_oldPixel2    : std_logic_vector(15 downto 0) := (others => '0');
 
    signal stage0_valid        : std_logic := '0';
    signal stage0_texture      : std_logic := '0';
@@ -177,6 +181,7 @@ architecture arch of gpu_pixelpipeline is
    signal stage0_uAcc         : unsigned(7 downto 0) := (others => '0');
    signal stage0_vAcc         : unsigned(7 downto 0) := (others => '0');
    signal stage0_oldPixel     : std_logic_vector(15 downto 0);
+   signal stage0_oldPixel2    : std_logic_vector(15 downto 0);
    
    signal stage0_u_array      : t_filterarray_u8;
    signal stage0_v_array      : t_filterarray_u8;
@@ -198,6 +203,7 @@ architecture arch of gpu_pixelpipeline is
    signal stage1_uAcc         : unsigned(7 downto 0) := (others => '0');
    signal stage1_vAcc         : unsigned(7 downto 0) := (others => '0');
    signal stage1_oldPixel     : std_logic_vector(15 downto 0);
+   signal stage1_oldPixel2    : std_logic_vector(15 downto 0);
    
    signal stage1_u_mux        : t_filterarray_u2;
    signal texdata_raw         : t_filterarray_b16;
@@ -214,6 +220,7 @@ architecture arch of gpu_pixelpipeline is
    signal stage2_cb           : unsigned(7 downto 0) := (others => '0');
    signal stage2_filter       : std_logic := '0';   
    signal stage2_oldPixel     : std_logic_vector(15 downto 0) := (others => '0');
+   signal stage2_oldPixel2    : std_logic_vector(15 downto 0) := (others => '0');
    signal stage2_texdata      : t_filterarray_b16;
    
    signal texdata_palette     : t_filterarray_b16;
@@ -253,6 +260,7 @@ architecture arch of gpu_pixelpipeline is
    signal stage3_cg           : unsigned(7 downto 0) := (others => '0');
    signal stage3_cb           : unsigned(7 downto 0) := (others => '0');
    signal stage3_oldPixel     : std_logic_vector(15 downto 0) := (others => '0');
+   signal stage3_oldPixel2    : std_logic_vector(15 downto 0) := (others => '0');
    signal stage3_tex_r        : unsigned(4 downto 0) := (others => '0');
    signal stage3_tex_g        : unsigned(4 downto 0) := (others => '0');
    signal stage3_tex_b        : unsigned(4 downto 0) := (others => '0');
@@ -270,6 +278,7 @@ architecture arch of gpu_pixelpipeline is
    signal stage4_cg           : unsigned(7 downto 0) := (others => '0');
    signal stage4_cb           : unsigned(7 downto 0) := (others => '0');
    signal stage4_oldPixel     : std_logic_vector(15 downto 0) := (others => '0');
+   signal stage4_oldPixel2    : std_logic_vector(15 downto 0) := (others => '0');
    signal stage4_ditherAdd    : integer range -4 to 4;
    signal stage4_tex_r        : unsigned(7 downto 0) := (others => '0');
    signal stage4_tex_g        : unsigned(7 downto 0) := (others => '0');
@@ -287,14 +296,15 @@ architecture arch of gpu_pixelpipeline is
    signal stage5_cg           : unsigned(7 downto 0) := (others => '0');
    signal stage5_cb           : unsigned(7 downto 0) := (others => '0');
    signal stage5_oldPixel     : std_logic_vector(15 downto 0) := (others => '0');
+   signal stage5_oldPixel2    : std_logic_vector(15 downto 0) := (others => '0');
    
    signal stage6_valid        : std_logic := '0';
    signal stage6_alphabit     : std_logic := '0';
    signal stage6_x            : unsigned(9 downto 0) := (others => '0');
    signal stage6_y            : unsigned(8 downto 0) := (others => '0');
-   signal stage6_cr           : std_logic_vector(4 downto 0) := (others => '0');
-   signal stage6_cg           : std_logic_vector(4 downto 0) := (others => '0');
-   signal stage6_cb           : std_logic_vector(4 downto 0) := (others => '0');
+   signal stage6_cr           : std_logic_vector(7 downto 0) := (others => '0');
+   signal stage6_cg           : std_logic_vector(7 downto 0) := (others => '0');
+   signal stage6_cb           : std_logic_vector(7 downto 0) := (others => '0');
   
 begin 
 
@@ -392,7 +402,7 @@ begin
          wren_a      => CLUTwrenA,
          
          clock_b     => clk2x,
-         enable_b    => (not pipeline_stall),
+         clken_b     => (not pipeline_stall),
          address_b   => CLUTaddrB(i),
          data_b      => x"0000",
          wren_b      => '0',
@@ -639,6 +649,7 @@ begin
                stageS_uAcc          <= pipeline_uAcc;   
                stageS_vAcc          <= pipeline_vAcc; 
                stageS_oldPixel      <= vramLineData;
+               stageS_oldPixel2     <= vramLineData2;
             end if;
             
             if (pipeline_stall = '0') then
@@ -663,6 +674,7 @@ begin
                   stage0_uAcc          <= stageS_uAcc;   
                   stage0_vAcc          <= stageS_vAcc;                     
                   stage0_oldPixel      <= stageS_oldPixel;  
+                  stage0_oldPixel2     <= stageS_oldPixel2;  
                else
                   stage0_valid         <= pipeline_new and ((not DrawPixelsMask) or (not vramLineData(15)));
                   stage0_texture       <= pipeline_texture and (not noTexture);    
@@ -682,6 +694,7 @@ begin
                   stage0_uAcc          <= pipeline_uAcc;   
                   stage0_vAcc          <= pipeline_vAcc;   
                   stage0_oldPixel      <= vramLineData;
+                  stage0_oldPixel2     <= vramLineData2;
                end if;
 
                -- stage1 - fetch texture
@@ -699,6 +712,7 @@ begin
                stage1_uAcc        <= stage0_uAcc;
                stage1_vAcc        <= stage0_vAcc;
                stage1_oldPixel    <= stage0_oldPixel; 
+               stage1_oldPixel2   <= stage0_oldPixel2; 
                for i in 0 to 3 loop
                   stage1_u(i)          <= stage0_u_array(i);
                   tag_addr_1(i)        <= tag_addr(i);
@@ -719,6 +733,7 @@ begin
                stage2_cb          <= stage1_cb; 
                stage2_filter      <= stage1_filter;
                stage2_oldPixel    <= stage1_oldPixel;
+               stage2_oldPixel2   <= stage1_oldPixel2;
                for i in 0 to 3 loop
                   stage2_texdata(i) <= texdata_raw(i);
                end loop;
@@ -740,6 +755,7 @@ begin
                stage3_cg          <= stage2_cg;         
                stage3_cb          <= stage2_cb; 
                stage3_oldPixel    <= stage2_oldPixel;
+               stage3_oldPixel2   <= stage2_oldPixel2;
                stage3_useFilter   <= useFilter;
                stage3_tex_r       <= unsigned(texdata_palette(0)( 4 downto  0));
                stage3_tex_g       <= unsigned(texdata_palette(0)( 9 downto  5));
@@ -767,6 +783,7 @@ begin
                stage4_cg          <= stage3_cg;         
                stage4_cb          <= stage3_cb;         
                stage4_oldPixel    <= stage3_oldPixel;   
+               stage4_oldPixel2   <= stage3_oldPixel2;   
                stage4_ditherAdd   <= DITHERMATRIX(to_integer(stage3_y(1 downto 0)), to_integer(stage3_x(1 downto 0)));  
                stage4_useFilter   <= stage3_useFilter;
                stage4_tex_alpha   <= stage3_tex_alpha;
@@ -786,6 +803,7 @@ begin
                stage5_x           <= stage4_x;          
                stage5_y           <= stage4_y;
                stage5_oldPixel    <= stage4_oldPixel;               
+               stage5_oldPixel2   <= stage4_oldPixel2;               
                if (stage4_texture = '1') then
                   stage5_alphacheck <= stage4_tex_alpha;
                   stage5_alphabit   <= stage4_tex_alpha;
@@ -813,13 +831,17 @@ begin
                         if (colorTg(15 downto 7) > 255) then stage5_cg <= (others => '1'); else stage5_cg <= colorTg(14 downto 7); end if;
                      end if;
                   end if;
-                  if (stage4_useFilter = '0') then
+                  if (stage4_useFilter = '0' and render24 = '0') then
                      stage5_cr(2 downto 0) <= "000";
                      stage5_cg(2 downto 0) <= "000";
                      stage5_cb(2 downto 0) <= "000";
                   end if;
                else
-                  if (stage4_dithering = '1') then
+                  if (render24 = '1') then
+                     stage5_cr         <= stage4_cr;
+                     stage5_cg         <= stage4_cg;
+                     stage5_cb         <= stage4_cb;
+                  elsif (stage4_dithering = '1') then
                      colorDr := to_integer(stage4_cr) + stage4_ditherAdd;
                      colorDg := to_integer(stage4_cg) + stage4_ditherAdd;
                      colorDb := to_integer(stage4_cb) + stage4_ditherAdd;
@@ -847,6 +869,11 @@ begin
                   colorBGr  := unsigned(stage5_oldPixel( 4 downto  0)) & "000";
                   colorBGg  := unsigned(stage5_oldPixel( 9 downto  5)) & "000";
                   colorBGb  := unsigned(stage5_oldPixel(14 downto 10)) & "000";
+                  if (render24 = '1') then
+                     colorBGr(2 downto 0) := unsigned(stage5_oldPixel2( 2 downto  0));
+                     colorBGg(2 downto 0) := unsigned(stage5_oldPixel2( 5 downto  3));
+                     colorBGb(2 downto 0) := unsigned(stage5_oldPixel2( 8 downto  6));
+                  end if;
                   
                   case (drawMode(6 downto 5)) is
                      when "00" => --  (B+F)/2
@@ -876,13 +903,13 @@ begin
                   if (colorMixg > 255) then colorMixg := 255; elsif (colorMixg < 0) then colorMixg := 0; end if;
                   if (colorMixb > 255) then colorMixb := 255; elsif (colorMixb < 0) then colorMixb := 0; end if;
                   
-                  stage6_cr       <= std_logic_vector(to_unsigned(colorMixr / 8,5));
-                  stage6_cg       <= std_logic_vector(to_unsigned(colorMixg / 8,5));
-                  stage6_cb       <= std_logic_vector(to_unsigned(colorMixb / 8,5));
+                  stage6_cr       <= std_logic_vector(to_unsigned(colorMixr,8));
+                  stage6_cg       <= std_logic_vector(to_unsigned(colorMixg,8));
+                  stage6_cb       <= std_logic_vector(to_unsigned(colorMixb,8));
                else
-                  stage6_cr       <= std_logic_vector(stage5_cr(7 downto 3));      
-                  stage6_cg       <= std_logic_vector(stage5_cg(7 downto 3));      
-                  stage6_cb       <= std_logic_vector(stage5_cb(7 downto 3));       
+                  stage6_cr       <= std_logic_vector(stage5_cr);      
+                  stage6_cg       <= std_logic_vector(stage5_cg);      
+                  stage6_cb       <= std_logic_vector(stage5_cb);     
                end if;
             
             end if; 
@@ -892,9 +919,10 @@ begin
       end if;
    end process; 
    
-   pixelColor <= stage6_alphabit & stage6_cb & stage6_cg & stage6_cr;
-   pixelAddr  <= stage6_y & stage6_x & '0';
-   pixelWrite <= stage6_valid;
+   pixelColor  <= stage6_alphabit & stage6_cb(7 downto 3) & stage6_cg(7 downto 3) & stage6_cr(7 downto 3);
+   pixelColor2 <= "0000000" & stage6_cb(2 downto 0) & stage6_cg(2 downto 0) & stage6_cr(2 downto 0);
+   pixelAddr   <= stage6_y & stage6_x & '0';
+   pixelWrite  <= stage6_valid;
 
 
 end architecture;

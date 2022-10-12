@@ -30,6 +30,7 @@ entity gpu is
       textureFilter        : in  std_logic_vector(1 downto 0);
       textureFilter2DOff   : in  std_logic;
       dither24             : in  std_logic;
+      render24             : in  std_logic;
       debugmodeOn          : in  std_logic;
       syncVideoOut         : in  std_logic;
       syncInterlace        : in  std_logic;
@@ -88,7 +89,7 @@ entity gpu is
       vram_DOUT            : in  std_logic_vector(63 downto 0);
       vram_DOUT_READY      : in  std_logic;
       vram_BURSTCNT        : out std_logic_vector(7 downto 0) := (others => '0'); 
-      vram_ADDR            : out std_logic_vector(19 downto 0) := (others => '0');                       
+      vram_ADDR            : out std_logic_vector(27 downto 0) := (others => '0');                       
       vram_DIN             : out std_logic_vector(63 downto 0) := (others => '0');
       vram_BE              : out std_logic_vector(7 downto 0) := (others => '0'); 
       vram_WE              : out std_logic := '0';
@@ -208,10 +209,12 @@ architecture arch of gpu is
    
    signal pixelStall                : std_logic;
    signal pixelColor                : std_logic_vector(15 downto 0);
+   signal pixelColor2               : std_logic_vector(15 downto 0);
    signal pixelAddr                 : unsigned(19 downto 0);
    signal pixelWrite                : std_logic;
       
    signal pixel64data               : std_logic_vector(63 downto 0) := (others => '0');
+   signal pixel64data2              : std_logic_vector(63 downto 0) := (others => '0');
    signal pixel64wordEna            : std_logic_vector(3 downto 0) := (others => '0');
    signal pixel64addr               : std_logic_vector(16 downto 0) := (others => '0');
    signal pixel64filled             : std_logic := '0';
@@ -335,6 +338,7 @@ architecture arch of gpu is
    signal poly_textPalY             : unsigned(8 downto 0); 
    
    signal pipeline_pixelColor       : std_logic_vector(15 downto 0);
+   signal pipeline_pixelColor2      : std_logic_vector(15 downto 0);
    signal pipeline_pixelAddr        : unsigned(19 downto 0);
    signal pipeline_pixelWrite       : std_logic;
    signal pipeline_reqVRAMEnable    : std_logic;
@@ -373,18 +377,22 @@ architecture arch of gpu is
    signal fifoOut_Din               : std_logic_vector(84 downto 0);
    signal fifoOut_Wr                : std_logic; 
    signal fifoOut_Wr_1              : std_logic; 
-   signal fifoOut_Full              : std_logic;
    signal fifoOut_NearFull          : std_logic;
    signal fifoOut_Dout              : std_logic_vector(84 downto 0);
    signal fifoOut_Rd                : std_logic;
    signal fifoOut_Empty             : std_logic;
-   signal fifoOut_Valid             : std_logic;
    signal fifoOut_idle              : std_logic;
+   
+   signal fifoOut2_Rd               : std_logic;
+   signal fifoOut2_Din              : std_logic_vector(63 downto 0);
+   signal fifoOut2_Dout             : std_logic_vector(63 downto 0);
    
    -- vram access
    type tvramState is
    (
       IDLE,
+      WRITESECOND,
+      READSECOND,
       READVRAM
    );
    signal vramState : tvramState := IDLE;
@@ -399,18 +407,24 @@ architecture arch of gpu is
    signal reqVRAMYPos               : unsigned(8 downto 0);
    signal reqVRAMSize               : unsigned(10 downto 0);
    signal reqVRAMremain             : unsigned(7 downto 0);
+   signal reqVRAMremain2            : unsigned(7 downto 0);
    signal reqVRAMwait               : unsigned(7 downto 0);
    signal reqVRAMwrap               : unsigned(7 downto 0);
    signal reqVRAMnext               : unsigned(7 downto 0);
    signal reqVRAMaddr               : unsigned(7 downto 0) := (others => '0');
+   signal reqVRAMaddr2              : unsigned(7 downto 0) := (others => '0');
    signal reqVRAMStore              : std_logic := '0';        
+   signal reqVRAMStore2             : std_logic := '0';        
+   signal reqVRAMtwice              : std_logic := '0';        
    
    signal vramLineAddr              : unsigned(9 downto 0);
    
    signal vramLineData              : std_logic_vector(15 downto 0);
+   signal vramLineData2             : std_logic_vector(15 downto 0);
    
    -- videoout
    signal videoout_reqVRAMEnable    : std_logic;
+   signal videoout_reqRAMMirror     : std_logic;
    signal videoout_reqVRAMXPos      : unsigned(9 downto 0);
    signal videoout_reqVRAMYPos      : unsigned(8 downto 0);
    signal videoout_reqVRAMSize      : unsigned(10 downto 0);
@@ -1268,7 +1282,8 @@ begin
       ce                   => ce,        
       reset                => softreset or SS_reset,
 
-      noTexture            => noTexture,      
+      noTexture            => noTexture,     
+      render24             => render24,
 
       drawMode_in          => drawMode,
       DrawPixelsMask_in    => GPUSTAT_DrawPixelsMask,
@@ -1307,6 +1322,7 @@ begin
       vram_DOUT_READY      => vram_DOUT_READY,
       
       vramLineData         => vramLineData,
+      vramLineData2        => vramLineData2,
       
       textPalInNew         => pipeline_textPalNew,
       textPalInX           => pipeline_textPalX,  
@@ -1314,6 +1330,7 @@ begin
       
       pixelStall           => pixelStall,
       pixelColor           => pipeline_pixelColor,
+      pixelColor2          => pipeline_pixelColor2,
       pixelAddr            => pipeline_pixelAddr, 
       pixelWrite           => pipeline_pixelWrite
    );
@@ -1346,16 +1363,17 @@ begin
       );
    end generate;
    
-   pixelColor <= cpu2vram_pixelColor or vram2vram_pixelColor or pipeline_pixelColor;
-   pixelAddr  <= cpu2vram_pixelAddr  or vram2vram_pixelAddr  or pipeline_pixelAddr ;
-   pixelWrite <= cpu2vram_pixelWrite or vram2vram_pixelWrite or pipeline_pixelWrite;
+   pixelColor  <= cpu2vram_pixelColor or vram2vram_pixelColor or pipeline_pixelColor;
+   pixelColor2 <=                                                pipeline_pixelColor2;
+   pixelAddr   <= cpu2vram_pixelAddr  or vram2vram_pixelAddr  or pipeline_pixelAddr ;
+   pixelWrite  <= cpu2vram_pixelWrite or vram2vram_pixelWrite or pipeline_pixelWrite;
    
    -- pixel writing fifo
    iSyncFifo_OUT: entity mem.SyncFifoFallThrough
    generic map
    (
       SIZE             => 256,
-      DATAWIDTH        => 85,  -- 64bit data, 17 bit address + 4bit word enable
+      DATAWIDTH        => 64 + 17 + 4,  -- 64bit data + 17 bit address + 4bit word enable
       NEARFULLDISTANCE => 250
    )
    port map
@@ -1371,14 +1389,36 @@ begin
       Empty    => fifoOut_Empty   
    );
    
+   iSyncFifo_OUT2: entity mem.SyncFifoFallThrough
+   generic map
+   (
+      SIZE             => 256,
+      DATAWIDTH        => 64,
+      NEARFULLDISTANCE => 250
+   )
+   port map
+   ( 
+      clk      => clk2x,
+      reset    => fifoOut_reset,  
+      Din      => fifoOut2_Din,     
+      Wr       => fifoOut_Wr,      
+      Full     => open,    
+      NearFull => open,
+      Dout     => fifoOut2_Dout,    
+      Rd       => fifoOut2_Rd,      
+      Empty    => open
+   );
+   
    process (clk2x)
    begin
       if rising_edge(clk2x) then
       
          fifoOut_Wr_1 <= fifoOut_Wr;
       
-         fifoOut_Wr  <= '0';
-         fifoOut_Din <= pixel64wordEna & pixel64Addr & pixel64data;
+         fifoOut_Wr   <= '0';
+         fifoOut_Din  <= pixel64wordEna & pixel64Addr & pixel64data;
+         
+         fifoOut2_Din <= pixel64data2;
       
          if (reset = '1') then
             
@@ -1389,8 +1429,10 @@ begin
             if (vramFill_pixelWrite = '1') then
             
                fifoOut_Wr    <= '1';
-               fifoOut_Din   <= "1111" & std_logic_vector(vramFill_pixelAddr(19 downto 3)) & vramFill_pixelColor & vramFill_pixelColor & vramFill_pixelColor & vramFill_pixelColor;
+               fifoOut_Din   <=  "1111" & std_logic_vector(vramFill_pixelAddr(19 downto 3)) & vramFill_pixelColor & vramFill_pixelColor & vramFill_pixelColor & vramFill_pixelColor;
                pixel64filled <= '0';
+         
+               fifoOut2_Din  <= x"0000000000000000";
          
             elsif (pixelWrite = '1') then
             
@@ -1402,10 +1444,10 @@ begin
                
                   pixel64Addr <= std_logic_vector(pixelAddr(19 downto 3));
                   case (pixelAddr(2 downto 1)) is
-                     when "00" => pixel64data(15 downto  0) <= pixelColor; pixel64wordEna <= "0001";
-                     when "01" => pixel64data(31 downto 16) <= pixelColor; pixel64wordEna <= "0010";
-                     when "10" => pixel64data(47 downto 32) <= pixelColor; pixel64wordEna <= "0100";
-                     when "11" => pixel64data(63 downto 48) <= pixelColor; pixel64wordEna <= "1000";
+                     when "00" => pixel64data(15 downto  0) <= pixelColor; pixel64data2(15 downto  0) <= pixelColor2; pixel64wordEna <= "0001";
+                     when "01" => pixel64data(31 downto 16) <= pixelColor; pixel64data2(31 downto 16) <= pixelColor2; pixel64wordEna <= "0010";
+                     when "10" => pixel64data(47 downto 32) <= pixelColor; pixel64data2(47 downto 32) <= pixelColor2; pixel64wordEna <= "0100";
+                     when "11" => pixel64data(63 downto 48) <= pixelColor; pixel64data2(63 downto 48) <= pixelColor2; pixel64wordEna <= "1000";
                      when others => null;
                   end case;
                   
@@ -1414,10 +1456,10 @@ begin
                else
                   
                   case (pixelAddr(2 downto 1)) is
-                     when "00" => pixel64data(15 downto  0) <= pixelColor; pixel64wordEna(0) <= '1';
-                     when "01" => pixel64data(31 downto 16) <= pixelColor; pixel64wordEna(1) <= '1';
-                     when "10" => pixel64data(47 downto 32) <= pixelColor; pixel64wordEna(2) <= '1';
-                     when "11" => pixel64data(63 downto 48) <= pixelColor; pixel64wordEna(3) <= '1';
+                     when "00" => pixel64data(15 downto  0) <= pixelColor; pixel64data2(15 downto  0) <= pixelColor2; pixel64wordEna(0) <= '1';
+                     when "01" => pixel64data(31 downto 16) <= pixelColor; pixel64data2(31 downto 16) <= pixelColor2; pixel64wordEna(1) <= '1';
+                     when "10" => pixel64data(47 downto 32) <= pixelColor; pixel64data2(47 downto 32) <= pixelColor2; pixel64wordEna(2) <= '1';
+                     when "11" => pixel64data(63 downto 48) <= pixelColor; pixel64data2(63 downto 48) <= pixelColor2; pixel64wordEna(3) <= '1';
                      when others => null;
                   end case;
 
@@ -1439,7 +1481,7 @@ begin
       end if;
    end process;
    
-   fifoOut_Rd <= '1' when (ce = '1' and vramState = IDLE and vram_BUSY = '0' and fifoOut_Empty = '0' and reqVRAMEnable = '0' and vram_pause = '0') else '0';
+   fifoOut_Rd <= '1' when (ce = '1' and vramState = IDLE and (vram_WE = '0' or vram_BUSY = '0') and fifoOut_Empty = '0' and reqVRAMEnable = '0' and vram_pause = '0') else '0';
    
    fifoOut_idle <= '1' when (fifoOut_Empty = '1' and fifoOut_Wr = '0' and fifoOut_Wr_1 = '0' and pixel64filled = '0') else '0';
    
@@ -1469,6 +1511,8 @@ begin
             vram_RD <= '0';
          end if;
          
+         fifoOut2_Rd <= '0';
+         
          vram_paused <= '0';
          if (VRAMIdle = '1' and vram_pause = '1' and vram_WE = '0') then
             if (vram_pauseCnt = 3) then
@@ -1493,7 +1537,7 @@ begin
                when IDLE =>
                   if ((ce = '1' or (videoout_reqVRAMEnable = '1' and savestate_busy = '0')) and (vram_WE = '0' or vram_BUSY = '0') and vram_pause = '0') then
                      if (reqVRAMEnable = '1') then
-                        reqVRAMStore <= (not pipeline_reqVRAMEnable) and (not videoout_reqVRAMEnable);
+                        reqVRAMStore  <= (not pipeline_reqVRAMEnable) and (not videoout_reqVRAMEnable);
                         reqVRAMSizeRounded := reqVRAMSize;
                         if (reqVRAMSize(1 downto 0) /= "00") then -- round up read size to full 4*16bit
                            reqVRAMSizeRounded(10 downto 2) := reqVRAMSizeRounded(10 downto 2) + 1;
@@ -1503,17 +1547,31 @@ begin
                         end if;
                         if (reqVRAMSizeRounded > 1024) then reqVRAMSizeRounded := to_unsigned(1024, 11); end if;
                         vramState     <= READVRAM;
-                        vram_ADDR     <= std_logic_vector(reqVRAMYPos) & std_logic_vector(reqVRAMXPos(9 downto 2)) & "000";
+                        vram_ADDR     <= x"00" & std_logic_vector(reqVRAMYPos) & std_logic_vector(reqVRAMXPos(9 downto 2)) & "000";
+                        if (videoout_reqVRAMEnable = '1' and videoout_reqRAMMirror = '1') then
+                           vram_ADDR(27 downto 20) <= x"04";
+                        end if;
+                        reqVRAMtwice   <= '0';
+                        reqVRAMStore2  <= '0';
+                        if (render24 = '1' and (line_reqVRAMEnable = '1' or rect_reqVRAMEnable = '1' or poly_reqVRAMEnable = '1')) then
+                           vramState               <= READSECOND;
+                           reqVRAMStore2           <= '1';
+                           reqVRAMtwice            <= '1';  
+                           vram_ADDR(27 downto 20) <= x"04";
+                        end if;
                         vram_RD       <= '1';
                         reqVRAMaddr   <= reqVRAMXPos(9 downto 2);
+                        reqVRAMaddr2  <= reqVRAMXPos(9 downto 2);
                         if (reqVRAMSizeRounded > 512) then
-                           vram_BURSTCNT <= x"80";
-                           reqVRAMremain <= x"80" - 1;
-                           reqVRAMnext   <= resize((reqVRAMSizeRounded - 512) / 4, 8);
+                           vram_BURSTCNT  <= x"80";
+                           reqVRAMremain  <= x"80" - 1;
+                           reqVRAMremain2 <= x"80" - 1;
+                           reqVRAMnext    <= resize((reqVRAMSizeRounded - 512) / 4, 8);
                         else
-                           vram_BURSTCNT <= std_logic_vector(reqVRAMSizeRounded(9 downto 2));
-                           reqVRAMremain <= reqVRAMSizeRounded(9 downto 2) - 1;
-                           reqVRAMnext   <= (others => '0');
+                           vram_BURSTCNT  <= std_logic_vector(reqVRAMSizeRounded(9 downto 2));
+                           reqVRAMremain  <= reqVRAMSizeRounded(9 downto 2) - 1;
+                           reqVRAMremain2 <= reqVRAMSizeRounded(9 downto 2) - 1;
+                           reqVRAMnext    <= (others => '0');
                         end if;
                         reqVRAMwrap <= (others => '0');
                         if (vram2vram_reqVRAMEnable = '1' or vram2cpu_reqVRAMEnable = '1') then
@@ -1522,11 +1580,38 @@ begin
                            end if;
                         end if;
                      elsif (fifoOut_Empty = '0') then
+                        if (render24 = '1') then
+                           vramState   <= WRITESECOND;
+                        else
+                           fifoOut2_Rd <= '1';
+                        end if;
                         vram_WE       <= '1';
-                        vram_ADDR     <= fifoOut_Dout(80 downto 64) & "000";
+                        vram_ADDR     <= x"00" & fifoOut_Dout(80 downto 64) & "000";
                         vram_BE       <= fifoOut_Dout(84) & fifoOut_Dout(84) & fifoOut_Dout(83) & fifoOut_Dout(83) & fifoOut_Dout(82) & fifoOut_Dout(82) & fifoOut_Dout(81) & fifoOut_Dout(81);
                         vram_DIN      <= fifoOut_Dout(63 downto 0);
                         vram_BURSTCNT <= x"01";
+                     end if;
+                  end if;
+                  
+               when WRITESECOND =>
+                  if (vram_BUSY = '0') then
+                     vramState     <= IDLE;
+                     vram_WE       <= '1';
+                     vram_ADDR(27 downto 20) <= x"04";
+                     vram_DIN      <= fifoOut2_Dout;
+                     fifoOut2_Rd   <= '1';
+                  end if;
+                  
+               when READSECOND =>
+                  if (vram_DOUT_READY = '1') then
+                     reqVRAMaddr2 <= reqVRAMaddr2 + 1;
+                     if (reqVRAMremain2 > 0) then
+                        reqVRAMremain2 <= reqVRAMremain2 - 1;
+                     else
+                        vramState               <= READVRAM;
+                        reqVRAMStore2           <= '0';
+                        vram_RD                 <= '1';
+                        vram_ADDR(27 downto 20) <= x"00";
                      end if;
                   end if;
                   
@@ -1536,23 +1621,31 @@ begin
                      if (reqVRAMremain > 0) then
                         reqVRAMremain <= reqVRAMremain - 1;
                      else
+                        if (reqVRAMtwice = '1') then
+                           vramState               <= READSECOND;
+                           reqVRAMStore2           <= '1';
+                           vram_ADDR(27 downto 20) <= x"04";
+                        end if;
                         if (reqVRAMnext > 0) then
-                           vram_ADDR(10) <= '1';
-                           vram_RD       <= '1';
-                           vram_BURSTCNT <= std_logic_vector(reqVRAMnext);
-                           reqVRAMnext   <= (others => '0');
-                           reqVRAMremain <= (reqVRAMnext - 1);
+                           vram_ADDR(10)  <= '1';
+                           vram_RD        <= '1';
+                           vram_BURSTCNT  <= std_logic_vector(reqVRAMnext);
+                           reqVRAMnext    <= (others => '0');
+                           reqVRAMremain  <= (reqVRAMnext - 1);
+                           reqVRAMremain2 <= (reqVRAMnext - 1);
                         elsif (reqVRAMwrap > 0) then
                            vram_ADDR(10 downto 0) <= (others => '0');
-                           vram_RD       <= '1';
-                           vram_BURSTCNT <= std_logic_vector(reqVRAMwrap);
-                           reqVRAMwrap   <= (others => '0');
-                           reqVRAMaddr   <= (others => '0');
-                           reqVRAMremain <= (reqVRAMwrap - 1);
+                           vram_RD        <= '1';
+                           vram_BURSTCNT  <= std_logic_vector(reqVRAMwrap);
+                           reqVRAMwrap    <= (others => '0');
+                           reqVRAMaddr    <= (others => '0');
+                           reqVRAMremain  <= (reqVRAMwrap - 1);
+                           reqVRAMremain2 <= (reqVRAMwrap - 1);
                            if (reqVRAMwrap > 128) then
-                              vram_BURSTCNT <= x"80";
-                              reqVRAMremain <= x"80" - 1;
-                              reqVRAMnext   <= reqVRAMwrap - 128;
+                              vram_BURSTCNT  <= x"80";
+                              reqVRAMremain  <= x"80" - 1;
+                              reqVRAMremain2 <= x"80" - 1;
+                              reqVRAMnext    <= reqVRAMwrap - 128;
                            end if;
                         else
                            vramState   <= IDLE;
@@ -1581,13 +1674,35 @@ begin
       clock_a     => clk2x,
       address_a   => std_logic_vector(reqVRAMaddr),
       data_a      => vram_DOUT,
-      wren_a      => (vram_DOUT_READY and reqVRAMStore),
+      wren_a      => (vram_DOUT_READY and reqVRAMStore and (not reqVRAMStore2)),
       
       clock_b     => clk2x,
       address_b   => std_logic_vector(vramLineAddr),
       data_b      => x"0000",
       wren_b      => '0',
       q_b         => vramLineData
+   );
+   
+   ilineram2: entity mem.dpram_dif
+   generic map 
+   ( 
+      addr_width_a  => 8,
+      data_width_a  => 64,
+      addr_width_b  => 10,
+      data_width_b  => 16
+   )
+   port map
+   (
+      clock_a     => clk2x,
+      address_a   => std_logic_vector(reqVRAMaddr2),
+      data_a      => vram_DOUT,
+      wren_a      => (vram_DOUT_READY and reqVRAMStore2),
+      
+      clock_b     => clk2x,
+      address_b   => std_logic_vector(vramLineAddr),
+      data_b      => x"0000",
+      wren_b      => '0',
+      q_b         => vramLineData2
    );
    
 --##############################################################
@@ -1611,6 +1726,7 @@ begin
    videoout_settings.vCrop                   <= vCrop;
    videoout_settings.hCrop                   <= hCrop;
    videoout_settings.dither24                <= dither24;
+   videoout_settings.render24                <= render24;
    
    videoout_ss_in.interlacedDisplayField  <= ss_timing_in(4)(19);
    videoout_ss_in.nextHCount              <= ss_timing_in(4)(11 downto 0);
@@ -1666,6 +1782,7 @@ begin
       LBAdisplay                 => LBAdisplay,
                                  
       requestVRAMEnable          => videoout_reqVRAMEnable,
+      requestVRAMMirror          => videoout_reqRAMMirror,
       requestVRAMXPos            => videoout_reqVRAMXPos,  
       requestVRAMYPos            => videoout_reqVRAMYPos,  
       requestVRAMSize            => videoout_reqVRAMSize,  
@@ -1815,6 +1932,31 @@ begin
                write(line_out, to_integer(unsigned(pixelColor)));
                writeline(outfile, line_out);
                pixelCount <= pixelCount + 1;
+               
+               if (render24 = '1') then
+                  write(line_out, to_integer(pixelAddr(10 downto 1)));
+                  write(line_out, string'(" ")); 
+                  write(line_out, to_integer(pixelAddr(19 downto 11)));
+                  write(line_out, string'(" ")); 
+                  write(line_out, to_integer(unsigned(pixelColor(4 downto 0)) & unsigned(pixelColor2(2 downto 0))));
+                  writeline(outfile, line_out);
+                  
+                  write(line_out, to_integer(pixelAddr(10 downto 1)));
+                  write(line_out, string'(" ")); 
+                  write(line_out, to_integer(pixelAddr(19 downto 11)));
+                  write(line_out, string'(" ")); 
+                  write(line_out, to_integer(unsigned(pixelColor(9 downto 5)) & unsigned(pixelColor2(5 downto 3))));
+                  writeline(outfile, line_out);
+                  
+                  write(line_out, to_integer(pixelAddr(10 downto 1)));
+                  write(line_out, string'(" ")); 
+                  write(line_out, to_integer(pixelAddr(19 downto 11)));
+                  write(line_out, string'(" ")); 
+                  write(line_out, to_integer(unsigned(pixelColor(14 downto 10)) & unsigned(pixelColor2(8 downto 6))));
+                  writeline(outfile, line_out);
+                  
+                  pixelCount <= pixelCount + 4;
+               end if;
    
             end if;
             
