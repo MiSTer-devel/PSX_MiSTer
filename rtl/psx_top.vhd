@@ -1219,6 +1219,7 @@ begin
       
       TURBO                => TURBO_COMP,
       DMABLOCKATONCE       => DMABLOCKATONCE,
+      ram8mb               => ram8mb,
       
       canDMA               => canDMA,
       cpuPaused            => cpuPaused,

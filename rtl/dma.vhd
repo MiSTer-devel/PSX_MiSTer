@@ -19,6 +19,7 @@ entity dma is
       
       TURBO                : in  std_logic;
       DMABLOCKATONCE       : in  std_logic;
+      ram8mb               : in  std_logic;
       
       canDMA               : in  std_logic;
       cpuPaused            : in  std_logic;
@@ -675,6 +676,10 @@ begin
                      
                         when others => report "DMA channel not implemented" severity failure; 
                      end case;
+                     
+                     if (ram8mb = '0') then
+                        fifoOut_Din(52 downto 51) <= "00";
+                     end if;
                      
                      if (dmaSettings.D_CHCR(10) = '0' and directionNeg = '1')  then 
                         dmaSettings.D_MADR <= dmaSettings.D_MADR - 4;
