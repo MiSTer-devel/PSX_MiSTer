@@ -15,6 +15,7 @@ entity gpu_poly is
       
       REPRODUCIBLEGPUTIMING: in  std_logic;
       textureFilter        : in  std_logic_vector(1 downto 0);
+      textureFilterStrength: in  std_logic_vector(1 downto 0);
       textureFilter2DOff   : in  std_logic;
       
       error                : out std_logic;
@@ -239,6 +240,7 @@ architecture arch of gpu_poly is
 
    signal firstPixel          : std_logic;   
    
+   signal filterStrength      : integer range 0 to 4;
    signal filter_on           : std_logic;
    signal filter_maxU         : unsigned(7 downto 0);
    signal filter_maxV         : unsigned(7 downto 0);
@@ -367,10 +369,12 @@ begin
       variable calc4    : signed(44 downto 0);
       variable stop     : std_logic;
       variable skip     : std_logic; 
-      variable uFilter  : unsigned(8 downto 0);
-      variable vFilter  : unsigned(8 downto 0);
+      variable uFilter  : unsigned(10 downto 0);
+      variable vFilter  : unsigned(10 downto 0);
    begin
       if rising_edge(clk2x) then
+         
+         filterStrength <= to_integer(unsigned(textureFilterStrength)) + 1;
          
          -- must be done here, so it also is effected when ce is off = paused
          if (state = READWAIT) then
@@ -1129,10 +1133,10 @@ begin
                         if (filter_on = '1') then
                            pipeline_filter      <= '1';
                            
-                           uFilter := resize(work_U(19 downto 12), 9) + 1; 
-                           vFilter := resize(work_V(19 downto 12), 9) + 1;
-                           if (uFilter <= ('0' & filter_maxU)) then pipeline_u11 <= uFilter(7 downto 0); end if;
-                           if (vFilter <= ('0' & filter_maxV)) then pipeline_v11 <= vFilter(7 downto 0); end if;
+                           uFilter := resize(work_U(19 downto 10), 11) + filterStrength; 
+                           vFilter := resize(work_V(19 downto 10), 11) + filterStrength;
+                           if (uFilter(10 downto 2) <= ('0' & filter_maxU)) then pipeline_u11 <= uFilter(9 downto 2); end if;
+                           if (vFilter(10 downto 2) <= ('0' & filter_maxV)) then pipeline_v11 <= vFilter(9 downto 2); end if;
                         end if;
                         
                      end if;

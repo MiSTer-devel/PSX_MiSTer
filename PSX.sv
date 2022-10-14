@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XX XXXXXX XXXXXX XXXXX XXX XX XXXXXXXXXXXXXXXXXXXXXXXX  XXX XX XXXXXXXXXXXXXXXXXXX
+//  X XX XXXXXX XXXXXX XXXXX XXX XX XXXXXXXXXXXXXXXXXXXXXXXX  XXX XX XXXXXXXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -401,6 +401,7 @@ parameter CONF_STR = {
 	"P1-;",
 	"P1O[54:53],Widescreen Hack,Off,3:2,5:3,16:9;",
 	"P1O[82:81],Texture Filter,Off,All Polygon,Dithered,Dith+Shaded;",
+	"hDP1O[87:86],Filter Strength,25%,50%,75%,100%;",
 	"hDP1O[83],Filter 2D Detect,Off,On;",
 	"P1-;",
 	"d1P1O[44],SPU RAM select,DDR3,SDRAM2;",
@@ -675,7 +676,7 @@ always @(posedge clk_1x) begin
       if (ioctl_wr) begin
          if(~ioctl_addr[1]) begin
             ramdownload_wrdata[15:0] <= ioctl_dout;
-            if (bios_download)         ramdownload_wraddr  <= {4'd1, ioctl_index[7:6], 2'b00, ioctl_addr[18:0]};
+            if (bios_download)         ramdownload_wraddr  <= {4'd1, 2'b00, ioctl_index[7:6], ioctl_addr[18:0]};
             else if (exe_download)     ramdownload_wraddr  <= ioctl_addr[22:0] + EXE_START[26:0];                              
             else if (cdinfo_download)  ramdownload_wraddr  <= ioctl_addr[26:0];      
          end else begin
@@ -1035,6 +1036,7 @@ psx
    .PATCHSERIAL(0), //.PATCHSERIAL(status[54]),
    .noTexture(status[27]),
    .textureFilter(status[82:81]),
+   .textureFilterStrength(status[87:86]),
    .textureFilter2DOff(status[83]),
    .dither24(status[73]),
    .render24(status[84]),

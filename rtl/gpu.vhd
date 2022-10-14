@@ -28,6 +28,7 @@ entity gpu is
       fpscountOn           : in  std_logic;
       noTexture            : in  std_logic;
       textureFilter        : in  std_logic_vector(1 downto 0);
+      textureFilterStrength: in  std_logic_vector(1 downto 0);
       textureFilter2DOff   : in  std_logic;
       dither24             : in  std_logic;
       render24             : in  std_logic;
@@ -1184,6 +1185,7 @@ begin
 
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,    
       textureFilter        => textureFilter,
+      textureFilterStrength=> textureFilterStrength,
       textureFilter2DOff   => textureFilter2DOff,
 
       error                => errorPOLY,
