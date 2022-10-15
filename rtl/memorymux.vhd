@@ -214,6 +214,7 @@ architecture arch of memorymux is
    signal bios_page_open         : std_logic;
    signal ram_page_open          : std_logic;
    signal ram_page_addr          : unsigned(10 downto 0);
+   signal ram_load_last          : integer range 0 to 7 := 0;
    
    signal waitcnt                : integer range 0 to 127;
          
@@ -502,6 +503,10 @@ begin
             writeram <= '0';
          end if;
       
+         if (ram_load_last > 0) then
+            ram_load_last <= ram_load_last - 1;
+         end if;
+      
          if (reset = '1') then
 
             state            <= IDLE;
@@ -622,7 +627,8 @@ begin
                            ram_Adr         <= "00" & std_logic_vector(mem_addressData(22 downto 2)) & "00";
                            ram_rotate_bits <= std_logic_vector(mem_addressData(1 downto 0));
                            if (mem_rnw = '1') then
-                              if (TURBO = '1') then
+                              ram_load_last <= 7;
+                              if (TURBO = '1' or ram_load_last > 0) then
                                  state   <= IDLE;
                                  ram_ena <= '1';
                                  readram <= '1';

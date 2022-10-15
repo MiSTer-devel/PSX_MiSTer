@@ -471,6 +471,7 @@ begin
                      REP_target    <= 1;
                      REP_refresh   <= 0;
                      REP_first     <= '1';
+                     firstword     <= '1';
                      
                      dmaSettings.D_CHCR <= dmaArray(triggerchannel).D_CHCR;
                      dmaSettings.D_MADR <= dmaArray(triggerchannel).D_MADR;
@@ -829,12 +830,9 @@ begin
             end if;
             
             if (dmaState = STARTING) then
-               firstword        <= '1';
-               requestedDwords  <= to_integer(4 - dmaSettings.D_MADR(3 downto 2));
+               requestedDwords  <= 4 - to_integer(dmaSettings.D_MADR(3 downto 2));
                fifoIn_reset     <= '1';
-            end if;
-            
-            if (ram_ena = '1' and firstword = '0') then
+            elsif (ram_ena = '1' and firstword = '0') then
                requestedDwords <= requestedDwords + 4;
             end if;
             

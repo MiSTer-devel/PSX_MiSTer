@@ -410,6 +410,8 @@ architecture arch of cpu is
    signal lateReadBypass               : std_logic := '0';
    signal lateReadReqDone              : std_logic := '0';
    signal lateReadWriteAfterWrite      : std_logic := '0';
+   signal lateReadStall                : std_logic := '0';
+   signal lateReadRam                  : std_logic := '0';
          
    -- wire     
    signal mem4_request                 : std_logic := '0';
@@ -2297,14 +2299,35 @@ begin
             writebackInvalidateCacheEna  <= WBinvalidateCacheEna; 
             writebackInvalidateCacheLine <= WBinvalidateCacheLine;   
             
+            if (lateReadBypass = '1' and stall4 = '0') then
+               lateReadRam <= '0';
+            end if;
+            
             lateReadReqDone <= '0';
             if (mem4_request = '1' and mem4_rnw = '1') then
                lateReadReqDone <= '1';
+
+               -- need to compensate for timing in original design on back to back reads:
+               -- this is due to unclear reason why the original design is slower here than it could be
+               if (lateReadBypass = '1') then
+                  -- one additional wait cycle if target of first read is to be used after second read
+                  if ((decodeReqSource1 = '1' and decodeSource1 = lateReadTarget) or (decodeReqSource2 = '1' and decodeSource2 = lateReadTarget)) then
+                     lateReadStall <= not TURBO;
+                  end if;
+                  -- one additional wait cycle if target of both reads is the same and goes to ram
+                  if (resultTarget = lateReadTarget and executeReadAddress(28 downto 0) < 16#800000# and lateReadRam = '1') then
+                     lateReadStall <= not TURBO;
+                  end if;
+               end if;
+               if (executeReadAddress(28 downto 0) < 16#800000#) then
+                  lateReadRam <= '1';
+               end if;
             end if;
             
             if (resultWriteEnable = '1' and mem4_pending = '1' and resultTarget = lateReadTarget) then
                lateReadWriteAfterWrite <= '1';
             end if;
+            
             
             if (stall = 0) then
             
@@ -2433,7 +2456,10 @@ begin
             else
 
                if (mem_fifofull = '0' and mem4_pending = '0') then
-                  stall4 <= '0';
+                  lateReadStall <= '0';
+                  if (lateReadStall = '0') then
+                     stall4 <= '0';
+                  end if;
                end if;
                
                lateReadWrite <= '0';
@@ -2453,6 +2479,8 @@ begin
                   if (lateReadTarget > 0 and lateReadWriteAfterWrite = '0') then
                      if (resultWriteEnable = '0' or resultTarget /= lateReadTarget) then -- write after write in same cycle -> ignore
                         lateReadWrite <= '1';
+                     else
+                        lateReadRam   <= '0';
                      end if;
                   end if;
 
