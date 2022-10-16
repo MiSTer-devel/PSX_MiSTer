@@ -35,7 +35,6 @@ entity psx_top is
       TURBO_CACHE           : in  std_logic;
       TURBO_CACHE50         : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
-      DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       FORCECDSPEED          : in  std_logic_vector(2 downto 0);
       LIMITREADSPEED        : in  std_logic;
@@ -459,6 +458,7 @@ architecture arch of psx_top is
    -- dma
    signal cpuPaused              : std_logic;
    signal dmaOn                  : std_logic;
+   signal dmaStop                : std_logic;
    signal dmaRequest             : std_logic;
    signal canDMA                 : std_logic;
    
@@ -772,10 +772,10 @@ begin
                   pausingSS <= '1';
                   ce        <= '0';
                   ce_cpu    <= '0';
-               elsif ((cpuPaused = '1' and dmaOn = '1') or (dmaRequest = '1' and canDMA = '1')) then -- switch to dma
+               elsif ((cpuPaused = '1' and dmaOn = '1' and dmaStop = '0') or (dmaRequest = '1' and canDMA = '1')) then -- switch to dma
                   cpuPaused <= '1';
                   ce_cpu    <= '0';
-               elsif (dmaOn = '0') then -- switch to CPU
+               elsif (dmaOn = '0' or dmaStop = '1') then -- switch to CPU
                   cpuPaused <= '0';
                   ce_cpu    <= '1';
                end if;
@@ -826,7 +826,6 @@ begin
          
          debugmodeOn <= '0';
          if (REPRODUCIBLEGPUTIMING = '1') then debugmodeOn <= '1'; end if;
-         if (DMABLOCKATONCE        = '1') then debugmodeOn <= '1'; end if;
          if (noTexture             = '1') then debugmodeOn <= '1'; end if;
          if (SPUon                 = '0') then debugmodeOn <= '1'; end if;
          if (REVERBOFF             = '1') then debugmodeOn <= '1'; end if;
@@ -1219,13 +1218,13 @@ begin
       errorDMAFIFO         => errorDMAFIFO, 
       
       TURBO                => TURBO_COMP,
-      DMABLOCKATONCE       => DMABLOCKATONCE,
       ram8mb               => ram8mb,
       
       canDMA               => canDMA,
       cpuPaused            => cpuPaused,
       dmaRequest           => dmaRequest,
       dmaOn                => dmaOn,
+      dmaStop              => dmaStop,
       irqOut               => irq_DMA,
       
       ram_Adr              => ram_dma_Adr,  

@@ -18,13 +18,13 @@ entity dma is
       errorDMAFIFO         : out std_logic;
       
       TURBO                : in  std_logic;
-      DMABLOCKATONCE       : in  std_logic;
       ram8mb               : in  std_logic;
       
       canDMA               : in  std_logic;
       cpuPaused            : in  std_logic;
       dmaRequest           : out std_logic;
       dmaOn                : out std_logic;
+      dmaStop              : out std_logic;
       irqOut               : out std_logic := '0';
       
       ram_Adr              : out std_logic_vector(22 downto 0) := (others => '0');
@@ -191,6 +191,8 @@ begin
    dmaOn <= '0' when ((dmaState = STOPPING or dmaState = PAUSING) and toDevice = '0' and fifoOut_NearEmpty = '1' and (TURBO = '1' or REP_counter >= REP_target)) else
             '1' when (dmaState /= OFF) else 
             '0';
+            
+   dmaStop <= '1' when (dmaState = working and fifoIn_Valid = '1' and toDevice = '1' and wordcount <= 1) else '0';
 
    DICR_readback( 5 downto  0) <= DICR( 5 downto 0);
    DICR_readback(14 downto  6) <= "000000000";
@@ -253,6 +255,7 @@ begin
       variable channel         : integer range 0 to 7;
       variable triggerNew      : std_logic;
       variable triggerPrio     : unsigned(2 downto 0);
+      variable checkIRQ        : std_logic;
    begin
       if rising_edge(clk1x) then
       
@@ -597,22 +600,10 @@ begin
                      dmaState           <= WAITREAD;           
                   elsif (fifoIn_Dout(23) = '1' or dmaSettings.D_CHCR(0) = '0') then
                      dmaState <= STOPPING;
-                     autoread <= '0';
                   else
                      dmaSettings.D_MADR <= unsigned(fifoIn_Dout(23 downto 0));
-                     if (fifoIn_Dout(23) = '1') then
-                        dmaState <= STOPPING;
-                        autoread <= '0';
-                     else
-                        if (DMABLOCKATONCE = '1' and gpu_dmaRequest = '1') then
-                           dmaState  <= STARTING;
-                           autoread  <= '0';
-                        else
-                           dmaState    <= PAUSING;
-                           paused      <= '1';
-                           autoread    <= '0';
-                        end if;
-                     end if;
+                     dmaState    <= PAUSING;
+                     paused      <= '1';
                   end if;  
                
                when WAITREAD => dmaState <= WORKING;
@@ -709,19 +700,19 @@ begin
                         REP_target  <= REP_target + 6;
                      end if;
                   
+                     checkIRQ := '0';
                      wordcount <= wordcount - 1;
                      if (wordcount <= 1) then
                         case (dmaSettings.D_CHCR(10 downto 9)) is
                            when "00" => -- manual
                               if (dmaSettings.D_CHCR(8) = '1' and dmaSettings.D_BCR(15 downto 0) > 0) then
                                  dmaState <= PAUSING;
-                                 autoread <= '0';
                                  dmaArray(activeChannel).chopwaiting   <= '1';
                                  dmaArray(activeChannel).chopwaitcount <= chopwaittime;
                                  dmaArray(activeChannel).D_CHCR(28)    <= '1';
                               else
+                                 checkIRQ := '1';
                                  dmaState <= STOPPING;
-                                 autoread <= '0';
                               end if;
                                  
                            when "01" => -- request
@@ -729,29 +720,19 @@ begin
                               blocksleft <= blocksleft - 1;
                               if (blocksleft = 0) then
                                  dmaState <= STOPPING;
-                                 autoread <= '0';
+                                 checkIRQ := '1';
                               else
-                                 wordcount  <= '0' & dmaSettings.D_BCR(15 downto 0);
-                                 if (DMABLOCKATONCE = '0' or dmaArray(activeChannel).request = '0') then
-                                    dmaState <= PAUSING;
-                                    autoread <= '0';
-                                 end if;
+                                 dmaState <= PAUSING;
                               end if;
                            
                            when "10" => -- linked list
                               dmaSettings.D_MADR <= unsigned(nextAddr);
                               if (nextAddr(23) = '1') then
+                                 checkIRQ := '1';
                                  dmaState <= STOPPING;
-                                 autoread <= '0';
                               else
-                                 if (DMABLOCKATONCE = '1' and gpu_dmaRequest = '1') then
-                                    dmaState <= STARTING;
-                                    autoread <= '0';
-                                 else
-                                    dmaState <= PAUSING;
-                                    paused   <= '1';
-                                    autoread <= '0';
-                                 end if;
+                                 dmaState <= PAUSING;
+                                 paused   <= '1';
                               end if;
                            
                            when others => null;
@@ -763,9 +744,20 @@ begin
                            dmaState <= SLOWDOWN;
                         end if;
                      end if;
+                     
+                     if (checkIRQ = '1') then
+                        if (DICR(16 + activeChannel) = '1') then
+                           DICR_IRQs(activeChannel) <= '1';
+                           if (DICR(23) = '1') then
+                              irqOut <= '1';
+                           end if;
+                        end if;
+                     end if;
+                     
                   end if;
                
                when STOPPING =>
+                  autoread <= '0';
                   if (fifoOut_NearEmpty = '1') then
                      if (TURBO = '1' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
@@ -774,16 +766,11 @@ begin
                         dmaArray(activeChannel).D_BCR  <= dmaSettings.D_BCR;
                         dmaArray(activeChannel).D_CHCR(24) <= '0';
                         dmaArray(activeChannel).channelOn  <= '0';
-                        if (DICR(16 + activeChannel) = '1') then
-                           DICR_IRQs(activeChannel) <= '1';
-                           if (DICR(23) = '1') then
-                              irqOut <= '1';
-                           end if;
-                        end if;
                      end if;
                   end if;
                
                when PAUSING =>
+                  autoread <= '0';
                   if (fifoOut_NearEmpty = '1') then
                      if (TURBO = '1' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
@@ -799,7 +786,7 @@ begin
 --############################### ram read handling
 --##############################################################
          
-            if (DMABLOCKATONCE = '0' and firstword = '0' and autoread = '1' and requestedDwords >= requiredDwords) then
+            if (firstword = '0' and autoread = '1' and requestedDwords >= requiredDwords) then
                autoread <= '0';
             end if;
             
@@ -823,7 +810,7 @@ begin
                      autoread <= '0';
                      ram_ena  <= '0';
                   end if;
-               elsif (DMABLOCKATONCE = '0' and requestedDwords >= requiredDwords) then
+               elsif (requestedDwords >= requiredDwords) then
                   autoread <= '0';
                   ram_ena  <= '0';
                end if;

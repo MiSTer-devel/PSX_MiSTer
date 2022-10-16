@@ -31,7 +31,6 @@ entity psx_mister is
       TURBO_CACHE           : in  std_logic;
       TURBO_CACHE50         : in  std_logic;
       REPRODUCIBLEGPUTIMING : in  std_logic;
-      DMABLOCKATONCE        : in  std_logic;
       INSTANTSEEK           : in  std_logic;
       FORCECDSPEED          : in  std_logic_vector(2 downto 0);
       LIMITREADSPEED        : in  std_logic;
@@ -309,7 +308,6 @@ begin
       TURBO_CACHE           => TURBO_CACHE,
       TURBO_CACHE50         => TURBO_CACHE50,
       REPRODUCIBLEGPUTIMING => REPRODUCIBLEGPUTIMING,
-      DMABLOCKATONCE        => DMABLOCKATONCE,
       INSTANTSEEK           => INSTANTSEEK,
       FORCECDSPEED          => FORCECDSPEED,
       LIMITREADSPEED        => LIMITREADSPEED,

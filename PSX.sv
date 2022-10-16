@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XX XXXXXX XXXXXX XXXXX XXX XX XXXXXXXXXXXXXXXXXXXXXXXX  XXX XX XXXXXXXXXXXXXXXXXXXXXXXX
+//  X XX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXX  XXX XX XXXXXXXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -375,11 +375,6 @@ parameter CONF_STR = {
 	"D8h2O[9],Show Crosshair,Off,On;",
 	"D8h4O[31],DS Mode,L3+R3+Up/Dn | Click,L1+L2+R1+R2+Up/Dn;",
 	"O[66],Multitap,Off,Port1: 4 x Digital;",
-	"-;",
-	"O[28],FPS Overlay,Off,On;",
-	"O[74],Error Overlay,Off,On;",
-	"O[59],CD Slow Overlay,Off,On;",
-	"h9O[70],CD Overlay,Read,Read+Seek;",
 	"-;",
 
 	"P1,Video & Audio;",
@@ -421,6 +416,11 @@ parameter CONF_STR = {
 	"P2O[77:75],CD Speed,Auto,Forced 1X(U),Forced 2X(U),Hack 4X(U),Hack 6X(U),Hack 8X(U);",
 	"P2O[78],Limit Max CD Speed,Off,On(U);",
 	"P2O[85],RAM(Homebrew),2 MByte,8 MByte(U);",
+	"P2-;",
+	"P2O[28],FPS Overlay,Off,On;",
+	"P2O[74],Error Overlay,Off,On;",
+	"P2O[59],CD Slow Overlay,Off,On;",
+	"h9P2O[70],CD Overlay,Read,Read+Seek;",
 	
 	"h3-;",
 	"h3P3,Debug;",
@@ -430,7 +430,6 @@ parameter CONF_STR = {
 	"h3P3O[11],VRAMViewer,Off,On;",
 	"h3P3O[30],Sound,On,Off;",
 	"h3P3O[43],RepTimingSPUDMA,Off,On;",
-	"h3P3O[26],DMAinBLOCKs,Off,On;",
 	"h3P3O[27],Textures,On,Off;",
 	"h3P3O[69],LBA Overlay,Off,On;",
 	"h3P3T1,Advance Pause;",
@@ -469,7 +468,7 @@ parameter CONF_STR = {
 reg dbg_enabled = 0;
 wire  [1:0] buttons;
 wire [127:0] status;
-wire [15:0] status_menumask = {filter_on, saving_memcard, (bk_pending | saving_memcard), bk_pending, status[59], multitap, biosMod, ~status[58], status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {filter_on, saving_memcard, (bk_pending | saving_memcard), bk_pending, status[59], multitap, biosMod, ~TURBO_MEM, status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -1021,7 +1020,6 @@ psx
    .TURBO_CACHE(TURBO_CACHE),
    .TURBO_CACHE50(TURBO_CACHE50),
    .REPRODUCIBLEGPUTIMING(0),
-   .DMABLOCKATONCE(status[26]),
    .INSTANTSEEK(status[21]),
    .FORCECDSPEED(status[77:75]),
    .LIMITREADSPEED(status[78]),
