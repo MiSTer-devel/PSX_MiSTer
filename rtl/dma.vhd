@@ -133,7 +133,7 @@ architecture arch of dma is
    signal activeChannel       : integer range 0 to 6;
    signal paused              : std_logic;
    signal gpupaused           : std_logic;
-   signal waitcnt             : integer range 0 to 5;
+   signal waitcnt             : integer range 0 to 4;
    signal wordcount           : unsigned(16 downto 0);
    signal toDevice            : std_logic;
    signal directionNeg        : std_logic;
@@ -180,10 +180,11 @@ architecture arch of dma is
    signal REP_target          : integer range 0 to 1048575;
    signal REP_refresh         : integer range 0 to 255;
    signal REP_first           : std_logic;
+   signal REP_required        : std_logic;
    
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
-   signal ss_in   : t_ssarray := (others => (others => '0'));  
+   signal ss_in   : t_ssarray := (others => (others => '0')); 
    signal ss_out  : t_ssarray := (others => (others => '0'));  
   
 begin 
@@ -192,7 +193,7 @@ begin
             '1' when (dmaState /= OFF) else 
             '0';
             
-   dmaStop <= '1' when (dmaState = working and fifoIn_Valid = '1' and toDevice = '1' and wordcount <= 1) else '0';
+   dmaStop <= '1' when (dmaState = working and fifoIn_Valid = '1' and toDevice = '1' and wordcount <= 1 and REP_required = '0') else '0';
 
    DICR_readback( 5 downto  0) <= DICR( 5 downto 0);
    DICR_readback(14 downto  6) <= "000000000";
@@ -201,9 +202,6 @@ begin
    DICR_readback(31)           <= '1' when (DICR(15) = '1') else
                                   '1' when (DICR(23) = '1' and (DICR(22 downto 16) and DICR_IRQs) /= "0000000") else 
                                   '0';
-
-   DMA_MDEC_writeEna <= '1' when (dmaState = WORKING and fifoIn_Valid = '1' and activeChannel = 0 and toDevice = '1') else '0'; 
-   DMA_MDEC_write    <= fifoIn_Dout;  
    
    DMA_MDEC_readEna  <= '1' when (dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 1 and toDevice = '0') else '0';
    
@@ -212,17 +210,10 @@ begin
                         '0';
                         
    DMA_GPU_readEna   <= '1' when (dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 2 and toDevice = '0') else '0';
-   DMA_GPU_writeEna  <= '1' when (dmaState = WORKING and fifoIn_Valid = '1' and activeChannel = 2 and toDevice = '1') else '0'; 
-   DMA_GPU_write     <= fifoIn_Dout;
 
    DMA_CD_readEna    <= '1' when (dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 3 and toDevice = '0') else '0';
    
    DMA_SPU_readEna   <= '1' when (dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 4 and toDevice = '0') else '0';
-   
-   DMA_SPU_writeEna  <= '1' when (dmaState = WORKING and fifoIn_Valid = '1' and activeChannel = 4 and toDevice = '1') else 
-                        '1' when ((dmaState = WORKING or dmaState = STOPPING or dmaState = PAUSING or dmaState = SLOWDOWN) and fifoIn_Valid_1 = '1' and activeChannel = 4 and toDevice = '1') else 
-                        '0'; 
-   DMA_SPU_write     <= fifoIn_Dout(15 downto 0) when fifoIn_Valid = '1' else fifoIn_Dout(31 downto 16);
 
    readStall <= '1' when (activeChannel = 2 and toDevice = '0' and gpu_dmaRequest = '0') else '0';
 
@@ -317,10 +308,18 @@ begin
 
          elsif (ce = '1') then
          
-            irqOut         <= '0';
-            ram_ena        <= '0';
+            irqOut               <= '0';
+            ram_ena              <= '0';
+            
+            DMA_MDEC_writeEna    <= '0';
+            DMA_GPU_writeEna     <= '0';
+            DMA_SPU_writeEna     <= '0';           
+            if (fifoIn_Valid_1 = '1' and DMA_SPU_writeEna = '1') then
+               DMA_SPU_writeEna <= '1';
+               DMA_SPU_write    <= fifoIn_Dout(31 downto 16);
+            end if;
          
-            bus_dataRead <= (others => '0');
+            bus_dataRead         <= (others => '0');
 
             channel := to_integer(unsigned(bus_addr(6 downto 4)));
             
@@ -479,11 +478,18 @@ begin
                      dmaSettings.D_CHCR <= dmaArray(triggerchannel).D_CHCR;
                      dmaSettings.D_MADR <= dmaArray(triggerchannel).D_MADR;
                      dmaSettings.D_BCR  <= dmaArray(triggerchannel).D_BCR;
+                     
+                     if (dmaArray(triggerchannel).D_CHCR(0) = '1') then
+                        ram_ena  <= '1';
+                        ram_Adr  <= std_logic_vector(dmaArray(triggerchannel).D_MADR(22 downto 2)) & "00";
+                        autoread <= '1';
+                     end if;
+
                   end if;
                
                when STARTING =>
                   dmaState      <= WAITING;
-                  waitcnt       <= 5;
+                  waitcnt       <= 4;
                   
                   if (dmaSettings.D_CHCR(0) = '0' and activeChannel = 2 and dmaSettings.D_CHCR(10 downto 9) = "01") then
                      dmaEndWait <= 12;
@@ -500,16 +506,13 @@ begin
                      wordAccu <= 1;
                   end if;
                   
-                  if (dmaSettings.D_CHCR(8) = '1' and activeChannel /= 3 and activeChannel /= 6) then
-                     errorCHOP <= '1';
+                  REP_required <= '0';
+                  if (dmaSettings.D_CHCR(0) = '0') then -- todo: add more conditions
+                     REP_required <= '1';
                   end if;
                   
-                  if (dmaSettings.D_CHCR(0) = '1') then
-                     if (autoread = '0') then
-                        ram_ena         <= '1';
-                        ram_Adr         <= std_logic_vector(dmaSettings.D_MADR(22 downto 2)) & "00";
-                        autoread        <= '1';
-                     end if;
+                  if (dmaSettings.D_CHCR(8) = '1' and activeChannel /= 3 and activeChannel /= 6) then
+                     errorCHOP <= '1';
                   end if;
                   
                   case (dmaSettings.D_CHCR(10 downto 9)) is
@@ -621,7 +624,10 @@ begin
                      case (activeChannel) is
                      
                         when 0 =>
-                           if (toDevice = '0') then
+                           if (toDevice = '1') then
+                              DMA_MDEC_writeEna <= '1'; 
+                              DMA_MDEC_write    <= fifoIn_Dout;  
+                           else
                               report "read from MDEC in not possible" severity failure;
                            end if;
                         
@@ -635,7 +641,10 @@ begin
                            end if;
                      
                         when 2 =>
-                           if (toDevice = '0') then
+                           if (toDevice = '1') then
+                              DMA_GPU_writeEna  <= '1'; 
+                              DMA_GPU_write     <= fifoIn_Dout;
+                           else
                               fifoOut_Wr                <= '1';
                               fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_GPU_read;
@@ -649,7 +658,10 @@ begin
                            end if;
                            
                         when 4 =>
-                           if (toDevice = '0') then
+                           if (toDevice = '1') then
+                              DMA_SPU_writeEna  <= '1';
+                              DMA_SPU_write     <= fifoIn_Dout(15 downto 0);
+                           else
                               fifoOut_Wr                <= '1';
                               fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_SPU_read & DMA_SPU_read_accu;
@@ -698,6 +710,10 @@ begin
                      if (REP_refresh = 100) then
                         REP_refresh <= 0;
                         REP_target  <= REP_target + 6;
+                     end if;
+                     
+                     if (dmaStop = '1') then
+                        REP_required <= '0';
                      end if;
                   
                      checkIRQ := '0';
@@ -759,7 +775,7 @@ begin
                when STOPPING =>
                   autoread <= '0';
                   if (fifoOut_NearEmpty = '1') then
-                     if (TURBO = '1' or REP_counter >= REP_target) then
+                     if (TURBO = '1' or REP_required = '0' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
                         dmaArray(activeChannel).D_MADR <= dmaSettings.D_MADR;
@@ -772,7 +788,7 @@ begin
                when PAUSING =>
                   autoread <= '0';
                   if (fifoOut_NearEmpty = '1') then
-                     if (TURBO = '1' or REP_counter >= REP_target) then
+                     if (TURBO = '1' or REP_required = '0' or REP_counter >= REP_target) then
                         dmaState   <= OFF;
                         isOn       <= '0';
                         dmaArray(activeChannel).D_MADR <= dmaSettings.D_MADR;
