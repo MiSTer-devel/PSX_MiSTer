@@ -88,9 +88,7 @@ architecture arch of dma is
    (
       OFF,
       STARTING,
-      WAITING,
       READHEADER,
-      WAITREAD,
       SLOWDOWN,
       WORKING,
       STOPPING,
@@ -133,7 +131,6 @@ architecture arch of dma is
    signal activeChannel       : integer range 0 to 6;
    signal paused              : std_logic;
    signal gpupaused           : std_logic;
-   signal waitcnt             : integer range 0 to 4;
    signal wordcount           : unsigned(16 downto 0);
    signal toDevice            : std_logic;
    signal directionNeg        : std_logic;
@@ -149,6 +146,7 @@ architecture arch of dma is
    signal dma_reqprocessed_2  : std_logic := '0';
    signal autoread            : std_logic := '0';
    signal firstword           : std_logic := '0';
+   signal useDataDirect       : std_logic := '0';
    
    signal requestedDwords     : integer range 0 to 65536;
    signal requiredDwords      : integer range 0 to 65536;
@@ -179,7 +177,6 @@ architecture arch of dma is
    signal REP_counter         : integer range 0 to 1048575;
    signal REP_target          : integer range 0 to 1048575;
    signal REP_refresh         : integer range 0 to 255;
-   signal REP_first           : std_logic;
    signal REP_required        : std_logic;
    
    -- savestates
@@ -189,11 +186,11 @@ architecture arch of dma is
   
 begin 
 
-   dmaOn <= '0' when ((dmaState = STOPPING or dmaState = PAUSING) and toDevice = '0' and fifoOut_NearEmpty = '1' and (TURBO = '1' or REP_counter >= REP_target)) else
+   dmaOn <= '0' when ((dmaState = STOPPING or dmaState = PAUSING) and fifoOut_NearEmpty = '1' and (TURBO = '1' or REP_counter >= REP_target)) else
             '1' when (dmaState /= OFF) else 
             '0';
             
-   dmaStop <= '1' when (dmaState = working and fifoIn_Valid = '1' and toDevice = '1' and wordcount <= 1 and REP_required = '0') else '0';
+   dmaStop <= '1' when (dmaState = working and dma_wr = '1' and useDataDirect = '1' and toDevice = '1' and wordcount <= 1 and REP_required = '0') else '0';
 
    DICR_readback( 5 downto  0) <= DICR( 5 downto 0);
    DICR_readback(14 downto  6) <= "000000000";
@@ -296,7 +293,6 @@ begin
             activeChannel  <= to_integer(unsigned(ss_in(2)(18 downto 16)));
             paused         <= ss_in(4)(9);
             gpupaused      <= ss_in(4)(10);
-            waitcnt        <= 0;
             
             autoread       <= '0';
             
@@ -461,6 +457,8 @@ begin
             case (dmaState) is
             
                when OFF => 
+                  fifoIn_reset <= '1';
+                  
                   if (dmaRequest = '1' and canDMA = '1') then
                      dmaArray(triggerchannel).requestsPending <= '0';
                      dmaArray(triggerchannel).timeupPending   <= '0';
@@ -472,7 +470,6 @@ begin
                      activeChannel <= triggerchannel;
                      REP_target    <= 1;
                      REP_refresh   <= 0;
-                     REP_first     <= '1';
                      firstword     <= '1';
                      
                      dmaSettings.D_CHCR <= dmaArray(triggerchannel).D_CHCR;
@@ -488,9 +485,6 @@ begin
                   end if;
                
                when STARTING =>
-                  dmaState      <= WAITING;
-                  waitcnt       <= 4;
-                  
                   if (dmaSettings.D_CHCR(0) = '0' and activeChannel = 2 and dmaSettings.D_CHCR(10 downto 9) = "01") then
                      dmaEndWait <= 12;
                   else
@@ -506,9 +500,18 @@ begin
                      wordAccu <= 1;
                   end if;
                   
+                  useDataDirect <= '0';
+                  if (activeChannel = 0 or activeChannel = 2) then
+                     useDataDirect <= '1';
+                  end if;
+                  
                   REP_required <= '0';
                   if (dmaSettings.D_CHCR(0) = '0') then -- todo: add more conditions
                      REP_required <= '1';
+                  else
+                     if (activeChannel = 4) then
+                        REP_target <= REP_target + 3;
+                     end if;
                   end if;
                   
                   if (dmaSettings.D_CHCR(8) = '1' and activeChannel /= 3 and activeChannel /= 6) then
@@ -568,48 +571,43 @@ begin
                            dmaState <= OFF;
                            isOn     <= '0';
                      end case;
-                  end if;
-               
-               when WAITING =>
-                  if (waitcnt > 0 and cpuPaused = '1') then
-                     waitcnt <= waitcnt - 1;
-                  end if;
-                  
-                  if (waitcnt = 1) then
-                     if (fifoIn_Empty = '1') then
-                        waitcnt <= waitcnt;
-                     else
-                        case (dmaSettings.D_CHCR(10 downto 9)) is
-                           when "00" => -- manual
-                              dmaState    <= WORKING;
-                           
-                           when "01" => -- request
-                              dmaState    <= WORKING;
-                           
-                           when "10" => -- linked list
-                              dmaState    <= READHEADER;
-                           
-                           when others => 
-                              dmaState <= OFF;
-                              isOn     <= '0';
-                        end case;
-                     end if;
+                  else
+                     case (dmaSettings.D_CHCR(10 downto 9)) is
+                        when "00" => -- manual
+                           dmaState    <= WORKING;
+                        
+                        when "01" => -- request
+                           dmaState    <= WORKING;
+                        
+                        when "10" => -- linked list
+                           dmaState    <= READHEADER;
+                        
+                        when others => 
+                           dmaState <= OFF;
+                           isOn     <= '0';
+                     end case;
                   end if;
                
                when READHEADER =>
-                  nextAddr  <= fifoIn_Dout(23 downto 0);
-                  if (unsigned(fifoIn_Dout(31 downto 24)) > 0) then
-                     dmaSettings.D_MADR <= dmaSettings.D_MADR + 4;
-                     dmaState           <= WAITREAD;           
-                  elsif (fifoIn_Dout(23) = '1' or dmaSettings.D_CHCR(0) = '0') then
-                     dmaState <= STOPPING;
-                  else
-                     dmaSettings.D_MADR <= unsigned(fifoIn_Dout(23 downto 0));
-                     dmaState    <= PAUSING;
-                     paused      <= '1';
-                  end if;  
-               
-               when WAITREAD => dmaState <= WORKING;
+                  if (dma_wr = '1') then
+                     nextAddr  <= dma_data(23 downto 0);
+                     if (unsigned(dma_data(31 downto 24)) > 0) then
+                        dmaSettings.D_MADR <= dmaSettings.D_MADR + 4;
+                        dmaState           <= WORKING;           
+                     elsif (dma_data(23) = '1' or dmaSettings.D_CHCR(0) = '0') then
+                        dmaState <= STOPPING;
+                        if (DICR(16 + activeChannel) = '1') then
+                           DICR_IRQs(activeChannel) <= '1';
+                           if (DICR(23) = '1') then
+                              irqOut <= '1';
+                           end if;
+                        end if;
+                     else
+                        dmaSettings.D_MADR <= unsigned(dma_data(23 downto 0));
+                        dmaState    <= PAUSING;
+                        paused      <= '1';
+                     end if;
+                  end if;
                
                when SLOWDOWN =>
                   if (slowcnt > 0) then
@@ -619,14 +617,14 @@ begin
                   end if;
                
                when WORKING =>
-                  if (fifoIn_Valid = '1' or (toDevice = '0' and fifoOut_NearFull = '0' and wordAccu = 0 and readStall = '0')) then
+                  if (fifoIn_Valid = '1' or (useDataDirect = '1' and dma_wr = '1') or (toDevice = '0' and fifoOut_NearFull = '0' and wordAccu = 0 and readStall = '0')) then
                      REP_target  <= REP_target + 1;
                      case (activeChannel) is
                      
                         when 0 =>
                            if (toDevice = '1') then
                               DMA_MDEC_writeEna <= '1'; 
-                              DMA_MDEC_write    <= fifoIn_Dout;  
+                              DMA_MDEC_write    <= dma_data;  
                            else
                               report "read from MDEC in not possible" severity failure;
                            end if;
@@ -643,7 +641,7 @@ begin
                         when 2 =>
                            if (toDevice = '1') then
                               DMA_GPU_writeEna  <= '1'; 
-                              DMA_GPU_write     <= fifoIn_Dout;
+                              DMA_GPU_write     <= dma_data;
                            else
                               fifoOut_Wr                <= '1';
                               fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
@@ -658,6 +656,8 @@ begin
                            end if;
                            
                         when 4 =>
+                           REP_required <= '1';
+                           REP_target   <= REP_target + 4;
                            if (toDevice = '1') then
                               DMA_SPU_writeEna  <= '1';
                               DMA_SPU_write     <= fifoIn_Dout(15 downto 0);
@@ -692,15 +692,24 @@ begin
                      end if;
                      
                      -- timing when hitting new bank
-                     REP_first <= '0';
-                     if (REP_first = '0') then
+                     if (wordcount > 1) then
                         if (directionNeg = '1')  then 
-                           if (dmaSettings.D_MADR(9 downto 2) = x"FF") then
-                              REP_target <= REP_target + 6;
+                           if (dmaSettings.D_MADR(9 downto 2) = x"00") then
+                              if (toDevice = '1') then
+                                 REP_target   <= REP_target + 4;
+                              else
+                                 REP_target   <= REP_target + 6;
+                              end if;
+                              REP_required <= '1';
                            end if;
                         else
-                           if (dmaSettings.D_MADR(9 downto 2) = x"00") then
-                              REP_target <= REP_target + 6;
+                           if (dmaSettings.D_MADR(9 downto 2) = x"FF") then
+                              if (toDevice = '1') then
+                                 REP_target   <= REP_target + 4;
+                              else
+                                 REP_target   <= REP_target + 6;
+                              end if;
+                              REP_required <= '1';
                            end if;
                         end if;
                      end if;
@@ -708,8 +717,9 @@ begin
                      -- timing for sdram refresh
                      REP_refresh <= REP_refresh + 1;
                      if (REP_refresh = 100) then
-                        REP_refresh <= 0;
-                        REP_target  <= REP_target + 6;
+                        REP_refresh  <= 0;
+                        REP_target   <= REP_target + 6;
+                        REP_required <= '1';
                      end if;
                      
                      if (dmaStop = '1') then
@@ -770,6 +780,8 @@ begin
                         end if;
                      end if;
                      
+                  elsif (REP_counter >= REP_target) then
+                     REP_required <= '0';
                   end if;
                
                when STOPPING =>
@@ -834,7 +846,6 @@ begin
             
             if (dmaState = STARTING) then
                requestedDwords  <= 4 - to_integer(dmaSettings.D_MADR(3 downto 2));
-               fifoIn_reset     <= '1';
             elsif (ram_ena = '1' and firstword = '0') then
                requestedDwords <= requestedDwords + 4;
             end if;
@@ -844,14 +855,11 @@ begin
       end if;
    end process;
    
-   fifoIn_Wr  <= ce when (toDevice = '1' and (dma_wr = '1')) else '0'; 
+   fifoIn_Wr  <= ce when (toDevice = '1' and dma_wr = '1' and useDataDirect = '0') else '0'; 
    fifoIn_Din <= dma_data(31 downto 0);
    
    
-   fifoIn_Rd <= '1' when (fifoIn_Empty = '0' and toDevice = '1' and dmaState = WAITING and waitcnt = 1) else
-                '1' when (fifoIn_Empty = '0' and toDevice = '1' and dmaState = WAITREAD) else 
-                '1' when (fifoIn_Empty = '0' and toDevice = '1' and dmaState = working and (activeChannel /= 4 or fifoIn_Valid = '0')) else 
-                '0';
+   fifoIn_Rd <= '1' when (fifoIn_Empty = '0' and toDevice = '1' and dmaState = working and (activeChannel /= 4 or fifoIn_Valid = '0')) else '0';
 
    iDMAfifoIn: entity mem.Syncfifo
    generic map
