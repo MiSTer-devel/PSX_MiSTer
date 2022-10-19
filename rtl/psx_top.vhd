@@ -456,10 +456,10 @@ architecture arch of psx_top is
    signal irq_LIGHTPEN           : std_logic;
    
    -- dma
-   signal cpuPaused              : std_logic;
+   signal cpuPaused              : std_logic := '0';
    signal dmaOn                  : std_logic;
-   signal dmaStop                : std_logic;
    signal dmaRequest             : std_logic;
+   signal dmaStallCPU            : std_logic;
    signal canDMA                 : std_logic;
    
    signal ram_dma_Adr            : std_logic_vector(22 downto 0);
@@ -499,7 +499,6 @@ architecture arch of psx_top is
    
    -- cpu
    signal ce_intern              : std_logic := '0';
-   signal ce_cpu                 : std_logic := '0';
    signal stallNext              : std_logic;
    
    -- GTE
@@ -723,7 +722,7 @@ begin
    Pause_Idle <= SS_Idle_gpu and SS_Idle_mdec and Pause_idle_cd and SS_idle_spu and SS_idle_pad and SS_idle_irq and SS_idle_cpu and SS_idle_gte and SS_idle_dma; 
    
    -- ce generation
-   canDMA <= memMuxIdle and not stallNext;
+   canDMA <= memMuxIdle;
    
    isPaused <= pausing;
    
@@ -734,7 +733,6 @@ begin
          if (reset = '1' or pausing = '1') then
          
             ce        <= '0';
-            ce_cpu    <= '0';
             if (reset_intern = '1') then
                cpuPaused <= '0';
             end if;
@@ -755,29 +753,24 @@ begin
          else
       
             ce        <= '1';
-            ce_cpu    <= '1';
          
             if (reset_intern = '1') then
                cpuPaused <= '0';
             else
          
                -- switch to pause when CD data fetch is slow
-               if ((pauseCD = '1') and cpuPaused = '0' and dmaRequest = '0' and canDMA = '1' and Pause_Idle = '1') then
+               if ((pauseCD = '1') and cpuPaused = '0' and dmaRequest = '0' and canDMA = '1' and stallNext = '0' and Pause_Idle = '1') then
                   pausing   <= '1';
                   ce        <= '0';
-                  ce_cpu    <= '0';
                -- switch to pause/savestate pausing
-               elsif ((pause = '1' or savestate_pause = '1' or memcard1_pause = '1' or memcard2_pause = '1') and cpuPaused = '0' and dmaRequest = '0' and canDMA = '1' and SS_idle = '1') then
+               elsif ((pause = '1' or savestate_pause = '1' or memcard1_pause = '1' or memcard2_pause = '1') and cpuPaused = '0' and dmaRequest = '0' and canDMA = '1' and stallNext = '0' and SS_idle = '1') then
                   pausing   <= '1';
                   pausingSS <= '1';
                   ce        <= '0';
-                  ce_cpu    <= '0';
-               elsif ((cpuPaused = '1' and dmaOn = '1' and dmaStop = '0') or (dmaRequest = '1' and canDMA = '1')) then -- switch to dma
+               elsif ((cpuPaused = '1' and dmaOn = '1') or (dmaRequest = '1' and canDMA = '1')) then -- switch to dma
                   cpuPaused <= '1';
-                  ce_cpu    <= '0';
-               elsif (dmaOn = '0' or dmaStop = '1') then -- switch to CPU
+               elsif (dmaOn = '0') then -- switch to CPU
                   cpuPaused <= '0';
-                  ce_cpu    <= '1';
                end if;
                
             end if;
@@ -1218,13 +1211,14 @@ begin
       errorDMAFIFO         => errorDMAFIFO, 
       
       TURBO                => TURBO_COMP,
+      TURBO_CACHE          => TURBO_CACHE,
       ram8mb               => ram8mb,
       
       canDMA               => canDMA,
       cpuPaused            => cpuPaused,
       dmaRequest           => dmaRequest,
+      dmaStallCPU          => dmaStallCPU,
       dmaOn                => dmaOn,
-      dmaStop              => dmaStop,
       irqOut               => irq_DMA,
       
       ram_Adr              => ram_dma_Adr,  
@@ -1667,9 +1661,10 @@ begin
    (
       clk1x                => clk1x,
       clk2x                => clk2x,
-      ce                   => ce_cpu,   
+      ce                   => ce,   
       reset                => reset_intern,
       
+      pauseNext            => cpuPaused or (dmaRequest and canDMA),
       isIdle               => memMuxIdle,
          
       loadExe              => loadExe,
@@ -1821,8 +1816,7 @@ begin
       clk1x             => clk1x,
       clk2x             => clk2x,
       clk3x             => clk3x,
-      ce                => ce_cpu,   
-      ce_system         => ce,
+      ce                => ce,   
       reset             => reset_intern,
       
       TURBO             => TURBO_COMP,
@@ -1830,7 +1824,8 @@ begin
       TURBO_CACHE50     => TURBO_CACHE50,
          
       irqRequest        => irqRequest,
-      dmaRequest        => dmaRequest,
+      dmaStallCPU       => dmaStallCPU,
+      cpuPaused         => cpuPaused,
       
       error             => errorCPU,
       error2            => errorCPU2,

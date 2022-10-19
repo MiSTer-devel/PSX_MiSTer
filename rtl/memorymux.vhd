@@ -12,6 +12,9 @@ entity memorymux is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      pauseNext            : in  std_logic;
+      isIdle               : out std_logic;
+      
       loadExe              : in  std_logic;
       exe_initial_pc       : in  unsigned(31 downto 0);
       exe_initial_gp       : in  unsigned(31 downto 0);
@@ -24,9 +27,7 @@ entity memorymux is
       PATCHSERIAL          : in  std_logic;
       TURBO                : in  std_logic;
       region_in            : in  std_logic_vector(1 downto 0);
-      
-      isIdle               : out std_logic;
-      
+
       ram_dataWrite        : out std_logic_vector(31 downto 0) := (others => '0');
       ram_dataRead         : in  std_logic_vector(31 downto 0);
       ram_Adr              : out std_logic_vector(24 downto 0) := (others => '0');
@@ -467,9 +468,9 @@ begin
    );
    
    writeFifo_Din <= mem_in_writeMask & std_logic_vector(mem_in_reqsize) & std_logic_vector(mem_in_addressData) & mem_in_dataWrite;
-   writeFifo_Wr  <= '1' when (ce = '1' and mem_in_request = '1' and mem_in_rnw = '0' and (state /= IDLE or writeFifo_busy = '1' or ((readram = '1' or writeram = '1') and ram_done = '0'))) else '0';
+   writeFifo_Wr  <= '1' when (ce = '1' and mem_in_request = '1' and mem_in_rnw = '0' and (pauseNext = '1' or state /= IDLE or writeFifo_busy = '1' or ((readram = '1' or writeram = '1') and ram_done = '0'))) else '0';
    
-   writeFifo_Rd  <= '1' when (ce = '1' and state = IDLE and writeFifo_Empty = '0' and ((readram = '0' and writeram = '0') or ram_done = '1')) else '0';
+   writeFifo_Rd  <= '1' when (ce = '1' and pauseNext = '0' and state = IDLE and writeFifo_Empty = '0' and ((readram = '0' and writeram = '0') or ram_done = '1')) else '0';
    
    mem_fifofull  <= writeFifo_NearFull;
    
@@ -552,7 +553,7 @@ begin
                      exestep    <= 0;
                      execopycnt <= (others => '0');
                
-                  elsif (((readram = '0' and writeram = '0') or ram_done = '1') and ((mem_request = '1' and writeFifo_busy = '0') or writeFifo_Empty = '0')) then
+                  elsif (pauseNext = '0' and ((readram = '0' and writeram = '0') or ram_done = '1') and ((mem_request = '1' and writeFifo_busy = '0') or writeFifo_Empty = '0')) then
                   
                      if (mem_request = '1' and writeFifo_busy = '0') then
                         mem_save_request <= '0';

@@ -13,7 +13,6 @@ entity cpu is
       clk2x                 : in  std_logic;
       clk3x                 : in  std_logic;
       ce                    : in  std_logic;
-      ce_system             : in  std_logic;
       reset                 : in  std_logic;
       
       TURBO                 : in  std_logic;
@@ -21,7 +20,8 @@ entity cpu is
       TURBO_CACHE50         : in  std_logic;
       
       irqRequest            : in  std_logic;
-      dmaRequest            : in  std_logic;
+      dmaStallCPU           : in  std_logic;
+      cpuPaused             : in  std_logic;
       
       error                 : out std_logic := '0';
       error2                : out std_logic := '0';
@@ -479,7 +479,7 @@ begin
    stallNext         <= mem_request or stallNew3;
 
    -- common
-   stall        <= dmaRequest & stall4 & stall3 & stall2 & stall1;
+   stall        <= dmaStallCPU & stall4 & stall3 & stall2 & stall1;
 
    exceptionNew <= exceptionNew5 & '0' & exceptionNew3 & '0' & exceptionNew1;
    
@@ -2258,7 +2258,7 @@ begin
    begin
       if (rising_edge(clk1x)) then
       
-         if (ce_system = '1') then
+         if (ce = '1') then
             gte_writeEna  <= '0';
             gte_cmdEna    <= '0';
          end if;
@@ -2818,7 +2818,7 @@ begin
          
             if (stall = 0) then
                debugStallcounter <= (others => '0');
-            else  
+            elsif (cpuPaused = '0') then  
                debugStallcounter <= debugStallcounter + 1;
             end if;
             

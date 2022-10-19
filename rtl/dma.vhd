@@ -18,13 +18,14 @@ entity dma is
       errorDMAFIFO         : out std_logic;
       
       TURBO                : in  std_logic;
+      TURBO_CACHE          : in  std_logic;
       ram8mb               : in  std_logic;
       
       canDMA               : in  std_logic;
       cpuPaused            : in  std_logic;
       dmaRequest           : out std_logic;
+      dmaStallCPU          : out std_logic;
       dmaOn                : out std_logic;
-      dmaStop              : out std_logic;
       irqOut               : out std_logic := '0';
       
       ram_Adr              : out std_logic_vector(22 downto 0) := (others => '0');
@@ -190,8 +191,6 @@ begin
             '1' when (dmaState /= OFF) else 
             '0';
             
-   dmaStop <= '1' when (dmaState = working and dma_wr = '1' and useDataDirect = '1' and toDevice = '1' and wordcount <= 1 and REP_required = '0') else '0';
-
    DICR_readback( 5 downto  0) <= DICR( 5 downto 0);
    DICR_readback(14 downto  6) <= "000000000";
    DICR_readback(23 downto 15) <= DICR(23 downto 15);
@@ -454,6 +453,13 @@ begin
                errorDMAFIFO <= '1';
             end if;
             
+            
+            if (dmaState = WORKING and TURBO_CACHE = '1' and toDevice = '0') then
+               dmaStallCPU <= '1';
+            elsif (fifoOut_Empty = '1') then
+               dmaStallCPU <= '0';
+            end if;
+            
             case (dmaState) is
             
                when OFF => 
@@ -468,7 +474,7 @@ begin
                      dmaState      <= STARTING;
                      isOn          <= '1';
                      activeChannel <= triggerchannel;
-                     REP_target    <= 1;
+                     
                      REP_refresh   <= 0;
                      firstword     <= '1';
                      
@@ -505,13 +511,11 @@ begin
                      useDataDirect <= '1';
                   end if;
                   
-                  REP_required <= '0';
+                  REP_required <= '1';
                   if (dmaSettings.D_CHCR(0) = '0') then -- todo: add more conditions
-                     REP_required <= '1';
+                     REP_target    <= 3;
                   else
-                     if (activeChannel = 4) then
-                        REP_target <= REP_target + 3;
-                     end if;
+                     REP_target    <= 3;
                   end if;
                   
                   if (dmaSettings.D_CHCR(8) = '1' and activeChannel /= 3 and activeChannel /= 6) then
@@ -696,7 +700,7 @@ begin
                         if (directionNeg = '1')  then 
                            if (dmaSettings.D_MADR(9 downto 2) = x"00") then
                               if (toDevice = '1') then
-                                 REP_target   <= REP_target + 4;
+                                 REP_target   <= REP_target + 5;
                               else
                                  REP_target   <= REP_target + 6;
                               end if;
@@ -705,7 +709,7 @@ begin
                         else
                            if (dmaSettings.D_MADR(9 downto 2) = x"FF") then
                               if (toDevice = '1') then
-                                 REP_target   <= REP_target + 4;
+                                 REP_target   <= REP_target + 5;
                               else
                                  REP_target   <= REP_target + 6;
                               end if;
@@ -720,10 +724,6 @@ begin
                         REP_refresh  <= 0;
                         REP_target   <= REP_target + 6;
                         REP_required <= '1';
-                     end if;
-                     
-                     if (dmaStop = '1') then
-                        REP_required <= '0';
                      end if;
                   
                      checkIRQ := '0';
@@ -838,10 +838,11 @@ begin
                      autoread <= '0';
                      ram_ena  <= '0';
                   end if;
-               elsif (requestedDwords >= requiredDwords) then
-                  autoread <= '0';
-                  ram_ena  <= '0';
                end if;
+            end if;
+            
+            if (dmaState = WORKING and dmaSettings.D_CHCR(10 downto 9) /= "10" and requestedDwords >= requiredDwords) then
+               autoread <= '0';
             end if;
             
             if (dmaState = STARTING) then
