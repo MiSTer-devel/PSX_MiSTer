@@ -35,6 +35,9 @@ entity memctrl is
       com2_delay           : out unsigned(3 downto 0);
       com3_delay           : out unsigned(3 downto 0);
       
+      dma_spu_timing_on    : out std_logic;
+      dma_spu_timing_value : out unsigned(3 downto 0);
+      
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(4 downto 0);
@@ -80,6 +83,8 @@ begin
    com2_delay   <= unsigned(MC_COMMON_DELAY(11 downto  8));
    com3_delay   <= unsigned(MC_COMMON_DELAY(15 downto 12));
 
+   dma_spu_timing_on    <= MC_SPU_DELAY(29);
+   dma_spu_timing_value <= unsigned(MC_SPU_DELAY(27 downto 24));
 
    ss_out(1)(23 downto 0) <= MC_EXP1_BASE;   
    ss_out(2)(23 downto 0) <= MC_EXP2_BASE;   

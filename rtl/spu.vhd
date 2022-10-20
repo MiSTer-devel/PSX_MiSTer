@@ -68,6 +68,7 @@ entity spu is
       
       -- savestates
       SS_reset             : in  std_logic;
+      loading_savestate    : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(8 downto 0);
       SS_wren              : in  std_logic;
@@ -481,7 +482,6 @@ architecture arch of spu is
 
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
-   signal ss_in  : t_ssarray := (others => (others => '0'));
    signal ss_out : t_ssarray := (others => (others => '0'));
       
    signal ss_voice_loading    : std_logic := '0';
@@ -867,71 +867,138 @@ begin
             cd_next_right        <= (others => '0');
                
             sampleticks          <= to_unsigned(512, 10); --unsigned(ss_in(1)(9 downto 0));
-            capturePosition      <= unsigned(ss_in(2)(9 downto 0));
-            ramTransferAddr      <= unsigned(ss_in(3)(18 downto 0));
-            reverbCurrentAddress <= unsigned(ss_in(4)(17 downto 0));
-            reverbRight          <= ss_in(4)(31);
-            noiseLevel           <= unsigned(ss_in(5)(15 downto 0));
-            noiseCnt             <= unsigned(ss_in(6)(31 downto 0));
             
-            IRQ9                 <= ss_in(40)(22);
+            if (loading_savestate = '0') then
+               capturePosition      <= (others => '0');
+               ramTransferAddr      <= (others => '0');
+               reverbCurrentAddress <= (others => '0');
+               reverbRight          <= '0';
+               noiseLevel           <= x"0001";
+               noiseCnt             <= (others => '0');
                
-            KEYON                <= ss_in(32);
-            KEYOFF               <= ss_in(33);
-            PITCHMODENA          <= ss_in(34);
-            NOISEMODE            <= ss_in(35);
-            REVERBON             <= ss_in(36);
-            ENDX                 <= ss_in(37);
+               IRQ9                 <= '0';
                   
-            VOLUME_LEFT          <= ss_in(38)(15 downto 0);
-            VOLUME_RIGHT         <= ss_in(38)(31 downto 16);
-            TRANSFERADDR         <= ss_in(39)(15 downto 0);
-            CNT		            <= ss_in(39)(31 downto 16);
-            TRANSFER_CNT         <= ss_in(40)(15 downto 0);
-            CDAUDIO_VOL_L        <= ss_in(41)(15 downto 0);
-            CDAUDIO_VOL_R        <= ss_in(41)(31 downto 16);
-            EXT_VOL_L	         <= ss_in(42)(15 downto 0);
-            EXT_VOL_R	         <= ss_in(42)(31 downto 16);
-            CURVOL_L	            <= ss_in(43)(15 downto 0);
-            CURVOL_R	            <= ss_in(43)(31 downto 16);
-            IRQ_ADDR             <= ss_in(44)(15 downto 0);
-            REVERB_vLOUT         <= ss_in(44)(31 downto 16);
-            REVERB_vROUT         <= ss_in(45)(15 downto 0);
-            REVERB_mBASE         <= ss_in(45)(31 downto 16);
-            REVERB_dAPF1         <= ss_in(46)(15 downto 0);
-            REVERB_dAPF2         <= ss_in(46)(31 downto 16);
-            REVERB_vIIR          <= ss_in(47)(15 downto 0);
-            REVERB_vCOMB1        <= ss_in(47)(31 downto 16);
-            REVERB_vCOMB2        <= ss_in(48)(15 downto 0);
-            REVERB_vCOMB3        <= ss_in(48)(31 downto 16);
-            REVERB_vCOMB4        <= ss_in(49)(15 downto 0);
-            REVERB_vWALL         <= ss_in(49)(31 downto 16);
-            REVERB_vAPF1         <= ss_in(50)(15 downto 0);
-            REVERB_vAPF2         <= ss_in(50)(31 downto 16);
-            REVERB_mLSAME        <= ss_in(51)(15 downto 0);
-            REVERB_mRSAME        <= ss_in(51)(31 downto 16);
-            REVERB_mLCOMB1       <= ss_in(52)(15 downto 0);
-            REVERB_mRCOMB1       <= ss_in(52)(31 downto 16);
-            REVERB_mLCOMB2       <= ss_in(53)(15 downto 0);
-            REVERB_mRCOMB2       <= ss_in(53)(31 downto 16);
-            REVERB_dLSAME        <= ss_in(54)(15 downto 0);
-            REVERB_dRSAME        <= ss_in(54)(31 downto 16);
-            REVERB_mLDIFF        <= ss_in(55)(15 downto 0);
-            REVERB_mRDIFF        <= ss_in(55)(31 downto 16);
-            REVERB_mLCOMB3       <= ss_in(56)(15 downto 0);
-            REVERB_mRCOMB3       <= ss_in(56)(31 downto 16);
-            REVERB_mLCOMB4       <= ss_in(57)(15 downto 0);
-            REVERB_mRCOMB4       <= ss_in(57)(31 downto 16);
-            REVERB_dLDIFF        <= ss_in(58)(15 downto 0);
-            REVERB_dRDIFF        <= ss_in(58)(31 downto 16);
-            REVERB_mLAPF1        <= ss_in(59)(15 downto 0);
-            REVERB_mRAPF1        <= ss_in(59)(31 downto 16);
-            REVERB_mLAPF2        <= ss_in(60)(15 downto 0);
-            REVERB_mRAPF2        <= ss_in(60)(31 downto 16);
-            REVERB_vLIN          <= ss_in(61)(15 downto 0);
-            REVERB_vRIN          <= ss_in(61)(31 downto 16);
+               KEYON                <= (others => '0');
+               KEYOFF               <= (others => '0');
+               PITCHMODENA          <= (others => '0');
+               NOISEMODE            <= (others => '0');
+               REVERBON             <= (others => '0');
+               ENDX                 <= (others => '0');
+                     
+               VOLUME_LEFT          <= (others => '0');
+               VOLUME_RIGHT         <= (others => '0');
+               TRANSFERADDR         <= (others => '0');
+               CNT		            <= (others => '0');
+               TRANSFER_CNT         <= (others => '0');
+               CDAUDIO_VOL_L        <= (others => '0');
+               CDAUDIO_VOL_R        <= (others => '0');
+               EXT_VOL_L	         <= (others => '0');
+               EXT_VOL_R	         <= (others => '0');
+               CURVOL_L	            <= (others => '0');
+               CURVOL_R	            <= (others => '0');
+               IRQ_ADDR             <= (others => '0');
+               REVERB_vLOUT         <= (others => '0');
+               REVERB_vROUT         <= (others => '0');
+               REVERB_mBASE         <= (others => '0');
+               REVERB_dAPF1         <= (others => '0');
+               REVERB_dAPF2         <= (others => '0');
+               REVERB_vIIR          <= (others => '0');
+               REVERB_vCOMB1        <= (others => '0');
+               REVERB_vCOMB2        <= (others => '0');
+               REVERB_vCOMB3        <= (others => '0');
+               REVERB_vCOMB4        <= (others => '0');
+               REVERB_vWALL         <= (others => '0');
+               REVERB_vAPF1         <= (others => '0');
+               REVERB_vAPF2         <= (others => '0');
+               REVERB_mLSAME        <= (others => '0');
+               REVERB_mRSAME        <= (others => '0');
+               REVERB_mLCOMB1       <= (others => '0');
+               REVERB_mRCOMB1       <= (others => '0');
+               REVERB_mLCOMB2       <= (others => '0');
+               REVERB_mRCOMB2       <= (others => '0');
+               REVERB_dLSAME        <= (others => '0');
+               REVERB_dRSAME        <= (others => '0');
+               REVERB_mLDIFF        <= (others => '0');
+               REVERB_mRDIFF        <= (others => '0');
+               REVERB_mLCOMB3       <= (others => '0');
+               REVERB_mRCOMB3       <= (others => '0');
+               REVERB_mLCOMB4       <= (others => '0');
+               REVERB_mRCOMB4       <= (others => '0');
+               REVERB_dLDIFF        <= (others => '0');
+               REVERB_dRDIFF        <= (others => '0');
+               REVERB_mLAPF1        <= (others => '0');
+               REVERB_mRAPF1        <= (others => '0');
+               REVERB_mLAPF2        <= (others => '0');
+               REVERB_mRAPF2        <= (others => '0');
+               REVERB_vLIN          <= (others => '0');
+               REVERB_vRIN          <= (others => '0');
+            end if;
             
          elsif (SS_wren = '1') then
+            
+            if (to_integer(SS_Adr) =  2) then capturePosition      <= unsigned(SS_DataWrite(9 downto 0));  end if;
+            if (to_integer(SS_Adr) =  3) then ramTransferAddr      <= unsigned(SS_DataWrite(18 downto 0)); end if;
+            if (to_integer(SS_Adr) =  4) then reverbCurrentAddress <= unsigned(SS_DataWrite(17 downto 0)); end if;
+            if (to_integer(SS_Adr) =  4) then reverbRight          <= SS_DataWrite(31);                    end if;
+            if (to_integer(SS_Adr) =  5) then noiseLevel           <= unsigned(SS_DataWrite(15 downto 0)); end if;
+            if (to_integer(SS_Adr) =  6) then noiseCnt             <= unsigned(SS_DataWrite(31 downto 0)); end if;
+                                                                                               
+            if (to_integer(SS_Adr) = 40) then IRQ9                 <= SS_DataWrite(22);                    end if;
+                                                                                                       
+            if (to_integer(SS_Adr) = 32) then KEYON                <= SS_DataWrite;                        end if;
+            if (to_integer(SS_Adr) = 33) then KEYOFF               <= SS_DataWrite;                        end if;
+            if (to_integer(SS_Adr) = 34) then PITCHMODENA          <= SS_DataWrite;                        end if;
+            if (to_integer(SS_Adr) = 35) then NOISEMODE            <= SS_DataWrite;                        end if;
+            if (to_integer(SS_Adr) = 36) then REVERBON             <= SS_DataWrite;                        end if;
+            if (to_integer(SS_Adr) = 37) then ENDX                 <= SS_DataWrite;                        end if;
+                                                                                                 
+            if (to_integer(SS_Adr) = 38) then VOLUME_LEFT          <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 38) then VOLUME_RIGHT         <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 39) then TRANSFERADDR         <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 39) then CNT                  <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 40) then TRANSFER_CNT         <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 41) then CDAUDIO_VOL_L        <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 41) then CDAUDIO_VOL_R        <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 42) then EXT_VOL_L            <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 42) then EXT_VOL_R            <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 43) then CURVOL_L             <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 43) then CURVOL_R             <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 44) then IRQ_ADDR             <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 44) then REVERB_vLOUT         <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 45) then REVERB_vROUT         <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 45) then REVERB_mBASE         <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 46) then REVERB_dAPF1         <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 46) then REVERB_dAPF2         <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 47) then REVERB_vIIR          <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 47) then REVERB_vCOMB1        <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 48) then REVERB_vCOMB2        <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 48) then REVERB_vCOMB3        <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 49) then REVERB_vCOMB4        <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 49) then REVERB_vWALL         <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 50) then REVERB_vAPF1         <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 50) then REVERB_vAPF2         <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 51) then REVERB_mLSAME        <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 51) then REVERB_mRSAME        <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 52) then REVERB_mLCOMB1       <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 52) then REVERB_mRCOMB1       <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 53) then REVERB_mLCOMB2       <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 53) then REVERB_mRCOMB2       <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 54) then REVERB_dLSAME        <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 54) then REVERB_dRSAME        <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 55) then REVERB_mLDIFF        <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 55) then REVERB_mRDIFF        <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 56) then REVERB_mLCOMB3       <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 56) then REVERB_mRCOMB3       <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 57) then REVERB_mLCOMB4       <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 57) then REVERB_mRCOMB4       <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 58) then REVERB_dLDIFF        <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 58) then REVERB_dRDIFF        <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 59) then REVERB_mLAPF1        <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 59) then REVERB_mRAPF1        <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 60) then REVERB_mLAPF2        <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 60) then REVERB_mRAPF2        <= SS_DataWrite(31 downto 16);          end if;
+            if (to_integer(SS_Adr) = 61) then REVERB_vLIN          <= SS_DataWrite(15 downto 0);           end if;
+            if (to_integer(SS_Adr) = 61) then REVERB_vRIN          <= SS_DataWrite(31 downto 16);          end if;
             
             if (SS_Adr >= 64 and SS_Adr < 256) then
                RamVoice_write <= '1';
@@ -2413,17 +2480,6 @@ begin
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
-      
-         if (SS_reset = '1') then
-         
-            for i in 0 to 63 loop
-               ss_in(i) <= (others => '0');
-            end loop;
-            ss_in(5) <= x"00000001"; -- noiseLevel
-            
-         elsif (SS_wren = '1' and SS_Adr < 64) then
-            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
-         end if;
          
          SS_idle <= '0';
          if ((FifoIn_Empty = '1' or ss_timeout(23) = '1') and (FifoOut_Empty = '1' or ss_timeout(23) = '1') and state = IDLE and sampleticks < 760 and sampleticks > 0 and stashedSamples = 0) then

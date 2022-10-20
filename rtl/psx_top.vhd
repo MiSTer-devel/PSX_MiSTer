@@ -399,6 +399,9 @@ architecture arch of psx_top is
    signal com2_delay             : unsigned(3 downto 0);
    signal com3_delay             : unsigned(3 downto 0);
    
+   signal dma_spu_timing_on      : std_logic;
+   signal dma_spu_timing_value   : unsigned(3 downto 0);
+   
    -- Memory mux
    signal memMuxIdle             : std_logic;
    
@@ -976,6 +979,9 @@ begin
       com2_delay           => com2_delay,
       com3_delay           => com3_delay,
       
+      dma_spu_timing_on    => dma_spu_timing_on,   
+      dma_spu_timing_value => dma_spu_timing_value,
+      
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(4 downto 0),      
@@ -1254,6 +1260,8 @@ begin
       DMA_CD_readEna       => DMA_CD_readEna,
       DMA_CD_read          => DMA_CD_read,   
       
+      spu_timing_on        => dma_spu_timing_on,   
+      spu_timing_value     => dma_spu_timing_value,
       spu_dmaRequest       => spu_dmaRequest, 
       DMA_SPU_writeEna     => DMA_SPU_writeEna,   
       DMA_SPU_readEna      => DMA_SPU_readEna,    
@@ -1627,6 +1635,7 @@ begin
       mem_DOUT_READY       => ddr3_DOUT_READY,
       
       SS_reset             => SS_reset,
+      loading_savestate    => loading_savestate,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(8 downto 0),  
       SS_wren              => SS_wren(9),     

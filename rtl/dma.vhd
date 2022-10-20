@@ -61,6 +61,9 @@ entity dma is
       DMA_CD_readEna       : out std_logic := '0';
       DMA_CD_read          : in  std_logic_vector(7 downto 0);
       
+      spu_timing_on        : in  std_logic;
+      spu_timing_value     : in  unsigned(3 downto 0);
+      
       spu_dmaRequest       : in  std_logic;
       DMA_SPU_writeEna     : out std_logic := '0';
       DMA_SPU_readEna      : out std_logic := '0';
@@ -326,6 +329,15 @@ begin
             dmaArray(5).request <= '0';
             dmaArray(6).request <= '1';
             
+            -- triggers from modules
+            triggerDMA <= (others => '0');
+            if (dmaArray(0).D_CHCR(28) = '1' or mdec_dmaWriteRequest = '1')  then triggerDMA(0) <= '1'; end if;
+            if (dmaArray(1).D_CHCR(28) = '1' or mdec_dmaReadRequest = '1')   then triggerDMA(1) <= '1'; end if;
+            if (dmaArray(2).D_CHCR(28) = '1' or gpu_dmaRequest = '1')        then triggerDMA(2) <= '1'; end if;
+            if (dmaArray(3).D_CHCR(28) = '1')                                then triggerDMA(3) <= '1'; end if;
+            if (dmaArray(4).D_CHCR(28) = '1' or spu_dmaRequest = '1')        then triggerDMA(4) <= '1'; end if;
+            if (dmaArray(6).D_CHCR(28) = '1')                                then triggerDMA(6) <= '1'; end if;
+            
             -- bus read
             if (bus_read = '1') then
                if (channel < 7) then
@@ -360,6 +372,7 @@ begin
                         if (bus_dataWrite(24) = '0') then
                            dmaArray(channel).channelOn <= '0';
                         end if;
+                        triggerDMA(channel) <= '0';
                      when others => null;
                   end case;
                else
@@ -378,17 +391,7 @@ begin
                      when others => null;
                   end case;
                end if;
-               
             end if;
-            
-            -- triggers from modules
-            triggerDMA <= (others => '0');
-            if (dmaArray(0).D_CHCR(28) = '1' or mdec_dmaWriteRequest = '1')  then triggerDMA(0) <= '1'; end if;
-            if (dmaArray(1).D_CHCR(28) = '1' or mdec_dmaReadRequest = '1')   then triggerDMA(1) <= '1'; end if;
-            if (dmaArray(2).D_CHCR(28) = '1' or gpu_dmaRequest = '1')        then triggerDMA(2) <= '1'; end if;
-            if (dmaArray(3).D_CHCR(28) = '1')                                then triggerDMA(3) <= '1'; end if;
-            if (dmaArray(4).D_CHCR(28) = '1' or spu_dmaRequest = '1')        then triggerDMA(4) <= '1'; end if;
-            if (dmaArray(6).D_CHCR(28) = '1')                                then triggerDMA(6) <= '1'; end if;
              
             -- trigger
             triggerNew     := '0';
@@ -512,10 +515,16 @@ begin
                   end if;
                   
                   REP_required <= '1';
-                  if (dmaSettings.D_CHCR(0) = '0') then -- todo: add more conditions
+                  if (dmaSettings.D_CHCR(0) = '0') then
                      REP_target    <= 3;
+                     if (activeChannel = 4) then
+                        REP_target <= 2;
+                     end if;
                   else
                      REP_target    <= 3;
+                     if (activeChannel = 4) then
+                        REP_target <= 5;
+                     end if;
                   end if;
                   
                   if (dmaSettings.D_CHCR(8) = '1' and activeChannel /= 3 and activeChannel /= 6) then
@@ -724,6 +733,11 @@ begin
                         REP_refresh  <= 0;
                         REP_target   <= REP_target + 6;
                         REP_required <= '1';
+                     end if;
+                  
+                     -- special timings
+                     if (activeChannel = 4 and spu_timing_on = '1' and spu_timing_value > 0) then
+                        REP_target <= REP_target + 4 + (to_integer(spu_timing_value) * 2);
                      end if;
                   
                      checkIRQ := '0';
