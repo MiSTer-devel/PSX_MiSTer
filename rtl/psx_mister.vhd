@@ -66,6 +66,7 @@ entity psx_mister is
       ram_dataWrite         : out std_logic_vector(31 downto 0);
       ram_dataRead32        : in  std_logic_vector(31 downto 0);
       ram_Adr               : out std_logic_vector(24 downto 0);
+      ram_cntDMA            : out std_logic_vector(1 downto 0);
       ram_be                : out std_logic_vector(3 downto 0) := (others => '0');
       ram_rnw               : out std_logic;
       ram_ena               : out std_logic;
@@ -343,6 +344,7 @@ begin
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead32        => ram_dataRead32, 
       ram_Adr               => ram_Adr, 
+      ram_cntDMA            => ram_cntDMA, 
       ram_be                => ram_be,        
       ram_rnw               => ram_rnw,      
       ram_ena               => ram_ena,  

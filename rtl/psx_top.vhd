@@ -70,6 +70,7 @@ entity psx_top is
       ram_dataWrite         : out std_logic_vector(31 downto 0);
       ram_dataRead32        : in  std_logic_vector(31 downto 0);
       ram_Adr               : out std_logic_vector(24 downto 0);
+      ram_cntDMA            : out std_logic_vector(1 downto 0);
       ram_be                : out std_logic_vector(3 downto 0) := (others => '0');
       ram_rnw               : out std_logic;
       ram_ena               : out std_logic;
@@ -982,6 +983,7 @@ begin
       dma_spu_timing_on    => dma_spu_timing_on,   
       dma_spu_timing_value => dma_spu_timing_value,
       
+      loading_savestate    => loading_savestate,
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(4 downto 0),      
@@ -1148,6 +1150,7 @@ begin
       bus_writeMask        => bus_sio_writeMask,
       bus_dataRead         => bus_sio_dataRead,
       
+      loading_savestate    => loading_savestate,
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(2 downto 0),      
@@ -1228,6 +1231,7 @@ begin
       irqOut               => irq_DMA,
       
       ram_Adr              => ram_dma_Adr,  
+      ram_cnt              => ram_cntDMA,  
       ram_ena              => ram_dma_ena,
       
       dma_wr               => dma_wr, 
@@ -1274,6 +1278,7 @@ begin
       bus_write            => bus_dma_write,    
       bus_dataRead         => bus_dma_dataRead,
       
+      loading_savestate    => loading_savestate,
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(5 downto 0),      
@@ -1342,6 +1347,7 @@ begin
       export_t_current2    => export_t_current2,
 -- synthesis translate_on
       
+      loading_savestate    => loading_savestate,
       SS_reset             => SS_reset,
       SS_DataWrite         => SS_DataWrite,
       SS_Adr               => SS_Adr(3 downto 0),      

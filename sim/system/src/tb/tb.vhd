@@ -76,6 +76,7 @@ architecture arch of etb is
    signal ram_dataWrite       : std_logic_vector(31 downto 0);
    signal ram_dataRead32      : std_logic_vector(31 downto 0);
    signal ram_Adr             : std_logic_vector(24 downto 0);
+   signal ram_cntDMA          : std_logic_vector(1 downto 0);
    signal ram_be              : std_logic_vector(3 downto 0);
    signal ram_rnw             : std_logic;
    signal ram_ena             : std_logic;
@@ -304,6 +305,7 @@ begin
       ram_dataWrite         => ram_dataWrite,
       ram_dataRead32        => ram_dataRead32, 
       ram_Adr               => ram_Adr,      
+      ram_cntDMA            => ram_cntDMA,      
       ram_be                => ram_be,      
       ram_rnw               => ram_rnw,      
       ram_ena               => ram_ena,      
@@ -511,6 +513,7 @@ begin
       addr(24 downto  0)   => ram_Adr,
       req                  => ram_ena,
       ram_dma              => ram_dma,
+      ram_dmacnt           => ram_cntDMA,
       ram_iscache          => ram_iscache,
       rnw                  => ram_rnw,
       be                   => ram_be,
@@ -553,6 +556,7 @@ begin
       addr(18 downto  0)   => spuram_Adr,
       req                  => spuram_ena,
       ram_dma              => '0',
+      ram_dmacnt           => "00",
       ram_iscache          => '0',
       rnw                  => spuram_rnw,
       be                   => spuram_be,

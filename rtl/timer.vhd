@@ -31,6 +31,7 @@ entity timer is
       export_t_current2    : out unsigned(15 downto 0);
 -- synthesis translate_on
       
+      loading_savestate    : in  std_logic;
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(3 downto 0);
@@ -59,8 +60,7 @@ architecture arch of timer is
    signal dotclock_1      : std_logic;
    
    -- savestates
-   type t_ssarray is array(0 to 15) of std_logic_vector(31 downto 0);
-   signal ss_in  : t_ssarray := (others => (others => '0'));  
+   type t_ssarray is array(0 to 15) of std_logic_vector(31 downto 0); 
    signal ss_out : t_ssarray := (others => (others => '0'));  
    
 begin 
@@ -100,28 +100,50 @@ begin
       
          if (reset = '1') then
          
-            timerArray(0).T_CURRENT <= unsigned(ss_in(0)(15 downto 0));
-            timerArray(0).T_MODE    <= unsigned(ss_in(3)(15 downto 0)); -- x"0400";
-            timerArray(0).T_TARGET  <= unsigned(ss_in(6)(15 downto 0));
-            timerArray(0).irqDone   <= ss_in(9)(11);
-            
-            timerArray(1).T_CURRENT <= unsigned(ss_in(1)(15 downto 0));
-            timerArray(1).T_MODE    <= unsigned(ss_in(4)(15 downto 0)); -- x"0400";
-            timerArray(1).T_TARGET  <= unsigned(ss_in(7)(15 downto 0));
-            timerArray(1).irqDone   <= ss_in(9)(12);
-            
-            timerArray(2).T_CURRENT <= unsigned(ss_in(2)(15 downto 0));
-            timerArray(2).T_MODE    <= unsigned(ss_in(5)(15 downto 0)); -- x"0400";
-            timerArray(2).T_TARGET  <= unsigned(ss_in(8)(15 downto 0));
-            timerArray(2).irqDone   <= ss_in(9)(13);
+            if (loading_savestate = '0') then
+               timerArray(0).T_CURRENT <= (others => '0');
+               timerArray(0).T_MODE    <= x"0400";
+               timerArray(0).T_TARGET  <= (others => '0');
+               timerArray(0).irqDone   <= '0';
+               
+               timerArray(1).T_CURRENT <= (others => '0');
+               timerArray(1).T_MODE    <= x"0400";
+               timerArray(1).T_TARGET  <= (others => '0');
+               timerArray(1).irqDone   <= '0';
+               
+               timerArray(2).T_CURRENT <= (others => '0');
+               timerArray(2).T_MODE    <= x"0400";
+               timerArray(2).T_TARGET  <= (others => '0');
+               timerArray(2).irqDone   <= '0';
+               
+               timer2_subcount <= (others => '0');
+            end if;
          
             for i in 0 to 2 loop
                timerArray(i).blockNext <= '0';
             end loop;
          
-            timer2_subcount <= unsigned(ss_in(9)(2 downto 0));
             hblank_1        <= hblank;
             vblank_1        <= vblank;
+
+         elsif (SS_wren = '1') then
+
+            if (to_integer(SS_Adr) = 0) then timerArray(0).T_CURRENT <= unsigned(SS_DataWrite(15 downto 0)); end if;
+            if (to_integer(SS_Adr) = 3) then timerArray(0).T_MODE    <= unsigned(SS_DataWrite(15 downto 0)); end if;
+            if (to_integer(SS_Adr) = 6) then timerArray(0).T_TARGET  <= unsigned(SS_DataWrite(15 downto 0)); end if;
+            if (to_integer(SS_Adr) = 9) then timerArray(0).irqDone   <= SS_DataWrite(11);                    end if;
+                                                                                                       
+            if (to_integer(SS_Adr) = 1) then timerArray(1).T_CURRENT <= unsigned(SS_DataWrite(15 downto 0)); end if;
+            if (to_integer(SS_Adr) = 4) then timerArray(1).T_MODE    <= unsigned(SS_DataWrite(15 downto 0)); end if;
+            if (to_integer(SS_Adr) = 7) then timerArray(1).T_TARGET  <= unsigned(SS_DataWrite(15 downto 0)); end if;
+            if (to_integer(SS_Adr) = 9) then timerArray(1).irqDone   <= SS_DataWrite(12);                    end if;
+                                                                                                   
+            if (to_integer(SS_Adr) = 2) then timerArray(2).T_CURRENT <= unsigned(SS_DataWrite(15 downto 0)); end if;
+            if (to_integer(SS_Adr) = 5) then timerArray(2).T_MODE    <= unsigned(SS_DataWrite(15 downto 0)); end if;
+            if (to_integer(SS_Adr) = 8) then timerArray(2).T_TARGET  <= unsigned(SS_DataWrite(15 downto 0)); end if;
+            if (to_integer(SS_Adr) = 9) then timerArray(2).irqDone   <= SS_DataWrite(13);                    end if;
+                                                                                                    
+            if (to_integer(SS_Adr) = 9) then timer2_subcount <= unsigned(SS_DataWrite(2 downto 0));          end if;
 
          elsif (ce = '1') then
          
@@ -309,20 +331,6 @@ begin
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
-      
-         if (SS_reset = '1') then
-         
-            for i in 0 to 1 loop
-               ss_in(i) <= (others => '0');
-            end loop;
-            
-            ss_in(3)(15 downto 0) <= x"0400"; -- T_MODE0
-            ss_in(4)(15 downto 0) <= x"0400"; -- T_MODE1
-            ss_in(5)(15 downto 0) <= x"0400"; -- T_MODE2
-            
-         elsif (SS_wren = '1') then
-            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
-         end if;
          
          if (SS_rden = '1') then
             SS_DataRead <= ss_out(to_integer(SS_Adr));

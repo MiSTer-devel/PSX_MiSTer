@@ -1055,6 +1055,7 @@ psx
    .ram_dataWrite(sdr_sdram_din),
    .ram_dataRead32(sdr_sdram_dout32),
    .ram_Adr(sdram_addr),
+   .ram_cntDMA(sdram_cntDMA),
    .ram_be(sdram_be), 
    .ram_rnw(sdram_rnw),  
    .ram_ena(sdram_req), 
@@ -1242,7 +1243,7 @@ psx
    .rewind_active         (0), //(status[27] & joy[15]),
    //cheats
    .cheat_clear(gg_reset),
-   .cheats_enabled(~status[6] && ~status[58] && ~ioctl_download),
+   .cheats_enabled(~status[6] && ~TURBO_MEM && ~ioctl_download),
    .cheat_on(gg_valid),
    .cheat_in(gg_code),
    .cheats_active(gg_active),
@@ -1267,6 +1268,7 @@ wire  [15:0] sdr_bram_din;
 wire         sdr_sdram_ack;
 wire         sdr_bram_ack;
 wire  [24:0] sdram_addr;
+wire   [1:0] sdram_cntDMA;
 wire   [3:0] sdram_be;
 wire         sdram_req;
 wire         sdram_ack;
@@ -1328,6 +1330,7 @@ sdram sdram
 	.ch1_req(sdram_req & sdram_rnw),
 	.ch1_rnw(1'b1),
 	.ch1_dma(sdram_dma),
+	.ch1_cntDMA(sdram_cntDMA),
 	.ch1_cache(sdram_cache),
 	.ch1_ready(sdram_readack),
 	.cache_wr(cache_wr),  
@@ -1400,6 +1403,7 @@ sdram sdram2
 	.ch1_req(spuram_ena & spuram_rnw),
 	.ch1_rnw(1'b1),
 	.ch1_dma(1'b0),
+   .ch1_cntDMA(2'b00),
 	.ch1_cache(1'b0),
 	.ch1_ready(sdram_readack2),
 

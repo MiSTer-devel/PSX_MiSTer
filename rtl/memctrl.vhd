@@ -38,6 +38,7 @@ entity memctrl is
       dma_spu_timing_on    : out std_logic;
       dma_spu_timing_value : out unsigned(3 downto 0);
       
+      loading_savestate    : in  std_logic;
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(4 downto 0);
@@ -49,6 +50,7 @@ end entity;
 
 architecture arch of memctrl is
 
+   signal MC_RAMSIZE      : std_logic_vector(31 downto 0);
    signal MC_EXP1_BASE    : std_logic_vector(23 downto 0);
    signal MC_EXP2_BASE    : std_logic_vector(23 downto 0);
    signal MC_EXP1_DELAY   : std_logic_vector(31 downto 0);
@@ -58,12 +60,9 @@ architecture arch of memctrl is
    signal MC_CDROM_DELAY  : std_logic_vector(31 downto 0);
    signal MC_EXP2_DELAY   : std_logic_vector(31 downto 0);
    signal MC_COMMON_DELAY : std_logic_vector(31 downto 0);
-   
-   signal MC_RAMSIZE      : std_logic_vector(31 downto 0);
 
    -- savestates
-   type t_ssarray is array(0 to 31) of std_logic_vector(31 downto 0);
-   signal ss_in  : t_ssarray := (others => (others => '0'));  
+   type t_ssarray is array(0 to 31) of std_logic_vector(31 downto 0); 
    signal ss_out : t_ssarray := (others => (others => '0')); 
 
 begin 
@@ -102,19 +101,31 @@ begin
    begin
       if rising_edge(clk1x) then
       
-         if (reset = '1') then
+         if (reset = '1' and loading_savestate = '0') then
                
-            MC_EXP1_BASE       <= ss_in(1)(23 downto 0); -- x"000000";
-            MC_EXP2_BASE       <= ss_in(2)(23 downto 0); -- x"802000";
-            MC_EXP1_DELAY      <= ss_in(3); -- x"0013243F";
-            MC_EXP3_DELAY      <= ss_in(4); -- x"00003022";
-            MC_BIOS_DELAY      <= ss_in(5); -- x"0013243F";
-            MC_SPU_DELAY       <= ss_in(6); -- x"200931E1";
-            MC_CDROM_DELAY     <= ss_in(7); -- x"00020843";
-            MC_EXP2_DELAY      <= ss_in(8); -- x"00070777";
-            MC_COMMON_DELAY    <= ss_in(9); -- x"00031125";
-                                    
-            MC_RAMSIZE         <= ss_in(0); -- x"00000B88";
+            MC_RAMSIZE      <= x"00000B88";
+            MC_EXP1_BASE    <= x"000000";
+            MC_EXP2_BASE    <= x"802000";
+            MC_EXP1_DELAY   <= x"0013243F";
+            MC_EXP3_DELAY   <= x"00003022";
+            MC_BIOS_DELAY   <= x"0013243F";
+            MC_SPU_DELAY    <= x"200931E1";
+            MC_CDROM_DELAY  <= x"00020843";
+            MC_EXP2_DELAY   <= x"00070777";
+            MC_COMMON_DELAY <= x"00031125";
+            
+         elsif (SS_wren = '1') then
+
+            if (to_integer(SS_Adr) = 0) then MC_RAMSIZE      <= SS_DataWrite;              end if;
+            if (to_integer(SS_Adr) = 1) then MC_EXP1_BASE    <= SS_DataWrite(23 downto 0); end if;
+            if (to_integer(SS_Adr) = 2) then MC_EXP2_BASE    <= SS_DataWrite(23 downto 0); end if;
+            if (to_integer(SS_Adr) = 3) then MC_EXP1_DELAY   <= SS_DataWrite;              end if;
+            if (to_integer(SS_Adr) = 4) then MC_EXP3_DELAY   <= SS_DataWrite;              end if;
+            if (to_integer(SS_Adr) = 5) then MC_BIOS_DELAY   <= SS_DataWrite;              end if;
+            if (to_integer(SS_Adr) = 6) then MC_SPU_DELAY    <= SS_DataWrite;              end if;
+            if (to_integer(SS_Adr) = 7) then MC_CDROM_DELAY  <= SS_DataWrite;              end if;
+            if (to_integer(SS_Adr) = 8) then MC_EXP2_DELAY   <= SS_DataWrite;              end if;
+            if (to_integer(SS_Adr) = 9) then MC_COMMON_DELAY <= SS_DataWrite;              end if;
 
          elsif (ce = '1') then
          
@@ -180,27 +191,6 @@ begin
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
-      
-         if (SS_reset = '1') then
-         
-            for i in 0 to 1 loop
-               ss_in(i) <= (others => '0');
-            end loop;
-            
-            ss_in(0) <= x"00000B88"; -- MC_RAMSIZE
-            ss_in(1) <= x"00000000"; -- MC_EXP1_BASE   
-            ss_in(2) <= x"00802000"; -- MC_EXP2_BASE   
-            ss_in(3) <= x"0013243F"; -- MC_EXP1_DELAY  
-            ss_in(4) <= x"00003022"; -- MC_EXP3_DELAY  
-            ss_in(5) <= x"0013243F"; -- MC_BIOS_DELAY  
-            ss_in(6) <= x"200931E1"; -- MC_SPU_DELAY   
-            ss_in(7) <= x"00020843"; -- MC_CDROM_DELAY 
-            ss_in(8) <= x"00070777"; -- MC_EXP2_DELAY  
-            ss_in(9) <= x"00031125"; -- MC_COMMON_DELAY
-            
-         elsif (SS_wren = '1') then
-            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
-         end if;
          
          if (SS_rden = '1') then
             SS_DataRead <= ss_out(to_integer(SS_Adr));

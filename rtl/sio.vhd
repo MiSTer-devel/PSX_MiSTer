@@ -16,6 +16,7 @@ entity sio is
       bus_writeMask        : in  std_logic_vector(3 downto 0);
       bus_dataRead         : out std_logic_vector(31 downto 0);
       
+      loading_savestate    : in  std_logic;
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(2 downto 0);
@@ -33,8 +34,7 @@ architecture arch of sio is
    signal SIO_BAUD : std_logic_vector(15 downto 0);
    
    -- savestates
-   type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0);
-   signal ss_in  : t_ssarray := (others => (others => '0'));  
+   type t_ssarray is array(0 to 7) of std_logic_vector(31 downto 0); 
    signal ss_out : t_ssarray := (others => (others => '0')); 
   
 begin 
@@ -48,12 +48,19 @@ begin
    begin
       if rising_edge(clk1x) then
       
-         if (reset = '1') then
+         if (reset = '1' and loading_savestate = '0') then
          
-            SIO_STAT <= ss_in(0);              -- x"00000005";
-            SIO_MODE <= ss_in(1)( 7 downto 0); -- x"00";
-            SIO_CTRL <= ss_in(2)(15 downto 0); -- x"0000";
-            SIO_BAUD <= ss_in(3)(15 downto 0); -- x"00DC";
+            SIO_STAT <= x"00000005";
+            SIO_MODE <= x"00";
+            SIO_CTRL <= x"0000";
+            SIO_BAUD <= x"00DC";
+            
+         elsif (SS_wren = '1') then
+         
+            if (to_integer(SS_Adr) = 0) then SIO_STAT <= SS_DataWrite;              end if;
+            if (to_integer(SS_Adr) = 1) then SIO_MODE <= SS_DataWrite( 7 downto 0); end if;
+            if (to_integer(SS_Adr) = 2) then SIO_CTRL <= SS_DataWrite(15 downto 0); end if;
+            if (to_integer(SS_Adr) = 3) then SIO_BAUD <= SS_DataWrite(15 downto 0); end if;
             
          elsif (ce = '1') then
          
@@ -106,19 +113,6 @@ begin
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
-      
-         if (SS_reset = '1') then
-         
-            for i in 0 to 1 loop
-               ss_in(i) <= (others => '0');
-            end loop;
-            
-            ss_in(0) <= x"00000005"; -- SIO_STAT  
-            ss_in(3) <= x"000000DC"; -- SIO_BAUD  
-            
-         elsif (SS_wren = '1') then
-            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
-         end if;
          
          if (SS_rden = '1') then
             SS_DataRead <= ss_out(to_integer(SS_Adr));

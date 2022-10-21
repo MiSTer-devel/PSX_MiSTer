@@ -21,6 +21,7 @@ entity sdram_model3x is
       addr              : in  std_logic_vector(26 downto 0);
       req               : in  std_logic;
       ram_dma           : in  std_logic;
+      ram_dmacnt        : in  std_logic_vector(1 downto 0);
       ram_iscache       : in  std_logic;
       rnw               : in  std_logic;
       be                : in  std_logic_vector(3 downto 0);
@@ -274,7 +275,7 @@ begin
          for i in 0 to 7 loop
             do(7  + (i * 16) downto     (i * 16))  <= std_logic_vector(to_unsigned(data(to_integer(unsigned(addr_rotate(26 downto 1)) & '0') + 0), 8));
             do(15 + (i * 16) downto 8 + (i * 16))  <= std_logic_vector(to_unsigned(data(to_integer(unsigned(addr_rotate(26 downto 1)) & '0') + 1), 8));
-            addr_rotate(3 downto 1) := std_logic_vector(unsigned(addr_rotate(3 downto 1)) + 1); 
+            addr_rotate(9 downto 1) := std_logic_vector(unsigned(addr_rotate(9 downto 1)) + 1); 
          end loop;
       end if;
       
@@ -325,10 +326,7 @@ begin
                
                dma_buffer      <= ram_dma;
                reqprocessed_3x <= ram_dma;
-               if (addr(3 downto 2) = "00") then dma_count_3x <= "11"; end if;
-               if (addr(3 downto 2) = "01") then dma_count_3x <= "10"; end if;
-               if (addr(3 downto 2) = "10") then dma_count_3x <= "01"; end if;
-               if (addr(3 downto 2) = "11") then dma_count_3x <= "00"; end if;
+               dma_count_3x    <= unsigned(ram_dmacnt);
             end if;
          
          when STATE_WAIT => 

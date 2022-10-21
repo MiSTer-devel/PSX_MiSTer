@@ -48,6 +48,7 @@ module sdram
 	input              ch1_req,     // request
 	input              ch1_rnw,     // 1 - read, 0 - write
 	input              ch1_dma,     // 1 - read 128bit for dma
+	input      [ 1:0]  ch1_cntDMA,  // count of words-1 for dma read
 	input              ch1_cache,   // 1 - read 128bit for cache
 	output reg         ch1_ready,
 	output reg [ 3:0]  cache_wr,    
@@ -86,10 +87,11 @@ assign SDRAM_nWE  = command[0];
 assign SDRAM_CKE  = 1;
 assign {SDRAM_DQMH,SDRAM_DQML} = SDRAM_A[12:11];
 
-
-// Burst length = 8
 localparam BURST_LENGTH        = 8;
-localparam BURST_CODE          = (BURST_LENGTH == 8) ? 3'b011 : (BURST_LENGTH == 4) ? 3'b010 : (BURST_LENGTH == 2) ? 3'b001 : 3'b000;  // 000=1, 001=2, 010=4, 011=8
+//(BURST_LENGTH == 8) ? 3'b011 : (BURST_LENGTH == 4) ? 3'b010 : (BURST_LENGTH == 2) ? 3'b001 : 3'b000;  // 000=1, 001=2, 010=4, 011=8
+// we do 4 bursts of 2 words(16bit) for every read. The reason is that a burst of 8 will wrap inside the page. e.g. reading address 6,7,8,.. is not possible, it will read 6,7,0,.. instead
+// as bursts of 2 can be done back-to-back, this does not have any latency or bandwidth penalty compared to full 8 word burst
+localparam BURST_CODE          = 3'b001;   
 localparam ACCESS_TYPE         = 1'b0;     // 0=sequential, 1=interleaved
 localparam CAS_LATENCY         = 3'd2;     // 2 for < 100MHz, 3 for >100MHz
 localparam OP_MODE             = 2'b00;    // only 00 (standard operation) allowed
@@ -216,17 +218,19 @@ reg  [3:0] state = STATE_STARTUP;
 
 reg ch1_rq, ch2_rq, ch3_rq, refreshForce_req;
 reg saved_wr;
+reg saved_128read = 0;
+
+reg [CAS_LATENCY+BURST_LENGTH:0] data_ready_delay1, data_ready_delay2, data_ready_delay3;
+
+reg [12:0] cas_addr;
+reg [31:0] saved_data;
+reg  [3:0] saved_be;
+reg [15:0] dq_reg;
+
+reg [1:0] ch;
 
 always @(posedge clk) begin
-	reg [CAS_LATENCY+BURST_LENGTH:0] data_ready_delay1, data_ready_delay2, data_ready_delay3;
-
-	reg [12:0] cas_addr;
-	reg [31:0] saved_data;
-	reg  [3:0] saved_be;
-	reg [15:0] dq_reg;
-
-	reg [1:0] ch;
-   
+  
    clk1xToggle3X   <= clk1xToggle;
    clk1xToggle3X_1 <= clk1xToggle3X;
    clk3xIndex      <= clk1xToggle3X_1 == clk1xToggle;
@@ -336,14 +340,60 @@ always @(posedge clk) begin
             end
          end
    
-         STATE_IDLE_9: state <= STATE_IDLE_8;
-         STATE_IDLE_8: state <= STATE_IDLE_7;
-         STATE_IDLE_7: state <= STATE_IDLE_6;
-         STATE_IDLE_6: state <= STATE_IDLE_5;
-         STATE_IDLE_5: state <= STATE_IDLE_4;
-         STATE_IDLE_4: state <= STATE_IDLE_3;
-         STATE_IDLE_3: state <= STATE_IDLE_2;
-         STATE_IDLE_2: state <= STATE_IDLE_1;
+         STATE_IDLE_9: begin
+            state <= STATE_IDLE_8;
+            if (saved_128read) begin
+               cas_addr[8:0] <= cas_addr[8:0] + 2'd2;
+            end
+         end
+         
+         STATE_IDLE_8: begin
+            state   <= STATE_IDLE_7;
+            if (saved_128read) begin
+               command <= CMD_READ;
+               SDRAM_A <= cas_addr;
+            end
+         end
+         
+         STATE_IDLE_7: begin
+            state <= STATE_IDLE_6;
+            if (saved_128read) begin
+               cas_addr[8:0] <= cas_addr[8:0] + 2'd2;
+            end
+         end
+         
+         STATE_IDLE_6: begin 
+            state <= STATE_IDLE_5;
+            if (saved_128read) begin
+               command <= CMD_READ;
+               SDRAM_A <= cas_addr;
+            end
+         end
+         
+         STATE_IDLE_5: begin 
+            state <= STATE_IDLE_4;
+            if (saved_128read) begin
+               cas_addr[8:0] <= cas_addr[8:0] + 2'd2;
+            end
+         end
+         
+         STATE_IDLE_4: begin
+            state <= STATE_IDLE_3;
+            if (saved_128read) begin
+               command       <= CMD_READ;
+               SDRAM_A       <= cas_addr;
+               saved_128read <= 0;
+            end
+         end
+         
+         STATE_IDLE_3: begin
+            state <= STATE_IDLE_2;
+         end
+         
+         STATE_IDLE_2: begin
+            state <= STATE_IDLE_1;
+         end
+         
          STATE_IDLE_1: begin
             state      <= STATE_IDLE;
             // mask possible refresh to reduce colliding.
@@ -366,6 +416,7 @@ always @(posedge clk) begin
          end
    
          STATE_IDLE: begin
+            saved_128read <= 0;
             if (refreshForce_req || refresh_count > cycles_per_refresh) begin
                state            <= STATE_RFSH;
                command          <= CMD_AUTO_REFRESH;
@@ -406,10 +457,9 @@ always @(posedge clk) begin
                
                dma_buffer                <= ch1_dma;
                dma_reqprocessed_ramclock <= ch1_dma;
-               if (ch1_addr[3:2] == 2'b00) dma_count_3x <= 2'b11;
-               if (ch1_addr[3:2] == 2'b01) dma_count_3x <= 2'b10;
-               if (ch1_addr[3:2] == 2'b10) dma_count_3x <= 2'b01;
-               if (ch1_addr[3:2] == 2'b11) dma_count_3x <= 2'b00;
+               dma_count_3x              <= ch1_cntDMA;
+               
+               saved_128read <= ch1_dma | ch1_cache;
                
             end else if(ch2_req | ch2_rq) begin
                {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch2_be[1:0], ch2_rnw, ch2_addr[25:1]};

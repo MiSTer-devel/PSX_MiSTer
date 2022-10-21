@@ -29,6 +29,7 @@ entity dma is
       irqOut               : out std_logic := '0';
       
       ram_Adr              : out std_logic_vector(22 downto 0) := (others => '0');
+      ram_cnt              : buffer std_logic_vector(1 downto 0) := (others => '0');
       ram_ena              : out std_logic := '0';
       
       dma_wr               : in  std_logic;
@@ -76,6 +77,7 @@ entity dma is
       bus_write            : in  std_logic;
       bus_dataRead         : out std_logic_vector(31 downto 0);
       
+      loading_savestate    : in  std_logic;
       SS_reset             : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(31 downto 0);
       SS_Adr               : in  unsigned(5 downto 0);
@@ -185,10 +187,19 @@ architecture arch of dma is
    
    -- savestates
    type t_ssarray is array(0 to 63) of std_logic_vector(31 downto 0);
-   signal ss_in   : t_ssarray := (others => (others => '0')); 
    signal ss_out  : t_ssarray := (others => (others => '0'));  
   
 begin 
+
+   toDevice <= dmaSettings.D_CHCR(0);
+
+   ram_cnt <= "00" when (directionNeg = '1' and ram_adr(9 downto 2) = x"01") else
+              "01" when (directionNeg = '1' and ram_adr(9 downto 2) = x"02") else
+              "10" when (directionNeg = '1' and ram_adr(9 downto 2) = x"03") else
+              "00" when (directionNeg = '0' and ram_adr(9 downto 2) = x"FF") else
+              "01" when (directionNeg = '0' and ram_adr(9 downto 2) = x"FE") else
+              "10" when (directionNeg = '0' and ram_adr(9 downto 2) = x"FD") else
+              "11";
 
    dmaOn <= '0' when ((dmaState = STOPPING or dmaState = PAUSING) and fifoOut_NearEmpty = '1' and (TURBO = '1' or REP_counter >= REP_target)) else
             '1' when (dmaState /= OFF) else 
@@ -272,37 +283,61 @@ begin
       
          if (reset = '1') then
          
-            dmaState <= OFF;
-         
+            if (loading_savestate = '0') then
+
+               for i in 0 to 6 loop
+                  dmaArray(i).D_MADR            <= (others => '0');
+                  dmaArray(i).D_BCR             <= (others => '0');
+                  dmaArray(i).D_CHCR            <= (others => '0');
+                  dmaArray(i).request           <= '0';
+                  dmaArray(i).requestsPending   <= '0';
+                  dmaArray(i).timeupPending     <= '0';
+                  dmaArray(i).channelOn         <= '0';
+               end loop;
+               
+               DPCR           <= x"07654321";
+               DICR           <= (others => '0');
+               DICR_IRQs      <= (others => '0');
+                  
+               isOn           <= '0';
+               activeChannel  <= 0;
+               paused         <= '0';
+               gpupaused      <= '0';
+            
+            end if;
+            
+            dmaState       <= OFF;
+            autoread       <= '0';
+            fifoIn_reset   <= '1';
+            fifoOut_reset  <= '1';
+            irqOut         <= '0';
+            triggerDMA     <= (others => '0');
+            
             for i in 0 to 6 loop
-               dmaArray(i).D_MADR            <= unsigned(ss_in(28 + i)(23 downto 0));
-               dmaArray(i).D_BCR             <= unsigned(ss_in(35 + i));
-               dmaArray(i).D_CHCR            <= unsigned(ss_in(42 + i));
-               dmaArray(i).request           <= ss_in(19 + i)(8);
-               dmaArray(i).requestsPending   <= ss_in(19 + i)(9);
-               dmaArray(i).timeupPending     <= ss_in(19 + i)(10);
-               dmaArray(i).channelOn         <= ss_in(19 + i)(11);
                dmaArray(i).chopwaiting       <= '0';
                dmaArray(i).chopwaitcount     <= (others => '0');
             end loop;
             
-            DPCR           <= unsigned(ss_in(26)); -- x"07654321";
-            DICR           <= unsigned(ss_in(27)(23 downto 0));
-            DICR_IRQs      <= unsigned(ss_in(27)(30 downto 24));
-               
-            triggerDMA     <= (others => '0');
-            isOn           <= ss_in(4)(8);
-            activeChannel  <= to_integer(unsigned(ss_in(2)(18 downto 16)));
-            paused         <= ss_in(4)(9);
-            gpupaused      <= ss_in(4)(10);
-            
-            autoread       <= '0';
-            
-            fifoIn_reset   <= '1';
-            
-            fifoOut_reset  <= '1';
+         elsif (SS_wren = '1') then
          
-            irqOut         <= '0';
+               for i in 0 to 6 loop
+                  if (to_integer(SS_Adr) = (28 + i)) then dmaArray(i).D_MADR            <= unsigned(SS_DataWrite(23 downto 0)); end if;
+                  if (to_integer(SS_Adr) = (35 + i)) then dmaArray(i).D_BCR             <= unsigned(SS_DataWrite);              end if;
+                  if (to_integer(SS_Adr) = (42 + i)) then dmaArray(i).D_CHCR            <= unsigned(SS_DataWrite);              end if;
+                  if (to_integer(SS_Adr) = (19 + i)) then dmaArray(i).request           <= SS_DataWrite(8);                     end if;
+                  if (to_integer(SS_Adr) = (19 + i)) then dmaArray(i).requestsPending   <= SS_DataWrite(9);                     end if;
+                  if (to_integer(SS_Adr) = (19 + i)) then dmaArray(i).timeupPending     <= SS_DataWrite(10);                    end if;
+                  if (to_integer(SS_Adr) = (19 + i)) then dmaArray(i).channelOn         <= SS_DataWrite(11);                    end if;
+               end loop;
+               
+               if (to_integer(SS_Adr) = 26) then DPCR           <= unsigned(SS_DataWrite);                           end if;
+               if (to_integer(SS_Adr) = 27) then DICR           <= unsigned(SS_DataWrite(23 downto 0));              end if;
+               if (to_integer(SS_Adr) = 27) then DICR_IRQs      <= unsigned(SS_DataWrite(30 downto 24));             end if;
+                                                                                                                    
+               if (to_integer(SS_Adr) =  4) then isOn           <= SS_DataWrite(8);                                  end if;
+               if (to_integer(SS_Adr) =  2) then activeChannel  <= to_integer(unsigned(SS_DataWrite(18 downto 16))); end if;
+               if (to_integer(SS_Adr) =  4) then paused         <= SS_DataWrite(9);                                  end if;
+               if (to_integer(SS_Adr) =  4) then gpupaused      <= SS_DataWrite(10);                                 end if;
 
          elsif (ce = '1') then
          
@@ -466,7 +501,8 @@ begin
             case (dmaState) is
             
                when OFF => 
-                  fifoIn_reset <= '1';
+                  fifoIn_reset    <= '1';
+                  requestedDwords <= 0;
                   
                   if (dmaRequest = '1' and canDMA = '1') then
                      dmaArray(triggerchannel).requestsPending <= '0';
@@ -490,17 +526,21 @@ begin
                         ram_Adr  <= std_logic_vector(dmaArray(triggerchannel).D_MADR(22 downto 2)) & "00";
                         autoread <= '1';
                      end if;
+                     
+                     directionNeg <= '0';
+                     if (dmaArray(triggerchannel).D_CHCR(10) = '0' and dmaArray(triggerchannel).D_CHCR(1) = '1') then
+                        directionNeg <= '1';
+                     end if;    
 
                   end if;
                
                when STARTING =>
-                  if (dmaSettings.D_CHCR(0) = '0' and activeChannel = 2 and dmaSettings.D_CHCR(10 downto 9) = "01") then
+                  if (toDevice = '0' and activeChannel = 2 and dmaSettings.D_CHCR(10 downto 9) = "01") then
                      dmaEndWait <= 12;
                   else
                      dmaEndWait <= 4;
                   end if;
                   
-                  toDevice     <= dmaSettings.D_CHCR(0);
                   wordAccu     <= 0;
                   if (activeChannel = 3) then
                      wordAccu <= 3;
@@ -515,7 +555,7 @@ begin
                   end if;
                   
                   REP_required <= '1';
-                  if (dmaSettings.D_CHCR(0) = '0') then
+                  if (toDevice = '0') then
                      REP_target    <= 3;
                      if (activeChannel = 4) then
                         REP_target <= 2;
@@ -563,12 +603,7 @@ begin
                      when others => null;
                   end case;
                   
-                  directionNeg <= '0';
-                  if (dmaSettings.D_CHCR(10) = '0' and dmaSettings.D_CHCR(1) = '1') then
-                     directionNeg <= '1';
-                  end if;    
-                  
-                  if (dmaSettings.D_CHCR(0) = '0') then -- from device -> can start immidiatly
+                  if (toDevice = '0') then -- from device -> can start immidiatly
                      case (dmaSettings.D_CHCR(10 downto 9)) is
                         when "00" => -- manual
                            dmaState    <= WORKING;
@@ -607,7 +642,7 @@ begin
                      if (unsigned(dma_data(31 downto 24)) > 0) then
                         dmaSettings.D_MADR <= dmaSettings.D_MADR + 4;
                         dmaState           <= WORKING;           
-                     elsif (dma_data(23) = '1' or dmaSettings.D_CHCR(0) = '0') then
+                     elsif (dma_data(23) = '1' or toDevice = '0') then
                         dmaState <= STOPPING;
                         if (DICR(16 + activeChannel) = '1') then
                            DICR_IRQs(activeChannel) <= '1';
@@ -698,7 +733,7 @@ begin
                         fifoOut_Din(52 downto 51) <= "00";
                      end if;
                      
-                     if (dmaSettings.D_CHCR(10) = '0' and directionNeg = '1')  then 
+                     if (directionNeg = '1')  then 
                         dmaSettings.D_MADR <= dmaSettings.D_MADR - 4;
                      else
                         dmaSettings.D_MADR <= dmaSettings.D_MADR + 4;
@@ -837,9 +872,9 @@ begin
             if (dma_reqprocessed_2 = '1' and autoread = '1') then
                ram_ena         <= '1';
                if (directionNeg = '1') then
-                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") - 16); 
+                  ram_Adr <= std_logic_vector(unsigned(ram_Adr) - ((1 + to_integer(unsigned(ram_cnt))) * 4));
                else
-                  ram_Adr <= std_logic_vector((unsigned(ram_Adr(22 downto 4)) & "0000") + 16); 
+                  ram_Adr <= std_logic_vector(unsigned(ram_Adr) + ((1 + to_integer(unsigned(ram_cnt))) * 4));
                end if;
             end if;
             
@@ -859,10 +894,8 @@ begin
                autoread <= '0';
             end if;
             
-            if (dmaState = STARTING) then
-               requestedDwords  <= 4 - to_integer(dmaSettings.D_MADR(3 downto 2));
-            elsif (ram_ena = '1' and firstword = '0') then
-               requestedDwords <= requestedDwords + 4;
+            if (ram_ena = '1') then
+               requestedDwords <= requestedDwords + (1 + to_integer(unsigned(ram_cnt)));
             end if;
             
          end if; -- ce
@@ -935,18 +968,6 @@ begin
    process (clk1x)
    begin
       if (rising_edge(clk1x)) then
-      
-         if (SS_reset = '1') then
-         
-            for i in 0 to 63 loop
-               ss_in(i) <= (others => '0');
-            end loop;
-            
-            ss_in(26) <= x"07654321"; -- DPCR
-            
-         elsif (SS_wren = '1') then
-            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
-         end if;
          
          if (SS_rden = '1') then
             SS_DataRead <= ss_out(to_integer(SS_Adr));
