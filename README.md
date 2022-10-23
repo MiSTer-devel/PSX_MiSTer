@@ -13,8 +13,10 @@ SDRAM of any size is required.
 * Dithering On/Off Toggle
 * Bob or Weave Deinterlacing
 * Texture Filtering
+* 24 Bit rendering
 * Widescreen modes
 * Screen roation by 180°
+* 8 Mbyte mode(from dev units, mostly for homebrew) 
 * Inputs: DualShock, Digital, Analog, Mouse, NeGcon, Wheel, Justifier and Guncon support.
 * Native Input support through SNAC
 
@@ -149,7 +151,7 @@ Memctrl: register stubs only
 SIO    : register stubs only
 
 Timer  : 90%
-- accuracy for start/wraparound not tested
+- accuracy for dotclock and gates timer not tested
 
 GTE    : 90%
 - CPU <-> GTE Transfer pipeline delay not fully correct
@@ -159,4 +161,4 @@ MDEC   : 90%
  
 CD     : 90%
 - accurate CD access model for correct seek times should be added
-- drive and controller logic shozuld be seperated
+- drive and controller logic should be seperated
