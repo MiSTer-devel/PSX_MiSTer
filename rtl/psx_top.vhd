@@ -38,6 +38,7 @@ entity psx_top is
       INSTANTSEEK           : in  std_logic;
       FORCECDSPEED          : in  std_logic_vector(2 downto 0);
       LIMITREADSPEED        : in  std_logic;
+      IGNORECDDMATIMING     : in  std_logic;
       ditherOff             : in  std_logic;
       showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
@@ -465,6 +466,7 @@ architecture arch of psx_top is
    signal dmaRequest             : std_logic;
    signal dmaStallCPU            : std_logic;
    signal canDMA                 : std_logic;
+   signal ignoreDMACDTiming      : std_logic;
    
    signal ram_dma_Adr            : std_logic_vector(22 downto 0);
    signal ram_dma_ena            : std_logic;
@@ -1206,6 +1208,8 @@ begin
       SS_idle              => SS_idle_irq
    );
    
+   ignoreDMACDTiming <= '1' when (TURBO_MEM = '1' or IGNORECDDMATIMING = '1' or unsigned(FORCECDSPEED) >= 3) else '0';
+   
    idma : entity work.dma
    port map
    (
@@ -1222,6 +1226,7 @@ begin
       TURBO                => TURBO_COMP,
       TURBO_CACHE          => TURBO_CACHE,
       ram8mb               => ram8mb,
+      ignoreCDTiming       => ignoreDMACDTiming,
       
       canDMA               => canDMA,
       cpuPaused            => cpuPaused,
@@ -1261,6 +1266,8 @@ begin
       DMA_MDEC_write       => DMA_MDEC_write,      
       DMA_MDEC_read        => DMA_MDEC_read,   
 
+      cd_memctrl           => cd_memctrl,
+      com0_delay           => com0_delay,
       DMA_CD_readEna       => DMA_CD_readEna,
       DMA_CD_read          => DMA_CD_read,   
       

@@ -34,6 +34,7 @@ entity psx_mister is
       INSTANTSEEK           : in  std_logic;
       FORCECDSPEED          : in  std_logic_vector(2 downto 0);
       LIMITREADSPEED        : in  std_logic;
+      IGNORECDDMATIMING     : in  std_logic;
       ditherOff             : in  std_logic;
       showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
@@ -312,6 +313,7 @@ begin
       INSTANTSEEK           => INSTANTSEEK,
       FORCECDSPEED          => FORCECDSPEED,
       LIMITREADSPEED        => LIMITREADSPEED,
+      IGNORECDDMATIMING     => IGNORECDDMATIMING,
       ditherOff             => ditherOff,
       showGunCrosshairs     => showGunCrosshairs,
       fpscountOn            => fpscountOn,

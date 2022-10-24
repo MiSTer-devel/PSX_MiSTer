@@ -341,7 +341,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXX  XXX XX XXXXXXXXXXXXXXXXXXXXXXXX
+//  X XX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXX  XXX XX XXXXXXXXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -432,6 +432,7 @@ parameter CONF_STR = {
 	"h3P3O[43],RepTimingSPUDMA,Off,On;",
 	"h3P3O[27],Textures,On,Off;",
 	"h3P3O[69],LBA Overlay,Off,On;",
+	"h3P3O[88],Fast CD DMA Timing,Off,On;",
 	"h3P3T1,Advance Pause;",
 
 	"-   ;",
@@ -1023,6 +1024,7 @@ psx
    .INSTANTSEEK(status[21]),
    .FORCECDSPEED(status[77:75]),
    .LIMITREADSPEED(status[78]),
+   .IGNORECDDMATIMING(status[88]),
    .ditherOff(status[22]),
    .showGunCrosshairs(status[9]),
    .fpscountOn(status[28]),

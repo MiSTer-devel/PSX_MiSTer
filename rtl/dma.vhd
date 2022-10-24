@@ -20,6 +20,7 @@ entity dma is
       TURBO                : in  std_logic;
       TURBO_CACHE          : in  std_logic;
       ram8mb               : in  std_logic;
+      ignoreCDTiming       : in  std_logic;
       
       canDMA               : in  std_logic;
       cpuPaused            : in  std_logic;
@@ -59,6 +60,8 @@ entity dma is
       DMA_MDEC_write       : out std_logic_vector(31 downto 0);
       DMA_MDEC_read        : in  std_logic_vector(31 downto 0);      
       
+      cd_memctrl           : in  unsigned(13 downto 0);
+      com0_delay           : in  unsigned(3 downto 0);
       DMA_CD_readEna       : out std_logic := '0';
       DMA_CD_read          : in  std_logic_vector(7 downto 0);
       
@@ -145,13 +148,8 @@ architecture arch of dma is
          
    signal chopsize            : unsigned(7 downto 0);
    signal chopwaittime        : unsigned(7 downto 0);
-   
-   signal dmaEndWait          : integer range 0 to 12;
-         
-   signal dma_reqprocessed_1  : std_logic := '0';
-   signal dma_reqprocessed_2  : std_logic := '0';
+        
    signal autoread            : std_logic := '0';
-   signal firstword           : std_logic := '0';
    signal useDataDirect       : std_logic := '0';
    
    signal requestedDwords     : integer range 0 to 65536;
@@ -182,7 +180,7 @@ architecture arch of dma is
    -- REPRODUCIBLEDMATIMING   
    signal REP_counter         : integer range 0 to 1048575;
    signal REP_target          : integer range 0 to 1048575;
-   signal REP_refresh         : integer range 0 to 255;
+   signal REP_refresh         : integer range 0 to 127;
    signal REP_required        : std_logic;
    
    -- savestates
@@ -257,6 +255,7 @@ begin
       variable triggerNew      : std_logic;
       variable triggerPrio     : unsigned(2 downto 0);
       variable checkIRQ        : std_logic;
+      variable addtime         : integer range 0 to 511;
    begin
       if rising_edge(clk1x) then
       
@@ -408,6 +407,12 @@ begin
                            dmaArray(channel).channelOn <= '0';
                         end if;
                         triggerDMA(channel) <= '0';
+                        
+                        if (channel = 2 and bus_dataWrite(10 downto 9) = "10") then
+                           dmaArray(2).chopwaiting   <= '1';
+                           dmaArray(2).chopwaitcount <= x"0A";
+                        end if;
+                        
                      when others => null;
                   end case;
                else
@@ -431,7 +436,7 @@ begin
             -- trigger
             triggerNew     := '0';
             triggerPrio    := "111";
-            if (dmaState = OFF and dmaEndWait = 0 and bus_write = '0' and bus_read = '0') then
+            if (dmaState = OFF and bus_write = '0' and bus_read = '0') then
                for i in 0 to 6 loop
                   if (triggerDMA(i) = '1' and dmaArray(i).chopwaiting = '0') then
                      if ((DPCR((i * 4) + 3) = '1' and dmaArray(i).D_CHCR(24) = '1') or dmaArray(i).channelOn = '1') then -- enable + start or already on(retrigger after busy)
@@ -447,10 +452,6 @@ begin
                end loop;
             end if;
             dmaRequest <= triggerNew;
-            
-            if (dmaState = OFF and dmaEndWait > 0) then
-               dmaEndWait <= dmaEndWait - 1;
-            end if;
             
             -- accu
             if (DMA_CD_readEna = '1') then
@@ -515,7 +516,6 @@ begin
                      activeChannel <= triggerchannel;
                      
                      REP_refresh   <= 0;
-                     firstword     <= '1';
                      
                      dmaSettings.D_CHCR <= dmaArray(triggerchannel).D_CHCR;
                      dmaSettings.D_MADR <= dmaArray(triggerchannel).D_MADR;
@@ -524,7 +524,6 @@ begin
                      if (dmaArray(triggerchannel).D_CHCR(0) = '1') then
                         ram_ena  <= '1';
                         ram_Adr  <= std_logic_vector(dmaArray(triggerchannel).D_MADR(22 downto 2)) & "00";
-                        autoread <= '1';
                      end if;
                      
                      directionNeg <= '0';
@@ -535,12 +534,7 @@ begin
                   end if;
                
                when STARTING =>
-                  if (toDevice = '0' and activeChannel = 2 and dmaSettings.D_CHCR(10 downto 9) = "01") then
-                     dmaEndWait <= 12;
-                  else
-                     dmaEndWait <= 4;
-                  end if;
-                  
+
                   wordAccu     <= 0;
                   if (activeChannel = 3) then
                      wordAccu <= 3;
@@ -557,6 +551,9 @@ begin
                   REP_required <= '1';
                   if (toDevice = '0') then
                      REP_target    <= 3;
+                     if (activeChannel = 3) then
+                        REP_target <= 2;
+                     end if;
                      if (activeChannel = 4) then
                         REP_target <= 2;
                      end if;
@@ -623,9 +620,11 @@ begin
                      case (dmaSettings.D_CHCR(10 downto 9)) is
                         when "00" => -- manual
                            dmaState    <= WORKING;
+                           autoread    <= '1';
                         
                         when "01" => -- request
                            dmaState    <= WORKING;
+                           autoread    <= '1';
                         
                         when "10" => -- linked list
                            dmaState    <= READHEADER;
@@ -641,7 +640,14 @@ begin
                      nextAddr  <= dma_data(23 downto 0);
                      if (unsigned(dma_data(31 downto 24)) > 0) then
                         dmaSettings.D_MADR <= dmaSettings.D_MADR + 4;
-                        dmaState           <= WORKING;           
+                        dmaState           <= WORKING; 
+                        REP_target         <= 8;
+                        wordcount          <= "0" & x"00" & unsigned(dma_data(31 downto 24)); 
+                        requiredDwords     <= to_integer(unsigned(dma_data(31 downto 24))) + 1;
+                        if (requestedDwords < (to_integer(unsigned(dma_data(31 downto 24))) + 1)) then
+                           autoread        <= '1';
+                           ram_ena         <= '1';
+                        end if;
                      elsif (dma_data(23) = '1' or toDevice = '0') then
                         dmaState <= STOPPING;
                         if (DICR(16 + activeChannel) = '1') then
@@ -654,6 +660,8 @@ begin
                         dmaSettings.D_MADR <= unsigned(dma_data(23 downto 0));
                         dmaState    <= PAUSING;
                         paused      <= '1';
+                        dmaArray(activeChannel).chopwaiting   <= '1';
+                        dmaArray(activeChannel).chopwaitcount <= x"03";
                      end if;
                   end if;
                
@@ -764,7 +772,7 @@ begin
                      
                      -- timing for sdram refresh
                      REP_refresh <= REP_refresh + 1;
-                     if (REP_refresh = 100) then
+                     if (REP_refresh >= 100) then
                         REP_refresh  <= 0;
                         REP_target   <= REP_target + 6;
                         REP_required <= '1';
@@ -772,8 +780,23 @@ begin
                   
                      -- special timings
                      if (activeChannel = 4 and spu_timing_on = '1' and spu_timing_value > 0) then
-                        REP_target <= REP_target + 4 + (to_integer(spu_timing_value) * 2);
+                        REP_target   <= REP_target + 4 + (to_integer(spu_timing_value) * 2);
+                        REP_required <= '1';
                      end if;
+                     
+                     if (ignoreCDTiming = '0' and activeChannel = 3) then
+                        REP_required <= '1';
+                        addtime := 24;
+                        if (cd_memctrl(8) = '1') then
+                           if (wordcount > 1 and com0_delay > 0) then
+                              addtime := addtime + to_integer(com0_delay) - 1;
+                           end if;
+                        end if;
+                        if (REP_refresh >= 100) then
+                           addtime := addtime + 6;
+                        end if;
+                        REP_target <= REP_target + addtime;
+                     end if; 
                   
                      checkIRQ := '0';
                      wordcount <= wordcount - 1;
@@ -798,6 +821,8 @@ begin
                                  checkIRQ := '1';
                               else
                                  dmaState <= PAUSING;
+                                 dmaArray(activeChannel).chopwaiting   <= '1';
+                                 dmaArray(activeChannel).chopwaitcount <= x"02";
                               end if;
                            
                            when "10" => -- linked list
@@ -808,6 +833,8 @@ begin
                               else
                                  dmaState <= PAUSING;
                                  paused   <= '1';
+                                 dmaArray(activeChannel).chopwaiting   <= '1';
+                                 dmaArray(activeChannel).chopwaitcount <= x"02";
                               end if;
                            
                            when others => null;
@@ -829,8 +856,17 @@ begin
                         end if;
                      end if;
                      
-                  elsif (REP_counter >= REP_target) then
-                     REP_required <= '0';
+                  else
+                     REP_refresh <= REP_refresh + 1;
+                  
+                     if (REP_counter >= REP_target) then
+                        REP_required <= '0';
+                     end if;
+                     
+                     if (ignoreCDTiming = '0' and activeChannel = 3 and cd_memctrl(8) = '1' and com0_delay > 0) then
+                        REP_target <= REP_target + to_integer(com0_delay) - 1;
+                     end if;
+                     
                   end if;
                
                when STOPPING =>
@@ -862,15 +898,11 @@ begin
 --##############################################################
 --############################### ram read handling
 --##############################################################
-         
-            if (firstword = '0' and autoread = '1' and requestedDwords >= requiredDwords) then
-               autoread <= '0';
-            end if;
             
-            dma_reqprocessed_1 <= dma_reqprocessed;
-            dma_reqprocessed_2 <= dma_reqprocessed_1; -- delay by 2, so data is ready and we can stop early depending on header content 
-            if (dma_reqprocessed_2 = '1' and autoread = '1') then
-               ram_ena         <= '1';
+            if (dma_reqprocessed = '1') then
+               if (autoread = '1') then
+                  ram_ena         <= '1';
+               end if;
                if (directionNeg = '1') then
                   ram_Adr <= std_logic_vector(unsigned(ram_Adr) - ((1 + to_integer(unsigned(ram_cnt))) * 4));
                else
@@ -878,20 +910,9 @@ begin
                end if;
             end if;
             
-            if (dma_wr = '1' and toDevice = '1' and firstword = '1') then
-               firstword       <= '0';
-               if (dmaSettings.D_CHCR(10 downto 9) = "10") then
-                  wordcount      <= "0" & x"00" & unsigned(dma_data(31 downto 24)); 
-                  requiredDwords <= to_integer(unsigned(dma_data(31 downto 24))) + 1;
-                  if (requestedDwords >= (unsigned(dma_data(31 downto 24)) + 1)) then
-                     autoread <= '0';
-                     ram_ena  <= '0';
-                  end if;
-               end if;
-            end if;
-            
-            if (dmaState = WORKING and dmaSettings.D_CHCR(10 downto 9) /= "10" and requestedDwords >= requiredDwords) then
+            if ((dmaState = WORKING or dmaState = SLOWDOWN) and requestedDwords >= requiredDwords) then
                autoread <= '0';
+               ram_ena  <= '0';
             end if;
             
             if (ram_ena = '1') then
