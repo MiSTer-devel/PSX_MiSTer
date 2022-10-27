@@ -66,21 +66,23 @@ package pGPU is
    end record;    
    
    type tvideoout_out is record
-      hsync          : std_logic;
-      vsync          : std_logic;
-      hblank         : std_logic;
-      vblank         : std_logic;
-      DisplayWidth   : unsigned( 9 downto 0);
-      DisplayHeight  : unsigned( 8 downto 0);
-      DisplayOffsetX : unsigned( 9 downto 0); 
-      DisplayOffsetY : unsigned( 8 downto 0); 
-      ce             : std_logic;
-      interlace      : std_logic;
-      r              : std_logic_vector(7 downto 0);
-      g              : std_logic_vector(7 downto 0);
-      b              : std_logic_vector(7 downto 0);
-      isPal          : std_logic;
-      hResMode       : std_logic_vector(2 downto 0);
+      hsync             : std_logic;
+      vsync             : std_logic;
+      hblank            : std_logic;
+      vblank            : std_logic;
+      DisplayWidth      : unsigned( 9 downto 0);
+      DisplayHeight     : unsigned( 8 downto 0);
+      DisplayWidthReal  : unsigned( 9 downto 0);
+      DisplayHeightReal : unsigned( 8 downto 0);
+      DisplayOffsetX    : unsigned( 9 downto 0); 
+      DisplayOffsetY    : unsigned( 8 downto 0); 
+      ce                : std_logic;
+      interlace         : std_logic;
+      r                 : std_logic_vector(7 downto 0);
+      g                 : std_logic_vector(7 downto 0);
+      b                 : std_logic_vector(7 downto 0);
+      isPal             : std_logic;
+      hResMode          : std_logic_vector(2 downto 0);
    end record; 
    
 end package;

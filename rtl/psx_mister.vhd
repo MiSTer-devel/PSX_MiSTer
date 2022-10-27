@@ -36,6 +36,7 @@ entity psx_mister is
       LIMITREADSPEED        : in  std_logic;
       IGNORECDDMATIMING     : in  std_logic;
       ditherOff             : in  std_logic;
+      interlaced480pHack    : in  std_logic;
       showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
@@ -162,7 +163,10 @@ entity psx_mister is
       video_g               : out std_logic_vector(7 downto 0);
       video_b               : out std_logic_vector(7 downto 0);
       video_isPal           : out std_logic;
+      video_fbmode          : out std_logic;
+      video_fb24            : out std_logic;
       video_hResMode        : out std_logic_vector(2 downto 0);
+      video_frameindex      : out std_logic_vector(3 downto 0);
       -- Keys - all active high   
       DSAltSwitchMode       : in  std_logic;
       PadPortEnable1        : in  std_logic;
@@ -315,6 +319,7 @@ begin
       LIMITREADSPEED        => LIMITREADSPEED,
       IGNORECDDMATIMING     => IGNORECDDMATIMING,
       ditherOff             => ditherOff,
+      interlaced480pHack    => interlaced480pHack,
       showGunCrosshairs     => showGunCrosshairs,
       fpscountOn            => fpscountOn,
       cdslowOn              => cdslowOn,
@@ -441,7 +446,10 @@ begin
       video_g               => video_g, 
       video_b               => video_b, 
       video_isPal           => video_isPal, 
+      video_fbmode          => video_fbmode, 
+      video_fb24            => video_fb24, 
       video_hResMode        => video_hResMode, 
+      video_frameindex      => video_frameindex, 
       -- inputs
       DSAltSwitchMode       => DSAltSwitchMode,
       

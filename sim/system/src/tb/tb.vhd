@@ -275,6 +275,7 @@ begin
       LIMITREADSPEED        => '0',
       IGNORECDDMATIMING     => '0',
       ditherOff             => '0',
+      interlaced480pHack    => '0',
       showGunCrosshairs     => '0',
       fpscountOn            => '0',
       cdslowOn              => '0',
@@ -389,7 +390,8 @@ begin
       video_interlace       => video_interlace,
       video_r               => video_r, 
       video_g               => video_g,    
-      video_b               => video_b,   
+      video_b               => video_b, 
+      video_frameindex      => open,
       -- Keys - all active high
       DSAltSwitchMode       => '0',
       PadPortEnable1        => '1',

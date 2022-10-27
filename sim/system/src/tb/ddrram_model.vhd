@@ -14,7 +14,8 @@ entity ddrram_model is
       loadVram     : std_logic := '0';
       SLOWTIMING   : integer := 0;
       RANDOMTIMING : std_logic := '0';
-      outputVRAM2  : std_logic := '0'
+      outputVRAM2  : std_logic := '0';
+      outputVRAM3  : std_logic := '0'
    );
    port 
    (
@@ -69,6 +70,10 @@ begin
       variable loadcount      : integer;
       
       file outfile            : text;
+      file outfile1           : text;
+      file outfile2           : text;
+      file outfile3           : text;
+      variable fileindex      : unsigned(7 downto 0);
       variable line_out       : line;
       variable color          : std_logic_vector(31 downto 0);
       variable linecounter_int : integer;
@@ -116,6 +121,26 @@ begin
       file_open(f_status, outfile, "gra_fb_out.gra", append_mode);
       write(line_out, string'("1024#512#1")); 
       writeline(outfile, line_out);
+      
+      if (outputVRAM3 = '1') then
+         file_open(f_status, outfile1, "gra_fb1_out.gra", write_mode);
+         file_close(outfile1);
+         file_open(f_status, outfile1, "gra_fb1_out.gra", append_mode);
+         write(line_out, string'("1024#512#1")); 
+         writeline(outfile1, line_out);
+         
+         file_open(f_status, outfile2, "gra_fb2_out.gra", write_mode);
+         file_close(outfile2);
+         file_open(f_status, outfile2, "gra_fb2_out.gra", append_mode);
+         write(line_out, string'("1024#512#1")); 
+         writeline(outfile2, line_out);
+         
+         file_open(f_status, outfile3, "gra_fb3_out.gra", write_mode);
+         file_close(outfile3);
+         file_open(f_status, outfile3, "gra_fb3_out.gra", append_mode);
+         write(line_out, string'("1024#512#1")); 
+         writeline(outfile3, line_out);
+      end if;
       
       dumpVRAMimage := '0';
       
@@ -209,17 +234,28 @@ begin
                   data(to_integer(unsigned(cmd_address_save)) + (i * 2) + 1) := to_integer(signed(DDRAM_DIN(63 downto 48)) & readval(15 downto 0));
                end if;
                
-               if ((outputVRAM2 = '0' and DDRAM_ADDR(28 downto 17) = "001100000000") or (outputVRAM2 = '1' and DDRAM_ADDR(28 downto 17) = "001100000100")) then
+               if ((outputVRAM2 = '0' and DDRAM_ADDR(28 downto 17) = "001100000000") or (outputVRAM2 = '1' and DDRAM_ADDR(28 downto 17) = "001100000100") or outputVRAM3 = '1') then
+                  fileindex := unsigned(DDRAM_ADDR(24 downto 17));
                   for i in 0 to 3 loop
                      if (cmd_be_save(i * 2) = '1') then
                         color := x"00" & cmd_din_save((i * 16) + 4 downto (i * 16)) & "000" & cmd_din_save((i * 16) + 9 downto (i * 16) + 5) & "000" & cmd_din_save((i * 16) + 14 downto (i * 16) + 10) & "000";
                         write(line_out, to_integer(unsigned(color)));
                         write(line_out, string'("#"));
-                        write(line_out, ((to_integer(unsigned(cmd_address_save(19 downto 0)) & "00") mod 2048) / 2) + i);
+                        write(line_out, ((to_integer(unsigned(cmd_address_save(17 downto 0)) & "00") mod 2048) / 2) + i);
                         write(line_out, string'("#")); 
-                        write(line_out, to_integer(unsigned(cmd_address_save(19 downto 0)) & "00") / 2048);
-                        writeline(outfile, line_out);
-                        pixelCount := pixelCount + 1;
+                        write(line_out, to_integer(unsigned(cmd_address_save(17 downto 0)) & "00") / 2048);
+                        if (outputVRAM3 = '1') then
+                           case (fileindex) is
+                              when x"00" => writeline(outfile,  line_out); pixelCount := pixelCount + 1;
+                              when x"04" => writeline(outfile1, line_out); pixelCount := pixelCount + 1;
+                              when x"05" => writeline(outfile2, line_out); pixelCount := pixelCount + 1;
+                              when x"06" => writeline(outfile3, line_out); pixelCount := pixelCount + 1;
+                              when others => null;
+                           end case;
+                        else
+                           writeline(outfile, line_out);
+                           pixelCount := pixelCount + 1;
+                        end if;
                      end if;
                   end loop;
                   pixelTimeout := 1000;
@@ -254,6 +290,18 @@ begin
             file_close(outfile);
             file_open(f_status, outfile, "gra_fb_out.gra", append_mode);
             pixelCount := 0;
+            
+            if (outputVRAM3 = '1') then
+               file_close(outfile1);
+               file_open(f_status, outfile1, "gra_fb1_out.gra", append_mode);
+               
+               file_close(outfile2);
+               file_open(f_status, outfile2, "gra_fb2_out.gra", append_mode);
+               
+               file_close(outfile3);
+               file_open(f_status, outfile3, "gra_fb3_out.gra", append_mode);
+            end if;
+            
          end if;
          
          if (pixelTimeout > 0) then

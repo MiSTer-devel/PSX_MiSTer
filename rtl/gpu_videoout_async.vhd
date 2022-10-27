@@ -237,7 +237,10 @@ begin
    videoout_reports.dotclock <= videoout_out.ce;
 
    videoout_out.isPal <= videoout_settings.GPUSTAT_PalVideoMode;
-
+   
+   videoout_out.DisplayWidthReal  <= to_unsigned(xmax, 10);
+   videoout_out.DisplayHeightReal <= to_unsigned(lineMax, 9);
+   
    process (clkvid)
       variable mode480i                      : std_logic;
       variable isVsync                       : std_logic;

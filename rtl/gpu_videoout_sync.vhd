@@ -278,6 +278,9 @@ begin
    videoout_out.DisplayOffsetX <= videoout_settings.vramRange(9 downto 0);
    videoout_out.DisplayOffsetY <= videoout_settings.vramRange(18 downto 10);
    
+   videoout_out.DisplayWidthReal  <= videoout_out.DisplayWidth; 
+   videoout_out.DisplayHeightReal <= videoout_out.DisplayHeight;
+   
    process (clk2x)
    begin
       if rising_edge(clk2x) then

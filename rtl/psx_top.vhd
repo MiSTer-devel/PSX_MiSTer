@@ -40,6 +40,7 @@ entity psx_top is
       LIMITREADSPEED        : in  std_logic;
       IGNORECDDMATIMING     : in  std_logic;
       ditherOff             : in  std_logic;
+      interlaced480pHack    : in  std_logic;
       showGunCrosshairs     : in  std_logic;
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
@@ -166,7 +167,10 @@ entity psx_top is
       video_g               : out std_logic_vector(7 downto 0);
       video_b               : out std_logic_vector(7 downto 0);
       video_isPal           : out std_logic;
+      video_fbmode          : out std_logic;
+      video_fb24            : out std_logic;
       video_hResMode        : out std_logic_vector(2 downto 0);
+      video_frameindex      : out std_logic_vector(3 downto 0);
 
       DSAltSwitchMode       : in  std_logic;
       joypad1               : in  joypad_t;
@@ -829,7 +833,6 @@ begin
          if (SPUon                 = '0') then debugmodeOn <= '1'; end if;
          if (REVERBOFF             = '1') then debugmodeOn <= '1'; end if;
          if (REPRODUCIBLESPUDMA    = '1') then debugmodeOn <= '1'; end if;
-         if (videoout_on           = '0') then debugmodeOn <= '1'; end if;
          if (PATCHSERIAL           = '1') then debugmodeOn <= '1'; end if;
          
       end if;
@@ -1442,6 +1445,7 @@ begin
       system_paused        => pausing,
       
       ditherOff            => ditherOff,
+      interlaced480pHack   => interlaced480pHack,
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
       videoout_on          => videoout_on,
       isPal                => isPal,
@@ -1535,7 +1539,10 @@ begin
       video_g              => video_g, 
       video_b              => video_b, 
       video_isPal          => video_isPal, 
+      video_fbmode         => video_fbmode, 
+      video_fb24           => video_fb24, 
       video_hResMode       => video_hResMode, 
+      video_frameindex     => video_frameindex,
       
 -- synthesis translate_off
       export_gtm           => export_gtm,

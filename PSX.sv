@@ -191,14 +191,15 @@ assign VGA_SCALER= 0;
 
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
+wire [ 3:0] frameindex;
 wire [11:0] DisplayWidth;
 wire [11:0] DisplayHeight;
 wire [ 9:0] DisplayOffsetX;
 wire [ 8:0] DisplayOffsetY;
 
-assign FB_BASE    = status[11] ? 32'h30000000 : (32'h30000000 + (DisplayOffsetX * 2) + (DisplayOffsetY * 2048));
-assign FB_EN      = status[14];
-assign FB_FORMAT  = status[10] ? 5'b00101 : 5'b01100;
+assign FB_BASE    = status[11] ? 32'h30000000 : {8'h30, frameindex, DisplayOffsetY, DisplayOffsetX, 1'b0};
+assign FB_EN      = (status[14] || video_fbmode);
+assign FB_FORMAT  = (status[10] || video_fb24) ? 5'b00101 : 5'b01100;
 assign FB_WIDTH   = status[11] ? 12'd1024 : DisplayWidth;
 assign FB_HEIGHT  = status[11] ? 12'd512  : DisplayHeight;
 assign FB_STRIDE  = 14'd2048;
@@ -341,7 +342,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6            7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXX  XXX XX XXXXXXXXXXXXXXXXXXXXXXXXX
+//  X XX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXX  XXX XX XXXXXXXXXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -394,6 +395,7 @@ parameter CONF_STR = {
 	"P1O[84],Render 24 Bit,Off,On;",
 	"P1O[73],Dither 24 Bit for VGA,Off,On;",
 	"P1-;",
+	"P1O[89],480i to 480p Hack,Off,On;",
 	"P1O[54:53],Widescreen Hack,Off,3:2,5:3,16:9;",
 	"P1O[82:81],Texture Filter,Off,All Polygon,Dithered,Dith+Shaded;",
 	"hDP1O[87:86],Filter Strength,25%,50%,75%,100%;",
@@ -1026,6 +1028,7 @@ psx
    .LIMITREADSPEED(status[78]),
    .IGNORECDDMATIMING(status[88]),
    .ditherOff(status[22]),
+   .interlaced480pHack(status[89]),
    .showGunCrosshairs(status[9]),
    .fpscountOn(status[28]),
    .cdslowOn(status[59]),
@@ -1151,7 +1154,10 @@ psx
    .video_g         (g),
    .video_b         (b),
    .video_isPal     (video_isPal),   
+   .video_fbmode    (video_fbmode),   
+   .video_fb24      (video_fb24),   
    .video_hResMode  (video_hResMode),
+   .video_frameindex(frameindex),
    //Keys
    .DSAltSwitchMode(status[31]),
    .PadPortEnable1 (PadPortEnable1),
@@ -1447,7 +1453,7 @@ assign DDRAM_CLK = clk_2x;
 
 assign CLK_VIDEO = clk_vid;
 
-wire hs, vs, hbl, vbl, video_interlace, video_isPal;
+wire hs, vs, hbl, vbl, video_interlace, video_isPal, video_fbmode, video_fb24;
 
 wire [2:0] video_hResMode;
 
@@ -1602,7 +1608,7 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 		video_aspect.hb <= 0;
 	if (h_pos == hb_end)
 		video_aspect.hb <= 1;
-	if (status[62] || (status[54:53] > 0))
+	if (status[62] || status[89] || (status[54:53] > 0))
 		video_aspect.hb <= hbl;
 	
 end
