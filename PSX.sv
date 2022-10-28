@@ -383,8 +383,8 @@ parameter CONF_STR = {
 	"P1O[33:32],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"P1O[35:34],Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"P1-;",
-	"P1O[62],Fixed HBlank,On,Off;",
-	"P1O[55],Fixed VBlank,Off,On;",
+	"DEP1O[62],Fixed HBlank,On,Off;",
+	"DEP1O[55],Fixed VBlank,Off,On;",
 	"d5P1O[4:3],Vertical Crop,Off,On(224/270),On(216/256);",
 	"P1O[67],Horizontal Crop,Off,On;",
 	"P1O[41],Deinterlacing,Weave,Bob;",
@@ -392,7 +392,7 @@ parameter CONF_STR = {
 	"P1O[24],Rotate,Off,On;",
 	"P1-;",
 	"P1O[22],Dithering,On,Off;",
-	"P1O[84],Render 24 Bit,Off,On;",
+	"DEP1O[84],Render 24 Bit,Off,On;",
 	"P1O[73],Dither 24 Bit for VGA,Off,On;",
 	"P1-;",
 	"P1O[89],480i to 480p Hack,Off,On;",
@@ -471,7 +471,7 @@ parameter CONF_STR = {
 reg dbg_enabled = 0;
 wire  [1:0] buttons;
 wire [127:0] status;
-wire [15:0] status_menumask = {filter_on, saving_memcard, (bk_pending | saving_memcard), bk_pending, status[59], multitap, biosMod, ~TURBO_MEM, status[55], (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
+wire [15:0] status_menumask = {hack_480p, filter_on, saving_memcard, (bk_pending | saving_memcard), bk_pending, status[59], multitap, biosMod, ~TURBO_MEM, (status[55] && ~hack_480p), (PadPortDS1 | PadPortDS2), dbg_enabled, (PadPortGunCon1 | PadPortGunCon2 | PadPortJustif1 | PadPortJustif2), SDRAM2_EN, 1'b0};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -1042,12 +1042,12 @@ psx
    .textureFilterStrength(status[87:86]),
    .textureFilter2DOff(status[83]),
    .dither24(status[73]),
-   .render24(status[84]),
+   .render24(status[84] && ~hack_480p),
    .syncVideoOut(syncVideoOut),
    .syncInterlace(status[60]),
    .rotate180(status[24]),
-   .fixedVBlank(status[55]),
-   .vCrop(status[4:3]),
+   .fixedVBlank(status[55] && ~hack_480p),
+   .vCrop(hack_480p ? 2'b00 : status[4:3]),
    .hCrop(status[67]),
    .SPUon(~status[30]),
    .SPUSDRAM(status[44] & SDRAM2_EN),
@@ -1460,6 +1460,8 @@ wire [2:0] video_hResMode;
 wire ce_pix;
 wire [7:0] r,g,b;
 
+wire hack_480p = status[89];
+
 typedef struct {
 	logic [7:0] red;
 	logic [7:0] green;
@@ -1608,7 +1610,7 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 		video_aspect.hb <= 0;
 	if (h_pos == hb_end)
 		video_aspect.hb <= 1;
-	if (status[62] || status[89] || (status[54:53] > 0))
+	if (status[62] || hack_480p || (status[54:53] > 0))
 		video_aspect.hb <= hbl;
 	
 end
