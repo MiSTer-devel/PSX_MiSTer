@@ -336,7 +336,7 @@ begin
                transmitValue  <= transmitBuffer;
                transmitFilled <= '0';
                transmitting   <= '1';
-               baudCnt        <= to_unsigned(259 + to_integer(unsigned(JOY_BAUD)) * 8, 21);
+               baudCnt        <= to_unsigned(to_integer(unsigned(JOY_BAUD)) * 8, 21);
             elsif (actionNextCombine = '1') then
                if (transmitting = '1') then
                   JOY_CTRL(2)    <= '1';
@@ -354,7 +354,7 @@ begin
                      if (ackMem1 = '1') then
                         baudCnt <= to_unsigned(500, 21); -- todo: should be ~5us + duration 9.98us => 500 clock cycles? -- measurements and values from @JaCzekanski, psx-sps and duckstation
                      else
-                        baudCnt <= to_unsigned(200, 21); -- measurement from joypad.exe test
+                        baudCnt <= to_unsigned(450, 21); -- measurement from joypad.exe test
                      end if;
                   end if;
                elsif (waitAck = '1') then
