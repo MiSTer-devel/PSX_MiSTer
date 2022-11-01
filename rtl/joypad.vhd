@@ -251,6 +251,8 @@ begin
                      
                   when x"4" =>
                      bus_dataRead <= JOY_STAT;
+                     -- hack for emulated pad/memcards -> usually should have about 100 cycles of ack time instead of resetting it here.
+                     -- Currently there is no reason to emulate that, as it only costs ressources and emulated pads/memcards are working fine.
                      JOY_STAT_ACK <= '0';
                      
                   when x"8" =>
@@ -334,10 +336,7 @@ begin
                transmitValue  <= transmitBuffer;
                transmitFilled <= '0';
                transmitting   <= '1';
-               baudCnt        <= to_unsigned(to_integer(unsigned(JOY_BAUD)) * 8, 21);
-               if (unsigned(JOY_BAUD) = 0) then
-                  baudCnt     <= to_unsigned(8, 21);
-               end if;
+               baudCnt        <= to_unsigned(259 + to_integer(unsigned(JOY_BAUD)) * 8, 21);
             elsif (actionNextCombine = '1') then
                if (transmitting = '1') then
                   JOY_CTRL(2)    <= '1';
@@ -352,11 +351,10 @@ begin
                      waitAck <= '1';                            
                      -- ack delay and initial low phase of ~100 clock cycles(hardware bug) not implemented
                      -- current logic assumes delayless long ack duration
-                     -- measurements and values from @JaCzekanski, psx-sps and duckstation
                      if (ackMem1 = '1') then
-                        baudCnt <= to_unsigned(500, 21); -- todo: should be ~5us + duration 9.98us => 500 clock cycles?
+                        baudCnt <= to_unsigned(500, 21); -- todo: should be ~5us + duration 9.98us => 500 clock cycles? -- measurements and values from @JaCzekanski, psx-sps and duckstation
                      else
-                        baudCnt <= to_unsigned(752, 21); -- ACK delay is between 6.8us-13.7us + duration 9.98us => 566 - 833 clock cycles
+                        baudCnt <= to_unsigned(200, 21); -- measurement from joypad.exe test
                      end if;
                   end if;
                elsif (waitAck = '1') then

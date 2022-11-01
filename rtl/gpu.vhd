@@ -1712,10 +1712,10 @@ begin
                   if (vram_BUSY = '0') then
                      vramState     <= IDLE;
                      vram_WE       <= '1';
+                     fifoOut2_Rd   <= '1';
                      if (render24 = '1') then
                         vram_ADDR(27 downto 20) <= x"04";
                         vram_DIN      <= fifoOut2_Dout;
-                        fifoOut2_Rd   <= '1';
                      elsif (interlaced480pHack = '1') then
                         vram_ADDR(27 downto 20) <= "000001" & std_logic_vector(frameindex_current);
                      end if;
