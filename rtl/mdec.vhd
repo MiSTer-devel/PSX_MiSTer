@@ -175,6 +175,7 @@ architecture arch of mdec is
    signal idct_calc1_target2  : integer range 0 to 511;
    signal idct_calc1_first    : std_logic := '0';
    signal idct_calc1_last     : std_logic := '0';
+   signal idct_calc1_swap     : std_logic := '0';
    signal idct_calc1_mul1     : signed(45 downto 0); 
    signal idct_calc1_mul2     : signed(45 downto 0); 
    signal idct_calc2_ena      : std_logic := '0';
@@ -182,9 +183,11 @@ architecture arch of mdec is
    signal idct_calc2_target1  : integer range 0 to 63;
    signal idct_calc2_target2  : integer range 0 to 511;
    signal idct_calc2_last     : std_logic := '0';
+   signal idct_calc2_swap     : std_logic := '0';
   
    signal idct_write          : std_logic := '0';
-   signal idct_target         : unsigned(8 downto 0) := (others => '0');
+   signal idct_buffer         : std_logic := '0';
+   signal idct_target         : unsigned(9 downto 0) := (others => '0');
    signal idct_resultClip     : signed(7 downto 0) := (others => '0');
   
    -- color conversion
@@ -202,13 +205,14 @@ architecture arch of mdec is
    );
    signal colorState          : tcolorState := COLOR_IDLE;
       
+   signal color_buffer        : std_logic := '0';
    signal color_block         : integer range 2 to 5;
    signal color_x             : integer range 0 to 7;
    signal color_y             : integer range 0 to 7;
    signal color_xBase         : integer range 0 to 8;
    signal color_yBase         : integer range 0 to 8;
       
-   signal idct_readAddr       : unsigned(8 downto 0) := (others => '0');
+   signal idct_readAddr       : unsigned(9 downto 0) := (others => '0');
    signal idct_readData       : std_logic_vector(7 downto 0) := (others => '0');
    signal color_read_R        : signed(7 downto 0) := (others => '0');
    signal color_read_B        : signed(7 downto 0) := (others => '0');
@@ -861,7 +865,7 @@ begin
                            idct_x <= 0; 
                            idctState <= IDCT_IDLE;
                            if ((rec_depth(1) = '1' and idct_block = 5) or rec_depth(1) = '0') then
-                              idct_done <= '1';
+                              idct_done   <= '1';
                            end if;
                         end if;
                      end if;
@@ -883,6 +887,7 @@ begin
             idct_calc1_last    <= idct_calc0_last;
             idct_calc1_mul1    <= idct_calc0_mul11 * idct_calc0_mul12;
             idct_calc1_mul2    <= idct_calc0_mul21 * idct_calc0_mul22;
+            idct_calc1_swap    <= idct_done;
             
             -- stage 1 add sum
             idct_calc2_ena     <= idct_calc1_ena;
@@ -890,6 +895,7 @@ begin
             idct_calc2_last    <= idct_calc1_last;
             idct_calc2_target1 <= idct_calc1_target1;
             idct_calc2_target2 <= idct_calc1_target2;
+            idct_calc2_swap    <= idct_calc1_swap;
             if (idct_calc1_ena = '1') then
                if (idct_calc1_first = '1') then
                   idct_sum <= to_signed(0, idct_sum'length) + idct_calc1_mul1 + idct_calc1_mul2;
@@ -899,11 +905,15 @@ begin
             end if;
             
             -- stage 2 write
+            if (idct_calc2_swap = '1') then
+               idct_buffer <= not idct_buffer;
+            end if;
+            
             if (idct_calc2_ena = '1' and idct_calc2_last = '1') then
                if (idct_calc2_stage = '0') then
                   --idct_temp(idct_calc2_target1) <= resize(idct_sum, 30);
                else
-                  idct_target <= to_unsigned(idct_calc2_target2, 9);
+                  idct_target <= idct_buffer & to_unsigned(idct_calc2_target2, 9);
                   idct_write  <= '1';
                   shifted := idct_sum(48 downto 32);
                   if (shifted < -128) then
@@ -925,7 +935,7 @@ begin
    iramIDCTResult: entity work.dpram
    generic map 
    ( 
-      addr_width => 9, 
+      addr_width => 10, 
       data_width => 8
    )
    port map
@@ -943,19 +953,19 @@ begin
       q_b         => idct_readData
    );
    
-   idct_readAddr <= to_unsigned(color_bwAddr, 9) when (colorState = COLOR_BW_READ) else 
-                    "000" & to_unsigned((color_x + color_xBase) / 2 + ((color_y + color_yBase) / 2) * 8, 6) when (colorState = COLOR_READ0) else 
-                    "001" & to_unsigned((color_x + color_xBase) / 2 + ((color_y + color_yBase) / 2) * 8, 6) when (colorState = COLOR_READ1) else 
-                    to_unsigned(color_block, 3) & to_unsigned(color_x + color_y * 8, 6);
+   idct_readAddr <= color_buffer & to_unsigned(color_bwAddr, 9) when (colorState = COLOR_BW_READ) else 
+                    color_buffer & "000" & to_unsigned((color_x + color_xBase) / 2 + ((color_y + color_yBase) / 2) * 8, 6) when (colorState = COLOR_READ0) else 
+                    color_buffer & "001" & to_unsigned((color_x + color_xBase) / 2 + ((color_y + color_yBase) / 2) * 8, 6) when (colorState = COLOR_READ1) else 
+                    color_buffer & to_unsigned(color_block, 3) & to_unsigned(color_x + color_y * 8, 6);
    
    -- Color
    process (clk2x)
       variable conv_R   : signed(18 downto 0);
       variable conv_G   : signed(18 downto 0);
       variable conv_B   : signed(18 downto 0);
-      variable mix_R    : signed(8 downto 0);
-      variable mix_G    : signed(8 downto 0);
-      variable mix_B    : signed(8 downto 0);
+      variable mix_R    : signed(9 downto 0);
+      variable mix_G    : signed(9 downto 0);
+      variable mix_B    : signed(9 downto 0);
       variable final_R  : signed(8 downto 0);
       variable final_G  : signed(8 downto 0);
       variable final_B  : signed(8 downto 0);
@@ -975,6 +985,7 @@ begin
             
                when COLOR_IDLE =>
                   if (idct_done = '1') then
+                     color_buffer <= idct_buffer;
                      if (rec_depth(1) = '1') then
                         color_block <= 2;
                         colorState  <= COLOR_SELECTBLOCK;
@@ -1019,9 +1030,9 @@ begin
                   color_conv_B <= conv_B(18 downto 10);
                   
                when COLOR_CALC =>
-                  mix_R := (color_read_Y + color_conv_R);
-                  mix_G := (color_read_Y + color_conv_G);
-                  mix_B := (color_read_Y + color_conv_B);
+                  mix_R := (resize(color_read_Y,10) + resize(color_conv_R,10));
+                  mix_G := (resize(color_read_Y,10) + resize(color_conv_G,10));
+                  mix_B := (resize(color_read_Y,10) + resize(color_conv_B,10));
                   if (mix_R < -128) then final_R := to_signed(-128, 9); elsif (mix_R > 127) then final_R := to_signed(127, 9); else final_R := resize(mix_R, 9); end if;
                   if (mix_G < -128) then final_G := to_signed(-128, 9); elsif (mix_G > 127) then final_G := to_signed(127, 9); else final_G := resize(mix_G, 9); end if;
                   if (mix_B < -128) then final_B := to_signed(-128, 9); elsif (mix_B > 127) then final_B := to_signed(127, 9); else final_B := resize(mix_B, 9); end if;
