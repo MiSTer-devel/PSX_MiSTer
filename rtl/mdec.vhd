@@ -115,29 +115,32 @@ architecture arch of mdec is
    (
       IDCT_IDLE,
       IDCT_STAGE1,
-      IDCT_STAGE2
+      IDCT_STAGE2,
+      IDCT_WAIT
    );
    signal idctState           : tidctState := IDCT_IDLE;
+   
+   signal idct_wait_cnt       : integer range 0 to 2171;
    
    -- synthesis translate_off
    type tidct_input is array(0 to 63) of signed(10 downto 0);
    signal idct_input          : tidct_input;
    -- synthesis translate_on
    
-   signal IDCTi_address_a    : std_logic_vector(5 downto 0) := (others => '0');
-   signal IDCTi_data_a       : std_logic_vector(10 downto 0) := (others => '0');
-   signal IDCTi_wren_a       : std_logic := '0';
-   signal IDCTi_wren_b       : std_logic := '0';
-   signal IDCTi_address_b    : std_logic_vector(5 downto 0) := (others => '0');
-   signal IDCTi_dataO_a      : std_logic_vector(10 downto 0) := (others => '0');
-   signal IDCTi_dataO_b      : std_logic_vector(10 downto 0) := (others => '0');
-   
-   signal scaleT_address_a   : std_logic_vector(5 downto 0) := (others => '0');
-   signal scaleT_address_Wr  : std_logic_vector(5 downto 0) := (others => '0');
-   signal scaleT_data_a      : std_logic_vector(15 downto 0) := (others => '0');
-   signal scaleT_data_aFirst : std_logic_vector(15 downto 0) := (others => '0');
-   signal scaleT_data_aNext  : std_logic_vector(15 downto 0) := (others => '0');
-   signal scaleT_wren_a      : std_logic := '0';
+   signal IDCTi_address_a     : std_logic_vector(5 downto 0) := (others => '0');
+   signal IDCTi_data_a        : std_logic_vector(10 downto 0) := (others => '0');
+   signal IDCTi_wren_a        : std_logic := '0';
+   signal IDCTi_wren_b        : std_logic := '0';
+   signal IDCTi_address_b     : std_logic_vector(5 downto 0) := (others => '0');
+   signal IDCTi_dataO_a       : std_logic_vector(10 downto 0) := (others => '0');
+   signal IDCTi_dataO_b       : std_logic_vector(10 downto 0) := (others => '0');
+                              
+   signal scaleT_address_a    : std_logic_vector(5 downto 0) := (others => '0');
+   signal scaleT_address_Wr   : std_logic_vector(5 downto 0) := (others => '0');
+   signal scaleT_data_a       : std_logic_vector(15 downto 0) := (others => '0');
+   signal scaleT_data_aFirst  : std_logic_vector(15 downto 0) := (others => '0');
+   signal scaleT_data_aNext   : std_logic_vector(15 downto 0) := (others => '0');
+   signal scaleT_wren_a       : std_logic := '0';
       
    signal idct_block          : integer range 0 to 5;
    signal idct_x              : integer range 0 to 7;
@@ -150,14 +153,14 @@ architecture arch of mdec is
    --type tidct_temp is array(0 to 63) of signed(29 downto 0);
    --signal idct_temp           : tidct_temp;
    
-   signal IDCTt_address_a    : std_logic_vector(5 downto 0) := (others => '0');
-   signal IDCTt_data_a       : std_logic_vector(29 downto 0) := (others => '0');
-   signal IDCTt_wren_a       : std_logic := '0';
-   signal IDCTt_wren_b       : std_logic := '0';
-   signal IDCTt_address_b1   : std_logic_vector(5 downto 0) := (others => '0');
-   signal IDCTt_address_b2   : std_logic_vector(5 downto 0) := (others => '0');
-   signal IDCTt_dataO_b1     : std_logic_vector(29 downto 0) := (others => '0');
-   signal IDCTt_dataO_b2     : std_logic_vector(29 downto 0) := (others => '0');
+   signal IDCTt_address_a     : std_logic_vector(5 downto 0) := (others => '0');
+   signal IDCTt_data_a        : std_logic_vector(29 downto 0) := (others => '0');
+   signal IDCTt_wren_a        : std_logic := '0';
+   signal IDCTt_wren_b        : std_logic := '0';
+   signal IDCTt_address_b1    : std_logic_vector(5 downto 0) := (others => '0');
+   signal IDCTt_address_b2    : std_logic_vector(5 downto 0) := (others => '0');
+   signal IDCTt_dataO_b1      : std_logic_vector(29 downto 0) := (others => '0');
+   signal IDCTt_dataO_b2      : std_logic_vector(29 downto 0) := (others => '0');
   
    signal idct_calc0_ena      : std_logic := '0';
    signal idct_calc0_stage    : std_logic := '0';
@@ -791,6 +794,12 @@ begin
             case (idctState) is
             
                when IDCT_IDLE =>
+                  if (rec_depth = "11") then -- 15bit mode
+                     idct_wait_cnt <= 2171;
+                  else
+                     idct_wait_cnt <= 10;
+                  end if;
+                  
                   if (FifoRL_Empty = '0' and FifoOut_Empty = '1') then
                      if (FifoRL_Dout(20) = '1') then
                         idctState   <= IDCT_STAGE1;
@@ -865,7 +874,7 @@ begin
                            idct_x <= 0; 
                            idctState <= IDCT_IDLE;
                            if ((rec_depth(1) = '1' and idct_block = 5) or rec_depth(1) = '0') then
-                              idct_done   <= '1';
+                              idctState <= IDCT_WAIT;
                            end if;
                         end if;
                      end if;
@@ -874,6 +883,15 @@ begin
                   -- synthesis translate_off
                   idct_input(idct_x * 8 + idct_y) <= (others => '0'); -- clear table here for next usage
                   -- synthesis translate_on
+               
+               when IDCT_WAIT =>
+                  if (idct_wait_cnt > 0) then
+                     idct_wait_cnt <= idct_wait_cnt - 1;
+                  else
+                     idctState <= IDCT_IDLE;
+                     idct_done <= '1';
+                  end if;
+                  
                
             end case;
             
