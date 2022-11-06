@@ -108,6 +108,7 @@ architecture arch of cd_top is
    signal pendingDriveIRQ           : std_logic_vector(4 downto 0);
    signal pendingDriveResponse      : std_logic_vector(7 downto 0);
    signal ackPendingIRQ             : std_logic := '0';
+   signal ackPendingSector          : std_logic := '0';
    signal ackRead_valid             : std_logic := '0';
             
    signal FifoParam_reset           : std_logic := '0';
@@ -349,6 +350,8 @@ architecture arch of cd_top is
    type tsectorBufferSizes is array(0 to 7) of integer range 0 to 588;
    signal sectorBufferSizes         : tsectorBufferSizes;
    
+   signal sectorBufferFilled        : std_logic := '0';
+   
    signal sectorBuffers_addrA       : std_logic_vector(12 downto 0) := (others => '0');
    signal sectorBuffers_DataA       : std_logic_vector(31 downto 0) := (others => '0');
    signal sectorBuffers_wrenA       : std_logic;
@@ -551,6 +554,7 @@ begin
             irqOut            <= '0';
             ackRead_valid     <= '0';
             ackPendingIRQ     <= '0';
+            ackPendingSector  <= '0';
             copyData          <= '0';
             cmd_unpause       <= '0';
          
@@ -601,6 +605,9 @@ begin
                               if (newFlags = "00000") then
                                  if (pendingDriveIRQ /= "00000") then
                                     ackPendingIRQ   <= '1';
+                                    if (pendingDriveIRQ = "00001") then
+                                       ackPendingSector <= '1';
+                                    end if;
                                  else
                                     if (cmd_delay > 0) then
                                        cmd_unpause <= '1';
@@ -707,8 +714,8 @@ begin
             
             if (ackRead = '1' or ackRead_data = '1') then
                if (CDROM_IRQFLAG = "00001") then -- irq for sector still pending, sector missed
-                  -- todo: nothing can be done?
-               elsif (CDROM_IRQFLAG /= "00000") then -- todo: store failed sector read as additional irq? duckstation does it, THPS2 expects it to not happen
+                  -- will be handled when next sector is fetched from cpu interface
+               elsif (CDROM_IRQFLAG /= "00000") then -- store sector done if current irq is something else, so CPU will be notified later
                   pendingDriveIRQ      <= "00001";
                   pendingDriveResponse <= internalStatus;
                else
@@ -1701,8 +1708,6 @@ begin
             startMotorReset        <= '0'; 
             startMotor             <= '0';
          end if;
-         
-         error  <= '0';
 
          if (reset = '1') then
             
@@ -1804,10 +1809,15 @@ begin
             if ((driveState /= DRIVE_READING and startReading = '0') or XA_write = '1' or mdec_idle = '0') then
                allow_speedhack <= '0';
             end if;
+            
+            sectorBufferFilled <= '0';
+            if (driveState = DRIVE_READING and sectorBufferSizes(to_integer((writeSectorPointer + 4))) /= 0) then -- allow up to 4 buffers to be filled
+               sectorBufferFilled <= '1';
+            end if;
          
             if (driveBusy = '1') then
                if (driveDelay > 0) then
-                  if ((LIMITREADSPEED = '0' or CDROM_IRQFLAG = "00000") or driveDelay > 8191) then
+                  if ((sectorBufferFilled = '0' and LIMITREADSPEED = '0') or CDROM_IRQFLAG = "00000" or driveDelay > 8191) then
                      if (sectorFetchState = SFETCH_IDLE or driveDelay > 127) then -- make sure to stop drive countdown if data isn't ready early enough so commands are still possible
                         driveDelay <= driveDelay - 1;
                      end if;
@@ -2159,8 +2169,8 @@ begin
                internalStatus(4) <= '0';
             end if;
             
-            if (ackRead_valid = '1' or ackPendingIRQ = '1') then
-               readSectorPointer <= writeSectorPointer;
+            if (ackRead_valid = '1' or ackPendingSector = '1') then
+               readSectorPointer <= readSectorPointer + 1;
             end if;
             
             if (startMotorCMD = '1') then
@@ -2337,6 +2347,8 @@ begin
          
          sectorBuffer_wrenA  <= '0';
          sectorBuffers_wrenA <= '0';
+         
+         error               <= '0';
          
          pauseCD <= '0';
          if (pauseOnCDSlow = '1') then
@@ -2692,6 +2704,9 @@ begin
                when SPROC_FIRST =>
                   sectorProcessState <= SPROC_DATA;
                   procReadAddr <= procReadAddr + 1;
+                  if (sectorBufferSizes(to_integer(writeSectorPointer)) /= 0) then
+                     --error <= '1';
+                  end if;
                   sectorBufferSizes(to_integer(writeSectorPointer)) <= procSize;
                
                when SPROC_DATA =>
