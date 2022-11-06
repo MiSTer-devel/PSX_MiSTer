@@ -440,7 +440,7 @@ parameter CONF_STR = {
 	"-   ;",
 	"R0,Reset;",
 	"J1,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,Savestates,Fastforward,Pause(Core),Toggle Dualshock;",
-	"jn,Triangle,Circle,Cross,Square,Select,Start,L1,R1,L2,R2,L3,R3,X,X;",
+	"jn,X,A,B,Y,Select,Start,L,R;",
 	"I,",
 	"Load=DPAD Up|Save=Down|Slot=L+R,",
 	"Active Slot 1,",
