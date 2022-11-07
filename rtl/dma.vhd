@@ -687,7 +687,7 @@ begin
                         
                         when 1 =>
                            if (toDevice = '0') then
-                              fifoOut_Wr                <= '1';
+                              fifoOut_Wr                <= not dmaSettings.D_MADR(23);
                               fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_MDEC_read;
                            else
@@ -699,14 +699,14 @@ begin
                               DMA_GPU_writeEna  <= '1'; 
                               DMA_GPU_write     <= dma_data;
                            else
-                              fifoOut_Wr                <= '1';
+                              fifoOut_Wr                <= not dmaSettings.D_MADR(23);
                               fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_GPU_read;
                            end if;
                            
                         when 3 =>
                            if (toDevice = '0') then
-                              fifoOut_Wr                <= '1';
+                              fifoOut_Wr                <= not dmaSettings.D_MADR(23);
                               fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_CD_read & DMA_CD_read_accu;
                            end if;
@@ -718,14 +718,14 @@ begin
                               DMA_SPU_writeEna  <= '1';
                               DMA_SPU_write     <= fifoIn_Dout(15 downto 0);
                            else
-                              fifoOut_Wr                <= '1';
+                              fifoOut_Wr                <= not dmaSettings.D_MADR(23);
                               fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               fifoOut_Din(31 downto 0)  <= DMA_SPU_read & DMA_SPU_read_accu;
                            end if;
                            
                         when 6 =>
                            if (toDevice = '0') then
-                              fifoOut_Wr                <= '1';
+                              fifoOut_Wr                <= not dmaSettings.D_MADR(23);
                               fifoOut_Din(52 downto 32) <= std_logic_vector(dmaSettings.D_MADR(22 downto 2));
                               if (wordcount = 1) then
                                  fifoOut_Din(31 downto 0) <= x"00FFFFFF";

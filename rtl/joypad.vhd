@@ -354,7 +354,7 @@ begin
                      if (ackMem1 = '1') then
                         baudCnt <= to_unsigned(500, 21); -- todo: should be ~5us + duration 9.98us => 500 clock cycles? -- measurements and values from @JaCzekanski, psx-sps and duckstation
                      else
-                        baudCnt <= to_unsigned(500, 21); -- measurement from joypad.exe test - slightly below average case timing (using best case only will let RE DC fail pad detect occasionally)
+                        baudCnt <= to_unsigned(550, 21); -- measurement from joypad.exe test - average case timing (using best case only will let RE DC fail pad detect occasionally)
                      end if;
                   end if;
                elsif (waitAck = '1') then
