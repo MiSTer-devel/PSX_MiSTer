@@ -967,7 +967,10 @@ begin
                   
                end if;
             
+            end if;
             
+            if (proc_idle = '1') then
+               interlacedDrawing <= GPUSTAT_VertInterlace and GPUSTAT_VerRes and not GPUSTAT_DrawToDisplay;
             end if;
 
             GPUSTAT_ReadyRecDMA <= fifoIn_Empty;
@@ -1010,8 +1013,6 @@ begin
    proc_requestFifo <= vramFill_requestFifo or cpu2vram_requestFifo or vram2vram_requestFifo or vram2cpu_requestFifo or line_requestFifo or rect_requestFifo or poly_requestFifo;
    
    pixelStall <= fifoOut_NearFull;
-   
-   interlacedDrawing <= GPUSTAT_VertInterlace and GPUSTAT_VerRes and not GPUSTAT_DrawToDisplay;
    
    -- workers
    igpu_fillVram : entity work.gpu_fillVram
