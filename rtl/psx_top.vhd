@@ -178,6 +178,8 @@ entity psx_top is
       joypad3               : in  joypad_t;
       joypad4               : in  joypad_t;
       multitap              : in  std_logic;
+      multitapDigital       : in  std_logic;
+      multitapAnalog        : in  std_logic;
       joypad1_rumble        : out std_logic_vector(15 downto 0);
       joypad2_rumble        : out std_logic_vector(15 downto 0);
       joypad3_rumble        : out std_logic_vector(15 downto 0);
@@ -1041,6 +1043,8 @@ begin
       joypad3              => joypad3,
       joypad4              => joypad4,
       multitap             => multitap,
+      multitapDigital      => multitapDigital,
+      multitapAnalog       => multitapAnalog,
       joypad1_rumble       => joypad1_rumble,
       joypad2_rumble       => joypad2_rumble,
       joypad3_rumble       => joypad3_rumble,

@@ -13,6 +13,8 @@ entity joypad_pad is
       
       DSAltSwitchMode      : in  std_logic;
       isMultitap           : in  std_logic := '0';
+      multitapDigital      : in  std_logic;
+      multitapAnalog       : in  std_logic;
       joypad1              : in  joypad_t;
       joypad2              : in  joypad_t;
       joypad3              : in  joypad_t;
@@ -425,7 +427,11 @@ begin
                            
                         when MULTITAP_READY =>
                            if (multitap_valid(multitap_counter) = '1') then
-                              receiveBuffer   <= x"41"; -- just for testing, always reply with digital controller
+                              if (multitapAnalog = '1') then
+                                  receiveBuffer   <= x"73";
+                              else
+                                  receiveBuffer   <= x"41";
+                              end if;
                               controllerState <= MULTITAP_ID;
                            else
                               receiveBuffer   <= x"FF";
@@ -550,7 +556,11 @@ begin
                                  if (multitapModeSave = '1') then
                                     receiveBuffer   <= x"80";
                                  else
-                                    receiveBuffer   <= x"41";
+                                    if (multitapAnalog = '1') then
+                                        receiveBuffer   <= x"73";
+                                    else
+                                        receiveBuffer   <= x"41";
+                                    end if;
                                  end if;
                                  controllerState <= ID;
                                  ack             <= '1';
@@ -695,7 +705,7 @@ begin
                            receiveBuffer(6) <= not joypad.KeyCross;
                            receiveBuffer(7) <= not joypad.KeySquare;
                            receiveValid     <= '1';
-                           if (analogPadSave = '1' or dsAnalogModeSave = '1' or dsConfigModeSave = '1' or analogStickSave = '1') then
+                           if (analogPadSave = '1' or dsAnalogModeSave = '1' or dsConfigModeSave = '1' or analogStickSave = '1' or multitapAnalog = '1') then
                               controllerState <= ANALOGRIGHTX;
                               ack <= '1';
                            else
@@ -716,7 +726,7 @@ begin
                               end if;
                            end if;
 
-                           if (isMultitap = '1') then
+                           if (multitapDigital = '1') then
                                if (multitapModeSave = '1') then
                                   rom_pointer     <= 36; -- just lots of FF padding
                                   bytecount       <= 4;
@@ -812,6 +822,12 @@ begin
                                  if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
                               end if;
                               if (portStates(portNr).dsRumbleIndexL = 5) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
+                           end if;
+
+                           if (multitapAnalog = '1' and multitapModeSave = '1' and multitap_counter /= 3) then
+                              controllerState       <= MULTITAP_READY;
+                              multitap_counter      <= multitap_counter + 1;
+                              ack <= '1';
                            end if;
                            
 -- ##############################################################################

@@ -22,6 +22,8 @@ entity joypad is
       joypad3              : in  joypad_t;
       joypad4              : in  joypad_t;
       multitap             : in  std_logic;
+      multitapDigital      : in  std_logic;
+      multitapAnalog       : in  std_logic;
       joypad1_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
       joypad2_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
       joypad3_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
@@ -413,6 +415,8 @@ begin
       rumble               => rumble_selected,
       padMode              => padMode,
       isMultitap           => multitap,
+      multitapDigital      => multitapDigital,
+      multitapAnalog       => multitapAnalog,
       portNr               => portNr,
       isPal                => isPal,
 
