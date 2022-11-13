@@ -19,7 +19,10 @@ entity joypad_pad is
       joypad2              : in  joypad_t;
       joypad3              : in  joypad_t;
       joypad4              : in  joypad_t;
-      rumble               : out std_logic_vector(15 downto 0);
+      joypad1_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
+      joypad2_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
+      joypad3_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
+      joypad4_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
       padMode              : out std_logic_vector(1 downto 0);
       portNr               : in integer range 0 to 1;
 
@@ -154,6 +157,9 @@ architecture arch of joypad_pad is
    type portState_array is array(0 to 1) of portState;
    signal portStates : portState_array := (others => ('0', '0', '0', '0', (others => '1'), (others => '0'), -1, -1, '0'));
 
+   type joypad_array is array(0 to 3) of joypad_t;
+   signal joypads : joypad_array;
+
    signal dsConfigModeSave  : std_logic := '0';
    signal dsAnalogModeSave  : std_logic := '0';
 
@@ -161,6 +167,7 @@ architecture arch of joypad_pad is
    signal isMultitap_1      : std_logic := '0';
    signal multitap_swapped  : std_logic := '0';
    signal multitap_offCnt   : integer range 0 to 255;
+   signal joypad_index      : integer range 0 to 3;
 
    type tresponse is array (natural range <>) of std_logic_vector(7 downto 0);
    constant response : tresponse :=(
@@ -196,12 +203,16 @@ begin
    ss_out(12)           <= portStates(0).multitapMode;
    ss_out(31 downto 13) <= (others => '0');
 
-   joypad <= joypad1 when (isMultitap = '0' and portNr = 0) else
-             joypad2 when (isMultitap = '0' and portNr = 1) else
-             joypad2 when multitap_counter = 1 else
-             joypad3 when multitap_counter = 2 else
-             joypad4 when multitap_counter = 3 else
-             joypad1;
+   joypad_index <=
+      0 when (isMultitap = '0' and portNr = 0) else
+      1 when (isMultitap = '0' and portNr = 1) else
+      1 when multitap_counter = 1 else
+      2 when multitap_counter = 2 else
+      3 when multitap_counter = 3 else
+      0;
+
+   joypads <= (joypad1, joypad2, joypad3, joypad4);
+   joypad  <= joypads(joypad_index);
    
    process (clk1x)
       variable mouseIncX            : signed(9 downto 0) := (others => '0');
@@ -212,6 +223,7 @@ begin
       variable newMouseAccClippedY  : signed(9 downto 0) := (others => '0');
       variable newAnalog            : signed(8 downto 0) := (others => '0');
       variable newPedal             : signed(7 downto 0) := (others => '0');
+      variable rumble               : std_logic_vector(15 downto 0) := (others => '0');
    begin
       if rising_edge(clk1x) then
       
@@ -221,13 +233,13 @@ begin
          ack <= '0';
          
          -- weak motor -> always full strength
-         rumble(7 downto 0) <= portStates(portNr).rumble(7 downto 0);
+         rumble(7 downto 0) := portStates(portNr).rumble(7 downto 0);
          
          -- strong motor: "The Left/Large motor starts spinning at circa min=50h..60h, and, once when started keeps spinning downto circa min=38h"
          if (unsigned(portStates(portNr).rumble) < 15#38#) then
-            rumble(15 downto 8) <= (others => '0');
+            rumble(15 downto 8) := (others => '0');
          else      
-            rumble(15 downto 8) <= portStates(portNr).rumble(15 downto 8);
+            rumble(15 downto 8) := portStates(portNr).rumble(15 downto 8);
          end if;
          
          -- increase analog values by 1/8 and convert from -127..127 to 0..255
@@ -267,8 +279,20 @@ begin
 
             multitap_valid <= (others => '0');
 
+            joypad1_rumble <= (others => '0');
+            joypad2_rumble <= (others => '0');
+            joypad3_rumble <= (others => '0');
+            joypad4_rumble <= (others => '0');
+
          elsif (ce = '1') then
          
+            case (joypad_index) is
+               when 0 => joypad1_rumble <= rumble;
+               when 1 => joypad2_rumble <= rumble;
+               when 2 => joypad3_rumble <= rumble;
+               when 3 => joypad4_rumble <= rumble;
+            end case;
+
             if (selected = '0') then
                isActive        <= '0';
                controllerState <= IDLE;
