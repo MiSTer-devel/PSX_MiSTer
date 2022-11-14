@@ -297,6 +297,7 @@ begin
             videoout_reports.inVsync                  <= videoout_ss_in.inVsync;
             videoout_reports.activeLineLSB            <= videoout_ss_in.activeLineLSB;
             videoout_reports.GPUSTAT_DrawingOddline   <= videoout_ss_in.GPUSTAT_DrawingOddline;
+            videoout_reports.GPUSTAT_InterlaceField   <= videoout_ss_in.GPUSTAT_InterlaceField;
             
             vdisp            <= to_integer(unsigned(videoout_ss_in.vdisp));
 
@@ -374,6 +375,14 @@ begin
                end if;
                -- synthesis translate_on
 
+               if (vdisp /= 0 and vdispNew = 0) then
+                  if (videoout_settings.GPUSTAT_VertInterlace = '1') then
+                     videoout_reports.GPUSTAT_InterlaceField <= not videoout_reports.GPUSTAT_InterlaceField;
+                  else
+                     videoout_reports.GPUSTAT_InterlaceField <= '0';
+                  end if;
+               end if;
+
                vdisp <= vdispNew;
 
                if (vDisplayCnt < vDisplayMax) then
@@ -429,6 +438,9 @@ begin
                else
                   if (videoout_settings.vramRange(10) = '0' and (vdispNew mod 2) = 1) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
                   if (videoout_settings.vramRange(10) = '1' and (vdispNew mod 2) = 0) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+               end if;
+               if (vdispNew >= vDisplayEnd or vdispNew = 0) then
+                  videoout_reports.GPUSTAT_DrawingOddline <= '0';
                end if;
                
                -- fixed vblank 
@@ -518,6 +530,7 @@ begin
             end if;
             
             if (softReset = '1') then
+               videoout_reports.GPUSTAT_InterlaceField <= '1';
                videoout_reports.GPUSTAT_DrawingOddline <= '0';
                videoout_reports.irq_VBLANK             <= '0';
                
@@ -615,8 +628,7 @@ begin
             videoout_request.lineDisp  <= (others => '0');
             readstate                  <= IDLE;
             
-            videoout_reports.GPUSTAT_InterlaceField <= videoout_ss_in.GPUSTAT_InterlaceField;
-            InterlaceFieldN                         <= videoout_ss_in.GPUSTAT_InterlaceField;
+            InterlaceFieldN            <= videoout_ss_in.GPUSTAT_InterlaceField;
          
          else
             
@@ -831,16 +843,10 @@ begin
                if (vpos = vsync_vstart + 3) then 
                   ditherFirstLine    <= '1';
                   videoout_out.vsync <= '0'; 
-                  if (videoout_settings.GPUSTAT_VertInterlace = '1') then
-                     videoout_reports.GPUSTAT_InterlaceField <= not videoout_reports.GPUSTAT_InterlaceField;
-                  else
-                     videoout_reports.GPUSTAT_InterlaceField <= '0';
-                  end if;
                end if;
             end if;
             
             if (softReset = '1') then
-               videoout_reports.GPUSTAT_InterlaceField <= '1';
                InterlaceFieldN                         <= '1';
             end if;
          

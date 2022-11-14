@@ -308,7 +308,7 @@ begin
                else
                   COMMAND_FILE_ENDIAN <= '0';
                end if;
-               if (targetmem = 1 or (targetmem = 0 and address < 8388608)) then -- sdram
+               if (targetmem = 1) then -- sdram
                   COMMAND_FILE_START_1  <= '1';
                   --wait until COMMAND_FILE_ACK_1 = '1';
                   wait for 30 ns;
