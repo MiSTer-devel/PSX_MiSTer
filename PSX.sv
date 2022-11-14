@@ -339,10 +339,10 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
 // Status Bit Map: (0..31 => "O", 32..63 => "o")
-// 0         1         2         3          4         5         6            7         8         9
+// 0         1         2         3          4         5         6          7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  X XX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXX  XXX XX XXXXXXXXXXXXXXXXXXXXXXXXXX
+//  X XX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX XX XX XXXXXXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -375,7 +375,7 @@ parameter CONF_STR = {
 	"D8O[52:49],Pad2,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port2,Analog Joystick;",
 	"D8h2O[9],Show Crosshair,Off,On;",
 	"D8h4O[31],DS Mode,L3+R3+Up/Dn | Click,L1+L2+R1+R2+Up/Dn;",
-	"O[66],Multitap,Off,Port1: 4 x Digital;",
+	"O[57:56],Multitap,Off,Port1: 4 x Digital,Port1: 4 x Analog;",
 	"-;",
 
 	"P1,Video & Audio;",
@@ -857,7 +857,12 @@ wire PadPortJustif2  = (status[52:49] == 4'b1001);
 wire snacPort2       = (status[52:49] == 4'b1010) && ~multitap;
 wire PadPortStick2   = (status[52:49] == 4'b1011);
 
-wire multitap       = status[66];
+// 00 -> multitap off
+// 01 -> port1, 4 x digital
+// 10 -> port1, 4 x analog
+wire multitap        = (status[57:56] != 2'b00);
+wire multitapDigital = (status[57:56] == 2'b01);
+wire multitapAnalog  = (status[57:56] == 2'b10);
 
 wire [1:0] padMode;
 reg  [1:0] padMode_1;
@@ -1224,6 +1229,8 @@ psx
    .MouseX({mouse[4],mouse[15:8]}),
    .MouseY({mouse[5],mouse[23:16]}),
    .multitap(multitap),
+   .multitapDigital(multitapDigital),
+   .multitapAnalog(multitapAnalog),
    //snac
    .snacPort1(snacPort1),
    .snacPort2(snacPort2),

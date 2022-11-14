@@ -223,6 +223,8 @@ entity psx_mister is
       Analog2XP4            : in  signed(7 downto 0);
       Analog2YP4            : in  signed(7 downto 0);
       multitap              : in  std_logic;
+      multitapDigital       : in  std_logic;
+      multitapAnalog        : in  std_logic;
       -- mouse
       MouseEvent            : in  std_logic;
       MouseLeft             : in  std_logic;
@@ -590,6 +592,8 @@ begin
       joypad4_rumble        => RumbleDataP4,
 
       multitap              => multitap,
+      multitapDigital       => multitapDigital,
+      multitapAnalog        => multitapAnalog,
 
       padMode               => padMode,
 
