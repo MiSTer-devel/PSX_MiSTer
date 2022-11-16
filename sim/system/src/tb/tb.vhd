@@ -228,7 +228,8 @@ begin
    -- NTSC 53.693175 mhz => 18624.340989ps
    clkvid <= not clkvid after 9312 ps;
       
-   -- PAL  53.203425 mhz => 18795.782414ps
+   -- PAL  53.203425 mhz => 30 ns * 33.8688 / 53.203425 / 2 = 9.5488589315 ns
+   --clkvid <= not clkvid after 9549 ps;
    
    -- sync  = 2x => 67.7376 mhz
    --clkvid <= not clkvid  after 7500 ps;
@@ -448,6 +449,8 @@ begin
       Analog2XP4            => Analog2XP2,
       Analog2YP4            => Analog2YP2, 
       multitap              => '0',
+      multitapDigital       => '0',
+      multitapAnalog        => '0',
       MouseEvent            => MouseEvent,
       MouseLeft             => MouseLeft,
       MouseRight            => MouseRight,

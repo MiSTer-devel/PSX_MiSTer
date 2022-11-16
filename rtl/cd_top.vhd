@@ -3030,7 +3030,7 @@ begin
                if (to_integer(unsigned(trackinfo_addr)) = 3) then
                   libcryptKey <= trackinfo_data(15 downto 0);
                   region_out  <= trackinfo_data(17 downto 16);
-                  resetFromCD <= trackinfo_data(18);
+                  resetFromCD <= trackinfo_data(18) and (not LIDopen);
                end if;
             
                -- tracks

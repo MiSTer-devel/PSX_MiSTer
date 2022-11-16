@@ -347,6 +347,31 @@ begin
                end if;
             end if;
             
+            -- variables can be calculated always
+            mode480i := '0';
+            if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_settings.GPUSTAT_VertInterlace = '1') then mode480i := '1'; end if;
+            
+            vdispNew := vdisp + 1;
+
+            -- starting to fetch video data? measured from 7502(PAL) console -> GPUSTAT_DrawingOddline is starting earlier than full line after vsync irq
+            if (nextHCount = 170) then
+            
+               if (videoout_out.vsync = '1' and vpos /= 245) then
+                  vdispNew := 0;
+               end if;
+            
+               if (mode480i = '0') then
+               
+                  if (vdispNew < vDisplayEnd and vdispNew /= 0) then
+                     videoout_reports.GPUSTAT_DrawingOddline <= '0';
+                     if (videoout_settings.vramRange(10) = '0' and (vdispNew mod 2) = 1) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+                     if (videoout_settings.vramRange(10) = '1' and (vdispNew mod 2) = 0) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+                  end if;
+                  
+               end if;
+               
+            end if;
+
             -- gpu timing count
             if (nextHCount > 1) then
                nextHCount <= nextHCount - 1;
@@ -360,20 +385,16 @@ begin
                end if;               
                
                -- todo: timer 1
-               
-               mode480i := '0';
-               if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_settings.GPUSTAT_VertInterlace = '1') then mode480i := '1'; end if;
-               
-               vdispNew := vdisp + 1;
                if (videoout_out.vsync = '1') then
-                   vdispNew := 0;
+                  vdispNew := 0;
                end if;
                
                -- synthesis translate_off
                if (vdispNew >= vtotal) then
-                   vdispNew := 0; -- fix simulation issues with rollover
+                  vdispNew := 0; -- fix simulation issues with rollover
                end if;
                -- synthesis translate_on
+            
 
                if (vdisp /= 0 and vdispNew = 0) then
                   if (videoout_settings.GPUSTAT_VertInterlace = '1') then
@@ -426,19 +447,12 @@ begin
                end if;
                videoout_reports.interlacedDisplayField <= interlacedDisplayFieldNew;
                
-             
-               videoout_reports.GPUSTAT_DrawingOddline <= '0';
                videoout_reports.activeLineLSB          <= '0';
                if (mode480i = '1') then
                   if (videoout_settings.vramRange(10) = '0' and interlacedDisplayFieldNew = '1') then videoout_reports.activeLineLSB <= '1'; end if;
                   if (videoout_settings.vramRange(10) = '1' and interlacedDisplayFieldNew = '0') then videoout_reports.activeLineLSB <= '1'; end if;
-               
-                  if (videoout_settings.vramRange(10) = '0' and isVsync = '0' and interlacedDisplayFieldNew = '1') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
-                  if (videoout_settings.vramRange(10) = '1' and isVsync = '0' and interlacedDisplayFieldNew = '0') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
-               else
-                  if (videoout_settings.vramRange(10) = '0' and (vdispNew mod 2) = 1) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
-                  if (videoout_settings.vramRange(10) = '1' and (vdispNew mod 2) = 0) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
                end if;
+               
                if (vdispNew >= vDisplayEnd or vdispNew = 0) then
                   videoout_reports.GPUSTAT_DrawingOddline <= '0';
                end if;
@@ -467,6 +481,15 @@ begin
 
                newLineTrigger <= '1';
                
+               vdispNew := vdispNew + 1;
+               -- GPUSTAT_DrawingOddline in interlaced mode is set 1 line before vsync ends (tested on 7502 PAL console)
+               if (mode480i = '1') then
+                  if (vdispNew = vDisplayStart) then
+                     if (videoout_settings.vramRange(10) = '0' and videoout_reports.interlacedDisplayField = '1') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+                     if (videoout_settings.vramRange(10) = '1' and videoout_reports.interlacedDisplayField = '0') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+                  end if;
+               end if;
+               
                -- fetching of next line from framebuffer
                activeLineLSBMuxed          := videoout_reports.activeLineLSB;
                interlacedDisplayFieldMuxed := videoout_reports.interlacedDisplayField;
@@ -475,7 +498,6 @@ begin
                   interlacedDisplayFieldMuxed := activeLSBpause;
                end if;
                
-               vdispNew := vdispNew + 1;
                nextLineCalc := nextLineCalcSaved;
                if (vDisplayStart > 0) then
                   if (vdispNew >= vDisplayStart and vdispNew < vDisplayEnd) then
