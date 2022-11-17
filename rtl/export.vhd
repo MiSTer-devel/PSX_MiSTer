@@ -33,6 +33,11 @@ use STD.textio.all;
 use work.pexport.all;
 
 entity export is
+   generic
+   (
+      export_index      : std_logic := '1';
+      export_time       : std_logic := '0'
+   );
    port 
    (
       clk               : in std_logic;
@@ -181,11 +186,18 @@ begin
          
          if (exportnow = '1') then
          
-            write(line_out, string'("# "));
-            write(line_out, to_lower(to_hstring(totalticks - 1)) & " ");
-            
-            write(line_out, string'("# "));
-            write(line_out, to_lower(to_hstring(newticks)) & " ");
+            if (export_index = '1') then
+               write(line_out, string'("# "));
+               write(line_out, to_lower(to_hstring(cyclenr - 1)) & " ");
+            end if;
+         
+            if (export_time = '1') then
+               write(line_out, string'("# "));
+               write(line_out, to_lower(to_hstring(totalticks - 1)) & " ");
+               
+               write(line_out, string'("# "));
+               write(line_out, to_lower(to_hstring(newticks)) & " ");
+            end if;
             
             write(line_out, string'("PC "));
             write(line_out, to_lower(to_hstring(export_cpu.pc)) & " ");
@@ -209,15 +221,16 @@ begin
             
             if (export_irq /= export_irq_last)   then write(line_out, string'("IRQ "));  write(line_out, to_lower(to_hstring(export_irq)) & " "); end if;
             
-            if (export_gtm /= export_gtm_last)   then write(line_out, string'("GTM "));  write(line_out, to_lower(to_hstring(export_gtm)) & " "); end if;
-            if (export_line /= export_line_last) then write(line_out, string'("LINE ")); write(line_out, to_lower(to_hstring(export_line)) & " "); end if;
-            if (export_gpus /= export_gpus_last) then write(line_out, string'("GPUS ")); write(line_out, to_lower(to_hstring(export_gpus)) & " "); end if;
-            if (export_gobj /= export_gobj_last) then write(line_out, string'("GOBJ ")); write(line_out, to_lower(to_hstring(export_gobj)) & " "); end if;
+            if (export_time = '1') then
+               if (export_gtm /= export_gtm_last)   then write(line_out, string'("GTM "));  write(line_out, to_lower(to_hstring(export_gtm)) & " "); end if;
+               if (export_line /= export_line_last) then write(line_out, string'("LINE ")); write(line_out, to_lower(to_hstring(export_line)) & " "); end if;
+               if (export_gpus /= export_gpus_last) then write(line_out, string'("GPUS ")); write(line_out, to_lower(to_hstring(export_gpus)) & " "); end if;
+               if (export_gobj /= export_gobj_last) then write(line_out, string'("GOBJ ")); write(line_out, to_lower(to_hstring(export_gobj)) & " "); end if;
             
-            if (export_t_current0 /= export_t_current0_last) then write(line_out, string'("T0 ")); write(line_out, to_lower(to_hstring(export_t_current0)) & " "); end if;
-            if (export_t_current1 /= export_t_current1_last) then write(line_out, string'("T1 ")); write(line_out, to_lower(to_hstring(export_t_current1)) & " "); end if;
-            if (export_t_current2 /= export_t_current2_last) then write(line_out, string'("T2 ")); write(line_out, to_lower(to_hstring(export_t_current2)) & " "); end if;
-
+               if (export_t_current0 /= export_t_current0_last) then write(line_out, string'("T0 ")); write(line_out, to_lower(to_hstring(export_t_current0)) & " "); end if;
+               if (export_t_current1 /= export_t_current1_last) then write(line_out, string'("T1 ")); write(line_out, to_lower(to_hstring(export_t_current1)) & " "); end if;
+               if (export_t_current2 /= export_t_current2_last) then write(line_out, string'("T2 ")); write(line_out, to_lower(to_hstring(export_t_current2)) & " "); end if;
+            end if;
 
             writeline(outfile, line_out);
             

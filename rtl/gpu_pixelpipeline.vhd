@@ -19,7 +19,8 @@ entity gpu_pixelpipeline is
       DrawPixelsMask_in    : in  std_logic;
       SetMask_in           : in  std_logic;
       
-      clearCache           : in  std_logic;
+      clearCacheTexture    : in  std_logic;
+      clearCachePalette    : in  std_logic;
       
       fifoOut_idle         : in  std_logic;
       pipeline_busy        : out std_logic;
@@ -90,6 +91,7 @@ architecture arch of gpu_pixelpipeline is
    signal drawMode            : unsigned(13 downto 0) := (others => '0');
    signal DrawPixelsMask      : std_logic := '0';
    signal SetMask             : std_logic := '0';
+   signal palette8bit         : std_logic := '0';
   
    signal tag_addr            : t_filterarray_u8;
    signal tag_data            : t_filterarray_u10;
@@ -612,20 +614,21 @@ begin
                drawMode       <= drawMode_in;      
                DrawPixelsMask <= DrawPixelsMask_in;
                SetMask        <= SetMask_in; 
-               if (drawMode_in(8) = '0' and drawMode_in(7) /= drawMode(7)) then
-                  textPalReq  <= not noTexture;
-               end if;
             end if;
             
-            if (textPalInNew = '1' and drawMode_in(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY or textPalReq = '1')) then
+            if (textPalInNew = '1' and drawMode_in(8) = '0' and (textPalFetched = '0' or textPalInX /= textPalX or textPalInY /= textPalY or palette8bit /= drawMode_in(7) or textPalReq = '1')) then
                textPalReq  <= not noTexture;
                textPalReqX <= textPalInX;
                textPalReqY <= textPalInY;
+               palette8bit <= drawMode_in(7);
             end if;
             
             -- clear cache request
-            if (clearCache = '1') then
+            if (clearCacheTexture = '1') then
                clearCacheBuffer <= '1';
+            end if;
+                        
+            if (clearCachePalette = '1') then
                textPalFetched   <= '0';
             end if;
             

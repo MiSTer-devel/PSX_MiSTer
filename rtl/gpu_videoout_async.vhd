@@ -104,6 +104,7 @@ architecture arch of gpu_videoout_async is
    signal vDisplayMax      : integer range 0 to 314 := 239;
    
    signal InterlaceFieldN  : std_logic := '0';  
+   signal mode480i_1       : std_logic := '0';  
    
    signal vblankFixed      : std_logic := '0';   
 
@@ -350,6 +351,7 @@ begin
             -- variables can be calculated always
             mode480i := '0';
             if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_settings.GPUSTAT_VertInterlace = '1') then mode480i := '1'; end if;
+            mode480i_1 <= mode480i;
             
             vdispNew := vdisp + 1;
 
@@ -370,6 +372,12 @@ begin
                   
                end if;
                
+            end if;
+            
+            -- set interlace field when turning on interlaced mode based on odd/even frame
+            if (mode480i_1 = '0' and mode480i = '1') then
+               videoout_reports.interlacedDisplayField <= videoout_reports.GPUSTAT_DrawingOddline;
+               videoout_reports.GPUSTAT_InterlaceField <= videoout_reports.GPUSTAT_DrawingOddline;
             end if;
 
             -- gpu timing count

@@ -372,7 +372,8 @@ architecture arch of gpu is
    signal pipeline_uAcc             : unsigned(7 downto 0);
    signal pipeline_vAcc             : unsigned(7 downto 0);
    
-   signal pipeline_clearCache       : std_logic;
+   signal pipeline_clearCacheTexture: std_logic := '0';
+   signal pipeline_clearCachePalette: std_logic := '0';
    
    signal pipeline_textPalNew       : std_logic;
    signal pipeline_textPalX         : unsigned(9 downto 0);   
@@ -389,9 +390,9 @@ architecture arch of gpu is
    signal fifoOut_Empty             : std_logic;
    signal fifoOut_idle              : std_logic;
    
-   signal fifoOut2_Rd               : std_logic;
    signal fifoOut2_Din              : std_logic_vector(63 downto 0);
    signal fifoOut2_Dout             : std_logic_vector(63 downto 0);
+   signal fifoOut2_Dout_1           : std_logic_vector(63 downto 0);
    
    -- vram access
    type tvramState is
@@ -902,14 +903,12 @@ begin
          
             fifoIn_Valid <= fifoIn_Rd and not fifoIn_reset;
             
-            pipeline_clearCache <= '0';
+            pipeline_clearCacheTexture <= '0';
+            pipeline_clearCachePalette <= '0';
          
             if (poly_drawModeNew = '1') then
                drawMode(8 downto 0) <= poly_drawModeRec(8 downto 0);
                drawMode(11)         <= poly_drawModeRec(11);
-               if (drawMode(8 downto 7) /= poly_drawModeRec(8 downto 7)) then
-                  pipeline_clearCache <= '1';
-               end if;
             end if;
             
             if (clk2xIndex = '1') then
@@ -926,7 +925,8 @@ begin
                   GPUSTAT_ReadyRecCmd <= '0';
                   
                elsif (cmdNew = 16#01#) then -- clear cache
-                  pipeline_clearCache <= '1';
+                  pipeline_clearCacheTexture <= '1';
+                  pipeline_clearCachePalette <= '1';
                   
                elsif (cmdNew = 16#1F#) then -- irq request
                   if (GPUSTAT_IRQRequest = '0') then
@@ -942,9 +942,6 @@ begin
                   GPUSTAT_DrawToDisplay  <= fifoIn_Dout(10);
                   GPUSTAT_TextureDisable <= fifoIn_Dout(11);
                   drawMode               <= unsigned(fifoIn_Dout(13 downto 0));
-                  if (drawMode(8 downto 7) /= unsigned(fifoIn_Dout(8 downto 7))) then
-                     pipeline_clearCache <= '1';
-                  end if;
                   
                elsif (cmdNew = 16#E2#) then -- Set Texture window
                   textureWindow <= unsigned(fifoIn_Dout(19 downto 0));
@@ -984,7 +981,7 @@ begin
             end if;
             
             if (vramFill_done = '1' or cpu2vram_done = '1' or vram2vram_done = '1') then
-               pipeline_clearCache <= '1';
+               pipeline_clearCacheTexture <= '1';
             end if;
             
             if (softReset = '1') then
@@ -1385,7 +1382,8 @@ begin
       DrawPixelsMask_in    => GPUSTAT_DrawPixelsMask,
       SetMask_in           => GPUSTAT_SetMask,
       
-      clearCache           => pipeline_clearCache,
+      clearCacheTexture    => pipeline_clearCacheTexture,
+      clearCachePalette    => pipeline_clearCachePalette,
       
       fifoOut_idle         => fifoOut_idle,
       pipeline_busy        => pipeline_busy,
@@ -1501,7 +1499,7 @@ begin
       Full     => open,    
       NearFull => open,
       Dout     => fifoOut2_Dout,    
-      Rd       => fifoOut2_Rd,      
+      Rd       => fifoOut_Rd,      
       Empty    => open
    );
    
@@ -1611,8 +1609,6 @@ begin
             vram_RD <= '0';
          end if;
          
-         fifoOut2_Rd <= '0';
-         
          vram_paused <= '0';
          if (VRAMIdle = '1' and vram_pause = '1' and vram_WE = '0') then
             if (vram_pauseCnt = 3) then
@@ -1692,15 +1688,14 @@ begin
                      elsif (fifoOut_Empty = '0') then
                         if (render24 = '1' or interlaced480pHack = '1') then
                            vramState   <= WRITESECOND;
-                        else
-                           fifoOut2_Rd <= '1';
                         end if;
-                        vram_WE       <= '1';
-                        vram_ADDR     <= x"00" & fifoOut_Dout(80 downto 64) & "000";
-                        vram_BE       <= fifoOut_Dout(84) & fifoOut_Dout(84) & fifoOut_Dout(83) & fifoOut_Dout(83) & fifoOut_Dout(82) & fifoOut_Dout(82) & fifoOut_Dout(81) & fifoOut_Dout(81);
-                        vram_DIN      <= fifoOut_Dout(63 downto 0);
-                        vram_BURSTCNT <= x"01";
-                        frameVramType <= fifoOut_Dout(85);
+                        vram_WE         <= '1';
+                        vram_ADDR       <= x"00" & fifoOut_Dout(80 downto 64) & "000";
+                        vram_BE         <= fifoOut_Dout(84) & fifoOut_Dout(84) & fifoOut_Dout(83) & fifoOut_Dout(83) & fifoOut_Dout(82) & fifoOut_Dout(82) & fifoOut_Dout(81) & fifoOut_Dout(81);
+                        vram_DIN        <= fifoOut_Dout(63 downto 0);
+                        vram_BURSTCNT   <= x"01";
+                        frameVramType   <= fifoOut_Dout(85);
+                        fifoOut2_Dout_1 <= fifoOut2_Dout;
                         if (interlacedDrawing = '1' and interlaced480pHack = '1' and videoout_reports.activeLineLSB = fifoOut_Dout(72) and fifoOut_Dout(85) = '1') then
                            vram_WE    <= '0';
                         end if;
@@ -1713,10 +1708,9 @@ begin
                   if (vram_BUSY = '0') then
                      vramState     <= IDLE;
                      vram_WE       <= '1';
-                     fifoOut2_Rd   <= '1';
                      if (render24 = '1') then
                         vram_ADDR(27 downto 20) <= x"04";
-                        vram_DIN      <= fifoOut2_Dout;
+                        vram_DIN      <= fifoOut2_Dout_1;
                      elsif (interlaced480pHack = '1') then
                         vram_ADDR(27 downto 20) <= "000001" & std_logic_vector(frameindex_current);
                      end if;

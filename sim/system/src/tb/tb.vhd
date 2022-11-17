@@ -225,8 +225,8 @@ begin
    
    reset  <= not psx_on(0);
    
-   -- NTSC 53.693175 mhz => 18624.340989ps
-   clkvid <= not clkvid after 9312 ps;
+   -- NTSC 53.693175 mhz => 30 ns * 33.8688 / 53.693175 / 2 = 9.4617612014 ns
+   clkvid <= not clkvid after 9462 ps;
       
    -- PAL  53.203425 mhz => 30 ns * 33.8688 / 53.203425 / 2 = 9.5488589315 ns
    --clkvid <= not clkvid after 9549 ps;
