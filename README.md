@@ -129,6 +129,29 @@ The following pad types are emulated by the core and can be independently assign
 SNAC can be selected for each port and will support gamepads and memory cards on the corresponding slot.
 When SNAC is enabled for a slot, the emulated gamepad/memory for this slot is disconnected.
 
+## Controller mapping reference
+NeGcon based controllers
+
+| DualShock (for reference) | NeGcon | Volume | Pachinko |
+|:-------------------------:|:------:|:------:|:--------:|
+| D-PAD                     | D-PAD  |        |          |
+| RX Axis                   | Twist  | Paddle | Handle   |
+| RY Axis                   | I      |        |          |
+| LX Axis                   | L1     |        |          |
+| LY Axis                   | II     |        |          |
+| O                         | A      | B      |          |
+| △                         | B      |        |          |
+| R1                        | R1     |        |          |
+| Start                     | Start  | A      | Button   |
+
+Lightgun
+  
+| DualShock (for reference) |   Guncon  | Justifier |
+|:-------------------------:|:---------:|:---------:|
+| O                         | Trigger   | Trigger   |
+| Start                     | A (Left)  | Start     |
+| X                         | B (Right) | Special   |
+  
 ## Status
 
 Many games working
