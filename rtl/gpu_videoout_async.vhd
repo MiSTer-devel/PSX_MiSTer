@@ -286,7 +286,7 @@ begin
          
          newLineTrigger <= '0';
          
-         if (nextHCount <   3) then videoout_reports.hblank_tmr <= '1'; else videoout_reports.hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
+         if (nextHCount < 210) then videoout_reports.hblank_tmr <= '1'; else videoout_reports.hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
                 
          if (reset = '1') then
                
@@ -354,25 +354,6 @@ begin
             mode480i_1 <= mode480i;
             
             vdispNew := vdisp + 1;
-
-            -- starting to fetch video data? measured from 7502(PAL) console -> GPUSTAT_DrawingOddline is starting earlier than full line after vsync irq
-            if (nextHCount = 170) then
-            
-               if (videoout_out.vsync = '1' and vpos /= 245) then
-                  vdispNew := 0;
-               end if;
-            
-               if (mode480i = '0') then
-               
-                  if (vdispNew < vDisplayEnd and vdispNew /= 0) then
-                     videoout_reports.GPUSTAT_DrawingOddline <= '0';
-                     if (videoout_settings.vramRange(10) = '0' and (vdispNew mod 2) = 1) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
-                     if (videoout_settings.vramRange(10) = '1' and (vdispNew mod 2) = 0) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
-                  end if;
-                  
-               end if;
-               
-            end if;
             
             -- set interlace field when turning on interlaced mode based on odd/even frame
             if (mode480i_1 = '0' and mode480i = '1') then
@@ -459,9 +440,13 @@ begin
                if (mode480i = '1') then
                   if (videoout_settings.vramRange(10) = '0' and interlacedDisplayFieldNew = '1') then videoout_reports.activeLineLSB <= '1'; end if;
                   if (videoout_settings.vramRange(10) = '1' and interlacedDisplayFieldNew = '0') then videoout_reports.activeLineLSB <= '1'; end if;
+               else
+                  videoout_reports.GPUSTAT_DrawingOddline <= '0';
+                  if (videoout_settings.vramRange(10) = '0' and (vdispNew mod 2) = 1) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+                  if (videoout_settings.vramRange(10) = '1' and (vdispNew mod 2) = 0) then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
                end if;
                
-               if (vdispNew >= vDisplayEnd or vdispNew = 0) then
+               if (isVsync = '1') then
                   videoout_reports.GPUSTAT_DrawingOddline <= '0';
                end if;
                
@@ -495,6 +480,9 @@ begin
                   if (vdispNew = vDisplayStart) then
                      if (videoout_settings.vramRange(10) = '0' and videoout_reports.interlacedDisplayField = '1') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
                      if (videoout_settings.vramRange(10) = '1' and videoout_reports.interlacedDisplayField = '0') then videoout_reports.GPUSTAT_DrawingOddline <= '1'; end if;
+                  end if;
+                  if (vdispNew = vDisplayEnd or vdispNew = 0) then
+                     videoout_reports.GPUSTAT_DrawingOddline <= '0';
                   end if;
                end if;
                
