@@ -117,6 +117,8 @@ architecture arch of gpu_videoout_async is
    (
       WAITNEWLINE,
       WAITHBLANKEND,
+      WAITHBLANKENDVSYNC,
+      WAITINVSYNC,
       DRAW
    );
    signal state : tState := WAITNEWLINE;
@@ -285,8 +287,6 @@ begin
          end if;
          
          newLineTrigger <= '0';
-         
-         if (nextHCount < 210) then videoout_reports.hblank_tmr <= '1'; else videoout_reports.hblank_tmr <= '0'; end if; -- todo: correct hblank timer tick position to be found
                 
          if (reset = '1') then
                
@@ -638,15 +638,17 @@ begin
          
          if (reset = '1') then
          
-            state                      <= WAITNEWLINE;
-         
-            clkCnt                     <= 0;
-            videoout_out.hblank        <= '1';
-            videoout_out.vsync         <= '0';
-            videoout_request.lineDisp  <= (others => '0');
-            readstate                  <= IDLE;
+            state                       <= WAITNEWLINE;
+                                        
+            clkCnt                      <= 0;
+            videoout_out.hblank         <= '1';
+            videoout_out.vsync          <= '0';
+            videoout_request.lineDisp   <= (others => '0');
+            readstate                   <= IDLE;
+                                        
+            InterlaceFieldN             <= videoout_ss_in.GPUSTAT_InterlaceField;
             
-            InterlaceFieldN            <= videoout_ss_in.GPUSTAT_InterlaceField;
+            videoout_reports.hblank_tmr <= '0'; 
          
          else
             
@@ -666,7 +668,8 @@ begin
             case (state) is
             
                when WAITNEWLINE =>
-                  videoout_out.hblank <= '1';
+                  videoout_out.hblank         <= '1';
+                  videoout_reports.hblank_tmr <= '1';
                   
                   nextLineCalc := to_unsigned((lineMax - 1), 9) - lineIn;
                   
@@ -706,21 +709,43 @@ begin
                      hCropPixels           <= (others => '0');
 
                      noDraw                <= '1';
-
+                     
+                  elsif (newLineTrigger = '1') then
+                     
+                     state                 <= WAITHBLANKENDVSYNC;
+                     hCropCount            <= (others => '0');
+                     hCropPixels           <= (others => '0');
+                     
                   end if;
             
-               when WAITHBLANKEND =>
+               when WAITHBLANKEND | WAITHBLANKENDVSYNC =>
                   if (clkCnt >= (clkDiv - 1)) then
                      if (hCropCount >= videoout_settings.hDisplayRange(11 downto 0)) then
-                        state       <= DRAW;
+                        if (state = WAITHBLANKENDVSYNC) then
+                           state <= WAITINVSYNC;
+                        else 
+                           state <= DRAW;
+                        end if;
                         readstate   <= IDLE;
                         readstate24 <= READ24_0;
                      end if;
                   end if;
                   
+               when WAITINVSYNC =>
+                  if (clkCnt >= (clkDiv - 1)) then
+                     videoout_reports.hblank_tmr <= '0'; 
+                     hCropPixels <= hCropPixels + 1;
+                     if (((hCropCount + 1) >= videoout_settings.hDisplayRange(23 downto 12))) then
+                        if ((hCropPixels + 1) = 0) then
+                           state <= WAITNEWLINE;
+                        end if;
+                     end if;
+                  end if;
+                  
                when DRAW =>
                   if (clkCnt >= (clkDiv - 1)) then
-                     videoout_out.hblank <= '0';
+                     videoout_out.hblank         <= '0';
+                     videoout_reports.hblank_tmr <= '0'; 
                      if (videoout_settings.fixedVBlank = '1' and vblankFixed = '1') then
                         videoout_out.r      <= (others => '0');
                         videoout_out.g      <= (others => '0');

@@ -257,12 +257,12 @@ begin
             -- apply resets
             if (timerArray(0).T_MODE(0) = '1') then
                if (timerArray(0).T_MODE(2 downto 1) = "01" or timerArray(0).T_MODE(2 downto 1) = "10") then
-                  if (hblank_1 = '0' and hblank = '1') then 
+                  if (hblank_1 = '1' and hblank = '0') then 
                      timerArray(0).T_CURRENT <= (others => '0'); 
                   end if;
                end if;
                if (timerArray(0).T_MODE(2 downto 1) = "11") then
-                  if (hblank_1 = '0' and hblank = '1') then 
+                  if (hblank_1 = '1' and hblank = '0') then 
                      timerArray(0).T_MODE(0) <= '0';
                   end if;
                end if;
