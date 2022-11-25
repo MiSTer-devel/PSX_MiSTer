@@ -17,7 +17,8 @@ entity justifier_sensor is
       ce                   : in  std_logic;
       vsync                : in  std_logic;
       hblank               : in  std_logic;
-
+      
+      offscreen            : in  std_logic;
       xpos_gun             : in integer range 0 to 1023;
       ypos_gun             : in integer range 0 to 1023;
       xpos_screen          : in integer range 0 to 1023;
@@ -72,16 +73,13 @@ begin
          case (state) is
 
             when CHECKLINE =>
-               if (hblank = '0' and diff >= -3 and diff <= 3) then
+               if (offscreen = '0' and hblank = '0' and diff >= -13 and diff <= -7) then
                   state <= CHECKPOS;
-                  if (diff = 0) then
-                     state <= CHECKPOS;
-                  end if;
                end if;
 
             when CHECKPOS =>
                draw_count <= 3;
-               if (diff = 0) then
+               if (diff = 10) then
                   state      <= DRAW;
                end if;
 

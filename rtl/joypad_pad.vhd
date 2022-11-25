@@ -48,6 +48,7 @@ entity joypad_pad is
       GunX                 : in  unsigned(7 downto 0);
       GunY_scanlines       : in  unsigned(8 downto 0);
       GunAimOffscreen      : in  std_logic;
+      JustifierIrqEnable   : out std_logic_vector(1 downto 0);
       
       ss_in                : in  std_logic_vector(31 downto 0);
       ss_out               : out std_logic_vector(31 downto 0)
@@ -283,6 +284,8 @@ begin
             joypad2_rumble <= (others => '0');
             joypad3_rumble <= (others => '0');
             joypad4_rumble <= (others => '0');
+            
+            JustifierIrqEnable <= "00";
 
          elsif (ce = '1') then
          
@@ -1080,13 +1083,13 @@ begin
                            controllerState <= JUSTIFBUTTONSMSB;
                            ack             <= '1';
                            receiveValid    <= '1';
-
-                           if joypad.KeyTriangle = '1' or GunAimOffscreen = '1' then
-                              gunOffscreen <= '1';
-                           else
-                              gunOffscreen <= '0';
+                           
+                           if (joypad_index = 0) then
+                              JustifierIrqEnable(0) <= transmitValue(4);
+                           elsif (joypad_index = 1) then
+                              JustifierIrqEnable(1) <= transmitValue(4);
                            end if;
-
+                           
                            receiveBuffer(0) <= '1';
                            receiveBuffer(1) <= '1';
                            receiveBuffer(2) <= '1';

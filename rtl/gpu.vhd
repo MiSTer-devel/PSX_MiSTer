@@ -44,11 +44,13 @@ entity gpu is
       Gun1CrosshairOn      : in  std_logic;
       Gun1X                : in  unsigned(7 downto 0);
       Gun1Y_scanlines      : in  unsigned(8 downto 0);
+      Gun1offscreen        : in  std_logic;
       Gun1IRQ10            : out std_logic;
 
       Gun2CrosshairOn      : in  std_logic;
       Gun2X                : in  unsigned(7 downto 0);
       Gun2Y_scanlines      : in  unsigned(8 downto 0);
+      Gun2offscreen        : in  std_logic;
       Gun2IRQ10            : out std_logic;
       
       cdSlow               : in  std_logic;
@@ -1904,11 +1906,13 @@ begin
       Gun1CrosshairOn            => Gun1CrosshairOn,
       Gun1X                      => Gun1X,
       Gun1Y_scanlines            => Gun1Y_scanlines,
+      Gun1offscreen              => Gun1offscreen,
       Gun1IRQ10                  => Gun1IRQ10,
    
       Gun2CrosshairOn            => Gun2CrosshairOn,
       Gun2X                      => Gun2X,
       Gun2Y_scanlines            => Gun2Y_scanlines,
+      Gun2offscreen              => Gun2offscreen,
       Gun2IRQ10                  => Gun2IRQ10,
             
       cdSlow                     => cdSlow,      

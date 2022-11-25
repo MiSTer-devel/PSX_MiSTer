@@ -46,6 +46,7 @@ entity joypad is
       Gun2Y_scanlines      : in  unsigned(8 downto 0);
       Gun1AimOffscreen     : in  std_logic;
       Gun2AimOffscreen     : in  std_logic;
+      JustifierIrqEnable   : out std_logic_vector(1 downto 0);
 
       snacPort1_in         : in  std_logic;
       snacPort2_in         : in  std_logic;		
@@ -429,6 +430,7 @@ begin
       GunX                 => GunX,
       GunY_scanlines       => GunY_scanlines,
       GunAimOffscreen      => GunAimOffscreen,
+      JustifierIrqEnable   => JustifierIrqEnable,
       
       ss_in                => ss_in(7),
       ss_out               => ss_out(7)

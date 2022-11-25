@@ -415,7 +415,7 @@ parameter CONF_STR = {
 	"P2O[72],Pause when CD slow,On,Off(U);",
 	"P2O[15],PAL 60Hz Hack,Off,On(U);",
 	"P2O[21],CD Fast Seek,Off,On(U);",
-	"P2O[77:75],CD Speed,Auto,Forced 1X(U),Forced 2X(U),Hack 4X(U),Hack 6X(U),Hack 8X(U);",
+	"P2O[77:75],CD Speed,Original,Forced 1X(U),Forced 2X(U),Hack 4X(U),Hack 6X(U),Hack 8X(U);",
 	"P2O[78],Limit Max CD Speed,Off,On(U);",
 	"P2O[85],RAM(Homebrew),2 MByte,8 MByte(U);",
 	"P2-;",
@@ -464,7 +464,8 @@ parameter CONF_STR = {
 	"Region JP,",
 	"Region US,",
 	"Region EU,",
-	"Saving Memcard;",
+	"Saving Memcard,",
+	"Unsafe option used!;",
 	"V,v",`BUILD_DATE
 };
 
@@ -902,7 +903,11 @@ always @(posedge clk_1x) begin
       if (padMode[1])  psx_info <= 8'd17;
       if (!padMode[1]) psx_info <= 8'd18;
    end else if (cdinfo_download_1 && ~cdinfo_download) begin
-      if (status[40:39] == 2'b00) begin
+      // warning for every unsafe option
+      if (status[89] || status[80:79] > 0 || status[72] || status[15] || status[21] || status[77:75] > 0 || status[78] || status[85]) begin
+         psx_info_req <= 1;
+         psx_info     <= 8'd24;
+      end else if (status[40:39] == 2'b00) begin
          psx_info_req <= 1;
          case(region_out)
             0: begin psx_info <= 8'd19; end   // unknown => default to NTSC          
