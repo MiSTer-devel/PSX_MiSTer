@@ -378,6 +378,7 @@ architecture arch of cd_top is
    signal XA_reset                  : std_logic := '0';
    signal XA_EOF                    : std_logic := '0';
    signal xa_muted                  : std_logic;
+   signal Xa_playing                : std_logic;
    signal cdaudio_left              : signed(15 downto 0);
    signal cdaudio_right             : signed(15 downto 0);
    
@@ -1745,6 +1746,7 @@ begin
             addSeekTime   <= '0';
             
             allow_speedhack <= '0';
+            Xa_playing      <= '0';
             
          elsif (softReset = '1') then
          
@@ -1810,9 +1812,15 @@ begin
                allow_speedhack <= '0';
             end if;
             
+            if (XA_reset = '1') then
+               Xa_playing <= '0';
+            elsif (XA_start = '1') then
+               Xa_playing <= '1';
+            end if;
+            
             sectorBufferFilled <= '0';
             if (driveState = DRIVE_READING and sectorBufferSizes(to_integer((writeSectorPointer + 4))) /= 0) then -- allow up to 4 buffers to be filled
-               sectorBufferFilled <= '1';
+               sectorBufferFilled <= not Xa_playing;
             end if;
          
             if (driveBusy = '1') then
