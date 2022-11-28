@@ -110,6 +110,7 @@ architecture arch of cd_top is
    signal ackPendingIRQ             : std_logic := '0';
    signal ackPendingSector          : std_logic := '0';
    signal ackRead_valid             : std_logic := '0';
+   signal irqTimeout                : integer range 0 to 10000 := 0;
             
    signal FifoParam_reset           : std_logic := '0';
    signal FifoParam_Din             : std_logic_vector(7 downto 0) := (others => '0');
@@ -532,7 +533,9 @@ begin
       
          if (reset = '1') then
             
-            FifoData_reset <= '1';
+            FifoData_reset  <= '1';
+            
+            irqTimeout      <= 0;
             
             CDROM_STATUS    <= ss_in(21)(7 downto 0); -- x"18";
             CDROM_IRQENA    <= ss_in(21)(12 downto 8); -- (others => '0');
@@ -605,10 +608,7 @@ begin
                               CDROM_IRQFLAG <= newFlags;
                               if (newFlags = "00000") then
                                  if (pendingDriveIRQ /= "00000") then
-                                    ackPendingIRQ   <= '1';
-                                    if (pendingDriveIRQ = "00001") then
-                                       ackPendingSector <= '1';
-                                    end if;
+                                    -- handled after waiting time below!
                                  else
                                     if (cmd_delay > 0) then
                                        cmd_unpause <= '1';
@@ -680,6 +680,17 @@ begin
                   
                   when others => null;
                end case;
+            end if;
+            
+            if (CDROM_IRQFLAG /= "00000") then
+               irqTimeout <= 0;
+            elsif (irqTimeout < 10000) then
+               irqTimeout <= irqTimeout + 1;
+            elsif (pendingDriveIRQ /= "00000") then
+               ackPendingIRQ   <= '1';
+               if (pendingDriveIRQ = "00001") then
+                  ackPendingSector <= '1';
+               end if;
             end if;
             
             if (cmdAck = '1' or cmdIRQ = '1') then
