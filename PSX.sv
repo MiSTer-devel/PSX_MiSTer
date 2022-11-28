@@ -1791,7 +1791,8 @@ begin
 	oldselectedPort2 <= selectedPort2Snac;
 
 	if ((~oldselectedPort1 && selectedPort1Snac) || (~oldselectedPort2 && selectedPort2Snac)) begin
-		byteCnt <= 9'd0;
+		byteCnt   <= 9'd0;
+		bytesLeft <= 9'd0;
 	end
 
 	if (beginTransferSnac) begin
@@ -1839,7 +1840,7 @@ begin
 	oldAck <= ack;
 	if(oldAck && ~ack) begin //ack received
 		actionNextPadSnac <= 1'b1;
-		ackTimer <= 16'd255;//a delay between ack and next action. too small might cause a hang. using acktimer 1-255
+		ackTimer <= 16'd173;//16'd255;//a delay between ack and next action. too small might cause a hang. was using acktimer 1-255
 	end
 	else if(ackTimer == 1) begin //wait over
 		actionNextPadSnac <= 1'b1;
@@ -1870,17 +1871,10 @@ begin
 					actionNextSnac <= 1'b1;
 				end	
 			else begin
-				if (byteCnt < 3) begin
+				if (byteCnt < (bytesLeft + 4)) begin
 					receiveBufferSnac <= Receive;
 					receiveValidSnac <= 1'b1;
 					//ackSnac <= 1'b1;
-				end
-				else begin
-					if (byteCnt < (bytesLeft + 4)) begin
-						receiveBufferSnac <= Receive;
-						receiveValidSnac <= 1'b1;
-						//ackSnac <= 1'b1;
-					end
 				end
 				actionNextSnac <= 1'b1;	
 			end
