@@ -127,11 +127,6 @@ architecture arch of joypad is
    signal snacPort2           : std_logic := '0';	
    signal baudCntSnac         : unsigned(20 downto 0) := (others => '0');
    signal bitCntSnac          : unsigned(4 downto 0)  := (others => '0');
-   signal initialDelaySnac    : unsigned(10 downto 0) := (others => '0');
-   signal delayEnableSnac     : std_logic;
-   signal oldselectedPort1Snac: std_logic := '0';
-   signal oldselectedPort2Snac: std_logic := '0';
-   signal beginTransferdelayedSnac : std_logic := '0';
    signal actionNextCombine   : std_logic := '0';	
       
    -- devices  
@@ -517,66 +512,39 @@ begin
          if (reset = '1') then		  
             baudCntSnac  <= to_unsigned(0, 21);
             bitCntSnac   <= to_unsigned(0, 5);	
-            initialDelaySnac <= to_unsigned(0, 11);
-            delayEnableSnac <= '0';
-            oldselectedPort1Snac <= '0';
-            oldselectedPort2Snac <= '0';
-            beginTransferdelayedSnac <= '0';
             clk9Snac <= '0';	
 
          elsif (ce = '1') then
 
-            if (baudCntSnac > 0) then
-              baudCntSnac <= baudCntSnac - 1;
-            else
-               if (bitCntSnac > 0) then
-                  bitCntSnac   <= bitCntSnac - 1;
-                  clk9Snac     <= not clk9Snac;
-                  baudCntSnac  <= to_unsigned((to_integer(unsigned(JOY_BAUD)) / 2) - 1, 21);
+            if (SelectedPort1Snac or SelectedPort2Snac) then
+               if (baudCntSnac > 0) then
+                  baudCntSnac <= baudCntSnac - 1;
                else
-                  clk9Snac <= '1';
-               end if;						
-            end if;
+                  if (bitCntSnac > 0) then
+                     bitCntSnac   <= bitCntSnac - 1;
+                     clk9Snac     <= not clk9Snac;
+                     baudCntSnac  <= to_unsigned((to_integer(unsigned(JOY_BAUD)) / 2) - 1, 21);
+                  else
+                     clk9Snac <= '1';
+                  end if;						
+               end if;
 				
-            -- needs to be a delay between select signal and first clk. digital pad may work but dualshock probably won't without it, depending on software
-            if (beginTransfer = '1' and delayEnableSnac = '1') then
-              initialDelaySnac <= to_unsigned(1226, 11);	-- tuned to digital pad in bios(1226)	
-            elsif (beginTransfer = '1' and delayEnableSnac = '0') then
-              initialDelaySnac <= to_unsigned(1, 11);
-            end if;				
-				
-            if (initialDelaySnac > 0) then
-              initialDelaySnac <= initialDelaySnac - 1;
-            end if;
-            if (initialDelaySnac = 1) then
-              beginTransferdelayedSnac <= '1';
-              delayEnableSnac <= '0';
-            else
-              beginTransferdelayedSnac <= '0';
-            end if;				
-				
-            if ((selectedPort1Snac = '1' and oldselectedPort1Snac = '0') or (selectedPort2Snac = '1' and oldselectedPort2Snac = '0')) then
-              delayEnableSnac <= '1'; --a signal to enable the delay. this should happen once when either are selected 
-            end if;
-		
-            if (beginTransferdelayedSnac = '1') then
-              baudCntSnac    <= to_unsigned((to_integer(unsigned(JOY_BAUD)) / 2) - 1, 21);--should do joy_baud * Baudrate Reload value
-              clk9Snac       <= '0';
-              bitCntSnac     <= to_unsigned(17, 5);
-              if (unsigned(JOY_BAUD) = 0) then
-                 baudCntSnac  <= to_unsigned(8, 21);			
-              end if;
+               if (beginTransferSnac = '1') then
+                  baudCntSnac    <= to_unsigned((to_integer(unsigned(JOY_BAUD)) / 2) - 1, 21);--should do joy_baud * Baudrate Reload value
+                  clk9Snac       <= '0';
+                  bitCntSnac     <= to_unsigned(17, 5);
+                  if (unsigned(JOY_BAUD) = 0) then
+                     baudCntSnac  <= to_unsigned(8, 21);			
+                  end if;
+               end if;	
             end if;	
-		
-            oldselectedPort1Snac <= selectedPort1Snac;
-            oldselectedPort2Snac <= selectedPort2Snac;	
 
          end if;
       end if;		
    end process;
 	
-   SelectedPort1Snac <= '1' when (JOY_CTRL(13) = '0' and JOY_CTRL(1 downto 0) = "11" and snacPort1 = '1') else '0';
-   SelectedPort2Snac <= '1' when (JOY_CTRL(13) = '1' and JOY_CTRL(1 downto 0) = "11" and snacPort2 = '1') else '0';
+   SelectedPort1Snac <= '1' when (JOY_CTRL(13) = '0' and JOY_CTRL(1) = '1' and snacPort1 = '1') else '0';
+   SelectedPort2Snac <= '1' when (JOY_CTRL(13) = '1' and JOY_CTRL(1) = '1' and snacPort2 = '1') else '0';
    beginTransferSnac <= begintransfer;
    transmitValueSnac <= transmitValue;
    
@@ -599,7 +567,7 @@ begin
          end if;
          
          SS_idle <= '0';
-         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNextCombine = '0' and isActivePad = '0' and initialDelaySnac = 0 and beginTransferdelayedSnac = '0') then
+         if (transmitting = '0' and waitAck = '0' and beginTransfer = '0' and actionNextCombine = '0' and isActivePad = '0' and beginTransferSnac = '0') then
             SS_idle <= '1';
          end if;
          
