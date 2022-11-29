@@ -1000,6 +1000,12 @@ begin
                GPUSTAT_TextureDisable <= '0';
                GPUSTAT_ReadyRecCmd    <= '1';
                GPUSTAT_ReadyRecDMA    <= '1';
+               drawingAreaLeft        <= (others => '0');
+               drawingAreaTop         <= (others => '0');
+               drawingAreaRight       <= (others => '0');
+               drawingAreaBottom      <= (others => '0');
+               drawingOffsetX         <= (others => '0');
+               drawingOffsetY         <= (others => '0');
             end if;
             
          end if;
