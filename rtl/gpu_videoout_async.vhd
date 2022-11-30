@@ -83,34 +83,38 @@ architecture arch of gpu_videoout_async is
    signal videoout_request     : tvideoout_request := ('0', (others => '0'), (others => '0'), 0, (others => '0'));
    
    -- timing
-   signal lineMax          : integer range 0 to 512 := 512;
-   signal lineIn           : unsigned(8 downto 0) := (others => '0');
-   signal nextHCount       : integer range 0 to 4095;
-
-   signal vpos             : integer range 0 to 511;
-   signal vdisp            : integer range 0 to 511;
-   
-   signal nextHCount_pause : integer range 0 to 4095;
-   signal vpos_pause       : integer range 0 to 511;
-   signal field_pause      : std_logic := '0'; 
-   signal activeLSBpause   : std_logic := '0'; 
-   signal unpauseCnt       : integer range 0 to 3 := 0;
-   
-   signal htotal           : integer range 3406 to 3413;
-   signal vtotal           : integer range 262 to 314;
-   signal vDisplayStart    : integer range 0 to 314;
-   signal vDisplayEnd      : integer range 0 to 314;
-   signal vDisplayCnt      : integer range 0 to 314 := 0;
-   signal vDisplayMax      : integer range 0 to 314 := 239;
-   
-   signal InterlaceFieldN  : std_logic := '0';  
-   signal mode480i_1       : std_logic := '0';  
-   
-   signal vblankFixed      : std_logic := '0';   
-
-   signal noDraw           : std_logic := '0';  
-   signal newLineTrigger   : std_logic := '0';  
-   signal nextLineCalcSaved: unsigned(8 downto 0) := (others => '0');
+   signal lineMax                      : integer range 0 to 512 := 512;
+   signal lineIn                       : unsigned(8 downto 0) := (others => '0');
+   signal nextHCount                   : integer range 0 to 4095;
+            
+   signal vpos                         : integer range 0 to 511;
+   signal vdisp                        : integer range 0 to 511;
+               
+   signal nextHCount_pause             : integer range 0 to 4095;
+   signal vpos_pause                   : integer range 0 to 511;
+   signal field_pause                  : std_logic := '0'; 
+   signal activeLSBpause               : std_logic := '0'; 
+   signal vdisp_pause                  : integer range 0 to 511;
+   signal inVsync_pause                : std_logic := '0';
+   signal GPUSTAT_InterlaceField_pause : std_logic := '0';
+   signal GPUSTAT_DrawingOddline_pause : std_logic := '0';
+   signal unpauseCnt                   : integer range 0 to 3 := 0;
+                 
+   signal htotal                       : integer range 3406 to 3413;
+   signal vtotal                       : integer range 262 to 314;
+   signal vDisplayStart                : integer range 0 to 314;
+   signal vDisplayEnd                  : integer range 0 to 314;
+   signal vDisplayCnt                  : integer range 0 to 314 := 0;
+   signal vDisplayMax                  : integer range 0 to 314 := 239;
+                 
+   signal InterlaceFieldN              : std_logic := '0';  
+   signal mode480i_1                   : std_logic := '0';  
+                 
+   signal vblankFixed                  : std_logic := '0';   
+              
+   signal noDraw                       : std_logic := '0';  
+   signal newLineTrigger               : std_logic := '0';  
+   signal nextLineCalcSaved            : unsigned(8 downto 0) := (others => '0');
    
    -- output   
    type tState is
@@ -225,14 +229,16 @@ begin
    end process;
    
    -- video timing
-   videoout_ss_out.interlacedDisplayField <= videoout_reports.interlacedDisplayField;                 
-   videoout_ss_out.nextHCount             <= std_logic_vector(to_unsigned(nextHCount, 12));                             
-   videoout_ss_out.vpos                   <= std_logic_vector(to_unsigned(vpos, 9));                            
-   videoout_ss_out.vdisp                  <= std_logic_vector(to_unsigned(vdisp, 9));                            
-   videoout_ss_out.inVsync                <= videoout_reports.inVsync;                                
-   videoout_ss_out.activeLineLSB          <= videoout_reports.activeLineLSB;                          
-   videoout_ss_out.GPUSTAT_InterlaceField <= videoout_reports.GPUSTAT_InterlaceField;
-   videoout_ss_out.GPUSTAT_DrawingOddline <= videoout_reports.GPUSTAT_DrawingOddline;
+   
+   -- savestates must save values when going into pause!
+   videoout_ss_out.interlacedDisplayField <= field_pause;                                         --videoout_reports.interlacedDisplayField;             
+   videoout_ss_out.nextHCount             <= std_logic_vector(to_unsigned(nextHCount_pause, 12)); --std_logic_vector(to_unsigned(nextHCount, 12));                             
+   videoout_ss_out.vpos                   <= std_logic_vector(to_unsigned(vpos_pause, 9));        --std_logic_vector(to_unsigned(vpos, 9));                            
+   videoout_ss_out.vdisp                  <= std_logic_vector(to_unsigned(vdisp_pause, 9));       --std_logic_vector(to_unsigned(vdisp, 9));                            
+   videoout_ss_out.inVsync                <= inVsync_pause;                                       --videoout_reports.inVsync;                                
+   videoout_ss_out.activeLineLSB          <= activeLSBpause;                                      --videoout_reports.activeLineLSB;                          
+   videoout_ss_out.GPUSTAT_InterlaceField <= GPUSTAT_InterlaceField_pause;                        --videoout_reports.GPUSTAT_InterlaceField;
+   videoout_ss_out.GPUSTAT_DrawingOddline <= GPUSTAT_DrawingOddline_pause;                        --videoout_reports.GPUSTAT_DrawingOddline;
 
    videoout_request.fetchsize <= to_unsigned(xmax, 10);
 
@@ -312,10 +318,14 @@ begin
          
             ce_1 <= ce;
             if (ce_1 = '1' and ce = '0') then
-               nextHCount_pause <= nextHCount;
-               vpos_pause       <= vpos;
-               field_pause      <= videoout_reports.interlacedDisplayField;
-               activeLSBpause   <= videoout_reports.activeLineLSB;
+               nextHCount_pause             <= nextHCount;
+               vpos_pause                   <= vpos;
+               field_pause                  <= videoout_reports.interlacedDisplayField;
+               activeLSBpause               <= videoout_reports.activeLineLSB;
+               vdisp_pause                  <= vdisp;                            
+               inVsync_pause                <= videoout_reports.inVsync;                                
+               GPUSTAT_InterlaceField_pause <= videoout_reports.GPUSTAT_InterlaceField;
+               GPUSTAT_DrawingOddline_pause <= videoout_reports.GPUSTAT_DrawingOddline;
             end if;
             
             if (unpauseCnt > 0) then

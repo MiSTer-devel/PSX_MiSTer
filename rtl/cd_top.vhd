@@ -1111,10 +1111,11 @@ begin
                         workCommand <= nextCmd;
                         cmdResetXa  <= '1';
                         if (driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
+                           -- todo: should this be swapped between single speed and double speed? DuckStation has double speed longer and psx spx doc has single speed being longer
                            if (modeReg(7) = '1') then
-                              workDelay  <= 2000000 - 2;
+                              workDelay  <= 2157295 - 2; -- min value from psx spx doc
                            else
-                              workDelay  <= 1000000 - 2;
+                              workDelay  <= 1066874 - 2; -- min value from psx spx doc
                            end if;
                         end if;
                         if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
