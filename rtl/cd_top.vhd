@@ -686,7 +686,7 @@ begin
                irqTimeout <= 0;
             elsif (irqTimeout < 10000) then
                irqTimeout <= irqTimeout + 1;
-            elsif (pendingDriveIRQ /= "00000") then
+            elsif (pendingDriveIRQ /= "00000" and ackPendingIRQ = '0' and ackPendingIRQNext = '0') then
                ackPendingIRQ   <= '1';
                if (pendingDriveIRQ = "00001") then
                   ackPendingSector <= '1';
