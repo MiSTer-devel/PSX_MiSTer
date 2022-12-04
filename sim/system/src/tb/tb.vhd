@@ -298,6 +298,7 @@ begin
       vCrop                 => "00",
       hCrop                 => '0',
       SPUon                 => '1',
+      SPUIRQTrigger         => '0',
       SPUSDRAM              => '1',
       REVERBOFF             => '0',
       REPRODUCIBLESPUDMA    => '0',

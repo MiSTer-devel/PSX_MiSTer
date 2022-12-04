@@ -222,6 +222,7 @@ ENTITY ascal IS
 		vmax    : IN natural RANGE 0 TO 4095; -- 0 <= vmin < vmax < vdisp
 		vrr     : IN std_logic := '0';
 		vrrmax  : IN natural RANGE 0 TO 4095 := 0;
+		swblack : IN std_logic := '0';        -- will output 3 black frame on every resolution switch
 
 		-- Scaler format. 00=16bpp 565, 01=24bpp 10=32bpp
 		format  : IN unsigned(1 DOWNTO 0) :="01";
@@ -510,6 +511,7 @@ ARCHITECTURE rtl OF ascal IS
 	SIGNAL o_divrun : std_logic;
 	SIGNAL o_hacpt,o_vacpt : unsigned(11 DOWNTO 0);
 	SIGNAL o_vacptl : unsigned(1 DOWNTO 0);
+	signal o_newres : integer range 0 to 3;
 
 	-----------------------------------------------------------------------------
 	FUNCTION shift_ishift(shift : unsigned(0 TO 119);
@@ -1890,7 +1892,15 @@ BEGIN
 				o_ivsize<=i_vrsize; -- <ASYNC>
 				o_hdown<=i_hdown; -- <ASYNC>
 				o_vdown<=i_vdown; -- <ASYNC>
+
+				if (o_newres > 0) then
+					o_newres <= o_newres- 1;
+				end if;
 			END IF;
+
+				if (swblack = '1' and o_fb_ena = '0' and (o_ihsize /= i_hrsize or o_ivsize /= i_vrsize)) then
+					o_newres <= 3;
+				end if;
 
 			-- Simultaneous change of input and output framebuffers
 			IF o_vsv(1)='1' AND o_vsv(0)='0' AND
@@ -2219,6 +2229,9 @@ BEGIN
 					hpix_v:=(r=>o_fb_pal_dr(23 DOWNTO 16),g=>o_fb_pal_dr(15 DOWNTO 8),
 									 b=>o_fb_pal_dr(7 DOWNTO 0));
 				END IF;
+				if (o_newres > 0) then
+					hpix_v := (others => (others => '0'));
+				end if;
 				o_hpix0<=hpix_v;
 				o_hpix1<=o_hpix0;
 				o_hpix2<=o_hpix1;

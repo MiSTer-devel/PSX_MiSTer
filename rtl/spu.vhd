@@ -15,6 +15,7 @@ entity spu is
       reset                : in  std_logic;
       
       SPUon                : in  std_logic;
+      SPUIRQTrigger        : in  std_logic;
       useSDRAM             : in  std_logic;
       REPRODUCIBLESPUIRQ   : in  std_logic;
       REPRODUCIBLESPUDMA   : in  std_logic;
@@ -1059,6 +1060,15 @@ begin
                   end if;
                end if;
             end if;
+            
+            if (SPUIRQTrigger = '1') then
+               if (REPRODUCIBLESPUIRQ = '1') then
+                  irqSaved <= '1';
+               else
+                  IRQ9 <= '1';
+                  irqOut <= '1';
+               end if;
+            end if;
          
             if (bus_write = '1') then
                
@@ -1487,7 +1497,7 @@ begin
                      
                      if (voice_repeatWrite(index) = '1') then
                         voice_repeatWrite(index) <= '0'; 
-                        if (unsigned(RamVoiceRecord_dataB(0)(76 downto 74)) /= ADSRPHASE_OFF and RamVoiceRecord_dataB(0)(101) = '0') then
+                        if (RamVoiceRecord_dataB(0)(101) = '0') then
                            voice.ignoreLoopWB <= '1';
                         end if;
                      end if;

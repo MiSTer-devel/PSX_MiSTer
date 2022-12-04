@@ -62,6 +62,7 @@ entity psx_top is
       vCrop                 : in  std_logic_vector(1 downto 0);
       hCrop                 : in  std_logic;
       SPUon                 : in  std_logic;
+      SPUIRQTrigger         : in  std_logic;
       SPUSDRAM              : in  std_logic;
       REVERBOFF             : in  std_logic;
       REPRODUCIBLESPUDMA    : in  std_logic;
@@ -1619,6 +1620,7 @@ begin
       reset                => reset_intern,     
       
       SPUon                => SPUon,
+      SPUIRQTrigger        => SPUIRQTrigger,
       useSDRAM             => SPUSDRAM,
       REPRODUCIBLESPUIRQ   => '1',
       REPRODUCIBLESPUDMA   => REPRODUCIBLESPUDMA,
