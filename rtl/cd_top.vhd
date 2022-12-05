@@ -1894,6 +1894,7 @@ begin
                            allow_speedhack   <= '1';
                            afterSeek         <= '1';
                            readAfterSeek     <= '0';
+                           internalStatus(6) <= '1'; -- keep seek on until read is active
                         elsif (playAfterSeek = '1') then
                            startPlaying  <= '1';
                            afterSeek     <= '1';
@@ -1934,6 +1935,7 @@ begin
                               processDataSector     <= '1';
                               lastSectorHeaderValid <= '1';
                               internalStatus(5)     <= '1'; -- reading
+                              internalStatus(6)     <= '0'; -- seek off
                               if ((modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
                                  writeSectorPointer    <= writeSectorPointer + 1;
                                  ackRead               <= '1';
@@ -2062,6 +2064,7 @@ begin
                   readAfterSeek     <= '1';
                   playAfterSeek     <= '0';
                else
+                  internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                   startReading      <= '1';
                   allow_speedhack   <= '1';
                   afterSeek         <= '0';
@@ -2100,7 +2103,6 @@ begin
                   readAfterSeek     <= '1';
                   playAfterSeek     <= '0';
                else
-                  internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
                   internalStatus(1)          <= '1'; -- motor on
                   if (fastCD = '1') then
                      driveDelay         <= 9999 - 2;
