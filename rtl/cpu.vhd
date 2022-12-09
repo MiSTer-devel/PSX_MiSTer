@@ -52,6 +52,7 @@ entity cpu is
       dma_cache_write       : in  std_logic;
       
       ram_done              : in  std_logic;
+      ram_rnw               : in  std_logic;
       ram_dataRead          : in  std_logic_vector(31 downto 0); 
       
       gte_busy              : in  std_logic;
@@ -2053,7 +2054,7 @@ begin
    
    
    -- datacache ###############################################
-   dcache_write_enable <= '1' when (ram_done = '1' and mem4_pending = '1' and writebackReadAddress(28 downto 0) < 16#800000#) else 
+   dcache_write_enable <= '1' when (ram_done = '1' and ram_rnw = '1' and mem4_pending = '1' and writebackReadAddress(28 downto 0) < 16#800000#) else 
                           '1' when (mem4_request = '1' and mem4_rnw = '0') else 
                           '1' when (dma_cache_write = '1') else
                           '0';

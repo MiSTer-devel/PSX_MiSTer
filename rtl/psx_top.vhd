@@ -1901,6 +1901,7 @@ begin
       dma_cache_write   => dma_cache_write,  
       
       ram_dataRead      => ram_dataRead32,    
+      ram_rnw           => ram_cpu_rnw,
       ram_done          => ram_cpu_done,
       
       gte_busy          => gte_busy, 
