@@ -1852,7 +1852,7 @@ begin
                      ram_rnw         <= '1';
                      ram_Adr         <= std_logic_vector(ramTransferAddr);
                      ramTransferAddr <= ramTransferAddr + 2;
-                  elsif ((CNT(5 downto 4) = "01" or CNT(5 downto 4) = "10") and FifoIn_Empty = '0') then
+                  elsif (FifoIn_Empty = '0') then
                      state           <= RAM_WRITE;
                      ram_request     <= '1';
                      ram_isTransfer  <= '1';
