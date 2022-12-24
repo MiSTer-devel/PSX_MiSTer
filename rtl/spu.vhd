@@ -239,6 +239,7 @@ architecture arch of spu is
    signal ram_dataWrite       : std_logic_vector(15 downto 0) := (others => '0');
    signal ram_Adr             : std_logic_vector(18 downto 0) := (others => '0');
    signal ram_request         : std_logic := '0';
+   signal ram_check_irq       : std_logic := '0';
    signal ram_rnw             : std_logic := '0';
    signal ram_dataRead        : std_logic_vector(15 downto 0);
    signal ram_done            : std_logic;
@@ -808,6 +809,7 @@ begin
          EnvCounterRam_write     <= '0';
                
          ram_request             <= '0';
+         ram_check_irq           <= '0';
          ram_isTransfer          <= '0';
          ram_isVoice             <= '0';
          ram_isReverb            <= '0';
@@ -1050,7 +1052,7 @@ begin
             
             envelope_startnext <= '0';
             
-            if (ram_request = '1' and cnt(15) = '1' and cnt(6) = '1' and (IRQ_ADDR = ram_Adr(18 downto 3)) and irq9 = '0') then
+            if ((ram_request = '1' or ram_check_irq = '1') and cnt(15) = '1' and cnt(6) = '1' and (IRQ_ADDR = ram_Adr(18 downto 3)) and irq9 = '0') then
                if (irqVoicetrigger = '1' or (state /= VOICE_EVALHEADER and state /= VOICE_EVALSAMPLE)) then
                   if (REPRODUCIBLESPUIRQ = '1') then
                      irqSaved <= '1';
@@ -1845,24 +1847,25 @@ begin
                   if (index = 1) then voice_lastVolume1 <= voice_lastVolume; end if;
                   if (index = 3) then voice_lastVolume3 <= voice_lastVolume; end if;
                   
+                  ram_Adr         <= std_logic_vector(ramTransferAddr);
+                  
                   if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0') then
                      state           <= RAM_READ;
                      ram_request     <= '1';
                      ram_isTransfer  <= '1';
                      ram_rnw         <= '1';
-                     ram_Adr         <= std_logic_vector(ramTransferAddr);
                      ramTransferAddr <= ramTransferAddr + 2;
                   elsif (FifoIn_Empty = '0') then
                      state           <= RAM_WRITE;
                      ram_request     <= '1';
                      ram_isTransfer  <= '1';
                      ram_rnw         <= '0';
-                     ram_Adr         <= std_logic_vector(ramTransferAddr);
                      ram_dataWrite   <= FifoIn_Dout;
                      FifoIn_Rd       <= '1';
                      ramTransferAddr <= ramTransferAddr + 2;
                   else
-                     state <= RAM_WAIT;
+                     state         <= RAM_WAIT;
+                     ram_check_irq <= '1'; -- seperate signal, so there is no useless SPU request to ddr3
                   end if;
                   
                   --voiceArray(index) <= voice;
