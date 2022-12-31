@@ -682,6 +682,12 @@ begin
                            receiveBuffer(6) <= not joypad.KeyDown;
                            receiveBuffer(7) <= not joypad.KeyLeft;
                            
+                           if (joypad.PadPortPopn = '1') then
+                              receiveBuffer(5) <= '0';
+                              receiveBuffer(6) <= '0';
+                              receiveBuffer(7) <= '0';
+                           end if;
+                           
                            if (digitalPadSave = '1') then
                               if (to_integer(joypad.Analog1X) <= -64) then receiveBuffer(7) <= '0'; end if;
                               if (to_integer(joypad.Analog1X) >=  64) then receiveBuffer(5) <= '0'; end if;

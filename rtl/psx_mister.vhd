@@ -180,6 +180,7 @@ entity psx_mister is
       PadPortDS1            : in  std_logic;
       PadPortJustif1        : in  std_logic;
       PadPortStick1         : in  std_logic;
+      PadPortPopn1          : in  std_logic;
       PadPortEnable2        : in  std_logic;
       PadPortDigital2       : in  std_logic;
       PadPortAnalog2        : in  std_logic;
@@ -190,6 +191,7 @@ entity psx_mister is
       PadPortDS2            : in  std_logic;
       PadPortJustif2        : in  std_logic;
       PadPortStick2         : in  std_logic;
+      PadPortPopn2          : in  std_logic;
       KeyTriangle           : in  std_logic_vector(3 downto 0);
       KeyCircle             : in  std_logic_vector(3 downto 0);
       KeyCross              : in  std_logic_vector(3 downto 0);
@@ -467,6 +469,7 @@ begin
       joypad1.WheelMap      => PadPortWheel1,
       joypad1.PadPortDS     => PadPortDS1,
       joypad1.PadPortStick  => PadPortStick1,
+      joypad1.PadPortPopn   => PadPortPopn1,
 
       joypad1.KeyTriangle   => KeyTriangle(0),
       joypad1.KeyCircle     => KeyCircle(0),
@@ -501,6 +504,7 @@ begin
       joypad2.WheelMap      => PadPortWheel2,
       joypad2.PadPortDS     => PadPortDS2,
       joypad2.PadPortStick  => PadPortStick2,
+      joypad2.PadPortPopn   => PadPortPopn2,
 
       joypad2.KeyTriangle   => KeyTriangle(1),
       joypad2.KeyCircle     => KeyCircle(1),
@@ -535,6 +539,7 @@ begin
       joypad3.WheelMap      => '0',
       joypad3.PadPortDS     => '0',
       joypad3.PadPortStick  => '0',
+      joypad3.PadPortPopn   => '0',
 
       joypad3.KeyTriangle   => KeyTriangle(2),
       joypad3.KeyCircle     => KeyCircle(2),
@@ -569,6 +574,7 @@ begin
       joypad4.WheelMap      => '0',
       joypad4.PadPortDS     => '0',
       joypad4.PadPortStick  => '0',
+      joypad4.PadPortPopn   => '0',
 
       joypad4.KeyTriangle   => KeyTriangle(3),
       joypad4.KeyCircle     => KeyCircle(3),

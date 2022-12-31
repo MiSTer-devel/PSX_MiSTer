@@ -373,8 +373,8 @@ parameter CONF_STR = {
 	"-;",
 	"O[40:39],System Type,Auto,NTSC-U,NTSC-J,PAL;",
 	"-;",
-	"D8O[48:45],Pad1,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port1,Analog Joystick;",
-	"D8O[52:49],Pad2,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port2,Analog Joystick;",
+	"D8O[48:45],Pad1,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port1,Analog Joystick,Pop'n;",
+	"D8O[52:49],Pad2,Dualshock,Off,Digital,Analog,GunCon,NeGcon,Wheel-NegCon,Wheel-Analog,Mouse,Justifier,SNAC-port2,Analog Joystick,Pop'n;",
 	"D8h2O[9],Show Crosshair,Off,On;",
 	"D8h4O[31],DS Mode,L3+R3+Up/Dn | Click,L1+L2+R1+R2+Up/Dn;",
 	"O[57:56],Multitap,Off,Port1: 4 x Digital,Port1: 4 x Analog;",
@@ -846,7 +846,7 @@ defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 
 wire PadPortDS1      = (status[48:45] == 4'b0000);
 wire PadPortEnable1  = (status[48:45] != 4'b0001);
-wire PadPortDigital1 = (status[48:45] == 4'b0010);
+wire PadPortDigital1 = (status[48:45] == 4'b0010) || (status[52:49] == 4'b1100);
 wire PadPortAnalog1  = (status[48:45] == 4'b0011) || (status[48:45] == 4'b0111);
 wire PadPortGunCon1  = (status[48:45] == 4'b0100);
 wire PadPortNeGcon1  = (status[48:45] == 4'b0101) || (status[48:45] == 4'b0110);
@@ -855,10 +855,11 @@ wire PadPortMouse1   = (status[48:45] == 4'b1000);
 wire PadPortJustif1  = (status[48:45] == 4'b1001);
 wire snacPort1       = (status[48:45] == 4'b1010) && ~multitap;
 wire PadPortStick1   = (status[48:45] == 4'b1011);
+wire PadPortPopn1    = (status[48:45] == 4'b1100);
    
 wire PadPortDS2      = (status[52:49] == 4'b0000);
 wire PadPortEnable2  = (status[52:49] != 4'b0001) && ~multitap;
-wire PadPortDigital2 = (status[52:49] == 4'b0010);
+wire PadPortDigital2 = (status[52:49] == 4'b0010) || (status[52:49] == 4'b1100);
 wire PadPortAnalog2  = (status[52:49] == 4'b0011) || (status[52:49] == 4'b0111);
 wire PadPortGunCon2  = (status[52:49] == 4'b0100);
 wire PadPortNeGcon2  = (status[52:49] == 4'b0101) || (status[52:49] == 4'b0110);
@@ -867,6 +868,7 @@ wire PadPortMouse2   = (status[52:49] == 4'b1000);
 wire PadPortJustif2  = (status[52:49] == 4'b1001);
 wire snacPort2       = (status[52:49] == 4'b1010) && ~multitap;
 wire PadPortStick2   = (status[52:49] == 4'b1011);
+wire PadPortPopn2    = (status[52:49] == 4'b1100);
 
 // 00 -> multitap off
 // 01 -> port1, 4 x digital
@@ -1191,6 +1193,7 @@ psx
    .PadPortDS1     (PadPortDS1),
    .PadPortJustif1 (PadPortJustif1),
    .PadPortStick1  (PadPortStick1),
+   .PadPortPopn1   (PadPortPopn1),
    .PadPortEnable2 (PadPortEnable2),
    .PadPortDigital2(PadPortDigital2),
    .PadPortAnalog2 (PadPortAnalog2),
@@ -1201,6 +1204,7 @@ psx
    .PadPortDS2     (PadPortDS2),
    .PadPortJustif2 (PadPortJustif2),
    .PadPortStick2  (PadPortStick2),
+   .PadPortPopn2   (PadPortPopn2),
    .KeyTriangle({joy4[4], joy3[4], joy2[4], joy[4] }),
    .KeyCircle  ({joy4[5] ,joy3[5] ,joy2[5] ,joy[5] }),
    .KeyCross   ({joy4[6] ,joy3[6] ,joy2[6] ,joy[6] }),
