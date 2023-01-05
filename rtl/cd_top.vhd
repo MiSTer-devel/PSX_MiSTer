@@ -1128,7 +1128,6 @@ begin
                         end if;
                      
                      when x"0A" => -- reset
-                        cmdAck <= '1';
                         if (working = '1' and workCommand = x"0A") then
                            cmdPending <= '0';
                         else
@@ -1137,6 +1136,7 @@ begin
                            --{
                            --   updatePositionWhileSeeking();
                            --}
+                           cmdAck      <= '1';
                            softReset   <= '1';
                            working     <= '1';
                            workDelay   <= workDelay + 399999; -- cannot ignore old workdelay, otherwise reset after pause is too fast(e.g. GTA PAL)
