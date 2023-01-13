@@ -1038,7 +1038,7 @@ psx
    .exe_load_address(exe_load_address),
    .exe_file_size(exe_file_size),   
    .exe_stackpointer(exe_stackpointer),
-   .fastboot(status[16]),
+   .fastboot(status[16] && hasCD),
    .ram8mb(status[85]),
    .TURBO_MEM(TURBO_MEM),
    .TURBO_COMP(TURBO_COMP),

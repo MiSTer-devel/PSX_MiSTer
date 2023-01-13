@@ -564,7 +564,7 @@ begin
 
          FifoOut_Rd <= '0';
 
-         if (reset = '1') then
+         if (reset = '1' or XA_reset = '1') then
             cdaudio_left  <= (others => '0');
             cdaudio_right <= (others => '0');
          else
