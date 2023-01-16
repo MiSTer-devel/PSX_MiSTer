@@ -150,7 +150,7 @@ The following pad types are emulated by the core and can be independently assign
   (ID 0x23) NeGcon compatible racing pad.  
   Primarily developed for dual analog stick usage with the following mapping (genuine NeGcons  
    may work if usb adapters map steering to Left Analog and I/II to Right Analog):
-   - Steering -> Left Analog
+   - Steering -> Left Analog (you can also use a paddle controller for this axis)
    - Circle -> Circle
    - Triangle -> Triangle
    - I -> Right Analog Up, Cross (100% pressed), R2 (100% pressed)

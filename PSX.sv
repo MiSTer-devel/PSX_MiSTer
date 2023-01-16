@@ -520,6 +520,8 @@ wire [15:0] joystick_analog_r2;
 wire [15:0] joystick_analog_l3;
 wire [15:0] joystick_analog_r3;
 
+wire [7:0] paddle_0;
+
 wire [24:0] mouse;
 
 wire [15:0] joystick1_rumble;
@@ -596,6 +598,8 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
    .ps2_mouse(mouse),
    .joystick_0_rumble(paused ? 16'h0000 : joystick1_rumble),
    .joystick_1_rumble(paused ? 16'h0000 : joystick2_rumble),
+   
+   .paddle_0(paddle_0),
    
    .direct_video(DIRECT_VIDEO)
 );
@@ -869,6 +873,24 @@ wire PadPortJustif2  = (status[52:49] == 4'b1001);
 wire snacPort2       = (status[52:49] == 4'b1010) && ~multitap;
 wire PadPortStick2   = (status[52:49] == 4'b1011);
 wire PadPortPopn2    = (status[52:49] == 4'b1100);
+
+reg paddleMode = 0;
+reg paddleMin = 0;
+reg paddleMax = 0;
+wire [7:0] joy0_xmuxed = (paddleMode) ? (paddle_0 - 8'd128) : joystick_analog_l0[7:0];
+
+// to activate paddleMode negcon mode must be active and paddle must best moved
+always @(posedge clk_1x) begin
+   if (PadPortNeGcon1) begin
+      if (paddle_0 < 112) paddleMin <= 1'b1;
+      if (paddle_0 > 144) paddleMax <= 1'b1;
+      if (paddleMin && paddleMax) paddleMode <= 1'b1;
+   end else begin
+      paddleMode <= 0;
+      paddleMin <= 0;
+      paddleMax <= 0;
+   end
+end
 
 // 00 -> multitap off
 // 01 -> port1, 4 x digital
@@ -1222,7 +1244,7 @@ psx
    .KeyL2      ({joy4[12],joy3[12],joy2[12],joy[12]}),
    .KeyL3      ({joy4[14],joy3[14],joy2[14],joy[14]}),
    .ToggleDS   (ToggleDS),
-   .Analog1XP1(joystick_analog_l0[7:0]),       
+   .Analog1XP1(joy0_xmuxed),       
    .Analog1YP1(joystick_analog_l0[15:8]),       
    .Analog2XP1(joystick_analog_r0[7:0]),           
    .Analog2YP1(joystick_analog_r0[15:8]),    
