@@ -154,8 +154,8 @@ entity psx_mister is
       vsync                 : out std_logic;
       hblank                : out std_logic;
       vblank                : out std_logic;
-      DisplayWidth          : out unsigned( 9 downto 0);
-      DisplayHeight         : out unsigned( 8 downto 0);
+      DisplayWidth          : out unsigned(10 downto 0);
+      DisplayHeight         : out unsigned( 9 downto 0);
       DisplayOffsetX        : out unsigned( 9 downto 0);
       DisplayOffsetY        : out unsigned( 8 downto 0);
       video_ce              : out std_logic;

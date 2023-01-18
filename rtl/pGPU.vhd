@@ -70,10 +70,10 @@ package pGPU is
       vsync             : std_logic;
       hblank            : std_logic;
       vblank            : std_logic;
-      DisplayWidth      : unsigned( 9 downto 0);
-      DisplayHeight     : unsigned( 8 downto 0);
-      DisplayWidthReal  : unsigned( 9 downto 0);
-      DisplayHeightReal : unsigned( 8 downto 0);
+      DisplayWidth      : unsigned(10 downto 0);
+      DisplayHeight     : unsigned( 9 downto 0);
+      DisplayWidthReal  : unsigned(10 downto 0);
+      DisplayHeightReal : unsigned( 9 downto 0);
       DisplayOffsetX    : unsigned( 9 downto 0); 
       DisplayOffsetY    : unsigned( 8 downto 0); 
       ce                : std_logic;

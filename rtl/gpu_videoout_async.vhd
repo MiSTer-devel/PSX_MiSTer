@@ -247,8 +247,8 @@ begin
 
    videoout_out.isPal <= videoout_settings.GPUSTAT_PalVideoMode;
    
-   videoout_out.DisplayWidthReal  <= to_unsigned(xmax, 10);
-   videoout_out.DisplayHeightReal <= to_unsigned(lineMax, 9);
+   videoout_out.DisplayWidthReal  <= to_unsigned(xmax, 11);
+   videoout_out.DisplayHeightReal <= to_unsigned(lineMax, 10);
    
    process (clkvid)
       variable mode480i                      : std_logic;
@@ -629,21 +629,21 @@ begin
          end if;
          
          if (videoout_settings.GPUSTAT_HorRes2 = '1') then
-            videoout_out.DisplayWidth  <= to_unsigned(368, 10);
+            videoout_out.DisplayWidth  <= to_unsigned(368, 11);
          else
             case (videoout_settings.GPUSTAT_HorRes1) is
-               when "00" => videoout_out.DisplayWidth <= to_unsigned(256, 10);
-               when "01" => videoout_out.DisplayWidth <= to_unsigned(320, 10);
-               when "10" => videoout_out.DisplayWidth <= to_unsigned(512, 10);
-               when "11" => videoout_out.DisplayWidth <= to_unsigned(640, 10);
+               when "00" => videoout_out.DisplayWidth <= to_unsigned(256, 11);
+               when "01" => videoout_out.DisplayWidth <= to_unsigned(320, 11);
+               when "10" => videoout_out.DisplayWidth <= to_unsigned(512, 11);
+               when "11" => videoout_out.DisplayWidth <= to_unsigned(640, 11);
                when others => null;
             end case;
          end if;
          
          if (videoout_settings.GPUSTAT_VerRes = '1') then
-            videoout_out.DisplayHeight  <= to_unsigned(480, 9);
+            videoout_out.DisplayHeight  <= to_unsigned(480, 10);
          else
-            videoout_out.DisplayHeight  <= to_unsigned(240, 9);
+            videoout_out.DisplayHeight  <= to_unsigned(240, 10);
          end if;
          
          if (reset = '1') then
@@ -750,6 +750,10 @@ begin
                            state <= WAITNEWLINE;
                         end if;
                      end if;
+                  end if;
+                  if ((nextHCount = 32 + 3413/2) and vpos = vsync_vstart and vtotal = 262) then -- one additional hblank for timer in 480i mode
+                     state        <= WAITHBLANKENDVSYNC;
+                     videoout_reports.hblank_tmr <= '1';
                   end if;
                   
                when DRAW =>

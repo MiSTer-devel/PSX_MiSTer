@@ -107,8 +107,8 @@ entity gpu is
       video_vsync          : out std_logic := '0';
       video_hblank         : out std_logic := '0';
       video_vblank         : out std_logic := '0';
-      video_DisplayWidth   : out unsigned( 9 downto 0);
-      video_DisplayHeight  : out unsigned( 8 downto 0);
+      video_DisplayWidth   : out unsigned(10 downto 0);
+      video_DisplayHeight  : out unsigned( 9 downto 0);
       video_DisplayOffsetX : out unsigned( 9 downto 0) := (others => '0'); 
       video_DisplayOffsetY : out unsigned( 8 downto 0) := (others => '0'); 
       video_ce             : out std_logic;
