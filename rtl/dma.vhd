@@ -134,7 +134,7 @@ architecture arch of dma is
    signal wordAccu            : integer range 0 to 3 := 0;
    signal DMA_CD_read_accu    : std_logic_vector(23 downto 0);
    signal DMA_SPU_read_accu   : std_logic_vector(15 downto 0);
-   signal slowcnt             : integer range 0 to 2;
+   signal slowcnt             : integer range 0 to 24;
       
    signal isOn                : std_logic;
    signal activeChannel       : integer range 0 to 6;
@@ -840,9 +840,13 @@ begin
                            when others => null;
                         end case;
                      else
-                        -- todo: slowdown for SPU read and CD read/write
+                        -- todo: slowdown for SPU read
                         if (activeChannel = 4 and toDevice = '1') then -- SPU access is 4 cycles per 32bit
                            slowcnt  <= 1;
+                           dmaState <= SLOWDOWN;
+                        end if;
+                        if (activeChannel = 3 and toDevice = '0') then -- CD access
+                           slowcnt  <= 24;
                            dmaState <= SLOWDOWN;
                         end if;
                      end if;

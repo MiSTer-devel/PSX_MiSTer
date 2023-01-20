@@ -224,7 +224,6 @@ architecture arch of cd_top is
    signal seekOnDiskDrive           : std_logic := '0';
    signal seekOnDiskPlay            : std_logic := '0';
    signal ackRead                   : std_logic := '0';
-   signal pause_cmd                 : std_logic := '0';
    signal calcSeekTime              : std_logic := '0';
    signal addSeekTime               : std_logic := '0';
          
@@ -524,7 +523,6 @@ begin
    
    -- cpu interface
    process(clk1x)
-      variable newFlags : std_logic_vector(4 downto 0);
    begin
       if (rising_edge(clk1x)) then
       
@@ -561,7 +559,7 @@ begin
             ackPendingIRQ     <= '0';
             ackPendingSector  <= '0';
             copyData          <= '0';
-            cmd_unpause       <= '0';
+
          
             CDROM_STATUS(2) <= '0';                      -- ADPBUSY XA-ADPCM fifo empty  (0=Empty) ;set when playing XA-ADPCM sound -> not used in duckstation
             CDROM_STATUS(3) <= FifoParam_Empty;          -- PRMEMPT Parameter fifo empty (1=Empty) ;triggered before writing 1st byte
@@ -605,17 +603,7 @@ begin
                               CDROM_IRQENA <= bus_dataWrite(4 downto 0);
                               
                            when x"3" =>
-                              newFlags := CDROM_IRQFLAG and (not bus_dataWrite(4 downto 0));
-                              CDROM_IRQFLAG <= newFlags;
-                              if (newFlags = "00000") then
-                                 if (pendingDriveIRQ /= "00000") then
-                                    -- handled after waiting time below!
-                                 else
-                                    if (cmd_delay > 0) then
-                                       cmd_unpause <= '1';
-                                    end if;
-                                 end if;
-                              end if;
+                              CDROM_IRQFLAG <= CDROM_IRQFLAG and (not bus_dataWrite(4 downto 0));
                               if (bus_dataWrite(6) = '1') then
                                  --todo: clear param fifo
                               end if;
@@ -942,29 +930,22 @@ begin
                      updatePhysicalPosition <= '1';
                   end if;
                   
-                  -- queue up new commands if irq is still pending,
-                  -- but not for reset with second response pending, otherwise will end in endless reset request loop(e.g. Gouketuji Ichizoku 2)
-                  if (CDROM_IRQFLAG /= "00000" and (CDROM_IRQFLAG /= "00010" or newCmd /= x"0A")) then
-                     cmd_busy  <= '0';
-                  end if;
-                  
                end if;
          
-            elsif (pause_cmd = '1') then
-               cmd_busy  <= '0';
-               if (cmd_busy = '1') then
-                  cmd_delay <= cmd_delay + 2;
-               end if;
-            elsif (cmd_unpause = '1') then
-               cmd_busy <= '1';
             elsif (cmd_busy = '1') then
-               if (cmd_delay > 0) then
-                  if (cmd_delay < 16 or ((driveBusy = '0' or driveDelay > 100) and (working = '0' or workDelay > 100))) then
-                     cmd_delay <= cmd_delay - 1;
+               if (CDROM_IRQFLAG /= "00000" or dma_read = '1') then
+                  if (cmd_delay < 8192) then
+                     cmd_delay <= 8192;
                   end if;
                else
-                  handleCommand <= '1';
-                  cmd_busy      <= '0';
+                  if (cmd_delay > 0) then
+                     if (cmd_delay < 16 or ((driveBusy = '0' or driveDelay > 100) and (working = '0' or workDelay > 100))) then
+                        cmd_delay <= cmd_delay - 1;
+                     end if;
+                  else
+                     handleCommand <= '1';
+                     cmd_busy      <= '0';
+                  end if;
                end if;
             end if;
             
@@ -1115,9 +1096,9 @@ begin
                         if (driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
                            -- todo: should this be swapped between single speed and double speed? DuckStation has double speed longer and psx spx doc has single speed being longer
                            if (modeReg(7) = '1') then
-                              workDelay  <= 2157295 - 2; -- min value from psx spx doc
+                              workDelay  <= 2157295 + driveDelay; -- value from psx spx doc
                            else
-                              workDelay  <= 1066874 - 2; -- min value from psx spx doc
+                              workDelay  <= 1066874 + driveDelay; -- value from psx spx doc
                            end if;
                         end if;
                         if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
@@ -1369,7 +1350,6 @@ begin
                      end if;
                      getIDAck <= '1';
                   else
-                     cmd_busy <= '0';
                      driveAck <= '1';
                   end if;
                end if;
@@ -1810,7 +1790,6 @@ begin
             startReading            <= '0';
             startPlaying            <= '0';
             ackRead                 <= '0';
-            pause_cmd               <= '0';
             processDataSector       <= '0';
             processCDDASector       <= '0';
             processSeekHeader       <= '0';
@@ -1942,7 +1921,6 @@ begin
                               if ((modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
                                  writeSectorPointer    <= writeSectorPointer + 1;
                                  ackRead               <= '1';
-                                 pause_cmd             <= '1'; -- todo: really pause/stop all commands here and only reactivate on cpu request?
                               end if;
                            elsif (isAudio = '1' and (driveState = DRIVE_PLAYING or (driveState = DRIVE_READING and modeReg(0) = '1'))) then
                               processCDDASector <= '1';
