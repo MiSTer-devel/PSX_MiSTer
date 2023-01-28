@@ -226,6 +226,7 @@ architecture arch of cd_top is
    signal ackRead                   : std_logic := '0';
    signal calcSeekTime              : std_logic := '0';
    signal addSeekTime               : std_logic := '0';
+   signal limitDelayTime            : std_logic := '0';
          
    signal currentLBA                : integer range 0 to 524287;        
    signal physicalLBA               : integer range 0 to 524287;        
@@ -1768,7 +1769,8 @@ begin
                end if;  
 
                if (INSTANTSEEK = '0') then
-                  calcSeekTime <= '1';   
+                  calcSeekTime   <= '1';   
+                  limitDelayTime <= '0';
                end if;
                diffLBA <= currentLBA;
             
@@ -1993,11 +1995,14 @@ begin
                internalStatus(6)          <= '1'; -- seeking
                driveDelay                 <= driveREADSPEED - 2;
                driveDelayNext             <= driveREADSPEED - 2;
+               
+               limitDelayTime             <= '0';
 
                if (INSTANTSEEK = '0') then
                   calcSeekTime <= '1';
                   if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
-                     driveDelay <= driveREADSPEED - 2 + driveDelay;
+                     driveDelay     <= driveREADSPEED - 2 + driveDelay;
+                     limitDelayTime <= '1';
                   elsif (driveState = DRIVE_SPEEDCHANGEORTOCREAD and (seekOnDiskPlay = '0' and playAfterSeek = '0')) then
                      driveDelay <= driveREADSPEED - 2 + driveDelay;
                   end if; 
@@ -2038,7 +2043,11 @@ begin
             end if;
             
             if (addSeekTime = '1') then
-               driveDelay     <= driveDelay + driveREADSPEED * seekTimeMul;
+               if (limitDelayTime = '1' and (driveDelay + driveREADSPEED * seekTimeMul) > 22880000) then -- max seek time
+                  driveDelay <= 22880000;
+               else
+                  driveDelay <= driveDelay + driveREADSPEED * seekTimeMul;
+               end if;
             end if;
             
             if (readSN = '1') then
@@ -2110,7 +2119,8 @@ begin
                      elsif (driveState = DRIVE_SPEEDCHANGEORTOCREAD) then
                         driveDelay  <= driveREADSPEED - 2 + driveDelay;
                      end if;
-                     addSeekTime <= '1';
+                     addSeekTime    <= '1';
+                     limitDelayTime <= '0';
                   end if;
                end if;
             end if;
@@ -2143,7 +2153,8 @@ begin
                      if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
                         driveDelay <= driveREADSPEED - 2 + driveDelay;
                      end if;
-                     addSeekTime <= '1';
+                     addSeekTime    <= '1';
+                     limitDelayTime <= '0';
                   end if;
                end if;
             end if;
