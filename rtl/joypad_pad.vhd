@@ -896,8 +896,8 @@ begin
                         when MOUSEBUTTONSMSB =>
                            receiveBuffer(0) <= '0';
                            receiveBuffer(1) <= '0';
-                           receiveBuffer(2) <= not MouseRight;
-                           receiveBuffer(3) <= not MouseLeft;
+                           receiveBuffer(2) <= not (MouseRight or joypad.KeyCircle);
+                           receiveBuffer(3) <= not (MouseLeft  or joypad.KeyCross);
                            receiveBuffer(4) <= '1';
                            receiveBuffer(5) <= '1';
                            receiveBuffer(6) <= '1';
@@ -913,7 +913,11 @@ begin
                            ack             <= '1';
 
                         when MOUSEAXISY =>
-                           receiveBuffer   <= std_logic_vector(mouseOutY);
+                           if (joypad.KeyR1 = '1') then
+                              receiveBuffer   <= std_logic_vector(mouseOutX);
+                           else
+                              receiveBuffer   <= std_logic_vector(mouseOutY);
+                           end if;
                            receiveValid    <= '1';
                            controllerState <= IDLE;
                            
