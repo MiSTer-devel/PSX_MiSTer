@@ -246,6 +246,7 @@ entity psx_mister is
       actionNextSnac        : in  std_logic;
       receiveValidSnac      : in  std_logic;
       ackSnac               : in  std_logic;
+      snacMC                : in  std_logic;
       receiveBufferSnac	    : in  std_logic_vector(7 downto 0);
       transmitValueSnac     : out std_logic_vector(7 downto 0);		
       selectedPort1Snac     : out std_logic;
@@ -623,6 +624,7 @@ begin
       actionNextSnac        => actionNextSnac,
       receiveValidSnac      => receiveValidSnac,
       ackSnac               => ackSnac,
+      snacMC                => snacMC,
 		
       -- sound              => -- sound       
       sound_out_left        => sound_out_left, 
