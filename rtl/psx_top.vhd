@@ -199,6 +199,7 @@ entity psx_top is
       actionNextSnac        : in  std_logic;
       receiveValidSnac      : in  std_logic;
       ackSnac               : in  std_logic;
+      snacMC                : in  std_logic;
       receiveBufferSnac	    : in  std_logic_vector(7 downto 0);
       transmitValueSnac     : out std_logic_vector(7 downto 0);		
       selectedPort1Snac     : out std_logic;
@@ -1087,6 +1088,7 @@ begin
       actionNextSnac       => actionNextSnac,
       receiveValidSnac     => receiveValidSnac,
       ackSnac              => ackSnac,
+      snacMC               => snacMC,
       
       mem1_request         => memDDR3card1_request,   
       mem1_BURSTCNT        => memDDR3card1_BURSTCNT,  
