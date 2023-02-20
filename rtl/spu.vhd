@@ -1281,9 +1281,9 @@ begin
                         end if;
                      else
                         if (envelopeRight = '1') then
-                           CURVOL_R <= std_logic_vector(envVolume);
+                           envVolume <= signed(CURVOL_R);
                         else
-                           CURVOL_L <= std_logic_vector(envVolume);
+                           envVolume <= signed(CURVOL_L);
                         end if;
                      end if;
                      
@@ -1370,7 +1370,7 @@ begin
                   EnvCounterRam_addrA <= to_unsigned(envelopeIndex, 6);
                   EnvCounterRam_dataA <= envTicksNew & std_logic_vector(envTicks);
                      
-                  if (envelopeIndex < 47) then
+                  if (envelopeIndex < 49) then
                      envelopeIndex  <= envelopeIndex + 1;
                   end if;
                   if (envelopeRight = '1') then
