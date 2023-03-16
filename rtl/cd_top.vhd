@@ -1921,8 +1921,10 @@ begin
                               internalStatus(5)     <= '1'; -- reading
                               internalStatus(6)     <= '0'; -- seek off
                               if ((modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
-                                 writeSectorPointer    <= writeSectorPointer + 1;
-                                 ackRead               <= '1';
+                                 if (XaCurrentSet = '0' or modeReg(3) = '0' or ((XaFilterChannel = subheader(15 downto 8)) and XaFilterFile = subheader(7 downto 0))) then
+                                    writeSectorPointer    <= writeSectorPointer + 1;
+                                    ackRead               <= '1';
+                                 end if;
                               end if;
                            elsif (isAudio = '1' and (driveState = DRIVE_PLAYING or (driveState = DRIVE_READING and modeReg(0) = '1'))) then
                               processCDDASector <= '1';
@@ -2698,6 +2700,10 @@ begin
                   sectorProcessState <= SPROC_START;
                   if (modeReg(6) = '1') then -- xa_enable
                      if (header(31 downto 24) = x"02") then
+                        if (XaCurrentSet = '1' and modeReg(3) = '1' and ((XaFilterChannel /= subheader(15 downto 8)) or XaFilterFile /= subheader(7 downto 0))) then
+                           sectorProcessState <= SPROC_IDLE;
+                        end if;
+                           
                         if (sectorBuffer_DataB(22) = '1') then -- realtime
                            if (sectorBuffer_DataB(18) = '1') then -- audio
                               procReadAddr         <= 0;
@@ -3335,20 +3341,22 @@ begin
             end if; 
             
             if (processDataSector = '1' and (modeReg(6) = '0' or headerIsData = '1') and (modeReg(5) = '1' or headerDataSector = '1')) then
-               write(line_out, string'("WPTR: "));
-               if (WRITETIME = '1') then
-                  write(line_out, to_hstring(clkCounter - 4));
-                  write(line_out, string'(" ")); 
+               if (XaCurrentSet = '0' or modeReg(3) = '0' or ((XaFilterChannel = subheader(15 downto 8)) and XaFilterFile = subheader(7 downto 0))) then
+                  write(line_out, string'("WPTR: "));
+                  if (WRITETIME = '1') then
+                     write(line_out, to_hstring(clkCounter - 4));
+                     write(line_out, string'(" ")); 
+                  end if;
+                  if (modeReg(5) = '1') then
+                     write(line_out, string'("24"));
+                  else
+                     write(line_out, string'("00"));
+                  end if;
+                  write(line_out, string'(" 000000"));
+                  write(line_out, to_hstring("00000" & writeSectorPointer));               
+                  writeline(outfile, line_out);
+                  newoutputCnt := newoutputCnt + 1;
                end if;
-               if (modeReg(5) = '1') then
-                  write(line_out, string'("24"));
-               else
-                  write(line_out, string'("00"));
-               end if;
-               write(line_out, string'(" 000000"));
-               write(line_out, to_hstring("00000" & writeSectorPointer));               
-               writeline(outfile, line_out);
-               newoutputCnt := newoutputCnt + 1;
             end if; 
             
             if (copyState = COPY_FIRST) then
