@@ -51,6 +51,7 @@ entity psx_mister is
       textureFilter2DOff    : in  std_logic;
       dither24              : in  std_logic;
       render24              : in  std_logic;
+      drawSlow              : in  std_logic;
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
       rotate180             : in  std_logic;
@@ -340,6 +341,7 @@ begin
       textureFilter2DOff    => textureFilter2DOff,
       dither24              => dither24,
       render24              => render24,
+      drawSlow              => drawSlow,
       syncVideoOut          => syncVideoOut,
       syncInterlace         => syncInterlace,
       rotate180             => rotate180,

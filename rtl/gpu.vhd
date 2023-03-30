@@ -33,6 +33,7 @@ entity gpu is
       textureFilter2DOff   : in  std_logic;
       dither24             : in  std_logic;
       render24             : in  std_logic;
+      drawSlow             : in  std_logic;
       debugmodeOn          : in  std_logic;
       syncVideoOut         : in  std_logic;
       syncInterlace        : in  std_logic;
@@ -1385,6 +1386,7 @@ begin
 
       noTexture            => noTexture,     
       render24             => render24,
+      drawSlow             => drawSlow,
 
       drawMode_in          => drawMode,
       DrawPixelsMask_in    => GPUSTAT_DrawPixelsMask,

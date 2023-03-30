@@ -55,6 +55,7 @@ entity psx_top is
       textureFilter2DOff    : in  std_logic;
       dither24              : in  std_logic;
       render24              : in  std_logic;
+      drawSlow              : in  std_logic;
       syncVideoOut          : in  std_logic;
       syncInterlace         : in  std_logic;
       rotate180             : in  std_logic;
@@ -1472,6 +1473,7 @@ begin
       textureFilter2DOff   => textureFilter2DOff,
       dither24             => dither24,
       render24             => render24,
+      drawSlow             => drawSlow,
       debugmodeOn          => debugmodeOn,
       syncVideoOut         => syncVideoOut,
       syncInterlace        => syncInterlace,

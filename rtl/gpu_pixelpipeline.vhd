@@ -14,6 +14,7 @@ entity gpu_pixelpipeline is
       
       noTexture            : in  std_logic;
       render24             : in  std_logic;
+      drawSlow             : in  std_logic;
       
       drawMode_in          : in  unsigned(13 downto 0) := (others => '0');
       DrawPixelsMask_in    : in  std_logic;
@@ -140,6 +141,8 @@ architecture arch of gpu_pixelpipeline is
    signal state : tState := IDLE;
    
    signal pipeline_stall_1    : std_logic := '0';
+   
+   signal slowdown            : std_logic := '0';
    
    signal reqVRAMXPos         : unsigned(9 downto 0)  := (others => '0');
    signal reqVRAMYPos         : unsigned(8 downto 0)  := (others => '0');
@@ -310,7 +313,7 @@ architecture arch of gpu_pixelpipeline is
   
 begin 
 
-   pipeline_stall <= '1' when (pixelStall = '1' or state /= IDLE) else '0';
+   pipeline_stall <= '1' when (pixelStall = '1' or state /= IDLE or slowdown = '1') else '0';
 
    requestVRAMEnable <= '1'         when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else '0';
    requestVRAMXPos   <= reqVRAMXPos when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else (others => '0');
@@ -630,6 +633,13 @@ begin
                         
             if (clearCachePalette = '1') then
                textPalFetched   <= '0';
+            end if;
+            
+            -- slowdown
+            if (slowdown = '1') then
+               slowdown <= '0';
+            elsif (stage1_valid = '1' and drawSlow = '1') then
+               slowdown <= '1';
             end if;
             
             -- pixel pipeline

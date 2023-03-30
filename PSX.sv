@@ -344,7 +344,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6          7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
-//  XXXX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXX
+//  XXXX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -422,6 +422,7 @@ parameter CONF_STR = {
 	"P2O[77:75],CD Speed,Original,Forced 1X(U),Forced 2X(U),Hack 4X(U),Hack 6X(U),Hack 8X(U);",
 	"P2O[78],Limit Max CD Speed,Off,On(U);",
 	"P2O[85],RAM(Homebrew),2 MByte,8 MByte(U);",
+	"P2O[90],GPU Slowdown,Off,On(U);",
 	"P2-;",
 	"P2O[28],FPS Overlay,Off,On;",
 	"P2O[74],Error Overlay,Off,On;",
@@ -1088,6 +1089,7 @@ psx
    .textureFilter2DOff(status[83]),
    .dither24(status[73]),
    .render24(status[84] && ~hack_480p),
+   .drawSlow(status[90]),
    .syncVideoOut(syncVideoOut),
    .syncInterlace(status[60]),
    .rotate180(status[24]),
