@@ -331,6 +331,7 @@ reg [11:0] vs_line = 0;
 
 reg        scaler_out = 0;
 reg        vrr_mode = 0;
+wire       resSwitchBlackout;
 
 reg [31:0] aflt_rate = 7056000;
 reg [39:0] acx  = 4258969;
@@ -752,6 +753,7 @@ wire         freeze;
 		.vmax     (vmax),
 		.vrr      (vrr_mode),
 		.vrrmax   (HEIGHT + VBP + VS[11:0] + 12'd1),
+		.swblack  (resSwitchBlackout),
 
 		.mode     ({~lowlat,LFB_EN ? LFB_FLT : |scaler_flt,2'b00}),
 		.poly_clk (clk_sys),
@@ -1740,6 +1742,7 @@ emu emu
 	.VGA_SL(scanlines),
 	.VIDEO_ARX(ARX),
 	.VIDEO_ARY(ARY),
+	.resSwitchBlackout(resSwitchBlackout),
 
 `ifdef MISTER_FB
 	.FB_EN(fb_en),
