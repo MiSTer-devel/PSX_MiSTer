@@ -59,7 +59,7 @@ module emu
 
 	input  [11:0] HDMI_WIDTH,
 	input  [11:0] HDMI_HEIGHT,
-   output        HDMI_FREEZE,
+	output        HDMI_FREEZE,
 
 `ifdef MISTER_FB
 	// Use framebuffer in DDRAM
@@ -263,7 +263,7 @@ wire syncVideoClock = 0; //status[56] && ~FB_LL && ~DIRECT_VIDEO;
 
 always @(posedge CLK_50M) begin : cfg_block
 	reg pald = 0, pald2 = 0;
-	reg pdbg = 0, pdbg2 = 0; 
+	reg pdbg = 0, pdbg2 = 0;
 	reg pffw = 0, pffw2 = 0;
 	reg [3:0] state = 0;
 
@@ -343,7 +343,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // Status Bit Map: (0..31 => "O", 32..63 => "o")
 // 0         1         2         3          4         5         6          7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
-// 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV 
+// 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
 //  XXXX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
@@ -428,7 +428,7 @@ parameter CONF_STR = {
 	"P2O[74],Error Overlay,Off,On;",
 	"P2O[59],CD Slow Overlay,Off,On;",
 	"h9P2O[70],CD Overlay,Read,Read+Seek;",
-	
+
 	"h3-;",
 	"h3P3,Debug;",
 	"h3P3-;",
@@ -532,7 +532,7 @@ wire [15:0] joystick3_rumble;
 wire [15:0] joystick4_rumble;
 wire [32:0] RTC_time;
 
-wire filter_on = (status[82:81] == 2'b00) ? 1'b0 : 1'b1; 
+wire filter_on = (status[82:81] == 2'b00) ? 1'b0 : 1'b1;
 
 assign resSwitchBlackout = ~status[61];
 
@@ -590,19 +590,19 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
 	.gamma_bus(gamma_bus),
 
    .joystick_l_analog_0(joystick_analog_l0),
-   .joystick_r_analog_0(joystick_analog_r0),  
+   .joystick_r_analog_0(joystick_analog_r0),
    .joystick_l_analog_1(joystick_analog_l1),
-   .joystick_r_analog_1(joystick_analog_r1),   
+   .joystick_r_analog_1(joystick_analog_r1),
    .joystick_l_analog_2(joystick_analog_l2),
-   .joystick_r_analog_2(joystick_analog_r2),   
+   .joystick_r_analog_2(joystick_analog_r2),
    .joystick_l_analog_3(joystick_analog_l3),
    .joystick_r_analog_3(joystick_analog_r3),
    .ps2_mouse(mouse),
    .joystick_0_rumble(paused ? 16'h0000 : joystick1_rumble),
    .joystick_1_rumble(paused ? 16'h0000 : joystick2_rumble),
-   
+
    .paddle_0(paddle_0),
-   
+
    .direct_video(DIRECT_VIDEO)
 );
 
@@ -671,7 +671,7 @@ reg [25:0] memcard2_cnt = 0;
 wire bk_save     = status[13];
 wire bk_autosave = ~status[71];
 
-reg old_save = 0; 
+reg old_save = 0;
 reg old_save_a = 0;
 
 wire bk_save_a = OSD_STATUS & bk_autosave;
@@ -683,10 +683,10 @@ wire [1:0] region_out;
 reg        isPal;
 reg biosMod = 0;
 
-reg [31:0] exe_initial_pc;  
-reg [31:0] exe_initial_gp;  
+reg [31:0] exe_initial_pc;
+reg [31:0] exe_initial_gp;
 reg [31:0] exe_load_address;
-reg [31:0] exe_file_size;   
+reg [31:0] exe_file_size;
 reg [31:0] exe_stackpointer;
 
 always @(posedge clk_1x) begin
@@ -696,8 +696,8 @@ always @(posedge clk_1x) begin
          if(~ioctl_addr[1]) begin
             ramdownload_wrdata[15:0] <= ioctl_dout;
             if (bios_download)         ramdownload_wraddr  <= {4'd1, 2'b00, ioctl_index[7:6], ioctl_addr[18:0]};
-            else if (exe_download)     ramdownload_wraddr  <= ioctl_addr[22:0] + EXE_START[26:0];                              
-            else if (cdinfo_download)  ramdownload_wraddr  <= ioctl_addr[26:0];      
+            else if (exe_download)     ramdownload_wraddr  <= ioctl_addr[22:0] + EXE_START[26:0];
+            else if (cdinfo_download)  ramdownload_wraddr  <= ioctl_addr[26:0];
          end else begin
             ramdownload_wrdata[31:16] <= ioctl_dout;
             ramdownload_wr            <= 1;
@@ -706,11 +706,11 @@ always @(posedge clk_1x) begin
          end
       end
       if(sdramCh3_done) ioctl_wait <= 0;
-   end else begin 
+   end else begin
       ioctl_wait <= 0;
 	end
    exe_download_1  <= exe_download;
-   loadExe         <= exe_download_1 & ~exe_download;  
+   loadExe         <= exe_download_1 & ~exe_download;
 
    if (exe_download & ramdownload_wr) begin
       if (ramdownload_wraddr[22:0] == 'h10) exe_initial_pc     <= ramdownload_wrdata;
@@ -722,7 +722,7 @@ always @(posedge clk_1x) begin
    end
 
    if (loadExe) biosMod <= 1'b1;
-     
+
    if (img_mounted[1]) begin
       if (img_size > 0) begin
          hasCD     <= 1;
@@ -730,11 +730,11 @@ always @(posedge clk_1x) begin
          hasCD     <= 0;
       end
    end
-  
+
    case(status[40:39])
       0: begin
             case(region_out)
-               0: begin region = 2'b00; isPal <= 0; end   // unknown => default to NTSC          
+               0: begin region = 2'b00; isPal <= 0; end   // unknown => default to NTSC
                1: begin region = 2'b01; isPal <= 0; end   // JP
                2: begin region = 2'b00; isPal <= 0; end   // US
                3: begin region = 2'b10; isPal <= 1; end   // EU
@@ -744,18 +744,18 @@ always @(posedge clk_1x) begin
       2: begin region = 2'b01; isPal <= 0; end
       3: begin region = 2'b10; isPal <= 1; end
 	endcase
-   
+
    if (bios_download && ioctl_index[7:6] == 2'b11) cdbios <= 1'b1;
-   
+
    if (cdbios)
       biosregion <= 2'b11;
    else
       biosregion <= region;
-   
+
    memcard1_load <= 0;
    memcard2_load <= 0;
    memcard_save <= 0;
-   
+
    // memcard 1
    if (img_mounted[2]) begin
       memcard1_inserted <= 0;
@@ -767,7 +767,7 @@ always @(posedge clk_1x) begin
          sd_mounted2       <= 0;
       end
    end
-   
+
    if (sd_mounted2) begin // delay memcard inserted for ~2 seconds on card change
       if (memcard1_cnt[25]) begin
          memcard1_inserted <= 1;
@@ -775,7 +775,7 @@ always @(posedge clk_1x) begin
          memcard1_cnt <= memcard1_cnt + 1'd1;
       end
    end
-   
+
    // memcard 2
    if (img_mounted[3]) begin
       memcard2_inserted <= 0;
@@ -787,7 +787,7 @@ always @(posedge clk_1x) begin
          sd_mounted3 <= 0;
       end
    end
-   
+
    if (sd_mounted3) begin
       if (memcard2_cnt[25]) begin
          memcard2_inserted <= 1;
@@ -795,12 +795,12 @@ always @(posedge clk_1x) begin
          memcard2_cnt <= memcard2_cnt + 1'd1;
       end
    end
-   
+
 	old_save   <= bk_save;
 	old_save_a <= bk_save_a;
-   
+
    if ((~old_save & bk_save) | (~old_save_a & bk_save_a)) memcard_save <= 1;
-   
+
 end
 
 ///////////////////////////  SAVESTATE  /////////////////////////////////
@@ -821,7 +821,7 @@ savestate_ui savestate_ui
 	.joyDown        (joy_unmod[2]  ),
 	.joyUp          (joy_unmod[3]  ),
 	.joyRewind      (0             ),
-	.rewindEnable   (0             ), 
+	.rewindEnable   (0             ),
 	.status_slot    (status[38:37] ),
 	.autoincslot    (status[68]    ),
 	.OSD_saveload   (status[18:17] ),
@@ -862,7 +862,7 @@ wire PadPortJustif1  = (status[48:45] == 4'b1001);
 wire snacPort1       = (status[48:45] == 4'b1010) && ~multitap;
 wire PadPortStick1   = (status[48:45] == 4'b1011);
 wire PadPortPopn1    = (status[48:45] == 4'b1100);
-   
+
 wire PadPortDS2      = (status[52:49] == 4'b0000);
 wire PadPortEnable2  = (status[52:49] != 4'b0001) && ~multitap;
 wire PadPortDigital2 = (status[52:49] == 4'b0010) || (status[52:49] == 4'b1100);
@@ -917,7 +917,7 @@ always @(posedge clk_1x) begin
 
    psx_info_req <= 0;
    padMode_1    <= padMode;
-   
+
    cdinfo_download_1 <= cdinfo_download;
 
    if (ss_info_req) begin
@@ -942,21 +942,21 @@ always @(posedge clk_1x) begin
       end else if (status[40:39] == 2'b00) begin
          psx_info_req <= 1;
          case(region_out)
-            0: begin psx_info <= 8'd19; end   // unknown => default to NTSC          
+            0: begin psx_info <= 8'd19; end   // unknown => default to NTSC
             1: begin psx_info <= 8'd20; end   // JP
             2: begin psx_info <= 8'd21; end   // US
             3: begin psx_info <= 8'd22; end   // EU
          endcase
       end
    end
-   
+
    cdDownloadReset <= 0;
    if (cdinfo_download_1 && ~cdinfo_download && resetFromCD) begin
       cdDownloadReset <= 1;
    end
-   
+
    if (joy[14] && joy[15] && joy[8]) dbg_enabled <= 1;  // L3+R3+Select
-   
+
    // DS toggle
    joy19_1 <= {joy4[19] ,joy3[19] ,joy2[19] ,joy[19] };
    ToggleDS[0] <=  joy[19] & ~joy19_1[0];
@@ -994,7 +994,7 @@ always @(posedge clk_1x) begin
    if (~status[64] & OSD_STATUS & (unpause == 0)) begin
       paused <= 1;
    end
-   
+
    // pause from button
    buttonpause_1 <= joy[18];
    if (joy[18] & ~buttonpause_1) begin
@@ -1003,7 +1003,7 @@ always @(posedge clk_1x) begin
    if (button_paused) begin
       paused <= 1;
    end
-   
+
    // Advance Pause OSD trigger
    status1_1 <= status[1];
    if (status[1] & ~status1_1) begin
@@ -1011,7 +1011,7 @@ always @(posedge clk_1x) begin
    end else if (unpause > 0) begin
       unpause <= unpause - 1'd1;
    end
-   
+
    // pause from heartbeat -> only used for savestate
    hps_busy    <= 0;
    heartbeat_1 <= heartbeat;
@@ -1024,14 +1024,14 @@ always @(posedge clk_1x) begin
    end else begin
       aliveCnt <= 0;
    end
-   
+
    // reset
    reset <= 0;
    if (reset_or) begin
       reset    <= 1;
       aliveCnt <= 0;
    end
-   
+
    // 1 => low    -> only MEM
    // 2 => medium -> MEM + 50% cache
    // 3 => high   -> everything
@@ -1047,20 +1047,20 @@ end
 psx_mister
 psx
 (
-   .clk1x(clk_1x),          
+   .clk1x(clk_1x),
    .clk2x(clk_2x),
    .clk3x(clk_3x),
    .clkvid(clk_vid),
    .reset(reset),
    .isPaused(isPaused),
-   // commands 
+   // commands
    .pause(paused),
    .hps_busy(hps_busy),
    .loadExe(loadExe),
    .exe_initial_pc(exe_initial_pc),
-   .exe_initial_gp(exe_initial_gp), 
+   .exe_initial_gp(exe_initial_gp),
    .exe_load_address(exe_load_address),
-   .exe_file_size(exe_file_size),   
+   .exe_file_size(exe_file_size),
    .exe_stackpointer(exe_stackpointer),
    .fastboot(status[16] && hasCD),
    .ram8mb(status[85]),
@@ -1102,27 +1102,27 @@ psx
    .REVERBOFF(0),
    .REPRODUCIBLESPUDMA(status[43]),
    .WIDESCREEN(status[54:53]),
-   // RAM/BIOS interface      
+   // RAM/BIOS interface
    .biosregion(biosregion),
    .ram_refresh(sdr_refresh),
    .ram_dataWrite(sdr_sdram_din),
    .ram_dataRead32(sdr_sdram_dout32),
    .ram_Adr(sdram_addr),
    .ram_cntDMA(sdram_cntDMA),
-   .ram_be(sdram_be), 
-   .ram_rnw(sdram_rnw),  
-   .ram_ena(sdram_req), 
-   .ram_dma(sdram_dma), 
-   .ram_cache(sdram_cache), 
+   .ram_be(sdram_be),
+   .ram_rnw(sdram_rnw),
+   .ram_ena(sdram_req),
+   .ram_dma(sdram_dma),
+   .ram_cache(sdram_cache),
    .ram_done(sdram_ack),
-   .ram_dmafifo_adr  (sdram_dmafifo_adr),  
-   .ram_dmafifo_data (sdram_dmafifo_data), 
+   .ram_dmafifo_adr  (sdram_dmafifo_adr),
+   .ram_dmafifo_data (sdram_dmafifo_data),
    .ram_dmafifo_empty(sdram_dmafifo_empty),
    .ram_dmafifo_read (sdram_dmafifo_read),
-   .cache_wr(cache_wr),  
+   .cache_wr(cache_wr),
    .cache_data(cache_data),
    .cache_addr(cache_addr),
-   .dma_wr(dma_wr),  
+   .dma_wr(dma_wr),
    .dma_reqprocessed(dma_reqprocessed),
    .dma_data(dma_data),
    // vram/ddr3
@@ -1145,11 +1145,11 @@ psx
    .trackinfo_addr  (ramdownload_wraddr[10:2]),
    .trackinfo_write (ramdownload_wr && cdinfo_download),
    .resetFromCD     (resetFromCD),
-   .cd_hps_req      (sd_rd[1]),  
-   .cd_hps_lba      (sd_lba1),  
+   .cd_hps_req      (sd_rd[1]),
+   .cd_hps_lba      (sd_lba1),
    .cd_hps_ack      (sd_ack[1]),
    .cd_hps_write    (sd_buff_wr),
-   .cd_hps_data     (sd_buff_dout), 
+   .cd_hps_data     (sd_buff_dout),
    // spuram
    .spuram_dataWrite(spuram_dataWrite),
    .spuram_Adr      (spuram_Adr      ),
@@ -1173,9 +1173,9 @@ psx
    .memcard1_write  (sd_buff_wr),
    .memcard1_addr   (sd_buff_addr[8:0]),
    .memcard1_dataIn (sd_buff_dout),
-   .memcard1_dataOut(sd_buff_din2),    
+   .memcard1_dataOut(sd_buff_din2),
    .memcard2_mounted   (sd_mounted3),
-   .memcard2_available (memcard2_inserted),   
+   .memcard2_available (memcard2_inserted),
    .memcard2_rd     (sd_rd[3]),
    .memcard2_wr     (sd_wr[3]),
    .memcard2_lba    (sd_lba3),
@@ -1183,7 +1183,7 @@ psx
    .memcard2_write  (sd_buff_wr),
    .memcard2_addr   (sd_buff_addr[8:0]),
    .memcard2_dataIn (sd_buff_dout),
-   .memcard2_dataOut(sd_buff_din3), 
+   .memcard2_dataOut(sd_buff_din3),
    // video
    .videoout_on     (~status[14]),
    .isPal           (isPal),
@@ -1192,7 +1192,7 @@ psx
    .vsync           (vs),
    .hblank          (hbl),
    .vblank          (vbl),
-   .DisplayWidth    (DisplayWidth), 
+   .DisplayWidth    (DisplayWidth),
    .DisplayHeight   (DisplayHeight),
    .DisplayOffsetX  (DisplayOffsetX),
    .DisplayOffsetY  (DisplayOffsetY),
@@ -1201,9 +1201,9 @@ psx
    .video_r         (r),
    .video_g         (g),
    .video_b         (b),
-   .video_isPal     (video_isPal),   
-   .video_fbmode    (video_fbmode),   
-   .video_fb24      (video_fb24),   
+   .video_isPal     (video_isPal),
+   .video_fbmode    (video_fbmode),
+   .video_fb24      (video_fb24),
    .video_hResMode  (video_hResMode),
    .video_frameindex(frameindex),
    //Keys
@@ -1247,14 +1247,14 @@ psx
    .KeyL2      ({joy4[12],joy3[12],joy2[12],joy[12]}),
    .KeyL3      ({joy4[14],joy3[14],joy2[14],joy[14]}),
    .ToggleDS   (ToggleDS),
-   .Analog1XP1(joy0_xmuxed),       
-   .Analog1YP1(joystick_analog_l0[15:8]),       
-   .Analog2XP1(joystick_analog_r0[7:0]),           
-   .Analog2YP1(joystick_analog_r0[15:8]),    
-   .Analog1XP2(joystick_analog_l1[7:0]),       
-   .Analog1YP2(joystick_analog_l1[15:8]),       
-   .Analog2XP2(joystick_analog_r1[7:0]),           
-   .Analog2YP2(joystick_analog_r1[15:8]),           
+   .Analog1XP1(joy0_xmuxed),
+   .Analog1YP1(joystick_analog_l0[15:8]),
+   .Analog2XP1(joystick_analog_r0[7:0]),
+   .Analog2YP1(joystick_analog_r0[15:8]),
+   .Analog1XP2(joystick_analog_l1[7:0]),
+   .Analog1YP2(joystick_analog_l1[15:8]),
+   .Analog2XP2(joystick_analog_r1[7:0]),
+   .Analog2YP2(joystick_analog_r1[15:8]),
    .Analog1XP3(joystick_analog_l2[7:0]),
    .Analog1YP3(joystick_analog_l2[15:8]),
    .Analog2XP3(joystick_analog_r2[7:0]),
@@ -1290,8 +1290,8 @@ psx
    .receiveValidSnac(receiveValidSnac),
    .ackSnac(~ack),//using real ack not the 1 cycle ack
    .snacMC(status[66]),
-	
-   //sound       
+
+   //sound
 	.sound_out_left(AUDIO_L),
 	.sound_out_right(AUDIO_R),
    //savestates
@@ -1347,10 +1347,10 @@ wire         dma_wr;
 wire         dma_reqprocessed;
 wire [31:0]  dma_data;
 
-wire  [22:0] sdram_dmafifo_adr;  
-wire  [31:0] sdram_dmafifo_data; 
+wire  [22:0] sdram_dmafifo_adr;
+wire  [31:0] sdram_dmafifo_data;
 wire         sdram_dmafifo_empty;
-wire         sdram_dmafifo_read; 
+wire         sdram_dmafifo_read;
 
 
 wire [20:0] cheats_addr;
@@ -1376,12 +1376,12 @@ sdram sdram
    .SDRAM_nCAS (SDRAM_nCAS),
    .SDRAM_CKE  (SDRAM_CKE),
    .SDRAM_CLK  (SDRAM_CLK),
-   
+
    .SDRAM_EN(1),
 	.init(~pll_locked),
 	.clk(clk_3x),
 	.clk_base(clk_1x),
-	
+
 	.refreshForce(sdr_refresh),
 
 	.ch1_addr(sdram_addr),
@@ -1394,11 +1394,11 @@ sdram sdram
 	.ch1_cntDMA(sdram_cntDMA),
 	.ch1_cache(sdram_cache),
 	.ch1_ready(sdram_readack),
-	.cache_wr(cache_wr),  
+	.cache_wr(cache_wr),
 	.cache_data(cache_data),
 	.cache_addr(cache_addr),
-	.dma_wr(dma_wr),  
-	.dma_reqprocessed(dma_reqprocessed),  
+	.dma_wr(dma_wr),
+	.dma_reqprocessed(dma_reqprocessed),
 	.dma_data(dma_data),
 
 	.ch2_addr (sdram_addr),
@@ -1453,7 +1453,7 @@ sdram sdram2
 	.init(~pll_locked),
 	.clk(clk_3x),
 	.clk_base(clk_1x),
-	
+
 	.refreshForce(1'b0),
 	.ram_idle(),
 
@@ -1562,45 +1562,45 @@ video_freak video_freak
 // 640  4   +64
 
 localparam reg [23:0] aspect_ratio_lut_ntsc[128] = '{
-    24'h37015B, 24'h2B4113, 24'h1A10A7, 24'hEB45EF, 24'hA00411, 24'hF8365B, 24'hA31435, 24'h6A42C3, 
-    24'h85D381, 24'hF8F691, 24'h581257, 24'h1860A7, 24'hFD56D4, 24'h6EF303, 24'h497202, 24'hDA1601, 
-    24'hF8D6E6, 24'h8513B7, 24'hB014F3, 24'h3C51B5, 24'h3971A3, 24'hC02583, 24'hD09606, 24'h4E1245, 
-    24'hFEF776, 24'hC555D0, 24'hBD559D, 24'hE686E1, 24'hF7C771, 24'hC4F5F4, 24'h655315, 24'hB5158B, 
-    24'h2C015B, 24'h1750B9, 24'hC74637, 24'hF857CB, 24'h89B459, 24'h800411, 24'hC87668, 24'hA21536, 
-    24'hFB3820, 24'h443238, 24'hE17761, 24'hFD3856, 24'h207113, 24'h204113, 24'h3941EB, 24'hE6F7C8, 
-    24'h28015B, 24'hD55745, 24'hD21733, 24'hE9F810, 24'hC0A6AD, 24'h99955A, 24'hA0359D, 24'h7FF482, 
-    24'hD5B792, 24'hE5C82F, 24'hF558C9, 24'h35D1F0, 24'h6EF404, 24'h93155A, 24'h5BF35D, 24'h9F75DD, 
-    24'h6E0411, 24'h2DF1B5, 24'h44D292, 24'h1160A7, 24'hB4F6D4, 24'hD49810, 24'hD057F1, 24'h91B595, 
-    24'hB006C7, 24'hF959A6, 24'hE338D6, 24'hC1378D, 24'hC557C0, 24'hF579B0, 24'h7E1500, 24'hABD6D9, 
-    24'hFE3A2E, 24'hD3D886, 24'h54736A, 24'hFF3A5E, 24'hE19935, 24'hF42A03, 24'h356233, 24'hFEBA8B, 
-    24'h957637, 24'hEFAA03, 24'h43F2DA, 24'hA6F70A, 24'h20015B, 24'h24D191, 24'h72E4E9, 24'hC1E853, 
-    24'hDC097D, 24'hD09909, 24'hFE8B13, 24'hD5E959, 24'hFEFB31, 24'h2B81EB, 24'h8A5620, 24'h2B91F0, 
-    24'h2AF1EB, 24'hD3F982, 24'hED9AB4, 24'h163101, 24'h724531, 24'hDCBA12, 24'hC50907, 24'hFB7B92, 
-    24'h580411, 24'hFDDBC7, 24'hAA77F1, 24'hD259D7, 24'h2ED233, 24'h2431B5, 24'hC1992B, 24'h20F191, 
-    24'h7665A7, 24'h42D334, 24'hD09A0A, 24'hF17BAB, 24'hFFFC6B, 24'h6B653B, 24'h5153FA, 24'hFD9C73 
-};                                                                                                  
-                                                                                                       
-localparam reg [23:0] aspect_ratio_lut_pal[160] = '{                                                   
-    24'hE8F4D9, 24'h41015D, 24'h40815D, 24'h8EB30A, 24'hF8D557, 24'h1C009B, 24'h1CB0A0, 24'h473190,    
-    24'h711280, 24'hCEF49C, 24'hD734D4, 24'hCAC495, 24'h4791A1, 24'hF695A7, 24'hC7549A, 24'hC31489, 
-    24'hAEB417, 24'hB8C45B, 24'hA2C3DD, 24'hBCF484, 24'hD2E513, 24'hC2A4B7, 24'hEFF5DA, 24'h85D349, 
-    24'h18809B, 24'h0C9050, 24'hF59626, 24'hE595C9, 24'h35C15D, 24'hF81655, 24'h0EC061, 24'hEA160D, 
-    24'h68D2BA, 24'hD735A2, 24'h4731E0, 24'hE9A631, 24'hDC35DF, 24'h6D12ED, 24'h96D412, 24'hB87502, 
-    24'hCFF5AE, 24'h73732C, 24'hF1D6AF, 24'h7CA377, 24'h30C15D, 24'hA7A4B7, 24'h5C629D, 24'h3941A1, 
-    24'h4A221F, 24'hF5B712, 24'hD5F631, 24'h8ED428, 24'h8BC417, 24'hE236A8, 24'hA854FB, 24'hEAE6FD, 
-    24'hD73670, 24'hD5666B, 24'hFD97AB, 24'hA8751F, 24'hCDA649, 24'hCE1655, 24'h5C92DC, 24'h3BC1DB, 
-    24'hAEB574, 24'hB5A5B3, 24'hFE8807, 24'h2B015D, 24'h13009B, 24'hB6F5DC, 24'hA5E557, 24'hC7D677, 
-    24'hD1A6D1, 24'h099050, 24'hEF37DB, 24'hB8C619, 24'h25B140, 24'h4FD2A9, 24'hE1978E, 24'hD7373E, 
-    24'h28515D, 24'hE437C1, 24'hD35737, 24'hF4D866, 24'hF97899, 24'h42724D, 24'h5572F9, 24'h27015D, 
-    24'hCF0745, 24'h6D83DD, 24'hFFB910, 24'hE35818, 24'hEB2869, 24'hB1565F, 24'hF3F8CE, 24'hE05822, 
-    24'h10A09B, 24'hEFF8C7, 24'h9E35D0, 24'h87B502, 24'hBAF6EE, 24'hD7D809, 24'hD7380C, 24'hF59939, 
-    24'h2E31BE, 24'hE0B883, 24'h6B8417, 24'h93F5A7, 24'h09E061, 24'hE3B8C6, 24'hBCE74F, 24'h2FC1DB, 
-    24'h22F15D, 24'h818513, 24'h5ED3BB, 24'hFF3A15, 24'h5AB399, 24'hB52737, 24'hF0199A, 24'hEE5992, 
-    24'hBDB7A6, 24'hC74811, 24'h3FD298, 24'h77F4E5, 24'h4552D7, 24'h1390CE, 24'hE4D973, 24'h25B190, 
-    24'h91960F, 24'hBBD7D9, 24'h20815D, 24'h788513, 24'h20415D, 24'h9BF69E, 24'h8EB614, 24'h8435A7, 
-    24'hF8DAAE, 24'h9B26AF, 24'h0E009B, 24'h8EA631, 24'h1CB140, 24'h1B112F, 24'hD05925, 24'hD1F940, 
-    24'h89060F, 24'hD7098B, 24'h88060F, 24'h4172ED, 24'hD739A8, 24'hDBE9E7, 24'h656495, 24'hFF8B97, 
-    24'hD1A98B, 24'hA6D79F, 24'hB4E84B, 24'hEC7AE1, 24'hFF1BC7, 24'h5C944A, 24'hC31912, 24'hEE8B21 
+    24'h37015B, 24'h2B4113, 24'h1A10A7, 24'hEB45EF, 24'hA00411, 24'hF8365B, 24'hA31435, 24'h6A42C3,
+    24'h85D381, 24'hF8F691, 24'h581257, 24'h1860A7, 24'hFD56D4, 24'h6EF303, 24'h497202, 24'hDA1601,
+    24'hF8D6E6, 24'h8513B7, 24'hB014F3, 24'h3C51B5, 24'h3971A3, 24'hC02583, 24'hD09606, 24'h4E1245,
+    24'hFEF776, 24'hC555D0, 24'hBD559D, 24'hE686E1, 24'hF7C771, 24'hC4F5F4, 24'h655315, 24'hB5158B,
+    24'h2C015B, 24'h1750B9, 24'hC74637, 24'hF857CB, 24'h89B459, 24'h800411, 24'hC87668, 24'hA21536,
+    24'hFB3820, 24'h443238, 24'hE17761, 24'hFD3856, 24'h207113, 24'h204113, 24'h3941EB, 24'hE6F7C8,
+    24'h28015B, 24'hD55745, 24'hD21733, 24'hE9F810, 24'hC0A6AD, 24'h99955A, 24'hA0359D, 24'h7FF482,
+    24'hD5B792, 24'hE5C82F, 24'hF558C9, 24'h35D1F0, 24'h6EF404, 24'h93155A, 24'h5BF35D, 24'h9F75DD,
+    24'h6E0411, 24'h2DF1B5, 24'h44D292, 24'h1160A7, 24'hB4F6D4, 24'hD49810, 24'hD057F1, 24'h91B595,
+    24'hB006C7, 24'hF959A6, 24'hE338D6, 24'hC1378D, 24'hC557C0, 24'hF579B0, 24'h7E1500, 24'hABD6D9,
+    24'hFE3A2E, 24'hD3D886, 24'h54736A, 24'hFF3A5E, 24'hE19935, 24'hF42A03, 24'h356233, 24'hFEBA8B,
+    24'h957637, 24'hEFAA03, 24'h43F2DA, 24'hA6F70A, 24'h20015B, 24'h24D191, 24'h72E4E9, 24'hC1E853,
+    24'hDC097D, 24'hD09909, 24'hFE8B13, 24'hD5E959, 24'hFEFB31, 24'h2B81EB, 24'h8A5620, 24'h2B91F0,
+    24'h2AF1EB, 24'hD3F982, 24'hED9AB4, 24'h163101, 24'h724531, 24'hDCBA12, 24'hC50907, 24'hFB7B92,
+    24'h580411, 24'hFDDBC7, 24'hAA77F1, 24'hD259D7, 24'h2ED233, 24'h2431B5, 24'hC1992B, 24'h20F191,
+    24'h7665A7, 24'h42D334, 24'hD09A0A, 24'hF17BAB, 24'hFFFC6B, 24'h6B653B, 24'h5153FA, 24'hFD9C73
+};
+
+localparam reg [23:0] aspect_ratio_lut_pal[160] = '{
+    24'hE8F4D9, 24'h41015D, 24'h40815D, 24'h8EB30A, 24'hF8D557, 24'h1C009B, 24'h1CB0A0, 24'h473190,
+    24'h711280, 24'hCEF49C, 24'hD734D4, 24'hCAC495, 24'h4791A1, 24'hF695A7, 24'hC7549A, 24'hC31489,
+    24'hAEB417, 24'hB8C45B, 24'hA2C3DD, 24'hBCF484, 24'hD2E513, 24'hC2A4B7, 24'hEFF5DA, 24'h85D349,
+    24'h18809B, 24'h0C9050, 24'hF59626, 24'hE595C9, 24'h35C15D, 24'hF81655, 24'h0EC061, 24'hEA160D,
+    24'h68D2BA, 24'hD735A2, 24'h4731E0, 24'hE9A631, 24'hDC35DF, 24'h6D12ED, 24'h96D412, 24'hB87502,
+    24'hCFF5AE, 24'h73732C, 24'hF1D6AF, 24'h7CA377, 24'h30C15D, 24'hA7A4B7, 24'h5C629D, 24'h3941A1,
+    24'h4A221F, 24'hF5B712, 24'hD5F631, 24'h8ED428, 24'h8BC417, 24'hE236A8, 24'hA854FB, 24'hEAE6FD,
+    24'hD73670, 24'hD5666B, 24'hFD97AB, 24'hA8751F, 24'hCDA649, 24'hCE1655, 24'h5C92DC, 24'h3BC1DB,
+    24'hAEB574, 24'hB5A5B3, 24'hFE8807, 24'h2B015D, 24'h13009B, 24'hB6F5DC, 24'hA5E557, 24'hC7D677,
+    24'hD1A6D1, 24'h099050, 24'hEF37DB, 24'hB8C619, 24'h25B140, 24'h4FD2A9, 24'hE1978E, 24'hD7373E,
+    24'h28515D, 24'hE437C1, 24'hD35737, 24'hF4D866, 24'hF97899, 24'h42724D, 24'h5572F9, 24'h27015D,
+    24'hCF0745, 24'h6D83DD, 24'hFFB910, 24'hE35818, 24'hEB2869, 24'hB1565F, 24'hF3F8CE, 24'hE05822,
+    24'h10A09B, 24'hEFF8C7, 24'h9E35D0, 24'h87B502, 24'hBAF6EE, 24'hD7D809, 24'hD7380C, 24'hF59939,
+    24'h2E31BE, 24'hE0B883, 24'h6B8417, 24'h93F5A7, 24'h09E061, 24'hE3B8C6, 24'hBCE74F, 24'h2FC1DB,
+    24'h22F15D, 24'h818513, 24'h5ED3BB, 24'hFF3A15, 24'h5AB399, 24'hB52737, 24'hF0199A, 24'hEE5992,
+    24'hBDB7A6, 24'hC74811, 24'h3FD298, 24'h77F4E5, 24'h4552D7, 24'h1390CE, 24'hE4D973, 24'h25B190,
+    24'h91960F, 24'hBBD7D9, 24'h20815D, 24'h788513, 24'h20415D, 24'h9BF69E, 24'h8EB614, 24'h8435A7,
+    24'hF8DAAE, 24'h9B26AF, 24'h0E009B, 24'h8EA631, 24'h1CB140, 24'h1B112F, 24'hD05925, 24'hD1F940,
+    24'h89060F, 24'hD7098B, 24'h88060F, 24'h4172ED, 24'hD739A8, 24'hDBE9E7, 24'h656495, 24'hFF8B97,
+    24'hD1A98B, 24'hA6D79F, 24'hB4E84B, 24'hEC7AE1, 24'hFF1BC7, 24'h5C944A, 24'hC31912, 24'hEE8B21
 };
 
 logic [11:0] h_pos, v_pos, vb_pos, v_total;
@@ -1642,20 +1642,20 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 		else
 			vb_pos <= vb_pos + 1'd1;
 	end
-	
+
 	if (~video_aspect.vs && vs) begin
 		v_pos <= 0;
 
 		if (v_pos < 128)
 			v_total <= 6'd0;
 		else if (video_isPal && v_pos > 287)
-			v_total <= 8'd159;		
+			v_total <= 8'd159;
 		else if (~video_isPal && v_pos > 255)
 			v_total <= 7'd127;
 		else
 			v_total <= v_pos - 8'd128;
 	end
-	
+
 	if (vb_pos > (video_isPal ? 161 : 135))
 		video_aspect.vb <= 0;
 
@@ -1665,7 +1665,7 @@ always_ff @(posedge CLK_VIDEO) if (CE_PIXEL) begin
 		video_aspect.hb <= 1;
 	if (status[62] || hack_480p || (status[54:53] > 0))
 		video_aspect.hb <= hbl;
-	
+
 end
 
 assign gamma_bus[21] = 1;
@@ -1782,19 +1782,19 @@ reg ackglitch;
 
 assign clk8Snac = bitCnt < 8 ? clk9Snac : 1'b1;
 
-always @(posedge clk_1x) 
+always @(posedge clk_1x)
 begin
 
    USER_IN3_1 <= USER_IN[3];
    USER_IN4_1 <= USER_IN[4];
    USER_IN6_1 <= USER_IN[6];
-   
+
    USER_IN3_2 <= USER_IN3_1;
    USER_IN4_2 <= USER_IN4_1;
    USER_IN6_2 <= USER_IN6_1;
 
-   USER_IN3_3 <= USER_IN3_2;//glitch filter for ack	
-   USER_IN3_4 <= USER_IN3_3;	
+   USER_IN3_3 <= USER_IN3_2;//glitch filter for ack
+   USER_IN3_4 <= USER_IN3_3;
    ackglitch  <= ~USER_IN3_1 && ~USER_IN3_2 && ~USER_IN3_3 && ~USER_IN3_4 ? 1'b0 : 1'b1;
 
 	if (snacPort1 || snacPort2) begin
@@ -1803,17 +1803,17 @@ begin
 		USER_OUT[2] <= Cmd;
 		USER_OUT[3] <= 1'b1; //ACK
 		USER_OUT[4] <= 1'b1; //DAT
-		USER_OUT[5] <= oldClk8;	
+		USER_OUT[5] <= oldClk8;
 		ack         <= ~ackglitch ? USER_IN3_2 : 1'b1;
-		Dat         <= USER_IN4_2;	
-		
+		Dat         <= USER_IN4_2;
+
 		if ((pad1ID == 8'h63 || pad2ID == 8'h63) && (pad1ID != 8'h31 || pad2ID != 8'h31)) begin //quirk for guncon, irq is N/C in guncon. so using irq line and outputting csync on snac for g-con. only if justifier isn't connected
 			USER_OUT[6] <= ~csync;
 			irq10Snac   <= 1'b0;
 			csync       <= VGA_HS ^ VGA_VS;//real csync shifts HSync during VSync, should be close enough to work	with guncon
 		end
 		else begin
-			USER_OUT[6] <= 1'b1;		
+			USER_OUT[6] <= 1'b1;
 			irq10Snac   <= ~USER_IN6_2;
 		end
 	end
@@ -1823,7 +1823,7 @@ begin
 		ack       <= 1'b1;
 		Dat       <= 1'b1;
 	end
-		
+
 	oldselectedPort1 <= selectedPort1Snac;
 	oldselectedPort2 <= selectedPort2Snac;
 
@@ -1836,10 +1836,10 @@ begin
 		bitCnt  <= 4'd0;
 		byteCnt <= byteCnt + 9'd1 ;
 	end
-	
+
 	oldClk8 <= clk8Snac;
 	oldClk9 <= clk9Snac;
-	
+
 	if (oldClk9 && ~clk9Snac) begin	//send on falling edge
 		if (bitCnt < 8) begin
 			if (bitCnt==0) begin
@@ -1850,30 +1850,30 @@ begin
 				Cmd  <= Send[0];
 				Send <= {1'b1, Send[7:1]};
 			end
-		end	
+		end
 		else begin
 			Cmd  <= 1'b1;
 			Send <= Send;
 		end
-	end	
-	
+	end
+
 	if(~oldClk8 && clk8Snac) begin //receive on rising edge
 		Receive <= { Dat, Receive[7:1]};
 		bitCnt <= bitCnt + 1'b1;
-		if(bitCnt == 4'd7) begin//check for ack 
+		if(bitCnt == 4'd7) begin//check for ack
 			oneTime <= 1'b1;
 			if (MCtransfer) ackTimer <= 16'd60000;//very late ack after 7th byte. around 56000 cycles (1.7ms) with a sony MC. 3rd party MCs don't seem to do this
 			else begin
 				if (byteCnt == bytesLeft + 3) ackTimer <= 16'd400;//only wait around 150 on last byte
 				else ackTimer <= 16'd1800;//1st byte of multitap(1375) cycles to ack,digital(460),analog(350-400),ds2(250-400),mouse(120),guncon(270)
 			end
-		end	
+		end
 	end
 
 	if (ackTimer > 0) begin
 		ackTimer <= ackTimer - 16'd1;
-	end	
-	
+	end
+
 	oldAck <= ack;
 	if(oldAck && ~ack) begin //ack received
 		actionNextPadSnac <= 1'b1;
@@ -1881,7 +1881,7 @@ begin
 	end
 	else if(ackTimer == 1) begin //wait over
 		actionNextPadSnac <= 1'b1;
-		oneTime <= 1'b0;		
+		oneTime <= 1'b0;
 	end
 	else if (ackTimer == 16'd258) begin //no ack
 		ackNone <= 1'b1;
@@ -1890,12 +1890,12 @@ begin
 	else if (ackTimer == 16'd256) begin //reset if no ack
 		oneTime <= 1'b0;
 		ackTimer <= 16'd0;
-	end	
+	end
 	else begin
 		actionNextPadSnac <= 1'b0;
 		ackNone <= 1'b0;
 	end
-		
+
 	if (actionNextPadSnac && ((snacPort1 && selectedPort1Snac) || (snacPort2 && selectedPort2Snac))) begin //logic for joypad.vhd
 		if (oneTime) begin
 			if (ackNone) begin
@@ -1906,32 +1906,32 @@ begin
 				end
 				else
 					actionNextSnac <= 1'b1;
-				end	
+				end
 			else begin
 				if (byteCnt < (bytesLeft + 4)) begin
 					receiveBufferSnac <= Receive;
 					receiveValidSnac <= 1'b1;
 					//ackSnac <= 1'b1;
 				end
-				actionNextSnac <= 1'b1;	
+				actionNextSnac <= 1'b1;
 			end
 		end
 		else begin
-			actionNextSnac <= 1'b1;	
+			actionNextSnac <= 1'b1;
 		end
-	end	
+	end
 	else begin
 		receiveBufferSnac <= 8'd0;
 		receiveValidSnac <= 1'b0;
 		actionNextSnac <= 1'b0;
 		//ackSnac <= 1'b0;
-	end	
-	
+	end
+
 	if (receiveValidSnac) begin
 		if (byteCnt == 1) begin
 			targetID <= transmitValueSnac;
 		end
-		if (byteCnt == 2) begin 
+		if (byteCnt == 2) begin
 			if (targetID == 8'h81 || targetID == 8'h82 || targetID == 8'h83 || targetID == 8'h84) begin 	//memcard quirks
 				MCtransfer <= 1'b1;
 				if (transmitValueSnac == 8'h52) bytesLeft <= 9'd137;//read
@@ -1942,35 +1942,35 @@ begin
 				if (transmitValueSnac == 8'h58) bytesLeft <= 9'd2;//Get an ID or Version value
 				if (transmitValueSnac == 8'h59) bytesLeft <= 9'd6;//Prepare File Execution with Dir_index, and Parameter
 				if (transmitValueSnac == 8'h5A) bytesLeft <= 9'd18;//Get Dir_index, ComFlags, F_SN, Date, and Time
-				if (transmitValueSnac == 8'h5D) bytesLeft <= 9'd3;//Execute Custom Download Notification					
+				if (transmitValueSnac == 8'h5D) bytesLeft <= 9'd3;//Execute Custom Download Notification
 				if (transmitValueSnac == 8'h5E) bytesLeft <= 9'd3;//Get-and-Send ComFlags.bit1,3,2
-				if (transmitValueSnac == 8'h5F) bytesLeft <= 9'd1;//Get-and-Send ComFlags.bit0				
+				if (transmitValueSnac == 8'h5F) bytesLeft <= 9'd1;//Get-and-Send ComFlags.bit0
 				if (transmitValueSnac == 8'h5B) begin//Execute Function and transfer data from Pocketstation to PSX--variable length
 					bytesLeft <= 9'd3;
 					PStransfer <= 1'b1;
-				end	
+				end
 				if (transmitValueSnac == 8'h5C) begin//Execute Function and transfer data from PSX to Pocketstation--variable length
 					bytesLeft <= 9'd3;
 					PStransfer <= 1'b1;
 				end
-			end 
+			end
 			else begin //joypad quirks
 				MCtransfer <= 1'b0;
 				if (selectedPort1Snac) pad1ID <= Receive;
 				if (selectedPort2Snac) pad2ID <= Receive;
 
 				if (Receive == 8'h80) bytesLeft <= 9'd32; //for multitap
-				else bytesLeft <= {5'd0, (Receive[3:0] + Receive[3:0])};	
+				else bytesLeft <= {5'd0, (Receive[3:0] + Receive[3:0])};
 			end
 		end
 		if (byteCnt == 4 && PStransfer == 1) begin //for pocketstation
 			bytesLeft <= bytesLeft + Receive;
 			PSdatalength <=  Receive;
 		end
-		if ((byteCnt == PSdatalength + 5) && PStransfer == 1) begin 
+		if ((byteCnt == PSdatalength + 5) && PStransfer == 1) begin
 			bytesLeft <= bytesLeft + Receive;
 			PStransfer <= 1'b0;
-		end		
+		end
 	end
 end
 
