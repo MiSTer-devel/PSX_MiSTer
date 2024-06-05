@@ -23,6 +23,7 @@ entity joypad_pad is
       joypad2_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
       joypad3_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
       joypad4_rumble       : out std_logic_vector(15 downto 0) := (others => '0');
+      neGconRumble         : in  std_logic;
       padMode              : out std_logic_vector(1 downto 0);
       portNr               : in integer range 0 to 1;
 
@@ -334,7 +335,7 @@ begin
                   end if;
                   
                end if;
-            else
+            elsif (joypad.PadPortNeGcon /= '1') then 
                portStates(portNr).dsConfigMode   <= '0';
                portStates(portNr).dsRumbleMode   <= '0';
                portStates(portNr).dsAnalogMode   <= '0';
@@ -345,7 +346,7 @@ begin
             end if;
             
             MouseLeft_1 <= MouseLeft;
-            if (joypad1.PadPortDS = '1' and isMultitap = '0' and MouseLeft = '1' and MouseLeft_1 = '0') then
+            if ((joypad1.PadPortNeGcon = '1' or joypad1.PadPortDS = '1') and isMultitap = '0' and MouseLeft = '1' and MouseLeft_1 = '0') then
                switchmode <= '1';
             end if;
             
@@ -492,7 +493,11 @@ begin
                               elsif (gunConSave = '1') then
                                  receiveBuffer   <= x"63";
                               elsif (neGconSave = '1') then
-                                 receiveBuffer   <= x"23";
+                                if (dsConfigModeSave = '1' and neGconRumble = '1') then
+                                  receiveBuffer <= x"F3";
+                                else
+                                  receiveBuffer   <= x"23";
+                                end if;
                               elsif (justifSave = '1') then
                                  receiveBuffer   <= x"31";
                               elsif (analogPadSave = '1' or dsAnalogModeSave = '1') then
@@ -518,10 +523,19 @@ begin
                                  controllerState <= ID;
                                  ack             <= '1';
                                  receiveValid    <= '1';
+                            elsif (neGconSave = '1' and neGconRumble = '1') then
+                                if (dsConfigModeSave = '1') then
+                                   receiveBuffer   <= x"F3";
+                                else
+                                   receiveBuffer   <= x"23";
+                                end if;
+                                controllerState <= ID;
+                                ack             <= '1';
+                                receiveValid    <= '1';
                               end if;
                            elsif (transmitValue = x"44") then
                               command <= COMMAND_SET_STATE;
-                              if (dsSave = '1' and dsConfigModeSave = '1') then
+                              if ((dsSave = '1' or (neGconSave = '1' and neGconRumble = '1')) and dsConfigModeSave = '1') then
                                  receiveBuffer   <= x"F3";
                                  controllerState <= ID;
                                  ack             <= '1';
@@ -532,7 +546,7 @@ begin
                               end if;
                            elsif (transmitValue = x"45") then
                               command <= COMMAND_GET_STATE;
-                              if (dsSave = '1' and dsConfigModeSave = '1') then
+                              if ((dsSave = '1' or (neGconSave = '1' and neGconRumble = '1')) and dsConfigModeSave = '1') then
                                  receiveBuffer   <= x"F3";
                                  controllerState <= ID;
                                  ack             <= '1';
@@ -540,7 +554,7 @@ begin
                               end if;
                            elsif (transmitValue = x"46") then
                               command <= COMMAND_46;
-                              if (dsSave = '1' and dsConfigModeSave = '1') then
+                              if ((dsSave = '1' or (neGconSave = '1' and neGconRumble = '1')) and dsConfigModeSave = '1') then
                                  receiveBuffer   <= x"F3";
                                  controllerState <= ID;
                                  ack             <= '1';
@@ -548,7 +562,7 @@ begin
                               end if;
                            elsif (transmitValue = x"47") then
                               command <= COMMAND_47;
-                              if (dsSave = '1' and dsConfigModeSave = '1') then
+                              if ((dsSave = '1' or (neGconSave = '1' and neGconRumble = '1')) and dsConfigModeSave = '1') then
                                  receiveBuffer   <= x"F3";
                                  controllerState <= ID;
                                  ack             <= '1';
@@ -556,7 +570,7 @@ begin
                               end if;
                            elsif (transmitValue = x"4C") then
                               command <= COMMAND_4C;
-                              if (dsSave = '1' and dsConfigModeSave = '1') then
+                              if ((dsSave = '1' or (neGconSave = '1' and neGconRumble = '1')) and dsConfigModeSave = '1') then
                                  receiveBuffer   <= x"F3";
                                  controllerState <= ID;
                                  ack             <= '1';
@@ -564,7 +578,7 @@ begin
                               end if;
                            elsif (transmitValue = x"4D") then
                               command <= COMMAND_RUMBLE;
-                              if (dsSave = '1' and dsConfigModeSave = '1') then
+                              if ((dsSave = '1' or (neGconSave = '1' and neGconRumble = '1')) and dsConfigModeSave = '1') then
                                  receiveBuffer   <= x"F3";
                                  controllerState <= ID;
                                  ack             <= '1';
@@ -1024,12 +1038,34 @@ begin
                            controllerState <= NEGCONSTEERING;
                            ack <= '1';
 
+                           if (command = COMMAND_READ_INPUTS) then
+                              if (portStates(portNr).dsRumbleMode = '1') then
+                                 if (portStates(portNr).dsRumbleIndexS = 1) then 
+                                    portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                    if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                                 end if;
+                                 if (portStates(portNr).dsRumbleIndexL = 1) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
+                              else
+                                 portStates(portNr).rumble <= X"0000";
+                                 if (analogPadSave = '1' and (transmitValue(0) = '1' or rumbleOnFirst = '1')) then
+                                    portStates(portNr).rumble <= X"00FF";
+                                 end if;
+                              end if;
+                           end if;
+
                         when NEGCONSTEERING =>
                            -- Same as ANALOGLEFTX, use IF in there to go to NEGCONANALOGI?
                            receiveBuffer   <= std_logic_vector(to_unsigned(to_integer(joypad.Analog1X) + 128, 8));
                            receiveValid    <= '1';
                            controllerState <= NEGCONANALOGI;
                            ack             <= '1';
+                           if (portStates(portNr).dsRumbleMode = '1' and command = COMMAND_READ_INPUTS) then
+                              if (portStates(portNr).dsRumbleIndexS = 2) then 
+                                 portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                 if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                              end if;
+                              if (portStates(portNr).dsRumbleIndexL = 2) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
+                           end if;
 
                         when NEGCONANALOGI =>
                            receiveBuffer   <= "00000000";
@@ -1051,6 +1087,14 @@ begin
                            controllerState <= NEGCONANALOGII;
                            ack             <= '1';
 
+                           if (portStates(portNr).dsRumbleMode = '1' and command = COMMAND_READ_INPUTS) then
+                              if (portStates(portNr).dsRumbleIndexS = 3) then 
+                                 portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                 if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                              end if;
+                              if (portStates(portNr).dsRumbleIndexL = 3) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
+                           end if;
+
                         when NEGCONANALOGII =>
                            receiveBuffer   <= "00000000";
                            if (joypad.KeySquare = '1' or joypad.KeyL2 = '1') then
@@ -1071,6 +1115,14 @@ begin
                            controllerState <= NEGCONANALOGL;
                            ack             <= '1';
 
+                           if (portStates(portNr).dsRumbleMode = '1' and command = COMMAND_READ_INPUTS) then
+                              if (portStates(portNr).dsRumbleIndexS = 4) then 
+                                 portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                 if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                              end if;
+                              if (portStates(portNr).dsRumbleIndexL = 4) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
+                           end if;
+
                         when NEGCONANALOGL =>
                            -- Ran out of analog buttons, ideally analog triggers would be supported and a layout
                            -- R2->I, L2->II, AnalogR->L would be possible, enabling I/II being independent when analog and have analog L
@@ -1084,6 +1136,14 @@ begin
                            end if;
                            receiveValid    <= '1';
                            controllerState <= IDLE;
+
+                           if (portStates(portNr).dsRumbleMode = '1' and command = COMMAND_READ_INPUTS) then
+                              if (portStates(portNr).dsRumbleIndexS = 5) then 
+                                 portStates(portNr).rumble( 7 downto 0) <= x"00";
+                                 if (transmitValue(0) = '1') then portStates(portNr).rumble(7 downto 0) <= x"FF"; end if;
+                              end if;
+                              if (portStates(portNr).dsRumbleIndexL = 5) then portStates(portNr).rumble(15 downto 8) <= transmitValue; end if;
+                           end if;
 
 -- ##############################################################################
 -- #################### Konami Justifier
