@@ -42,6 +42,7 @@ entity psx_top is
       ditherOff             : in  std_logic;
       interlaced480pHack    : in  std_logic;
       showGunCrosshairs     : in  std_logic;
+      enableNeGconRumble    : in  std_logic;
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
       testSeek              : in  std_logic;
@@ -182,6 +183,7 @@ entity psx_top is
       multitap              : in  std_logic;
       multitapDigital       : in  std_logic;
       multitapAnalog        : in  std_logic;
+      neGconRumble          : in  std_logic;
       joypad1_rumble        : out std_logic_vector(15 downto 0);
       joypad2_rumble        : out std_logic_vector(15 downto 0);
       joypad3_rumble        : out std_logic_vector(15 downto 0);
@@ -1054,6 +1056,7 @@ begin
       multitap             => multitap,
       multitapDigital      => multitapDigital,
       multitapAnalog       => multitapAnalog,
+			neGconRumble         => neGconRumble,
       joypad1_rumble       => joypad1_rumble,
       joypad2_rumble       => joypad2_rumble,
       joypad3_rumble       => joypad3_rumble,

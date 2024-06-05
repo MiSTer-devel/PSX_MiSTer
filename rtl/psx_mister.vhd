@@ -38,6 +38,7 @@ entity psx_mister is
       ditherOff             : in  std_logic;
       interlaced480pHack    : in  std_logic;
       showGunCrosshairs     : in  std_logic;
+      enableNeGconRumble    : in  std_logic;
       fpscountOn            : in  std_logic;
       cdslowOn              : in  std_logic;
       testSeek              : in  std_logic;
@@ -328,6 +329,7 @@ begin
       ditherOff             => ditherOff,
       interlaced480pHack    => interlaced480pHack,
       showGunCrosshairs     => showGunCrosshairs,
+      enableNeGconRumble    => enableNeGconRumble, 
       fpscountOn            => fpscountOn,
       cdslowOn              => cdslowOn,
       testSeek              => testSeek,
@@ -461,6 +463,7 @@ begin
       video_frameindex      => video_frameindex, 
       -- inputs
       DSAltSwitchMode       => DSAltSwitchMode,
+      neGconRumble          => enableNeGconRumble,
       
       joypad1.PadPortEnable => PadPortEnable1,
       joypad1.PadPortDigital=> PadPortDigital1,
