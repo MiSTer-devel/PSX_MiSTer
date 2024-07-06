@@ -55,11 +55,10 @@ module emu
 	output        VGA_SCALER, // Force VGA scaler
 	output        VGA_DISABLE, // analog out is off
 
-	output        resSwitchBlackout,
-
 	input  [11:0] HDMI_WIDTH,
 	input  [11:0] HDMI_HEIGHT,
 	output        HDMI_FREEZE,
+	output        HDMI_BLACKOUT,
 
 `ifdef MISTER_FB
 	// Use framebuffer in DDRAM
@@ -535,7 +534,7 @@ wire [32:0] RTC_time;
 
 wire filter_on = (status[82:81] == 2'b00) ? 1'b0 : 1'b1;
 
-assign resSwitchBlackout = ~status[61];
+assign HDMI_BLACKOUT = ~status[61];
 
 wire [127:0] status_in = {status[127:39],ss_slot,status[36:19], 2'b00, status[16:0]};
 

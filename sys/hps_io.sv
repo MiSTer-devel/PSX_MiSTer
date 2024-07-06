@@ -233,7 +233,7 @@ video_calc video_calc
 /////////////////////////////////////////////////////////
 
 localparam STRLEN = $size(CONF_STR)>>3;
-localparam MAX_W = $clog2((32 > (STRLEN+2)) ? 32 : (STRLEN+2))-1;
+localparam MAX_W = $clog2((64 > (STRLEN+2)) ? 64 : (STRLEN+2))-1;
 
 wire [7:0] conf_byte;
 generate

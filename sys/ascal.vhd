@@ -1893,14 +1893,14 @@ BEGIN
 				o_hdown<=i_hdown; -- <ASYNC>
 				o_vdown<=i_vdown; -- <ASYNC>
 
-				if (o_newres > 0) then
+				IF (o_newres > 0) then
 					o_newres <= o_newres- 1;
-				end if;
+				END IF;
 			END IF;
 
-				if (swblack = '1' and o_fb_ena = '0' and (o_ihsize /= i_hrsize or o_ivsize /= i_vrsize)) then
-					o_newres <= 3;
-				end if;
+			IF (swblack = '1' and o_fb_ena = '0' and (o_ihsize /= i_hrsize or o_ivsize /= i_vrsize)) then
+				o_newres <= 3;
+			END IF;
 
 			-- Simultaneous change of input and output framebuffers
 			IF o_vsv(1)='1' AND o_vsv(0)='0' AND
@@ -2229,9 +2229,9 @@ BEGIN
 					hpix_v:=(r=>o_fb_pal_dr(23 DOWNTO 16),g=>o_fb_pal_dr(15 DOWNTO 8),
 									 b=>o_fb_pal_dr(7 DOWNTO 0));
 				END IF;
-				if (o_newres > 0) then
+				IF (o_newres > 0) then
 					hpix_v := (others => (others => '0'));
-				end if;
+				END IF;
 				o_hpix0<=hpix_v;
 				o_hpix1<=o_hpix0;
 				o_hpix2<=o_hpix1;
