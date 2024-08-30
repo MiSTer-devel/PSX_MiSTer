@@ -297,6 +297,15 @@ architecture arch of mdec is
    
    signal ss_timeout          : unsigned(23 downto 0);
 
+   function roundUp8to5(data : std_logic_vector(7 downto 0)) return std_logic_vector is
+   begin
+      if (data(7 downto 3) /= "11111" and data(2) = '1') then
+         return std_logic_vector(unsigned(data(7 downto 3)) + 1);
+      else
+         return data(7 downto 3);
+      end if;
+   end function;
+
 begin 
 
    FifoIn_Din <= dma_writedata when (dma_write = '1') else bus_dataWrite;
@@ -978,9 +987,9 @@ begin
    
    -- Color
    process (clk2x)
-      variable conv_R   : signed(18 downto 0);
-      variable conv_G   : signed(18 downto 0);
-      variable conv_B   : signed(18 downto 0);
+      variable conv_R   : signed(16 downto 0);
+      variable conv_G   : signed(16 downto 0);
+      variable conv_B   : signed(16 downto 0);
       variable mix_R    : signed(9 downto 0);
       variable mix_G    : signed(9 downto 0);
       variable mix_B    : signed(9 downto 0);
@@ -1040,12 +1049,12 @@ begin
                when COLOR_READ3 =>
                   colorState   <= COLOR_CALC;
                   color_read_Y <= signed(idct_readData);
-                  conv_R := to_signed((to_integer(color_read_R) * 1402), 19);
-                  conv_G := to_signed(((to_integer(color_read_B) * (-344)) + (to_integer(color_read_R) * (-714))), 19);
-                  conv_B := to_signed((to_integer(color_read_B) * 1772), 19);
-                  color_conv_R <= conv_R(18 downto 10);
-                  color_conv_G <= conv_G(18 downto 10);
-                  color_conv_B <= conv_B(18 downto 10);
+                  conv_R := to_signed((to_integer(color_read_R) * 359), 17);
+                  conv_G := to_signed(((to_integer(color_read_B) * (-88)) + (to_integer(color_read_R) * (-183))), 17);
+                  conv_B := to_signed((to_integer(color_read_B) * 454), 17);
+                  color_conv_R <= conv_R(16 downto 8);
+                  color_conv_G <= conv_G(16 downto 8);
+                  color_conv_B <= conv_B(16 downto 8);
                   
                when COLOR_CALC =>
                   mix_R := (resize(color_read_Y,10) + resize(color_conv_R,10));
@@ -1128,6 +1137,9 @@ begin
    
    -- Output
    process (clk2x)
+      variable color_round16_r : std_logic_vector(4 downto 0);
+      variable color_round16_g : std_logic_vector(4 downto 0);
+      variable color_round16_b : std_logic_vector(4 downto 0);
    begin
       if rising_edge(clk2x) then
 
@@ -1193,25 +1205,28 @@ begin
                when COLORMAP_8_4 => if (color_readValid = '1') then colormapState <= COLORMAP_8_1; FifoOut_Din(31 downto 24) <= color_readData(7 downto 0); FifoOut_Wr <= '1'; end if;
                
                -- 16 bit
-               when COLORMAP_16_1 =>
+               when COLORMAP_16_1 | COLORMAP_16_2 =>
                   if (color_readValid = '1') then
-                     colormapState <= COLORMAP_16_2;
-                     FifoOut_Din( 4 downto  0) <= color_readData(7 downto 3);
-                     FifoOut_Din( 9 downto  5) <= color_readData(15 downto 11);
-                     FifoOut_Din(14 downto 10) <= color_readData(23 downto 19);
-                     FifoOut_Din(15) <= rec_bit15;
+                     color_round16_r := roundUp8to5(color_readData( 7 downto  0));
+                     color_round16_g := roundUp8to5(color_readData(15 downto  8));
+                     color_round16_b := roundUp8to5(color_readData(23 downto 16));
+
+                     if (colormapState = COLORMAP_16_1) then
+                        colormapState <= COLORMAP_16_2;
+                        FifoOut_Din( 4 downto  0) <= color_round16_r;
+                        FifoOut_Din( 9 downto  5) <= color_round16_g;
+                        FifoOut_Din(14 downto 10) <= color_round16_b;
+                        FifoOut_Din(15) <= rec_bit15;
+                     else
+                        colormapState <= COLORMAP_16_1;
+                        FifoOut_Wr    <= '1';
+                        FifoOut_Din(20 downto 16) <= color_round16_r;
+                        FifoOut_Din(25 downto 21) <= color_round16_g;
+                        FifoOut_Din(30 downto 26) <= color_round16_b;
+                        FifoOut_Din(31) <= rec_bit15;
+                     end if;
                   end if;
-                  
-               when COLORMAP_16_2 =>
-                  if (color_readValid = '1') then
-                     colormapState <= COLORMAP_16_1;
-                     FifoOut_Wr    <= '1';
-                     FifoOut_Din(20 downto 16) <= color_readData(7 downto 3);
-                     FifoOut_Din(25 downto 21) <= color_readData(15 downto 11);
-                     FifoOut_Din(30 downto 26) <= color_readData(23 downto 19);
-                     FifoOut_Din(31) <= rec_bit15;
-                  end if;
-                  
+
                -- 24 bit
                when COLORMAP_24_1 => -- 0 bytes left
                   if (color_readValid = '1') then
