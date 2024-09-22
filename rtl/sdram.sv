@@ -284,7 +284,7 @@ always @(posedge clk) begin
    if(data_ready_delay1[1]) ch1_dout[111: 96]  <= dq_reg;
    if(data_ready_delay1[0]) ch1_dout[127:112]  <= dq_reg;
    if(data_ready_delay1[6] && ~dma_buffer && ~cache_buffer_next) ch1_ready_ramclock <= 1;
-   if(data_ready_delay1[4] && cache_buffer_next)                 ch1_ready_ramclock <= 1;
+   if(data_ready_delay1[2] && cache_buffer_next)                 ch1_ready_ramclock <= 1;
    if(data_ready_delay1[6] && dma_buffer)                        dma_done <= 1;
 
    if(data_ready_delay1[7]) cache_buffer_next <= cache_buffer;

@@ -258,6 +258,9 @@ architecture arch of psx_top is
    signal pausingSS              : std_logic := '0';
    signal allowunpause           : std_logic;
    
+   signal reset_ready            : std_logic := '0';
+   signal reset_cnt              : integer range 0 to 16 := 0;
+   
    signal pauseCD                : std_logic;
    signal Pause_idle_cd          : std_logic;
    
@@ -750,9 +753,18 @@ begin
    begin
       if rising_edge(clk1x) then
       
+         if (reset_cnt < 16) then
+            reset_cnt <= reset_cnt + 1;
+         else
+            reset_ready <= '1';
+         end if;
+      
          if (reset = '1' or pausing = '1') then
          
-            ce        <= '0';
+            ce          <= '0';
+            reset_ready <= '0';
+            reset_cnt   <= 0;
+            
             if (reset_intern = '1') then
                cpuPaused <= '0';
             end if;
@@ -770,7 +782,7 @@ begin
                pausing <= '0';
             end if;
          
-         else
+         elsif (reset_ready = '1') then
       
             ce        <= '1';
          
@@ -1867,6 +1879,7 @@ begin
    (
       clk1x             => clk1x,
       clk2x             => clk2x,
+      clk2xIndex        => clk2xIndex,
       clk3x             => clk3x,
       ce                => ce,   
       reset             => reset_intern,
@@ -1893,7 +1906,7 @@ begin
       mem_writeMask     => mem_writeMask,
       mem_dataWrite     => mem_dataWrite,
       mem_dataRead      => mem_dataRead, 
-      mem_done          => mem_done,
+      mem_done_in       => mem_done,
       mem_fifofull      => mem_fifofull,
       mem_tagvalids     => mem_tagvalids,
       
@@ -2181,7 +2194,7 @@ begin
       iexport : entity work.export
       port map
       (
-         clk               => clk1x,
+         clk               => clk2x,
          ce                => ce,
          reset             => reset_intern,
             

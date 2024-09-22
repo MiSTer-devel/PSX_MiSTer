@@ -1,3 +1,9 @@
+Special version of the MiSTer PSX core with CPU running at 2x clock speed(67 MHz)
+
+Experimental build only. Don't report bugs.
+
+---------------------
+
 # [Playstation](https://en.wikipedia.org/wiki/PlayStation_(console)) for [MiSTer Platform](https://github.com/MiSTer-devel/Main_MiSTer/wiki)
 
 ## Hardware Requirements

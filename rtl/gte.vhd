@@ -266,7 +266,82 @@ begin
 
    gte_writeAddr <= SS_Adr                 when (loading_savestate = '1') else gte_writeAddr_in;
    gte_writeData <= unsigned(SS_DataWrite) when (loading_savestate = '1') else gte_writeData_in;
-   gte_writeEna  <= SS_wren                when (loading_savestate = '1') else gte_writeEna_in; 
+   gte_writeEna  <= SS_wren and clk2xIndex when (loading_savestate = '1') else gte_writeEna_in; 
+   
+   process (all)
+   begin
+      case (to_integer(gte_readAddr)) is
+         when 00 => gte_readData <= unsigned(REG_V0Y & REG_V0X);
+         when 01 => gte_readData <= unsigned(resize(REG_V0Z, 32));
+         when 02 => gte_readData <= unsigned(REG_V1Y & REG_V1X);
+         when 03 => gte_readData <= unsigned(resize(REG_V1Z, 32));
+         when 04 => gte_readData <= unsigned(REG_V2Y & REG_V2X);
+         when 05 => gte_readData <= unsigned(resize(REG_V2Z, 32));
+         when 06 => gte_readData <= REG_RGBC;
+         when 07 => gte_readData <= x"0000" & REG_OTZ;
+         when 08 => gte_readData <= unsigned(resize(REG_IR0, 32));
+         when 09 => gte_readData <= unsigned(resize(REG_IR1, 32));
+         when 10 => gte_readData <= unsigned(resize(REG_IR2, 32));
+         when 11 => gte_readData <= unsigned(resize(REG_IR3, 32));
+         when 12 => gte_readData <= unsigned(REG_SY0 & REG_SX0);
+         when 13 => gte_readData <= unsigned(REG_SY1 & REG_SX1);
+         when 14 => gte_readData <= unsigned(REG_SY2 & REG_SX2);
+         when 15 => gte_readData <= unsigned(REG_SY2 & REG_SX2);
+         when 16 => gte_readData <= x"0000" & REG_SZ0;
+         when 17 => gte_readData <= x"0000" & REG_SZ1;
+         when 18 => gte_readData <= x"0000" & REG_SZ2;
+         when 19 => gte_readData <= x"0000" & REG_SZ3;
+         when 20 => gte_readData <= REG_RGB0;
+         when 21 => gte_readData <= REG_RGB1;
+         when 22 => gte_readData <= REG_RGB2;
+         when 23 => gte_readData <= REG_RES1;
+         when 24 => gte_readData <= unsigned(REG_MAC0);
+         when 25 => gte_readData <= unsigned(REG_MAC1);
+         when 26 => gte_readData <= unsigned(REG_MAC2);
+         when 27 => gte_readData <= unsigned(REG_MAC3);
+         when 28 | 29 => 
+            gte_readData(31 downto 15) <= (others => '0');
+            if (REG_IR1 < 0) then gte_readData( 4 downto  0) <= "00000"; elsif (REG_IR1(15 downto 7) > 31) then gte_readData( 4 downto  0) <= "11111"; else gte_readData( 4 downto  0) <= unsigned(REG_IR1(11 downto 7)); end if;
+            if (REG_IR2 < 0) then gte_readData( 9 downto  5) <= "00000"; elsif (REG_IR2(15 downto 7) > 31) then gte_readData( 9 downto  5) <= "11111"; else gte_readData( 9 downto  5) <= unsigned(REG_IR2(11 downto 7)); end if;
+            if (REG_IR3 < 0) then gte_readData(14 downto 10) <= "00000"; elsif (REG_IR3(15 downto 7) > 31) then gte_readData(14 downto 10) <= "11111"; else gte_readData(14 downto 10) <= unsigned(REG_IR3(11 downto 7)); end if;
+   
+         when 30 => gte_readData <= unsigned(REG_LZCS);
+         when 31 => gte_readData <= unsigned(REG_LZCR);
+         when 32 => gte_readData <= unsigned(REG_RT12 & REG_RT11);
+         when 33 => gte_readData <= unsigned(REG_RT21 & REG_RT13);
+         when 34 => gte_readData <= unsigned(REG_RT23 & REG_RT22);
+         when 35 => gte_readData <= unsigned(REG_RT32 & REG_RT31);
+         when 36 => gte_readData <= unsigned(resize(REG_RT33, 32));
+         when 37 => gte_readData <= REG_TR0;
+         when 38 => gte_readData <= REG_TR1;
+         when 39 => gte_readData <= REG_TR2;
+         when 40 => gte_readData <= unsigned(REG_LL12 & REG_LL11);
+         when 41 => gte_readData <= unsigned(REG_LL21 & REG_LL13);
+         when 42 => gte_readData <= unsigned(REG_LL23 & REG_LL22);
+         when 43 => gte_readData <= unsigned(REG_LL32 & REG_LL31);
+         when 44 => gte_readData <= unsigned(resize(REG_LL33, 32));
+         when 45 => gte_readData <= REG_BK0;
+         when 46 => gte_readData <= REG_BK1;
+         when 47 => gte_readData <= REG_BK2;
+         when 48 => gte_readData <= unsigned(REG_LC12 & REG_LC11);
+         when 49 => gte_readData <= unsigned(REG_LC21 & REG_LC13);
+         when 50 => gte_readData <= unsigned(REG_LC23 & REG_LC22);
+         when 51 => gte_readData <= unsigned(REG_LC32 & REG_LC31);
+         when 52 => gte_readData <= unsigned(resize(REG_LC33, 32));
+         when 53 => gte_readData <= REG_FC0;
+         when 54 => gte_readData <= REG_FC1;
+         when 55 => gte_readData <= REG_FC2;
+         when 56 => gte_readData <= REG_OFX;
+         when 57 => gte_readData <= REG_OFY;
+         when 58 => gte_readData <= unsigned(resize(REG_H, 32));
+         when 59 => gte_readData <= unsigned(resize(REG_DQA, 32));
+         when 60 => gte_readData <= REG_DQB;
+         when 61 => gte_readData <= unsigned(resize(REG_ZSF3, 32));
+         when 62 => gte_readData <= unsigned(resize(REG_ZSF4, 32));
+         when 63 => gte_readData <= REG_FLAG;
+         when others => null;
+      end case;
+   end process;
    
    process (clk2x)
       variable leadCountData : unsigned(31 downto 0);
@@ -388,82 +463,8 @@ begin
             setOTZ          <= '0';
             pushSZandDivide <= '0';
             pushSXY         <= '0';
-            
-            if (gte_readEna = '1') then
-               case (to_integer(gte_readAddr)) is
-                  when 00 => gte_readData <= unsigned(REG_V0Y & REG_V0X);
-                  when 01 => gte_readData <= unsigned(resize(REG_V0Z, 32));
-                  when 02 => gte_readData <= unsigned(REG_V1Y & REG_V1X);
-                  when 03 => gte_readData <= unsigned(resize(REG_V1Z, 32));
-                  when 04 => gte_readData <= unsigned(REG_V2Y & REG_V2X);
-                  when 05 => gte_readData <= unsigned(resize(REG_V2Z, 32));
-                  when 06 => gte_readData <= REG_RGBC;
-                  when 07 => gte_readData <= x"0000" & REG_OTZ;
-                  when 08 => gte_readData <= unsigned(resize(REG_IR0, 32));
-                  when 09 => gte_readData <= unsigned(resize(REG_IR1, 32));
-                  when 10 => gte_readData <= unsigned(resize(REG_IR2, 32));
-                  when 11 => gte_readData <= unsigned(resize(REG_IR3, 32));
-                  when 12 => gte_readData <= unsigned(REG_SY0 & REG_SX0);
-                  when 13 => gte_readData <= unsigned(REG_SY1 & REG_SX1);
-                  when 14 => gte_readData <= unsigned(REG_SY2 & REG_SX2);
-                  when 15 => gte_readData <= unsigned(REG_SY2 & REG_SX2);
-                  when 16 => gte_readData <= x"0000" & REG_SZ0;
-                  when 17 => gte_readData <= x"0000" & REG_SZ1;
-                  when 18 => gte_readData <= x"0000" & REG_SZ2;
-                  when 19 => gte_readData <= x"0000" & REG_SZ3;
-                  when 20 => gte_readData <= REG_RGB0;
-                  when 21 => gte_readData <= REG_RGB1;
-                  when 22 => gte_readData <= REG_RGB2;
-                  when 23 => gte_readData <= REG_RES1;
-                  when 24 => gte_readData <= unsigned(REG_MAC0);
-                  when 25 => gte_readData <= unsigned(REG_MAC1);
-                  when 26 => gte_readData <= unsigned(REG_MAC2);
-                  when 27 => gte_readData <= unsigned(REG_MAC3);
-                  when 28 | 29 => 
-                     gte_readData(31 downto 15) <= (others => '0');
-                     if (REG_IR1 < 0) then gte_readData( 4 downto  0) <= "00000"; elsif (REG_IR1(15 downto 7) > 31) then gte_readData( 4 downto  0) <= "11111"; else gte_readData( 4 downto  0) <= unsigned(REG_IR1(11 downto 7)); end if;
-                     if (REG_IR2 < 0) then gte_readData( 9 downto  5) <= "00000"; elsif (REG_IR2(15 downto 7) > 31) then gte_readData( 9 downto  5) <= "11111"; else gte_readData( 9 downto  5) <= unsigned(REG_IR2(11 downto 7)); end if;
-                     if (REG_IR3 < 0) then gte_readData(14 downto 10) <= "00000"; elsif (REG_IR3(15 downto 7) > 31) then gte_readData(14 downto 10) <= "11111"; else gte_readData(14 downto 10) <= unsigned(REG_IR3(11 downto 7)); end if;
-   
-                  when 30 => gte_readData <= unsigned(REG_LZCS);
-                  when 31 => gte_readData <= unsigned(REG_LZCR);
-                  when 32 => gte_readData <= unsigned(REG_RT12 & REG_RT11);
-                  when 33 => gte_readData <= unsigned(REG_RT21 & REG_RT13);
-                  when 34 => gte_readData <= unsigned(REG_RT23 & REG_RT22);
-                  when 35 => gte_readData <= unsigned(REG_RT32 & REG_RT31);
-                  when 36 => gte_readData <= unsigned(resize(REG_RT33, 32));
-                  when 37 => gte_readData <= REG_TR0;
-                  when 38 => gte_readData <= REG_TR1;
-                  when 39 => gte_readData <= REG_TR2;
-                  when 40 => gte_readData <= unsigned(REG_LL12 & REG_LL11);
-                  when 41 => gte_readData <= unsigned(REG_LL21 & REG_LL13);
-                  when 42 => gte_readData <= unsigned(REG_LL23 & REG_LL22);
-                  when 43 => gte_readData <= unsigned(REG_LL32 & REG_LL31);
-                  when 44 => gte_readData <= unsigned(resize(REG_LL33, 32));
-                  when 45 => gte_readData <= REG_BK0;
-                  when 46 => gte_readData <= REG_BK1;
-                  when 47 => gte_readData <= REG_BK2;
-                  when 48 => gte_readData <= unsigned(REG_LC12 & REG_LC11);
-                  when 49 => gte_readData <= unsigned(REG_LC21 & REG_LC13);
-                  when 50 => gte_readData <= unsigned(REG_LC23 & REG_LC22);
-                  when 51 => gte_readData <= unsigned(REG_LC32 & REG_LC31);
-                  when 52 => gte_readData <= unsigned(resize(REG_LC33, 32));
-                  when 53 => gte_readData <= REG_FC0;
-                  when 54 => gte_readData <= REG_FC1;
-                  when 55 => gte_readData <= REG_FC2;
-                  when 56 => gte_readData <= REG_OFX;
-                  when 57 => gte_readData <= REG_OFY;
-                  when 58 => gte_readData <= unsigned(resize(REG_H, 32));
-                  when 59 => gte_readData <= unsigned(resize(REG_DQA, 32));
-                  when 60 => gte_readData <= REG_DQB;
-                  when 61 => gte_readData <= unsigned(resize(REG_ZSF3, 32));
-                  when 62 => gte_readData <= unsigned(resize(REG_ZSF4, 32));
-                  when 63 => gte_readData <= REG_FLAG;
-                  when others => null;
-               end case;
-            end if;
          
-            if (gte_writeEna = '1' and clk2xIndex = '1') then
+            if (gte_writeEna = '1') then
             
                case (to_integer(gte_writeAddr)) is
                   when 00 => REG_V0X <= signed(gte_writeData(15 downto 0)); REG_V0Y <= signed(gte_writeData(31 downto 16));
@@ -573,7 +574,7 @@ begin
                when IDLE =>
                   calcStep   <= 0;
                   batchCount <= 0;
-                  if (gte_cmdEna = '1' and clk2xIndex = '1') then
+                  if (gte_cmdEna = '1') then
                      gte_busy <= '1';
                      REG_FLAG <= (others => '0');
                      cmdShift <= gte_cmdData(19);
@@ -612,7 +613,7 @@ begin
                         debug_firstGTE <= '1';
                      end if;
                      
-                  elsif (clk2xIndex = '0') then
+                  else
                      gte_busy <= '0';
                   end if;
                   
@@ -1552,8 +1553,9 @@ begin
          variable regcheck       : integer range 0 to 3; 
          variable busy_1         : std_logic := '0'; 
          variable gte_writeEna_1 : std_logic := '0';
-         variable gte_readEna_1  : std_logic := '0';
          variable gte_cmdEna_1   : std_logic := '0';
+         
+         variable gte_readAddr_1 : unsigned(5 downto 0);
          
          variable outputCountNew : integer;
          
@@ -1735,7 +1737,7 @@ begin
                outputCountNew := outputCountNew + 1;
             end if;
             
-            if (gte_writeEna = '1' and clk2xIndex = '1') then
+            if (gte_writeEna = '1') then
                write(line_out, string'("REG IN: "));
                if (gte_writeAddr < 10) then
                   write(line_out, string'("0"));
@@ -1747,7 +1749,7 @@ begin
                outputCountNew := outputCountNew + 1;
             end if;
             
-            if (gte_readEna_1 = '1') then
+            if (gte_readEna = '1') then
                write(line_out, string'("REG READ: "));
                if (gte_readAddr < 10) then
                   write(line_out, string'("0"));
@@ -1760,9 +1762,8 @@ begin
             end if;
             
             busy_1 := gte_busy;
-            gte_writeEna_1 := gte_writeEna and clk2xIndex;
-            gte_cmdEna_1   := gte_cmdEna and clk2xIndex;
-            gte_readEna_1  := gte_readEna and clk2xIndex; 
+            gte_writeEna_1 := gte_writeEna;
+            gte_cmdEna_1   := gte_cmdEna;
             
             outputCount <= outputCountNew;
             
