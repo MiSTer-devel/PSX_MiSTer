@@ -1781,7 +1781,7 @@ begin
                         if (loopEnd = '1') then
                            ENDX(index)           <= '1';
                            voice.currentAddr     <= unsigned(RamVoice_dataB(1)(15 downto 1)) & '0';
-                           if (loopRepeat = '0') then
+                           if (loopRepeat = '0' and NOISEMODE(index) = '0') then
                               voice.adsrphase <= ADSRPHASE_OFF;
                               RamVoice_dataA  <= (others => '0');
                            end if;
