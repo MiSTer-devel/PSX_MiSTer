@@ -128,12 +128,13 @@ module sys_top
 wire SD_CS, SD_CLK, SD_MOSI, SD_MISO, SD_CD;
 
 `ifndef MISTER_DUAL_SDRAM
-	assign SD_CD       = mcp_en ? mcp_sdcd : SDCD_SPDIF;
+	wire   sd_cd       = SDCD_SPDIF & ~SW[2]; // SW[2]=ON workaround for faulty boards without SD card detect pin.
+	assign SD_CD       = mcp_en ? mcp_sdcd : sd_cd;
 	assign SD_MISO     = SD_CD | (mcp_en ? SD_SPI_MISO : (VGA_EN | SDIO_DAT[0]));
 	assign SD_SPI_CS   = mcp_en ?  (mcp_sdcd  ? 1'bZ : SD_CS) : (sog & ~cs1 & ~VGA_EN) ? 1'b1 : 1'bZ;
 	assign SD_SPI_CLK  = (~mcp_en | mcp_sdcd) ? 1'bZ : SD_CLK;
 	assign SD_SPI_MOSI = (~mcp_en | mcp_sdcd) ? 1'bZ : SD_MOSI;
-	assign {SDIO_CLK,SDIO_CMD,SDIO_DAT} = av_dis ? 6'bZZZZZZ : (mcp_en | (SDCD_SPDIF & ~SW[2])) ? {vga_g,vga_r,vga_b} : {SD_CLK,SD_MOSI,SD_CS,3'bZZZ};
+	assign {SDIO_CLK,SDIO_CMD,SDIO_DAT} = av_dis ? 6'bZZZZZZ : (mcp_en | sd_cd) ? {vga_g,vga_r,vga_b} : {SD_CLK,SD_MOSI,SD_CS,3'bZZZ};
 `else
 	assign SD_CD       = mcp_sdcd;
 	assign SD_MISO     = mcp_sdcd | SD_SPI_MISO;
@@ -183,10 +184,10 @@ wire io_dig = mcp_en ? mcp_mode : SW[3];
 	assign LED_USER  = VGA_TX_CLK;
 	wire   BTN_DIS   = VGA_EN;
 `else
-	wire   BTN_RESET = SDRAM2_DQ[9];
-	wire   BTN_OSD   = SDRAM2_DQ[13];
-	wire   BTN_USER  = SDRAM2_DQ[11];
-	wire   BTN_DIS   = SDRAM2_DQ[15];
+	wire   BTN_RESET = 1'b1;
+	wire   BTN_OSD   = 1'b1;
+	wire   BTN_USER  = 1'b1;
+	wire   BTN_DIS   = 1'b1;
 `endif
 
 reg BTN_EN = 0;
@@ -678,6 +679,7 @@ wire         vbuf_write;
 wire  [23:0] hdmi_data;
 wire         hdmi_vs, hdmi_hs, hdmi_de, hdmi_vbl, hdmi_brd;
 wire         freeze;
+wire         bob_deint;
 
 `ifndef MISTER_DEBUG_NOHDMI
 	wire clk_hdmi  = hdmi_clk_out;
@@ -709,9 +711,10 @@ wire         freeze;
 	)
 	ascal
 	(
-		.reset_na (~reset_req),
-		.run      (1),
-		.freeze   (freeze),
+		.reset_na   (~reset_req),
+		.run        (1),
+		.freeze     (freeze),
+		.bob_deint  (bob_deint),
 
 		.i_clk    (clk_ihdmi),
 		.i_ce     (ce_hpix),
@@ -1737,6 +1740,7 @@ emu emu
 	.HDMI_HEIGHT(direct_video ? 12'd0 : hdmi_height),
 	.HDMI_FREEZE(freeze),
 	.HDMI_BLACKOUT(hdmi_blackout),
+	.HDMI_BOB_DEINT(bob_deint),
 
 	.CLK_VIDEO(clk_vid),
 	.CE_PIXEL(ce_pix),
