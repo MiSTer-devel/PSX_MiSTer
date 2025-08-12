@@ -178,7 +178,7 @@ module emu
 );
 
 assign HDMI_FREEZE = 1'b0;
-assign HDMI_BOB_DEINT = 0;
+assign HDMI_BOB_DEINT = status[41];
 
 assign ADC_BUS  = 'Z;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
