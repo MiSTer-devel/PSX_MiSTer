@@ -1539,7 +1539,7 @@ assign VGA_B    = video_gamma.blue;
 assign VGA_VS   = video_gamma.vs;
 assign VGA_HS   = video_gamma.hs;
 assign VGA_DE   = ~(video_gamma.vb | video_gamma.hb);
-assign VGA_F1 = status[14] ? 1'b0 : (video_aspect.interlace & ~status[41]);
+assign VGA_F1   =  status[14] ? 1'b0 : video_aspect.interlace;
 assign VGA_SL = 0;
 logic [11:0] aspect_x, aspect_y;
 
