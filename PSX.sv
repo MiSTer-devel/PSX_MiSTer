@@ -59,6 +59,7 @@ module emu
 	input  [11:0] HDMI_HEIGHT,
 	output        HDMI_FREEZE,
 	output        HDMI_BLACKOUT,
+	output        HDMI_BOB_DEINT,
 
 `ifdef MISTER_FB
 	// Use framebuffer in DDRAM
@@ -177,6 +178,7 @@ module emu
 );
 
 assign HDMI_FREEZE = 1'b0;
+assign HDMI_BOB_DEINT = status[41];
 
 assign ADC_BUS  = 'Z;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
@@ -1537,7 +1539,7 @@ assign VGA_B    = video_gamma.blue;
 assign VGA_VS   = video_gamma.vs;
 assign VGA_HS   = video_gamma.hs;
 assign VGA_DE   = ~(video_gamma.vb | video_gamma.hb);
-assign VGA_F1 = status[14] ? 1'b0 : (video_aspect.interlace & ~status[41]);
+assign VGA_F1   =  status[14] ? 1'b0 : video_aspect.interlace;
 assign VGA_SL = 0;
 logic [11:0] aspect_x, aspect_y;
 

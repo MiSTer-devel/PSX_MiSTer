@@ -128,12 +128,13 @@ module sys_top
 wire SD_CS, SD_CLK, SD_MOSI, SD_MISO, SD_CD;
 
 `ifndef MISTER_DUAL_SDRAM
-	assign SD_CD       = mcp_en ? mcp_sdcd : SDCD_SPDIF;
+	wire   sd_cd       = SDCD_SPDIF & ~SW[2]; // SW[2]=ON workaround for faulty boards without SD card detect pin.
+	assign SD_CD       = mcp_en ? mcp_sdcd : sd_cd;
 	assign SD_MISO     = SD_CD | (mcp_en ? SD_SPI_MISO : (VGA_EN | SDIO_DAT[0]));
 	assign SD_SPI_CS   = mcp_en ?  (mcp_sdcd  ? 1'bZ : SD_CS) : (sog & ~cs1 & ~VGA_EN) ? 1'b1 : 1'bZ;
 	assign SD_SPI_CLK  = (~mcp_en | mcp_sdcd) ? 1'bZ : SD_CLK;
 	assign SD_SPI_MOSI = (~mcp_en | mcp_sdcd) ? 1'bZ : SD_MOSI;
-	assign {SDIO_CLK,SDIO_CMD,SDIO_DAT} = av_dis ? 6'bZZZZZZ : (mcp_en | (SDCD_SPDIF & ~SW[2])) ? {vga_g,vga_r,vga_b} : {SD_CLK,SD_MOSI,SD_CS,3'bZZZ};
+	assign {SDIO_CLK,SDIO_CMD,SDIO_DAT} = av_dis ? 6'bZZZZZZ : (mcp_en | sd_cd) ? {vga_g,vga_r,vga_b} : {SD_CLK,SD_MOSI,SD_CS,3'bZZZ};
 `else
 	assign SD_CD       = mcp_sdcd;
 	assign SD_MISO     = mcp_sdcd | SD_SPI_MISO;
@@ -183,10 +184,10 @@ wire io_dig = mcp_en ? mcp_mode : SW[3];
 	assign LED_USER  = VGA_TX_CLK;
 	wire   BTN_DIS   = VGA_EN;
 `else
-	wire   BTN_RESET = SDRAM2_DQ[9];
-	wire   BTN_OSD   = SDRAM2_DQ[13];
-	wire   BTN_USER  = SDRAM2_DQ[11];
-	wire   BTN_DIS   = SDRAM2_DQ[15];
+	wire   BTN_RESET = 1'b1;
+	wire   BTN_OSD   = 1'b1;
+	wire   BTN_USER  = 1'b1;
+	wire   BTN_DIS   = 1'b1;
 `endif
 
 reg BTN_EN = 0;
@@ -299,8 +300,9 @@ wire       audio_96k    = cfg[6];
 wire       csync_en     = cfg[3];
 wire       io_osd_vga   = io_ss1 & ~io_ss2;
 `ifndef MISTER_DUAL_SDRAM
-	wire    ypbpr_en     = cfg[5];
-	wire    sog          = cfg[9];
+	wire forced_scandoubler = cfg[4];
+	wire ypbpr_en           = cfg[5];
+	wire sog                = cfg[9];
 	`ifdef MISTER_DEBUG_NOHDMI
 		wire vga_scaler   = 0;
 	`else
@@ -499,18 +501,20 @@ always@(posedge clk_sys) begin
 				endcase
 			end
 `endif
-`ifndef MISTER_DISABLE_YC
 			if(cmd == 'h41) begin
 				case(cnt[3:0])
-					 0: {pal_en,cvbs,yc_en}    <= io_din[2:0];
-					 1: PhaseInc[15:0]         <= io_din;
-					 2: PhaseInc[31:16]        <= io_din;
-					 3: PhaseInc[39:32]        <= io_din[7:0];
-					 4: ColorBurst_Range[15:0] <= io_din;
-					 5: ColorBurst_Range[16]   <= io_din[0];
+`ifndef MISTER_DISABLE_YC
+					0: {pal_en,cvbs,yc_en}    <= io_din[2:0];
+					4: ColorBurst_Range[15:0] <= io_din;
+					5: ColorBurst_Range[16]   <= io_din[0];
+`endif
+					// Subcarrier commands (independent of YC module)
+					1: PhaseInc[15:0]         <= io_din;
+					2: PhaseInc[31:16]        <= io_din;
+					3: PhaseInc[39:32]        <= io_din[7:0];
+					6: subcarrier             <= io_din[0];
 				endcase
 			end
-`endif
 		end
 	end
 
@@ -678,6 +682,7 @@ wire         vbuf_write;
 wire  [23:0] hdmi_data;
 wire         hdmi_vs, hdmi_hs, hdmi_de, hdmi_vbl, hdmi_brd;
 wire         freeze;
+wire         bob_deint;
 
 `ifndef MISTER_DEBUG_NOHDMI
 	wire clk_hdmi  = hdmi_clk_out;
@@ -709,9 +714,10 @@ wire         freeze;
 	)
 	ascal
 	(
-		.reset_na (~reset_req),
-		.run      (1),
-		.freeze   (freeze),
+		.reset_na   (~reset_req),
+		.run        (1),
+		.freeze     (freeze),
+		.bob_deint  (bob_deint),
 
 		.i_clk    (clk_ihdmi),
 		.i_ce     (ce_hpix),
@@ -1391,36 +1397,47 @@ osd vga_osd
 wire vga_cs_osd;
 csync csync_vga(clk_vid, vga_hs_osd, vga_vs_osd, vga_cs_osd);
 
-`ifndef MISTER_DISABLE_YC
-	reg         pal_en;
-	reg         yc_en;
-	reg         cvbs;
-	reg  [16:0] ColorBurst_Range;
-	reg  [39:0] PhaseInc;
-	wire [23:0] yc_o;
-	wire        yc_hs, yc_vs, yc_cs, yc_de;
-
-	yc_out yc_out
-	(
-		.clk(clk_vid),
-		.PAL_EN(pal_en),
-		.CVBS(cvbs),
-		.PHASE_INC(PhaseInc),
-		.COLORBURST_RANGE(ColorBurst_Range),
-		.hsync(vga_hs_osd),
-		.vsync(vga_vs_osd),
-		.csync(vga_cs_osd),
-		.de(vga_de_osd),
-		.dout(yc_o),
-		.din(vga_data_osd),
-		.hsync_o(yc_hs),
-		.vsync_o(yc_vs),
-		.csync_o(yc_cs),
-		.de_o(yc_de)
-	);
-`endif
-
 `ifndef MISTER_DUAL_SDRAM
+	`ifndef MISTER_DISABLE_YC
+		reg         pal_en;
+		reg         yc_en;
+		reg         cvbs;
+		reg  [16:0] ColorBurst_Range;
+		wire [23:0] yc_o;
+		wire        yc_hs, yc_vs, yc_cs, yc_de;
+
+		yc_out yc_out
+		(
+			.clk(clk_vid),
+			.PAL_EN(pal_en),
+			.CVBS(cvbs),
+			.PHASE_INC(PhaseInc),
+			.COLORBURST_RANGE(ColorBurst_Range),
+			.hsync(vga_hs_osd),
+			.vsync(vga_vs_osd),
+			.csync(vga_cs_osd),
+			.de(vga_de_osd),
+			.dout(yc_o),
+			.din(vga_data_osd),
+			.hsync_o(yc_hs),
+			.vsync_o(yc_vs),
+			.csync_o(yc_cs),
+			.de_o(yc_de)
+		);
+	`endif
+
+	// Subcarrier generation for external encoders (independent of YC module)
+	reg         subcarrier;
+	reg  [39:0] PhaseInc;
+
+	reg  [39:0] sub_accum;
+	always @(posedge clk_vid) sub_accum <= sub_accum + PhaseInc;
+
+	// 1-bit output for positive/negative of wave, no LUT required. Output 1 if disabled for further logic
+	reg subcarrier_out;
+	always @(posedge clk_vid) subcarrier_out <= ~(subcarrier & csync_en & ~ypbpr_en & ~forced_scandoubler & ~vgas_en) | sub_accum[39];
+
+
 	wire VGA_DISABLE;
 	wire [23:0] vgas_o;
 	wire vgas_hs, vgas_vs, vgas_cs, vgas_de;
@@ -1473,7 +1490,7 @@ csync csync_vga(clk_vid, vga_hs_osd, vga_vs_osd, vga_cs_osd);
 	wire cs1 = vgas_en ? vgas_cs : vga_cs;
 	wire de1 = vgas_en ? vgas_de : vga_de;
 
-	assign VGA_VS = av_dis ? 1'bZ      : ((vgas_en ? (~vgas_vs ^ VS[12])                         : VGA_DISABLE ? 1'd1 : ~vga_vs) | csync_en);
+	assign VGA_VS = av_dis ? 1'bZ      :(((vgas_en ? (~vgas_vs ^ VS[12])                         : VGA_DISABLE ? 1'd1 : ~vga_vs) | csync_en) & subcarrier_out);
 	assign VGA_HS = av_dis ? 1'bZ      :  (vgas_en ? ((csync_en ? ~vgas_cs : ~vgas_hs) ^ HS[12]) : VGA_DISABLE ? 1'd1 : (csync_en ? ~vga_cs : ~vga_hs));
 	assign VGA_R  = av_dis ? 6'bZZZZZZ :   vgas_en ? vgas_o[23:18]                               : VGA_DISABLE ? 6'd0 : vga_o[23:18];
 	assign VGA_G  = av_dis ? 6'bZZZZZZ :   vgas_en ? vgas_o[15:10]                               : VGA_DISABLE ? 6'd0 : vga_o[15:10];
@@ -1737,6 +1754,7 @@ emu emu
 	.HDMI_HEIGHT(direct_video ? 12'd0 : hdmi_height),
 	.HDMI_FREEZE(freeze),
 	.HDMI_BLACKOUT(hdmi_blackout),
+	.HDMI_BOB_DEINT(bob_deint),
 
 	.CLK_VIDEO(clk_vid),
 	.CE_PIXEL(ce_pix),
