@@ -1013,12 +1013,14 @@ begin
                            --fastForwardRate <= to_signed(-4, 8); -- debug test!
                            
                            if ((FifoParam_Empty = '1' or FifoParam_Dout = x"00") and (setLocActive = '0' or seekLBA = lastReadSector) and (driveState = DRIVE_PLAYING or ((driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) and playAfterSeek = '1'))) then
-                              fastForwardRate <= (others => '0');
+                              playLBA <= currentLBA;
                            else
                               play           <= '1';
                               lastreportCDDA <= (others => '1');
-                           end if;
-                           
+							  if (FifoParam_Empty = '1' or FifoParam_Dout = x"00") then
+							     playLBA <= currentLBA;
+                              end if;
+                           end if; 
                         end if;
                         
                      when x"04" => -- forward
@@ -1897,7 +1899,9 @@ begin
                   when DRIVE_READING | DRIVE_PLAYING =>
                      if (nextSubdata(1) = LEAD_OUT_TRACK_NUMBER) then
                         internalStatus(7 downto 5) <= "000"; -- ClearActiveBits
-                        internalStatus(1)          <= '0'; -- motor off
+						-- The motor should remain ON during normal CD audio playback. End-of-track detection should NOT stop the motor.
+                        -- always signal end of playback with interrupt
+                        -- internalStatus(1)          <= '0'; -- motor off
                         driveState   <= DRIVE_IDLE;
                         ackDriveEnd  <= '1';
                      else
