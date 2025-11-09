@@ -502,18 +502,22 @@ always@(posedge clk_sys) begin
 			end
 `endif
 			if(cmd == 'h41) begin
-				case(cnt[3:0])
 `ifndef MISTER_DISABLE_YC
+				case(cnt[3:0])
 					0: {pal_en,cvbs,yc_en}    <= io_din[2:0];
 					4: ColorBurst_Range[15:0] <= io_din;
 					5: ColorBurst_Range[16]   <= io_din[0];
+				endcase
 `endif
+`ifndef MISTER_DUAL_SDRAM
+				case(cnt[3:0])
 					// Subcarrier commands (independent of YC module)
 					1: PhaseInc[15:0]         <= io_din;
 					2: PhaseInc[31:16]        <= io_din;
 					3: PhaseInc[39:32]        <= io_din[7:0];
-					6: subcarrier             <= io_din[0];
+					6: subcarrier     		  <= io_din[0];
 				endcase
+`endif
 			end
 		end
 	end
