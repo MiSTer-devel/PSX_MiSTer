@@ -42,6 +42,8 @@ entity gpu is
       vCrop                : in  std_logic_vector(1 downto 0);
       hCrop                : in  std_logic;
 
+	  oldGPU               : in  std_logic;
+
       Gun1CrosshairOn      : in  std_logic;
       Gun1X                : in  unsigned(7 downto 0);
       Gun1Y_scanlines      : in  unsigned(8 downto 0);
@@ -53,7 +55,7 @@ entity gpu is
       Gun2Y_scanlines      : in  unsigned(8 downto 0);
       Gun2offscreen        : in  std_logic;
       Gun2IRQ10            : out std_logic;
-      
+	  
       cdSlow               : in  std_logic;
       
       errorOn              : in  std_logic;
@@ -1387,6 +1389,8 @@ begin
       noTexture            => noTexture,     
       render24             => render24,
       drawSlow             => drawSlow,
+	  
+	  oldGPU           	   => oldGPU,
 
       drawMode_in          => drawMode,
       DrawPixelsMask_in    => GPUSTAT_DrawPixelsMask,

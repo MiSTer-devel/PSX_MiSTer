@@ -11,7 +11,7 @@ entity gpu_pixelpipeline is
       clk2xIndex           : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
-      
+	        
       noTexture            : in  std_logic;
       render24             : in  std_logic;
       drawSlow             : in  std_logic;
@@ -19,6 +19,8 @@ entity gpu_pixelpipeline is
       drawMode_in          : in  unsigned(13 downto 0) := (others => '0');
       DrawPixelsMask_in    : in  std_logic;
       SetMask_in           : in  std_logic;
+	  
+	  oldGPU               : in  std_logic;
       
       clearCacheTexture    : in  std_logic;
       clearCachePalette    : in  std_logic;
@@ -789,12 +791,19 @@ begin
                stage4_texture     <= stage3_texture;    
                stage4_transparent <= stage3_transparent;
                stage4_rawTexture  <= stage3_rawTexture; 
-               stage4_dithering   <= stage3_dithering;  
+               stage4_dithering   <= stage3_dithering; 
                stage4_x           <= stage3_x;          
-               stage4_y           <= stage3_y;          
-               stage4_cr          <= stage3_cr;         
-               stage4_cg          <= stage3_cg;         
-               stage4_cb          <= stage3_cb;         
+               stage4_y           <= stage3_y;
+               -- oldGPU
+			   if (oldGPU = '1' and stage3_texture = '1' and stage3_rawTexture = '0') then
+			      stage4_cr          <= stage3_cr(7 downto 3) & "000";
+                  stage4_cg          <= stage3_cg(7 downto 3) & "000";
+                  stage4_cb          <= stage3_cb(7 downto 3) & "000";
+               else
+                  stage4_cr <= stage3_cr;
+                  stage4_cg <= stage3_cg;
+                  stage4_cb <= stage3_cb;
+               end if;
                stage4_oldPixel    <= stage3_oldPixel;   
                stage4_oldPixel2   <= stage3_oldPixel2;   
                stage4_ditherAdd   <= DITHERMATRIX(to_integer(stage3_y(1 downto 0)), to_integer(stage3_x(1 downto 0)));  

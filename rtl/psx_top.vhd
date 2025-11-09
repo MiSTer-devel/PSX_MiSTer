@@ -69,6 +69,7 @@ entity psx_top is
       REVERBOFF             : in  std_logic;
       REPRODUCIBLESPUDMA    : in  std_logic;
       WIDESCREEN            : in  std_logic_vector(1 downto 0);
+	  oldGPU                : in  std_logic;
       -- RAM/BIOS interface  
       biosregion            : in  std_logic_vector(1 downto 0);      
       ram_refresh           : out std_logic;
@@ -1485,6 +1486,8 @@ begin
       vCrop                => vCrop,   
       hCrop                => hCrop,   
       
+	  oldGPU               => oldGPU,
+	  
       Gun1CrosshairOn      => Gun1CrosshairOn,
       Gun1X                => Gun1X,
       Gun1Y_scanlines      => Gun1Y_scanlines,
