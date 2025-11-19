@@ -2507,7 +2507,9 @@ begin
                   -- synthesis translate_on
                   
                   readSubchannel <= '1';
-                  
+
+				  subchannelSector <= lastReadSector + 2; -- When reading sector N, SUBQ should report sector N+2
+															
                   if (
                       (libcryptKey(15) = '1' and (lastReadSector = 14105 or lastReadSector = 14110)) or
                       (libcryptKey(14) = '1' and (lastReadSector = 14231 or lastReadSector = 14236)) or
@@ -2669,7 +2671,7 @@ begin
                   subchannelSector <= physicalLBA;
                   UpdateSubchannel <= '1';
                else
-                  subchannelSector <= lastReadSector;
+                  subchannelSector <= lastReadSector +2;
                end if;
             end if;
             
