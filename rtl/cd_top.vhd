@@ -1090,26 +1090,35 @@ begin
                         cmdStop     <= '1';
                         
                      when x"09" => -- pause
-                        cmdAck      <= '1';
-                        cmdPending  <= '0';
-                        working     <= '1';
-                        workDelay   <= 7000 - 2;
-                        workCommand <= nextCmd;
-                        cmdResetXa  <= '1';
-                        if (driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
-                           -- todo: should this be swapped between single speed and double speed? DuckStation has double speed longer and psx spx doc has single speed being longer
-                           if (modeReg(7) = '1') then
-                              workDelay  <= 2157295 + driveDelay; -- value from psx spx doc
-                           else
-                              workDelay  <= 1066874 + driveDelay; -- value from psx spx doc
-                           end if;
-                        end if;
-                        if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
-                           -- todo: complete seek?
-                           stop_afterseek <= '1';
+						-- Reject PAUSE while still seeking (first sector not delivered)
+						if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or ((driveState = DRIVE_READING or driveState = DRIVE_PLAYING) and internalStatus(6) = '1')) then	  
+                           -- Return NOT_READY (0x80)
+						   cmdPending              <= '0';
+						   errorResponseCmd_new    <= '1';	
+						   errorResponseCmd_error  <= x"01"; -- STAT_ERROR
+                           errorResponseCmd_reason <= x"80"; -- NOT_READY
                         else
-                           drive_stop <= '1';
-                        end if;
+						   cmdAck      <= '1';
+                           cmdPending  <= '0';
+                           working     <= '1';
+                           workDelay   <= 7000 - 2;
+                           workCommand <= nextCmd;
+                           cmdResetXa  <= '1';
+                           if (driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
+                              -- todo: should this be swapped between single speed and double speed? DuckStation has double speed longer and psx spx doc has single speed being longer
+                              if (modeReg(7) = '1') then
+                                 workDelay  <= 2157295 + driveDelay; -- value from psx spx doc
+                              else
+                                 workDelay  <= 1066874 + driveDelay; -- value from psx spx doc
+                              end if;
+                           end if;
+                           if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
+                              -- todo: complete seek?
+                              stop_afterseek <= '1';
+                           else
+                              drive_stop <= '1';
+                           end if;
+					    end if;
                      
                      when x"0A" => -- reset
                         if (working = '1' and workCommand = x"0A") then
@@ -2097,6 +2106,11 @@ begin
             
             if (startReading = '1') then
                clearSectorBuffers <= '1';
+			   
+			   if (afterSeek = '0') then
+			      internalStatus(6) <= '1';  -- seeking until first sector arrives
+			   end if;
+															
                --todo: check for setLocActive needed when coming from readSN?
                if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
                   readAfterSeek     <= '1';
@@ -2507,7 +2521,9 @@ begin
                   -- synthesis translate_on
                   
                   readSubchannel <= '1';
-                  
+
+				  subchannelSector <= lastReadSector + 2; -- When reading sector N, SUBQ should report sector N+2
+															
                   if (
                       (libcryptKey(15) = '1' and (lastReadSector = 14105 or lastReadSector = 14110)) or
                       (libcryptKey(14) = '1' and (lastReadSector = 14231 or lastReadSector = 14236)) or
@@ -2669,7 +2685,7 @@ begin
                   subchannelSector <= physicalLBA;
                   UpdateSubchannel <= '1';
                else
-                  subchannelSector <= lastReadSector;
+                  subchannelSector <= lastReadSector +2;
                end if;
             end if;
             
