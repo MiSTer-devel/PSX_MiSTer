@@ -2521,26 +2521,24 @@ begin
                   -- synthesis translate_on
                   
                   readSubchannel <= '1';
-
-				  subchannelSector <= lastReadSector + 2; -- When reading sector N, SUBQ should report sector N+2
 															
                   if (
-                      (libcryptKey(15) = '1' and (lastReadSector = 14105 or lastReadSector = 14110)) or
-                      (libcryptKey(14) = '1' and (lastReadSector = 14231 or lastReadSector = 14236)) or
-                      (libcryptKey(13) = '1' and (lastReadSector = 14485 or lastReadSector = 14490)) or
-                      (libcryptKey(12) = '1' and (lastReadSector = 14579 or lastReadSector = 14584)) or
-                      (libcryptKey(11) = '1' and (lastReadSector = 14649 or lastReadSector = 14654)) or
-                      (libcryptKey(10) = '1' and (lastReadSector = 14899 or lastReadSector = 14904)) or
-                      (libcryptKey(9)  = '1' and (lastReadSector = 15056 or lastReadSector = 15061)) or
-                      (libcryptKey(8)  = '1' and (lastReadSector = 15130 or lastReadSector = 15135)) or
-                      (libcryptKey(7)  = '1' and (lastReadSector = 15242 or lastReadSector = 15247)) or
-                      (libcryptKey(6)  = '1' and (lastReadSector = 15312 or lastReadSector = 15317)) or
-                      (libcryptKey(5)  = '1' and (lastReadSector = 15378 or lastReadSector = 15383)) or
-                      (libcryptKey(4)  = '1' and (lastReadSector = 15628 or lastReadSector = 15633)) or
-                      (libcryptKey(3)  = '1' and (lastReadSector = 15919 or lastReadSector = 15924)) or
-                      (libcryptKey(2)  = '1' and (lastReadSector = 16031 or lastReadSector = 16036)) or
-                      (libcryptKey(1)  = '1' and (lastReadSector = 16101 or lastReadSector = 16106)) or
-                      (libcryptKey(0)  = '1' and (lastReadSector = 16167 or lastReadSector = 16172))
+                      (libcryptKey(15) = '1' and ((lastReadSector + 2) = 14105 or (lastReadSector + 2) = 14110)) or
+                      (libcryptKey(14) = '1' and ((lastReadSector + 2) = 14231 or (lastReadSector + 2) = 14236)) or
+                      (libcryptKey(13) = '1' and ((lastReadSector + 2) = 14485 or (lastReadSector + 2) = 14490)) or
+                      (libcryptKey(12) = '1' and ((lastReadSector + 2) = 14579 or (lastReadSector + 2) = 14584)) or
+                      (libcryptKey(11) = '1' and ((lastReadSector + 2) = 14649 or (lastReadSector + 2) = 14654)) or
+                      (libcryptKey(10) = '1' and ((lastReadSector + 2) = 14899 or (lastReadSector + 2) = 14904)) or
+                      (libcryptKey(9)  = '1' and ((lastReadSector + 2) = 15056 or (lastReadSector + 2) = 15061)) or
+                      (libcryptKey(8)  = '1' and ((lastReadSector + 2) = 15130 or (lastReadSector + 2) = 15135)) or
+                      (libcryptKey(7)  = '1' and ((lastReadSector + 2) = 15242 or (lastReadSector + 2) = 15247)) or
+                      (libcryptKey(6)  = '1' and ((lastReadSector + 2) = 15312 or (lastReadSector + 2) = 15317)) or
+                      (libcryptKey(5)  = '1' and ((lastReadSector + 2) = 15378 or (lastReadSector + 2) = 15383)) or
+                      (libcryptKey(4)  = '1' and ((lastReadSector + 2) = 15628 or (lastReadSector + 2) = 15633)) or
+                      (libcryptKey(3)  = '1' and ((lastReadSector + 2) = 15919 or (lastReadSector + 2) = 15924)) or
+                      (libcryptKey(2)  = '1' and ((lastReadSector + 2) = 16031 or (lastReadSector + 2) = 16036)) or
+                      (libcryptKey(1)  = '1' and ((lastReadSector + 2) = 16101 or (lastReadSector + 2) = 16106)) or
+                      (libcryptKey(0)  = '1' and ((lastReadSector + 2) = 16167 or (lastReadSector + 2) = 16172))
                   ) then
                       readSubchannel <= '0';
                   end if;
