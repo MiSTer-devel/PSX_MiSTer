@@ -81,6 +81,8 @@ begin
    ss_out(0)(10 downto 0) <= std_logic_vector(I_STATUS);
    ss_out(1)(31 downto 0) <= std_logic_vector(I_MASK);
 
+   SS_idle <= '1';
+
    process (clk1x)
       variable I_STATUSNew : unsigned(10 downto 0);
    begin
@@ -129,8 +131,6 @@ begin
             if (first = '0') then
                I_STATUS <= I_STATUSNew;
             end if;
-            
-            SS_idle <= '1';
             
          end if;
       end if;

@@ -14,11 +14,11 @@ entity datacache is
    );
    port 
    (
-      clk1x             : in  std_logic;
-      clk2x             : in  std_logic;
+      clk               : in  std_logic;
       reset             : in  std_logic;
       halfrate          : in  std_logic;
                         
+      read_ce           : in  std_logic;
       read_enable       : in  std_logic;
       read_addr         : in  std_logic_vector(SIZEBASEBITS-1 downto 0);
       read_hit          : out std_logic := '0';
@@ -60,6 +60,7 @@ architecture arch of datacache is
    signal addrsave_dataout   : std_logic_vector(ADDRSAVEBITS downto 0) := (others => '0');
    signal addrsave_we        : std_logic := '0';
    signal upperbits          : std_logic_vector(SIZEBASEBITS - SIZEBITS - 1 downto 0) := (others => '0');
+   signal writeAndRead       : std_logic := '0';
    
    -- clear cache
    signal clear_counter      : unsigned(SIZEBITS - 1 downto 0);
@@ -74,13 +75,14 @@ begin
    generic map ( addr_width => SIZEBITS, data_width => BITWIDTH)
    port map
    (
-      clock_a     => clk2x,
+      clock_a     => clk,
+      clken_a     => read_ce,
       address_a   => memory_addr_a,
       data_a      => (memory_dataout'range => '0'),
       wren_a      => '0',
       q_a         => memory_dataout,
       
-      clock_b     => clk1x,
+      clock_b     => clk,
       address_b   => memory_addr_b,
       data_b      => memory_datain,
       wren_b      => memory_we,
@@ -91,13 +93,14 @@ begin
    generic map ( addr_width => SIZEBITS, data_width => ADDRSAVEBITS + 1)
    port map
    (
-      clock_a     => clk2x,
+      clock_a     => clk,
+      clken_a     => read_ce,
       address_a   => addrsave_addr_a,
       data_a      => (addrsave_dataout'range => '0'),
       wren_a      => '0',
       q_a         => addrsave_dataout,
       
-      clock_b     => clk1x,
+      clock_b     => clk,
       address_b   => addrsave_addr_b,
       data_b      => addrsave_datain,
       wren_b      => addrsave_we,
@@ -108,11 +111,9 @@ begin
    memory_addr_a    <= read_addr(SIZEBITS - 1 downto 0);
    addrsave_addr_a  <= read_addr(SIZEBITS - 1 downto 0);
    
-   upperbits       <= read_addr(SIZEBASEBITS-1 downto SIZEBITS);
-   
    cache_hit        <= '1' when (addrsave_dataout = '0' & upperbits) else '0';
    
-   read_hit         <= cache_hit and cache_half;
+   read_hit         <= cache_hit and cache_half and not writeAndRead;
    read_data        <= memory_dataout;
    
    -- writing
@@ -124,9 +125,20 @@ begin
    memory_datain   <= write_data;
    memory_we       <= write_enable;
    
-   process (clk1x)
+   process (clk)
    begin
-      if rising_edge(clk1x) then
+      if rising_edge(clk) then
+      
+         if (read_ce = '1') then
+            upperbits <= read_addr(SIZEBASEBITS-1 downto SIZEBITS);
+         end if;
+         
+         if (read_ce = '1') then
+            writeAndRead <= '0';
+            if (memory_we = '1' and addrsave_addr_a = addrsave_addr_b) then
+               writeAndRead <= '1';
+            end if;
+         end if;
 
          if (halfrate = '1') then
             cache_half <= not cache_half;
