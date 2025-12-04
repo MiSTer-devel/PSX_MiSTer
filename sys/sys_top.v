@@ -395,6 +395,7 @@ always@(posedge clk_sys) begin
 `ifndef MISTER_DEBUG_NOHDMI
 			if(io_din[7:0] == 'h40) io_dout_sys <= fb_crc;
 `endif
+			if(io_din[7:0] == 'h42) io_dout_sys <= {1'b1, frame_cnt};
 		end
 		else begin
 			cnt <= cnt + 1'd1;
@@ -531,6 +532,15 @@ always@(posedge clk_sys) begin
 
 	vs_d2 <= vs_d1;
 	if(~vs_d2 & vs_d1) vs_wait <= 0;
+end
+
+reg [7:0] frame_cnt;
+always @(posedge clk_sys) begin
+	reg vs_r, vs_old;
+	
+	vs_r <= vs_fix;
+	if(vs_r == vs_fix) vs_old <= vs_r;
+	if(~vs_old & vs_r) frame_cnt <= frame_cnt + 1'd1;
 end
 
 cyclonev_hps_interface_peripheral_uart uart
