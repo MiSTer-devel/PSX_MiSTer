@@ -395,6 +395,7 @@ always@(posedge clk_sys) begin
 `ifndef MISTER_DEBUG_NOHDMI
 			if(io_din[7:0] == 'h40) io_dout_sys <= fb_crc;
 `endif
+			if(io_din[7:0] == 'h42) io_dout_sys <= {1'b1, frame_cnt};
 		end
 		else begin
 			cnt <= cnt + 1'd1;
@@ -512,7 +513,9 @@ always@(posedge clk_sys) begin
 					1: PhaseInc[15:0]         <= io_din;
 					2: PhaseInc[31:16]        <= io_din;
 					3: PhaseInc[39:32]        <= io_din[7:0];
+`ifndef MISTER_DUAL_SDRAM
 					6: subcarrier             <= io_din[0];
+`endif
 				endcase
 			end
 		end
@@ -531,6 +534,15 @@ always@(posedge clk_sys) begin
 
 	vs_d2 <= vs_d1;
 	if(~vs_d2 & vs_d1) vs_wait <= 0;
+end
+
+reg [7:0] frame_cnt;
+always @(posedge clk_sys) begin
+	reg vs_r, vs_old;
+	
+	vs_r <= vs_fix;
+	if(vs_r == vs_fix) vs_old <= vs_r;
+	if(~vs_old & vs_r) frame_cnt <= frame_cnt + 1'd1;
 end
 
 cyclonev_hps_interface_peripheral_uart uart
@@ -1397,38 +1409,39 @@ osd vga_osd
 wire vga_cs_osd;
 csync csync_vga(clk_vid, vga_hs_osd, vga_vs_osd, vga_cs_osd);
 
+`ifndef MISTER_DISABLE_YC
+	reg         pal_en;
+	reg         yc_en;
+	reg         cvbs;
+	reg  [16:0] ColorBurst_Range;
+	wire [23:0] yc_o;
+	wire        yc_hs, yc_vs, yc_cs, yc_de;
+
+	yc_out yc_out
+	(
+		.clk(clk_vid),
+		.PAL_EN(pal_en),
+		.CVBS(cvbs),
+		.PHASE_INC(PhaseInc),
+		.COLORBURST_RANGE(ColorBurst_Range),
+		.hsync(vga_hs_osd),
+		.vsync(vga_vs_osd),
+		.csync(vga_cs_osd),
+		.de(vga_de_osd),
+		.dout(yc_o),
+		.din(vga_data_osd),
+		.hsync_o(yc_hs),
+		.vsync_o(yc_vs),
+		.csync_o(yc_cs),
+		.de_o(yc_de)
+	);
+`endif
+
+reg  [39:0] PhaseInc;
+
 `ifndef MISTER_DUAL_SDRAM
-	`ifndef MISTER_DISABLE_YC
-		reg         pal_en;
-		reg         yc_en;
-		reg         cvbs;
-		reg  [16:0] ColorBurst_Range;
-		wire [23:0] yc_o;
-		wire        yc_hs, yc_vs, yc_cs, yc_de;
-
-		yc_out yc_out
-		(
-			.clk(clk_vid),
-			.PAL_EN(pal_en),
-			.CVBS(cvbs),
-			.PHASE_INC(PhaseInc),
-			.COLORBURST_RANGE(ColorBurst_Range),
-			.hsync(vga_hs_osd),
-			.vsync(vga_vs_osd),
-			.csync(vga_cs_osd),
-			.de(vga_de_osd),
-			.dout(yc_o),
-			.din(vga_data_osd),
-			.hsync_o(yc_hs),
-			.vsync_o(yc_vs),
-			.csync_o(yc_cs),
-			.de_o(yc_de)
-		);
-	`endif
-
 	// Subcarrier generation for external encoders (independent of YC module)
 	reg         subcarrier;
-	reg  [39:0] PhaseInc;
 
 	reg  [39:0] sub_accum;
 	always @(posedge clk_vid) sub_accum <= sub_accum + PhaseInc;
