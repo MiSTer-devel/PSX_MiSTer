@@ -1915,6 +1915,9 @@ begin
                         ackDriveEnd  <= '1';
                      else
                         skipreading := '0';
+						if (setLocActive = '1' and (currentLBA - seekLBA) >= 2) then
+						   skipreading := '1';
+						end if;
                         if (isAudio = '1') then
                            if (currentTrackBCD = x"00") then -- auto find track number from subheader
                               currentTrackBCD <= nextSubdata(1);
