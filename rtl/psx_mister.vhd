@@ -266,6 +266,7 @@ entity psx_mister is
       load_state            : in  std_logic;
       savestate_number      : in  integer range 0 to 3;
       state_loaded          : out std_logic;
+      validSStates          : out std_logic_vector(3 downto 0);
       rewind_on             : in  std_logic;
       rewind_active         : in  std_logic;
       -- cheats
@@ -642,6 +643,7 @@ begin
       load_state            => load_state,           
       savestate_number      => savestate_number,     
       state_loaded          => state_loaded,
+      validSStates          => validSStates,
       rewind_on             => rewind_on,    
       -- cheats
       rewind_active         => rewind_active,

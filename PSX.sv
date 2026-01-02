@@ -810,6 +810,7 @@ end
 
 wire [1:0] ss_slot;
 wire [7:0] ss_info;
+wire [3:0] validSStates;
 wire ss_save, ss_load, ss_info_req;
 wire statusUpdate;
 
@@ -828,6 +829,7 @@ savestate_ui savestate_ui
 	.status_slot    (status[38:37] ),
 	.autoincslot    (status[68]    ),
 	.OSD_saveload   (status[18:17] ),
+   .validSStates   (validSStates  ),
 	.ss_save        (ss_save       ),
 	.ss_load        (ss_load       ),
 	.ss_info_req    (ss_info_req   ),
@@ -1306,6 +1308,7 @@ psx
    .load_state            (ss_load),
    .savestate_number      (ss_slot),
    .state_loaded          (),
+   .validSStates          (validSStates),
    .rewind_on             (0), //(status[27]),
    .rewind_active         (0), //(status[27] & joy[15]),
    //cheats
