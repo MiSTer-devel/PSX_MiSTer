@@ -66,6 +66,7 @@ entity psx_mister is
       REPRODUCIBLESPUDMA    : in  std_logic;
       WIDESCREEN            : in  std_logic_vector(1 downto 0);
 	  oldGPU                : in  std_logic;
+	  backwardSeekFilter    : in  std_logic;
       -- RAM/BIOS interface      
       biosregion            : in  std_logic_vector(1 downto 0);  
       ram_refresh           : out std_logic;
@@ -359,6 +360,7 @@ begin
       REPRODUCIBLESPUDMA    => REPRODUCIBLESPUDMA,
       WIDESCREEN            => WIDESCREEN,
 	  oldGPU                => oldGPU,
+	  backwardSeekFilter    => backwardSeekFilter,
       -- RAM/BIOS interface        
       biosregion            => biosregion,
       ram_refresh           => ram_refresh,
