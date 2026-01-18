@@ -426,7 +426,7 @@ parameter CONF_STR = {
     "P2O[93],Backward Seek Hack,Off,On(U);",
 	"P2O[85],RAM(Homebrew),2 MByte,8 MByte(U);",
 	"P2O[90],GPU Slowdown,Off,On(U);",
-	"P2O[92],Old GPU,Off,On;",
+	"P2O[92],Old GPU (CXD8514Q),Off,On;",
 	"P2-;",
 	"P2O[28],FPS Overlay,Off,On;",
 	"P2O[74],Error Overlay,Off,On;",
