@@ -22,6 +22,8 @@ entity cd_top is
       pauseOnCDSlow        : in  std_logic;
       region               : in  std_logic_vector(1 downto 0);
       region_out           : out std_logic_vector(1 downto 0);
+	  
+	  backwardSeekHack     : in  std_logic;
       
       pauseCD              : out std_logic := '0';
       Pause_idle_cd        : out std_logic := '0';
@@ -1915,9 +1917,13 @@ begin
                         ackDriveEnd  <= '1';
                      else
                         skipreading := '0';
-						if (setLocActive = '1' and (currentLBA - seekLBA) >= 2) then
-						   skipreading := '1';
-						end if;
+                        -- optional fix for Dave Mirra / Trasher 
+						if (backwardSeekHack = '1') then
+						   if (setLocActive = '1' and (currentLBA - seekLBA) >= 2) then
+						      skipreading := '1';
+						   end if;
+						end if;   
+
                         if (isAudio = '1') then
                            if (currentTrackBCD = x"00") then -- auto find track number from subheader
                               currentTrackBCD <= nextSubdata(1);

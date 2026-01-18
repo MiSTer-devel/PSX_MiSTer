@@ -70,6 +70,7 @@ entity psx_top is
       REPRODUCIBLESPUDMA    : in  std_logic;
       WIDESCREEN            : in  std_logic_vector(1 downto 0);
 	  oldGPU                : in  std_logic;
+	  backwardSeekHack      : in  std_logic;
       -- RAM/BIOS interface  
       biosregion            : in  std_logic_vector(1 downto 0);      
       ram_refresh           : out std_logic;
@@ -1404,6 +1405,8 @@ begin
       LIDopen              => LIDopen,
       region               => region,
       region_out           => region_out,
+	  
+	  backwardSeekHack     => backwardSeekHack,
       
       pauseCD              => pauseCD,
       Pause_idle_cd        => Pause_idle_cd,
