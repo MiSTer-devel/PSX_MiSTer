@@ -716,19 +716,24 @@ begin
                end if;
             end if;
             
-            if (ackRead = '1' or ackRead_data = '1') then
-               if (CDROM_IRQFLAG = "00001") then -- irq for sector still pending, sector missed
-                  -- will be handled when next sector is fetched from cpu interface
-               elsif (CDROM_IRQFLAG /= "00000") then -- store sector done if current irq is something else, so CPU will be notified later
-                  pendingDriveIRQ      <= "00001";
-                  pendingDriveResponse <= internalStatus;
+            if (ackRead = '1' or ackRead_data = '1') then            
+               if (CDROM_IRQFLAG = "00011") then
+                  -- INT3 active: do not overwrite it with INT1
+                  -- queue INT1 for later delivery
+                  if (pendingDriveIRQ = "00000") then
+                     pendingDriveIRQ      <= "00001";
+                     pendingDriveResponse <= internalStatus;
+                  end if;            
                else
+                  if (CDROM_IRQFLAG /= "00000" and CDROM_IRQFLAG /= "00001") then
+                     pendingDriveIRQ <= CDROM_IRQFLAG;
+                  end if;           
                   CDROM_IRQFLAG <= "00001";
                   if (CDROM_IRQENA(0) = '1') then
                      irqOut <= '1';
                   end if;
                   ackRead_valid <= '1';
-               end if;
+               end if;            
             end if;
             
             if (ackPendingIRQNext = '1') then
