@@ -2828,19 +2828,23 @@ begin
             case (copyState) is
             
                when COPY_IDLE =>
-                  if (copyData = '1' and ce = '1') then
+                  if (copyData = '1' and ce = '1' and
+                     sectorBufferSizes(to_integer(readSectorPointer)) /= 0) then
+
                      copyState         <= COPY_FIRST;
                      copyCount         <= 0;
                      copyReadAddr      <= 0;
                      copyByteCnt       <= 0;
                      copySectorPointer <= readSectorPointer;
-                     sectorBufferSizes(to_integer(readSectorPointer)) <= 0;
-                     if (sectorBufferSizes(to_integer(readSectorPointer)) = 0) then
-                        copySize <= RAW_SECTOR_OUTPUT_SIZE / 4;
-                     else
-                        copySize <= sectorBufferSizes(to_integer(readSectorPointer));
-                     end if;
+                  -- read size before clearing buffer size
+                  if (sectorBufferSizes(to_integer(readSectorPointer)) = 0) then
+                     copySize <= RAW_SECTOR_OUTPUT_SIZE / 4;
+                  else
+                     copySize <= sectorBufferSizes(to_integer(readSectorPointer));
                   end if;
+                  -- clear buffer size after size was latched
+                     sectorBufferSizes(to_integer(readSectorPointer)) <= 0;
+               end if;
                
                when COPY_FIRST =>
                   copyState     <= COPY_DATA;
