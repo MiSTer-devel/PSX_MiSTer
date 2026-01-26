@@ -345,7 +345,7 @@ wire reset_or = RESET | buttons[1] | status[0] | bios_download | exe_download | 
 // 0         1         2         3          4         5         6          7         8         9
 // 01234567890123456789012345678901 23456789012345678901234567890123 45678901234567890123456789012345
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-//  XXXX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//  XXXX XXXXXX XXXXXX XXXXX  XX XX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -423,9 +423,10 @@ parameter CONF_STR = {
 	"P2O[21],CD Fast Seek,Off,On(U);",
 	"P2O[77:75],CD Speed,Original,Forced 1X(U),Forced 2X(U),Hack 4X(U),Hack 6X(U),Hack 8X(U);",
 	"P2O[78],Limit Max CD Speed,Off,On(U);",
+    "P2O[93],Backward Seek Hack,Off,On(U);",
 	"P2O[85],RAM(Homebrew),2 MByte,8 MByte(U);",
 	"P2O[90],GPU Slowdown,Off,On(U);",
-	"P2O[92],Old GPU,Off,On;",
+	"P2O[92],Old GPU(CXD8514Q),Off,On;",
 	"P2-;",
 	"P2O[28],FPS Overlay,Off,On;",
 	"P2O[74],Error Overlay,Off,On;",
@@ -941,7 +942,7 @@ always @(posedge clk_1x) begin
       if (!padMode[1]) psx_info <= 8'd18;
    end else if (cdinfo_download_1 && ~cdinfo_download) begin
       // warning for every unsafe option
-      if (status[89] || status[80:79] > 0 || status[72] || status[15] || status[21] || status[77:75] > 0 || status[78] || status[85]) begin
+      if (status[89] || status[80:79] > 0 || status[72] || status[15] || status[21] || status[77:75] > 0 || status[78] || status[85] || status[93]) begin
          psx_info_req <= 1;
          psx_info     <= 8'd24;
       end else if (status[40:39] == 2'b00) begin
@@ -1109,6 +1110,7 @@ psx
    .REPRODUCIBLESPUDMA(status[43]),
    .WIDESCREEN(status[54:53]),
    .oldGPU(status[92]),
+   .backwardSeekHack(status[93]),
    
    // RAM/BIOS interface
    .biosregion(biosregion),

@@ -19,6 +19,7 @@ SDRAM of any size is required.
 * 8 Mbyte mode(from dev units, mostly for homebrew) 
 * Inputs: DualShock, Digital, Analog, Mouse, NeGcon, Wheel, Justifier and Guncon support.
 * Native Input support through SNAC
+* Old GPU (CXD8514Q)
 
 ## Bios
 Rename your playstation bios file (e.g. `scph-1001.bin`/`ps-22a.bin` ) and place it in the `./games/PSX/` folder.
@@ -47,7 +48,7 @@ You need to save them either manually in the OSD or turn on autosave. Saving or 
 
 ## Multiple Disc Games
 
-To swap discs while the game is running, you will need have all of the disc files for the game placed in the same folder. Then when loading a new disc for most games you will need to toggle the Lid Open/Close option to tell the game you have opened the lid and closed it. Example folder structure of a multi disc game:
+To swap discs while the game is running, all disc files for the game must be placed in the same folder. When a disc change is required, the core will automatically simulate opening and closing the disc lid. Example folder structure of a multi-disc game:
 
 ```
 /media/fat/games/PSX/Final Fantasy VII (USA)/Final Fantasy VII (USA) (Disc 1).chd
@@ -106,6 +107,11 @@ The higher speed rates are more unstable and require proper storage to be usable
 - Limit Max CD Speed:
 Will hold back any new CD data until the game has processed the last data. 
 Mostly useful to prevent CD data overrun when using higher speed modes, leading to overall faster loading times due to less read retries.
+
+- Backward Seek Hack:
+Fixes long stutters in Dave Mirra and Thrasher games related to backward CD seeks.
+The drive continues reading normally, while sectors ahead of the seek target are temporarily hidden from the CPU until the correct position is reached.
+Generally safe, but may affect a small number of sensitive titles (e.g. some Army Men games).
 
 - RAM:
 8 Mbyte option from development consoles. Only use for homebrew that requires it, otherwise there is a high chance of crashing games.

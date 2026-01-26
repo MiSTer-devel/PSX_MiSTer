@@ -22,6 +22,8 @@ entity cd_top is
       pauseOnCDSlow        : in  std_logic;
       region               : in  std_logic_vector(1 downto 0);
       region_out           : out std_logic_vector(1 downto 0);
+	  
+	  backwardSeekHack     : in  std_logic;
       
       pauseCD              : out std_logic := '0';
       Pause_idle_cd        : out std_logic := '0';
@@ -714,19 +716,24 @@ begin
                end if;
             end if;
             
-            if (ackRead = '1' or ackRead_data = '1') then
-               if (CDROM_IRQFLAG = "00001") then -- irq for sector still pending, sector missed
-                  -- will be handled when next sector is fetched from cpu interface
-               elsif (CDROM_IRQFLAG /= "00000") then -- store sector done if current irq is something else, so CPU will be notified later
-                  pendingDriveIRQ      <= "00001";
-                  pendingDriveResponse <= internalStatus;
+            if (ackRead = '1' or ackRead_data = '1') then            
+               if (CDROM_IRQFLAG = "00011") then
+                  -- INT3 active: do not overwrite it with INT1
+                  -- queue INT1 for later delivery
+                  if (pendingDriveIRQ = "00000") then
+                     pendingDriveIRQ      <= "00001";
+                     pendingDriveResponse <= internalStatus;
+                  end if;            
                else
+                  if (CDROM_IRQFLAG /= "00000" and CDROM_IRQFLAG /= "00001") then
+                     pendingDriveIRQ <= CDROM_IRQFLAG;
+                  end if;           
                   CDROM_IRQFLAG <= "00001";
                   if (CDROM_IRQENA(0) = '1') then
                      irqOut <= '1';
                   end if;
                   ackRead_valid <= '1';
-               end if;
+               end if;            
             end if;
             
             if (ackPendingIRQNext = '1') then
@@ -1105,11 +1112,11 @@ begin
                            workCommand <= nextCmd;
                            cmdResetXa  <= '1';
                            if (driveState = DRIVE_READING or driveState = DRIVE_PLAYING) then
-                              -- todo: should this be swapped between single speed and double speed? DuckStation has double speed longer and psx spx doc has single speed being longer
+                              -- Matches psx spx doc and DuckStation
                               if (modeReg(7) = '1') then
-                                 workDelay  <= 2157295 + driveDelay; -- value from psx spx doc
-                              else
                                  workDelay  <= 1066874 + driveDelay; -- value from psx spx doc
+                              else
+                                 workDelay  <= 2157295 + driveDelay; -- value from psx spx doc
                               end if;
                            end if;
                            if (driveState = DRIVE_SEEKLOGICAL or driveState = DRIVE_SEEKPHYSICAL or driveState = DRIVE_SEEKIMPLICIT) then
@@ -1915,9 +1922,13 @@ begin
                         ackDriveEnd  <= '1';
                      else
                         skipreading := '0';
-						if (setLocActive = '1' and (currentLBA - seekLBA) >= 2) then
-						   skipreading := '1';
-						end if;
+                        -- optional fix for Dave Mirra / Trasher 
+						if (backwardSeekHack = '1') then
+						   if (setLocActive = '1' and (currentLBA - seekLBA) >= 2) then
+						      skipreading := '1';
+						   end if;
+						end if;   
+
                         if (isAudio = '1') then
                            if (currentTrackBCD = x"00") then -- auto find track number from subheader
                               currentTrackBCD <= nextSubdata(1);
@@ -2817,19 +2828,23 @@ begin
             case (copyState) is
             
                when COPY_IDLE =>
-                  if (copyData = '1' and ce = '1') then
+                  if (copyData = '1' and ce = '1' and
+                     sectorBufferSizes(to_integer(readSectorPointer)) /= 0) then
+
                      copyState         <= COPY_FIRST;
                      copyCount         <= 0;
                      copyReadAddr      <= 0;
                      copyByteCnt       <= 0;
                      copySectorPointer <= readSectorPointer;
-                     sectorBufferSizes(to_integer(readSectorPointer)) <= 0;
-                     if (sectorBufferSizes(to_integer(readSectorPointer)) = 0) then
-                        copySize <= RAW_SECTOR_OUTPUT_SIZE / 4;
-                     else
-                        copySize <= sectorBufferSizes(to_integer(readSectorPointer));
-                     end if;
+                  -- read size before clearing buffer size
+                  if (sectorBufferSizes(to_integer(readSectorPointer)) = 0) then
+                     copySize <= RAW_SECTOR_OUTPUT_SIZE / 4;
+                  else
+                     copySize <= sectorBufferSizes(to_integer(readSectorPointer));
                   end if;
+                  -- clear buffer size after size was latched
+                     sectorBufferSizes(to_integer(readSectorPointer)) <= 0;
+               end if;
                
                when COPY_FIRST =>
                   copyState     <= COPY_DATA;
