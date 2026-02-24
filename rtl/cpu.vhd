@@ -149,6 +149,7 @@ architecture arch of cpu is
    signal stall                        : unsigned(4 downto 0) := (others => '0');
                      
    signal exception                    : unsigned(4 downto 0) := (others => '0');
+   signal exceptionBreakpoint          : std_logic;
                
    signal exceptionNew1                : std_logic := '0';
    signal exceptionNew3                : std_logic := '0';
@@ -350,6 +351,7 @@ architecture arch of cpu is
    signal EXEgte_cmdData               : unsigned(31 downto 0);
    signal EXEgte_cmdEna                : std_logic := '0'; 
    signal EXElastreadCOP               : std_logic := '0'; 
+   signal EXEBreakpoint                : std_logic := '0';
    
    --MULT/DIV
    type CPU_HILOCALC is
@@ -672,7 +674,8 @@ begin
       );
    end generate; 
    
-   FetchAddr       <= x"BFC00180" when (exception > 0 and cop0_SR(22) = '1') else
+   FetchAddr       <= x"80000040" when (exceptionBreakpoint = '1') else
+                      x"BFC00180" when (exception > 0 and cop0_SR(22) = '1') else
                       x"80000080" when (exception > 0 and cop0_SR(22) = '0') else
                       PCbranch when branch = '1' else
                       PC;
@@ -1014,12 +1017,16 @@ begin
       end if;
       
    end process;
+   
+   EXEBreakpoint <= '1' when ((cop0_DCIC(31 downto 29) = "111" and cop0_DCIC(24 downto 23) = "11") and (((pcOld1 xor cop0_BPC) and cop0_BPCM) = x"00000000")) else '0';
 
    process (decodeImmData, decodeTarget, decodeJumpTarget, decodeSource1, decodeSource2, decodeValue1, decodeValue2, decodeOP, decodeFunct, decodeShamt, decodeRD, exception, stall3, stall, value1, value2, pcOld0, resultData, executeStalltype,
             cop0_BPC, cop0_BDA, cop0_JUMPDEST, cop0_DCIC, cop0_BADVADDR, cop0_BDAM, cop0_BPCM, cop0_SR, cop0_CAUSE, cop0_EPC, cop0_PRID, PC, hi, lo, hiloWait, 
-            opcode1, gte_readAddr, decode_gte_readAddr, gte_readData, gte_busy, execute_gte_cmdEna, ce, execute_gte_readAddr)
-      variable calcResult  : unsigned(31 downto 0);
-      variable calcMemAddr : unsigned(31 downto 0);
+            opcode1, gte_readAddr, decode_gte_readAddr, gte_readData, gte_busy, execute_gte_cmdEna, ce, execute_gte_readAddr, EXEBreakpoint)
+      variable calcResult   : unsigned(31 downto 0);
+      variable calcMemAddr  : unsigned(31 downto 0);
+      variable executeShamt : unsigned(4 downto 0) := (others => '0');
+      variable shiftValue   : signed(32 downto 0) := (others => '0');
    begin
    
       branch                  <= '0';
@@ -1079,36 +1086,36 @@ begin
          gte_readAddr        <= execute_gte_readAddr;
       end if;
 
-      if (exception(4 downto 2) = 0 and stall = 0) then
+      -- multiplex immidiate and register based shift amount, so both types can use the same shifters
+      executeShamt := decodeShamt;
+      if (decodeFunct(2) = '1') then
+         executeShamt := value1(4 downto 0);
+      end if;
+      -- multiplex high bit of rightshift so arithmetic shift can be reused for logical shift
+      shiftValue := '0' & signed(value2);
+      if (decodeFunct(0) = '1') then
+         shiftValue(32) := value2(31);
+      end if;
+
+      if (EXEBreakpoint = '1') then
+
+         exceptionNew3   <= '1';
+         exceptionCode_3 <= x"9";
+
+      elsif (exception(4 downto 2) = 0 and stall = 0) then
              
          case (to_integer(decodeOP)) is
          
             when 16#00# =>
                case (to_integer(decodeFunct)) is
          
-                  when 16#00# => -- SLL
+                  when 16#00# | 16#04# => -- SLL | SLLV
                      EXEresultWriteEnable <= '1';
-                     EXEresultData        <= value2 sll to_integer(decodeShamt);
-                    
-                  when 16#02# => -- SRL
-                     EXEresultWriteEnable <= '1';
-                     EXEresultData        <= value2 srl to_integer(decodeShamt);  
-                  
-                  when 16#03# => -- SRA
-                     EXEresultWriteEnable <= '1';              
-                     EXEresultData        <= unsigned(shift_right(signed(value2),to_integer(decodeShamt)));            
+                     EXEresultData        <= value2 sll to_integer(executeShamt);
 
-                  when 16#04# => -- SLLV
+                  when 16#02# | 16#03# | 16#06# | 16#07# => -- SRL | SRA | SRLV | SRAV
                      EXEresultWriteEnable <= '1';
-                     EXEresultData        <= value2 sll to_integer(value1(4 downto 0));        
-
-                  when 16#06# => -- SRLV
-                     EXEresultWriteEnable <= '1';
-                     EXEresultData        <= value2 srl to_integer(value1(4 downto 0));     
-
-                  when 16#07# => -- SRAV
-                     EXEresultWriteEnable <= '1';
-                     EXEresultData        <= unsigned(shift_right(signed(value2),to_integer(value1(4 downto 0))));                        
+                     EXEresultData        <= resize(unsigned(shift_right(shiftValue,to_integer(executeShamt))), 32);                        
                     
                   when 16#08# => -- JR 
                      EXEBranchdelaySlot <= '1';
@@ -2500,7 +2507,8 @@ begin
             
             if (stall = 0) then
          
-               exception <= exceptionNew;
+               exception           <= exceptionNew;
+               exceptionBreakpoint <= EXEBreakpoint;
                if (exceptionNew1 = '1') then    -- PC out of bounds
                   exceptionCode     <= x"6";
                   exceptionInstr    <= opcode2(27 downto 26);

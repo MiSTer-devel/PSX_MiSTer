@@ -5,8 +5,9 @@ use IEEE.numeric_std.all;
 entity savestates is
    generic 
    (
-      FASTSIM        : std_logic;
-      SAVETYPESCOUNT : integer := 17
+      FASTSIM                : std_logic;
+      SAVETYPESCOUNT         : integer := 17;
+      Softmap_SaveState_ADDR : integer
    );
    port 
    (
@@ -22,7 +23,9 @@ entity savestates is
       loadExe                 : in  std_logic;
          
       load_done               : out std_logic := '0';
+      validSStates            : out std_logic_vector(3 downto 0);
             
+      savestate_number        : in integer range 0 to 3;
       increaseSSHeaderCount   : in  std_logic;  
       save                    : in  std_logic;  
       load                    : in  std_logic;
@@ -85,6 +88,7 @@ end entity;
 architecture arch of savestates is
 
    constant STATESIZE      : integer := 1048574;
+   constant SAVESTATESIZE  : integer := 16#100000#; -- 1048576 Dwords = 4096 kbyte
    
    constant SETTLECOUNT    : integer := 4095;
    constant HEADERCOUNT    : integer := 2;
@@ -135,6 +139,7 @@ architecture arch of savestates is
       SAVESIZEAMOUNT,
       SAVEWAITHPSDONE,
       LOAD_WAITSETTLE,
+      LOAD_RESETSSCHECK,
       LOAD_HEADERAMOUNTCHECK,
       LOADMEMORY_NEXT,
       LOADMEMORY_READ,
@@ -149,6 +154,10 @@ architecture arch of savestates is
    
    signal count               : integer range 0 to 524288 := 0;
    signal maxcount            : integer range 0 to 524288;
+   
+   -- must check if savestate is valid at reset time and keep track of it, because we cannot check at runtime
+   signal ssValid             : std_logic_vector(3 downto 0) := (others => '0');
+   signal ssValidCnt          : integer range 0 to 3;
                
    signal settle              : integer range 0 to SETTLECOUNT := 0;
    
@@ -194,6 +203,8 @@ begin
    savestate_busy <= '0' when state = IDLE else '1';
 
    ddr3_BURSTCNT <= x"01";
+   
+   validSStates <= ssValid;
 
    process (clk1x)
    begin
@@ -311,7 +322,8 @@ begin
                   savetype_counter     <= 0;
                   state                <= WAITPAUSE;
                   header_amount        <= header_amount + 1;
-               elsif (load = '1') then
+                  ssValid(savestate_number) <= '1'; 
+               elsif (load = '1' and ssValid(savestate_number) = '1') then
                   state                <= WAITPAUSE;
                   reset_2x             <= '1';
                   ss_reset_2x          <= '1';
@@ -524,13 +536,35 @@ begin
                if (settle < SETTLECOUNT) then
                   settle <= settle + 1;
                else
-                  state             <= LOAD_HEADERAMOUNTCHECK;
-                  ddr3_ADDR         <= std_logic_vector(to_unsigned(savestate_address, 26));
-                  ddr3_RD           <= not resetMode;
+                  if (resetMode = '1') then
+                     state          <= LOAD_RESETSSCHECK;
+                     ddr3_ADDR      <= std_logic_vector(to_unsigned(Softmap_SaveState_ADDR, 26));
+                     ssValidCnt     <= 0;
+                     ssValid        <= (others => '0');
+                  else
+                     ddr3_ADDR      <= std_logic_vector(to_unsigned(savestate_address, 26));
+                     state          <= LOAD_HEADERAMOUNTCHECK;
+                  end if;
+                  ddr3_RD           <= '1';
                end if;
                
                if (settle > (SETTLECOUNT / 2)) then
                   ddr3_savestate    <= '1';
+               end if;
+               
+            when LOAD_RESETSSCHECK =>
+                if (ddr3_DOUT_READY = '1') then
+                  if (ddr3_DOUT(63 downto 32) = std_logic_vector(to_unsigned(STATESIZE, 32))) then
+                     ssValid(ssValidCnt) <= '1';
+                  end if;
+                  if (ssValidCnt = 3) then
+                     ddr3_ADDR      <= std_logic_vector(to_unsigned(savestate_address, 26));
+                     state          <= LOAD_HEADERAMOUNTCHECK;
+                  else
+                     ddr3_ADDR      <= std_logic_vector(unsigned(ddr3_ADDR) + to_unsigned(SAVESTATESIZE, 26));
+                     ssValidCnt     <= ssValidCnt + 1;
+                     ddr3_RD        <= '1';
+                  end if;
                end if;
                
             when LOAD_HEADERAMOUNTCHECK =>

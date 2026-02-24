@@ -425,7 +425,7 @@ parameter CONF_STR = {
 	"P2O[78],Limit Max CD Speed,Off,On(U);",
 	"P2O[85],RAM(Homebrew),2 MByte,8 MByte(U);",
 	"P2O[90],GPU Slowdown,Off,On(U);",
-	"P2O[92],Old GPU,Off,On;",
+	"P2O[92],Old GPU(CXD8514Q),Off,On;",
 	"P2-;",
 	"P2O[28],FPS Overlay,Off,On;",
 	"P2O[74],Error Overlay,Off,On;",
@@ -810,6 +810,7 @@ end
 
 wire [1:0] ss_slot;
 wire [7:0] ss_info;
+wire [3:0] validSStates;
 wire ss_save, ss_load, ss_info_req;
 wire statusUpdate;
 
@@ -828,6 +829,7 @@ savestate_ui savestate_ui
 	.status_slot    (status[38:37] ),
 	.autoincslot    (status[68]    ),
 	.OSD_saveload   (status[18:17] ),
+   .validSStates   (validSStates  ),
 	.ss_save        (ss_save       ),
 	.ss_load        (ss_load       ),
 	.ss_info_req    (ss_info_req   ),
@@ -1106,8 +1108,7 @@ psx
    .REVERBOFF(0),
    .REPRODUCIBLESPUDMA(status[43]),
    .WIDESCREEN(status[54:53]),
-   .oldGPU(status[92]),
-   
+   .oldGPU(status[92]),   
    // RAM/BIOS interface
    .biosregion(biosregion),
    .ram_refresh(sdr_refresh),
@@ -1306,6 +1307,7 @@ psx
    .load_state            (ss_load),
    .savestate_number      (ss_slot),
    .state_loaded          (),
+   .validSStates          (validSStates),
    .rewind_on             (0), //(status[27]),
    .rewind_active         (0), //(status[27] & joy[15]),
    //cheats

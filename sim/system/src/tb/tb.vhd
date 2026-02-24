@@ -303,6 +303,12 @@ begin
       REVERBOFF             => '0',
       REPRODUCIBLESPUDMA    => '0',
       WIDESCREEN            => "00",
+      enableNeGconRumble    => '0',
+      drawSlow              => '0',
+      oldGPU                => '0',
+      PadPortPopn1          => '0',
+      PadPortPopn2          => '0',
+      snacMC                => '0',
       -- RAM/BIOS interface        
       biosregion            => "00",
       ram_refresh           => ram_refresh,
