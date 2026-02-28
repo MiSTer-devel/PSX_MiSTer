@@ -14,6 +14,7 @@ module savestate_ui #(parameter INFO_TIMEOUT_BITS)
 	input      [1:0] status_slot, 
 	input            autoincslot, 
 	input      [1:0] OSD_saveload,
+	input      [3:0] validSStates,
 	output reg       ss_save,
 	output reg       ss_load,
 	output reg       ss_info_req,
@@ -63,10 +64,10 @@ always @(posedge clk) begin
 		if(old_state != ps2_key[10]) begin
 			case(ps2_key[7:0])
 				'h11: alt <= pressed;
-				'h05: begin ss_save <= pressed & alt; ss_load <= pressed & ~alt; ss_base <= 0; statusUpdate <= 1'b1; end // F1
-				'h06: begin ss_save <= pressed & alt; ss_load <= pressed & ~alt; ss_base <= 1; statusUpdate <= 1'b1; end // F2
-				'h04: begin ss_save <= pressed & alt; ss_load <= pressed & ~alt; ss_base <= 2; statusUpdate <= 1'b1; end // F3
-				'h0C: begin ss_save <= pressed & alt; ss_load <= pressed & ~alt; ss_base <= 3; statusUpdate <= 1'b1; end // F4
+				'h05: begin ss_save <= pressed & alt; ss_load <= pressed & ~alt & validSStates[0]; ss_base <= 0; statusUpdate <= 1'b1; end // F1
+				'h06: begin ss_save <= pressed & alt; ss_load <= pressed & ~alt & validSStates[1]; ss_base <= 1; statusUpdate <= 1'b1; end // F2
+				'h04: begin ss_save <= pressed & alt; ss_load <= pressed & ~alt & validSStates[2]; ss_base <= 2; statusUpdate <= 1'b1; end // F3
+				'h0C: begin ss_save <= pressed & alt; ss_load <= pressed & ~alt & validSStates[3]; ss_base <= 3; statusUpdate <= 1'b1; end // F4
 			endcase
 		end
 		
@@ -109,7 +110,7 @@ always @(posedge clk) begin
 			end
 			// load
 			if (joyUp & ~lastUp) begin
-				ss_load     <= 1'b1;
+				ss_load     <= validSStates[ss_base];
 				InfoWaitcnt <= 25'b0;
 			end
 		end else begin
@@ -126,7 +127,7 @@ always @(posedge clk) begin
 			end
 		end
 
-		if(~old_st[1] && OSD_saveload[1]) ss_load <= 1'b1;
+		if(~old_st[1] && OSD_saveload[1]) ss_load <= validSStates[ss_base];
 
 		// infotexts
 		if (slotswitched) begin
