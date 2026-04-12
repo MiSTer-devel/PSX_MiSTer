@@ -2830,32 +2830,24 @@ begin
                   CDDA_data  <= sectorBuffer_DataB;
                   
             end case;
-            
 
+															
             case (copyState) is
             
-                when COPY_IDLE =>
-                   if (copyData = '1' and ce = '1') then
-                
-                      copySectorPointer <= readSectorPointer;
-                      copyCount         <= 0;
-                      copyReadAddr      <= 0;
-                      copyByteCnt       <= 0;
-                
-                      if (sectorBufferSizes(to_integer(readSectorPointer)) /= 0) then
-                         -- buffered sector ready
-                         copySize <= sectorBufferSizes(to_integer(readSectorPointer));
-                         sectorBufferSizes(to_integer(readSectorPointer)) <= 0;
-                         copyState <= COPY_FIRST;                
-                      else
-                         -- buffer empty → allow RAW only
-                         if (modeReg(5) = '1') then
-                            copySize  <= RAW_SECTOR_OUTPUT_SIZE / 4;
-                            copyState <= COPY_FIRST;
-                         end if;
-                         -- otherwise stay in COPY_IDLE (no DMA)
-                      end if;
-                   end if;
+               when COPY_IDLE =>
+                  if (copyData = '1' and ce = '1') then
+                     copyState         <= COPY_FIRST;
+                     copyCount         <= 0;
+                     copyReadAddr      <= 0;
+                     copyByteCnt       <= 0;
+                     copySectorPointer <= readSectorPointer;
+                     sectorBufferSizes(to_integer(readSectorPointer)) <= 0;
+                     if (sectorBufferSizes(to_integer(readSectorPointer)) = 0) then
+                        copySize <= RAW_SECTOR_OUTPUT_SIZE / 4;
+                     else
+                        copySize <= sectorBufferSizes(to_integer(readSectorPointer));
+                     end if;
+                  end if;
                
                when COPY_FIRST =>
                   copyState     <= COPY_DATA;
