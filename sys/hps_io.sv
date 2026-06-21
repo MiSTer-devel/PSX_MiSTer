@@ -2,7 +2,7 @@
 // hps_io.v
 //
 // Copyright (c) 2014 Till Harbaum <till@harbaum.org>
-// Copyright (c) 2017-2020 Alexey Melnikov
+// Copyright (c) 2017-2026 Alexey Melnikov
 //
 // This source file is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published
@@ -26,11 +26,16 @@
 // WIDE=1 for 16 bit file I/O
 // VDNUM 1..10
 // BLKSZ 0..7: 0 = 128, 1 = 256, 2 = 512(default), .. 7 = 16384
+
+// F12KEYMOD - is modifier key requested to raise fremework menu? 
+//  0 - no, F12 bring framework menu
+//  1 - F12 is passed to core, F12 + (L/R)GUI key bring framework menu
+
 //
-module hps_io #(parameter CONF_STR, CONF_STR_BRAM=0, PS2DIV=0, WIDE=0, VDNUM=1, BLKSZ=2, PS2WE=0, STRLEN=$size(CONF_STR)>>3)
+module hps_io #(parameter CONF_STR, CONF_STR_BRAM=0, PS2DIV=0, WIDE=0, VDNUM=1, BLKSZ=2, PS2WE=0, STRLEN=$size(CONF_STR)>>3, F12KEYMOD=0)
 (
 	input             clk_sys,
-	inout      [48:0] HPS_BUS,
+	inout      [45:0] HPS_BUS,
 
 	// buttons up to 32
 	output reg [31:0] joystick_0,
@@ -325,17 +330,10 @@ always@(posedge clk_sys) begin : uio_block
 				'h0X17,
 				'h0X18: begin sd_ack <= disk[VD:0]; sdn_ack <= io_din[11:8]; end
 				  'h29: io_dout <= {4'hA, stflg};
-`ifdef MISTER_DISABLE_ADAPTIVE
-				  'h2B: io_dout <= {HPS_BUS[48:46],4'b0110};
-`else
-				  'h2B: io_dout <= {HPS_BUS[48:46],4'b0111};
-`endif
-				  'h2F: io_dout <= 1;
 				  'h32: io_dout <= gamma_bus[21];
 				  'h36: begin io_dout <= info_n; info_n <= 0; end
-				  'h39: io_dout <= 1;
-				  'h3C: if(upload_req) begin io_dout <= {ioctl_upload_index, 8'd1}; upload_req <= 0; end
-				  'h3E: io_dout <= 1; // shadow mask
+				  'h3C: if(upload_req) begin io_dout <= {ioctl_upload_index, 8'd1}; upload_req <= 0; end				  
+				  'h43: io_dout <= |F12KEYMOD;
 				'h003F: io_dout <= joystick_0_rumble;
 				'h013F: io_dout <= joystick_1_rumble;
 				'h023F: io_dout <= joystick_2_rumble;
@@ -627,14 +625,21 @@ always@(posedge clk_sys) begin : fio_block
 	reg [15:0] cmd;
 	reg  [2:0] cnt;
 	reg        has_cmd;
-	reg [26:0] addr;
 	reg        wr;
+	reg  [1:0] req_io;
+	reg        skip_add;
 
 	ioctl_rd <= 0;
 	ioctl_wr <= wr;
 	wr <= 0;
 
-	if(~fp_enable) has_cmd <= 0;
+	if(~fp_enable) begin
+		if(has_cmd && (cmd == FIO_FILE_TX)) begin
+			{ioctl_upload, ioctl_download} <= req_io;
+			skip_add <= req_io[0];
+		end
+		has_cmd <= 0;
+	end
 	else begin
 		if(io_strobe) begin
 
@@ -642,6 +647,7 @@ always@(posedge clk_sys) begin : fio_block
 				cmd <= io_din;
 				has_cmd <= 1;
 				cnt <= 0;
+				req_io <= 0;
 			end else begin
 
 				case(cmd)
@@ -663,44 +669,33 @@ always@(posedge clk_sys) begin : fio_block
 						begin
 							cnt <= cnt + 1'd1;
 							case(cnt)
-								0:	if(io_din[7:0] == 8'hAA) begin
+								0:	if(io_din[7:0]) begin
 										ioctl_addr <= 0;
-										ioctl_upload <= 1;
-										ioctl_rd <= 1;
-									end
-									else if(io_din[7:0]) begin
-										addr <= 0;
-										ioctl_download <= 1;
+										req_io <= (io_din[7:0] == 8'hAA) ? 2'b10 : 2'b01;
 									end
 									else begin
-										if(ioctl_download) ioctl_addr <= addr;
+										if(ioctl_download) ioctl_addr <= ioctl_addr + (WIDE ? 2'd2 : 2'd1);
 										ioctl_download <= 0;
 										ioctl_upload <= 0;
 									end
-
-								1: begin
-										ioctl_addr[15:0] <= io_din;
-										addr[15:0] <= io_din;
-									end
-
-								2: begin
-										ioctl_addr[26:16] <= io_din[10:0];
-										addr[26:16] <= io_din[10:0];
-									end
+								1: ioctl_addr[15:0]  <= io_din;
+								2: ioctl_addr[26:16] <= io_din[10:0];
 							endcase
 						end
 
 					FIO_FILE_TX_DAT:
-						if(ioctl_download) begin
-							ioctl_addr <= addr;
-							ioctl_dout <= io_din[DW:0];
-							wr   <= 1;
-							addr <= addr + (WIDE ? 2'd2 : 2'd1);
-						end
-						else begin
-							ioctl_addr <= ioctl_addr + (WIDE ? 2'd2 : 2'd1);
-							fp_dout <= ioctl_din;
-							ioctl_rd <= 1;
+						begin
+							if(!skip_add) ioctl_addr <= ioctl_addr + (WIDE ? 2'd2 : 2'd1);
+							skip_add <= 0;
+							
+							if(ioctl_download) begin
+								ioctl_dout <= io_din[DW:0];
+								wr <= 1;
+							end
+							else begin
+								fp_dout <= ioctl_din;
+								ioctl_rd <= 1;
+							end
 						end
 				endcase
 			end
