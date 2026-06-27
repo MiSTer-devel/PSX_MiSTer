@@ -52,4 +52,5 @@ set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) statemanag
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) savestates.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) psx_top.vhd ]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) psx_mister.vhd ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jtframe_resync.v ]
 
