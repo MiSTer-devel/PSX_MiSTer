@@ -78,6 +78,8 @@ Both also offer crop options for games that depend on CRT viewports to hide arti
 Sync 480i for HDMI will make 480i content run with 240p timings, making it easier for HDMI devices to keep the sync when switching between both modes in games. 
 Do not use with VGA/Analog out or you get artifacts!
 
+Analog Video H-Pos / V-Pos allow shifting the HSYNC and VSYNC pulses for the analog (VGA) output, so the picture can be centered on a CRT. Range is 0..16 and -15..-1 for each axis (positive shifts the sync later, negative shifts it earlier). These options affect the analog output only and have no effect on HDMI.
+
 ## Libcrypt
 
 Some games are secured with Libcrypt and will not work if it's not circumvented.
