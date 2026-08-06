@@ -806,6 +806,8 @@ begin
       variable interpol3           : signed(30 downto 0);
       variable interpol4           : signed(30 downto 0);
       variable soundmulresult      : signed(39 downto 0);
+      variable reverbInputLeft_v   : signed(15 downto 0);
+      variable reverbInputRight_v  : signed(15 downto 0);
    begin
       if (rising_edge(clk1x)) then
             
@@ -1928,14 +1930,21 @@ begin
                when RAM_WAIT =>
                   if (voiceCounter >= 23 or useSDRAM = '0') then
                      if (index = 23) then
+                        if (cnt(0) = '1' and cnt(2) = '1') then
+                           reverbInputLeft_v  := clamp16(reverbsumleft  + resize(cd_next_left, 24));
+                           reverbInputRight_v := clamp16(reverbsumright + resize(cd_next_right, 24));
+                        else
+                           reverbInputLeft_v  := clamp16(reverbsumleft);
+                           reverbInputRight_v := clamp16(reverbsumright);
+                        end if;
                         reverbDownLeft  <= clamp16(shift_right(reverbPartA_L + reverbPartB_L, 4));
                         reverbDownRight <= clamp16(shift_right(reverbPartA_R + reverbPartB_R, 4));
-                        reverbPartA_L <= resize(clamp16(reverbsumleft), 25)
+                        reverbPartA_L <= resize(reverbInputLeft_v, 25)
                                          + shift_left(resize(reverbL_d1, 25), 2);
                         reverbPartB_L <= shift_left(resize(reverbL_d2, 25), 2) + shift_left(resize(reverbL_d2, 25), 1)
                                          + shift_left(resize(reverbL_d3, 25), 2)
                                          + resize(reverbL_d4, 25);
-                        reverbPartA_R <= resize(clamp16(reverbsumright), 25)
+                        reverbPartA_R <= resize(reverbInputRight_v, 25)
                                          + shift_left(resize(reverbR_d1, 25), 2);
                         reverbPartB_R <= shift_left(resize(reverbR_d2, 25), 2) + shift_left(resize(reverbR_d2, 25), 1)
                                          + shift_left(resize(reverbR_d3, 25), 2)
@@ -1943,11 +1952,11 @@ begin
                         reverbL_d4 <= reverbL_d3;
                         reverbL_d3 <= reverbL_d2;
                         reverbL_d2 <= reverbL_d1;
-                        reverbL_d1 <= clamp16(reverbsumleft);
+                        reverbL_d1 <= reverbInputLeft_v;
                         reverbR_d4 <= reverbR_d3;
                         reverbR_d3 <= reverbR_d2;
                         reverbR_d2 <= reverbR_d1;
-                        reverbR_d1 <= clamp16(reverbsumright);
+                        reverbR_d1 <= reverbInputRight_v;
 
                         if (cnt(7) = '1' and REVERBOFF = '0') then
                            ram_ReverbIndex <= 0;
