@@ -21,7 +21,7 @@ set_global_assignment -name VERILOG_FILE       [file join $::quartus(qip_path) i
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) alsa.sv ]
 set_global_assignment -name VERILOG_FILE       [file join $::quartus(qip_path) i2s.v ]
 set_global_assignment -name VERILOG_FILE       [file join $::quartus(qip_path) spdif.v ]
-set_global_assignment -name VERILOG_FILE       [file join $::quartus(qip_path) audio_out.v ]
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) audio_out.sv ]
 set_global_assignment -name VERILOG_FILE       [file join $::quartus(qip_path) iir_filter.v ]
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) ltc2308.sv ]
 set_global_assignment -name VERILOG_FILE       [file join $::quartus(qip_path) sigma_delta_dac.v ]
@@ -32,3 +32,4 @@ set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) d
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) sysmem.sv ]
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) sd_card.sv ]
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) hps_io.sv ]
+set_global_assignment -name SOURCE_FILE        [file join $::quartus(qip_path) emu_ports.vh ]

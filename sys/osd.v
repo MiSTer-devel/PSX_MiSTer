@@ -26,7 +26,7 @@ parameter  OSD_COLOR    =  3'd4;
 localparam OSD_WIDTH    = 12'd256;
 localparam OSD_HEIGHT   = 12'd64;
 
-`ifdef OSD_HEADER
+`ifdef MENU_CORE
 localparam OSD_HDR      = 12'd24;
 `else
 localparam OSD_HDR      = 12'd0;

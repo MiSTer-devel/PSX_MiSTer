@@ -1,3 +1,23 @@
+//============================================================================
+//
+//  MiSTer Audio mixing & filtering
+//  (c)2020-2026 Alexey Melnikov
+//
+//  This program is free software; you can redistribute it and/or modify it
+//  under the terms of the GNU General Public License as published by the Free
+//  Software Foundation; either version 2 of the License, or (at your option)
+//  any later version.
+//
+//  This program is distributed in the hope that it will be useful, but WITHOUT
+//  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+//  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+//  more details.
+//
+//  You should have received a copy of the GNU General Public License along
+//  with this program; if not, write to the Free Software Foundation, Inc.,
+//  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+//
+//============================================================================
 
 module audio_out
 #(
@@ -20,6 +40,7 @@ module audio_out
 	input  [23:0] cy2,
 
 	input  [4:0] att,
+	input  [1:0] boost,
 	input  [1:0] mix,
 
 	input        is_signed,
@@ -122,7 +143,7 @@ always @(posedge clk) begin
 	div <= div + add;
 	if(!div) begin
 		div <= 2'd1 << sample_rate;
-		add  <= 2'd1 << sample_rate;
+		add <= 2'd1 << sample_rate;
 	end
 
 	sample_ce <= !div;
@@ -227,6 +248,7 @@ aud_mix_top audmix_l
 	.clk(clk),
 	.ce(sample_ce),
 	.att(att),
+	.boost(boost),
 	.mix(mix),
 
 	.core_audio(adl),
@@ -243,6 +265,7 @@ aud_mix_top audmix_r
 	.clk(clk),
 	.ce(sample_ce),
 	.att(att),
+	.boost(boost),
 	.mix(mix),
 
 	.core_audio(adr),
@@ -261,6 +284,7 @@ module aud_mix_top
 	input             ce,
 
 	input       [4:0] att,
+	input       [1:0] boost,
 	input       [1:0] mix,
 
 	input      [15:0] core_audio,
@@ -271,11 +295,34 @@ module aud_mix_top
 	output reg [15:0] out = 0
 );
 
-reg signed [16:0] a1, a2, a3, a4;
+localparam boost_f1 = 4;
+localparam boost_a1 = 2;
+localparam boost_x1 = ((32767 * (boost_f1 - 1)) / ((boost_f1 * boost_a1) - 1)) + 1;
+localparam boost_b1 = boost_x1 * boost_a1;
+
+localparam boost_f2 = 8;
+localparam boost_a2 = 4;
+localparam boost_x2 = ((32767 * (boost_f2 - 1)) / ((boost_f2 * boost_a2) - 1)) + 1;
+localparam boost_b2 = boost_x2 * boost_a2;
+
+localparam  [1:0][2:0] boost_f = '{$clog2(boost_f2), $clog2(boost_f1)};
+localparam  [1:0][2:0] boost_a = '{$clog2(boost_a2), $clog2(boost_a1)};
+localparam [1:0][15:0] boost_x = '{boost_x2[15:0], boost_x1[15:0]};
+localparam [1:0][15:0] boost_b = '{boost_b2[15:0], boost_b1[15:0]};
+
+reg signed [15:0] a1;
+reg signed [16:0] a2, a3, a4;
+reg [15:0] v0, v1;
+reg s0,s1;
 always @(posedge clk) if (ce) begin
 
-	a1 <= {core_audio[15],core_audio};
-	a2 <= a1 + {linux_audio[15],linux_audio};
+	v0 <= core_audio[15] ? (~core_audio) + 1'd1 : core_audio;
+	s0 <= core_audio[15];
+	v1 <= (v0 < boost_x[boost[1]]) ? (v0 << boost_a[boost[1]]) : (((v0 - boost_x[boost[1]]) >> boost_f[boost[1]]) + boost_b[boost[1]]);
+	s1 <= s0;
+
+	a1 <= boost ? (s1 ? ~(v1-1'd1) : v1) : core_audio;
+	a2 <= {a1[15],a1} + {linux_audio[15],linux_audio};
 
 	pre_out <= a2[16:1];
 
