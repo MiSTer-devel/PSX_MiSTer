@@ -489,6 +489,7 @@ architecture arch of psx_top is
    signal dma_cache_write        : std_logic;
    
    signal gpu_dmaRequest         : std_logic;
+   signal gpu_dmaDrawActive      : std_logic;
    signal DMA_GPU_waiting        : std_logic;
    signal DMA_GPU_writeEna       : std_logic;
    signal DMA_GPU_readEna        : std_logic;
@@ -1277,6 +1278,7 @@ begin
       dma_cache_write      => dma_cache_write,      
       
       gpu_dmaRequest       => gpu_dmaRequest,  
+      gpu_dmaDrawActive    => gpu_dmaDrawActive,
       DMA_GPU_waiting      => DMA_GPU_waiting,
       DMA_GPU_writeEna     => DMA_GPU_writeEna,
       DMA_GPU_readEna      => DMA_GPU_readEna, 
@@ -1526,6 +1528,7 @@ begin
       
       dmaOn                => dmaOn,
       gpu_dmaRequest       => gpu_dmaRequest,  
+      gpu_dmaDrawActive    => gpu_dmaDrawActive,
       DMA_GPU_waiting      => DMA_GPU_waiting,
       DMA_GPU_writeEna     => DMA_GPU_writeEna,
       DMA_GPU_readEna      => DMA_GPU_readEna, 

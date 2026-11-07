@@ -81,6 +81,7 @@ entity gpu is
       
       dmaOn                : in  std_logic;
       gpu_dmaRequest       : out std_logic;
+      gpu_dmaDrawActive    : out std_logic;
       DMA_GPU_waiting      : in  std_logic;
       DMA_GPU_writeEna     : in  std_logic;
       DMA_GPU_readEna      : in  std_logic;
@@ -208,7 +209,10 @@ architecture arch of gpu is
    signal fifoIn_Dout               : std_logic_vector(31 downto 0);
    signal fifoIn_Rd                 : std_logic;
    signal fifoIn_Empty              : std_logic;
+   signal fifoIn_Full               : std_logic;
+   signal fifoIn_Count              : unsigned(7 downto 0) := (others => '0');
    signal fifoIn_Valid              : std_logic;
+   signal fifoIn_Pending            : unsigned(8 downto 0);
       
    -- Processing  
    signal proc_idle                 : std_logic;
@@ -487,6 +491,7 @@ begin
    export_gpus <= unsigned(GPUSTAT);
 -- synthesis translate_on
    
+   gpu_dmaDrawActive <= not proc_idle;
    gpu_dmaRequest <= GPUSTAT_DMADataRequest;
 
    GPUSTAT(3 downto 0)     <= GPUSTAT_TextPageX;
@@ -808,13 +813,32 @@ begin
       reset    => fifoIn_reset,  
       Din      => fifoIn_Din,     
       Wr       => fifoIn_Wr,      
-      Full     => ERRORFIFO,    
+      Full     => fifoIn_Full,    
       NearFull => open,
       Dout     => fifoIn_Dout,    
       Rd       => fifoIn_Rd,      
       Empty    => fifoIn_Empty   
    );
    
+   errorFIFO <= fifoIn_Full;
+
+   process (clk2x)
+   begin
+      if rising_edge(clk2x) then
+         if (fifoIn_reset = '1') then
+            fifoIn_Count <= (others => '0');
+         elsif (fifoIn_Wr = '1' and fifoIn_Full = '0') then
+            if (fifoIn_Rd = '0' or fifoIn_Empty = '1') then
+               fifoIn_Count <= fifoIn_Count + 1;
+            end if;
+         elsif (fifoIn_Rd = '1' and fifoIn_Empty = '0') then
+            fifoIn_Count <= fifoIn_Count - 1;
+         end if;
+      end if;
+   end process;
+
+   fifoIn_Pending <= resize(fifoIn_Count, 9) + 1 when (fifoIn_Valid = '1') else resize(fifoIn_Count, 9);
+
    fifoIn_Rd <= '1' when (ce = '1' and (proc_idle = '1' or proc_requestFifo = '1') and pipeline_busy = '0' and fifoIn_Empty = '0' and fifoIn_Valid = '0' and (clk2xIndex = '0' or REPRODUCIBLEGPUTIMING = '0')) else '0';
    
    process (clk2x)
@@ -975,7 +999,11 @@ begin
                interlacedDrawing <= GPUSTAT_VertInterlace and GPUSTAT_VerRes and not GPUSTAT_DrawToDisplay;
             end if;
 
-            GPUSTAT_ReadyRecDMA <= fifoIn_Empty;
+            if (GPUSTAT_DMADirection = "10" and fifoIn_Pending <= 1) then
+               GPUSTAT_ReadyRecDMA <= '1';
+            else
+               GPUSTAT_ReadyRecDMA <= fifoIn_Empty;
+            end if;
             
             if (proc_done = '1') then
 -- synthesis translate_off
