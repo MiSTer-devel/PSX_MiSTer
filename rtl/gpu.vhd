@@ -180,6 +180,7 @@ architecture arch of gpu is
    signal GPUSTAT_ReadyRecCmd       : std_logic;
    signal GPUSTAT_ReadySendVRAM     : std_logic;
    signal GPUSTAT_ReadyRecDMA       : std_logic;
+   signal GPUSTAT_FIFOReady         : std_logic := '1';
    signal GPUSTAT_DMADirection      : std_logic_vector(1 downto 0);
       
    signal vramRange                 : unsigned(18 downto 0) := (others => '0');
@@ -323,6 +324,7 @@ architecture arch of gpu is
    signal rect_textPalY             : unsigned(8 downto 0); 
    
    signal poly_requestFifo          : std_logic; 
+   signal poly_dreqHold             : std_logic;
    signal poly_done                 : std_logic;
    --signal poly_CmdDone              : std_logic;
    signal poly_div                  : t_div_array;
@@ -521,7 +523,7 @@ begin
    GPUSTAT(31)             <= videoout_reports.GPUSTAT_DrawingOddline;
 
    GPUSTAT_DMADataRequest <= '0' when (GPUSTAT_DMADirection = "00") else
-                             GPUSTAT_ReadyRecDMA when (GPUSTAT_DMADirection = "01") else
+                             GPUSTAT_FIFOReady when (GPUSTAT_DMADirection = "01") else
                              GPUSTAT_ReadyRecDMA when (GPUSTAT_DMADirection = "10") else
                              not vram2cpu_Fifo_Empty; -- GPUSTAT_ReadySendVRAM cannot be used, because data is read earlier                
 
@@ -925,6 +927,7 @@ begin
             GPUSTAT_TextureDisable  <= ss_gpu_in(1)(15);
             GPUSTAT_ReadyRecCmd     <= '1'; --ss_gpu_in(1)(26); -- in savestate should never be busy
             GPUSTAT_ReadyRecDMA     <= '1'; --ss_gpu_in(1)(28);
+            GPUSTAT_FIFOReady       <= '1';
             
             fifoIn_Valid            <= '0';
             
@@ -999,10 +1002,13 @@ begin
                interlacedDrawing <= GPUSTAT_VertInterlace and GPUSTAT_VerRes and not GPUSTAT_DrawToDisplay;
             end if;
 
-            if (GPUSTAT_DMADirection = "10" and fifoIn_Pending <= 1) then
-               GPUSTAT_ReadyRecDMA <= '1';
+            GPUSTAT_FIFOReady <= fifoIn_Empty;
+            if (fifoIn_Valid = '1' and proc_idle = '1' and fifoIn_Dout(31 downto 29) = "001") then
+               GPUSTAT_ReadyRecDMA <= '0';
+            elsif (GPUSTAT_DMADirection = "10" and fifoIn_Pending <= 1) then
+               GPUSTAT_ReadyRecDMA <= not poly_dreqHold;
             else
-               GPUSTAT_ReadyRecDMA <= fifoIn_Empty;
+               GPUSTAT_ReadyRecDMA <= fifoIn_Empty and not poly_dreqHold;
             end if;
             
             if (proc_done = '1') then
@@ -1031,6 +1037,7 @@ begin
                GPUSTAT_TextureDisable <= '0';
                GPUSTAT_ReadyRecCmd    <= '1';
                GPUSTAT_ReadyRecDMA    <= '1';
+               GPUSTAT_FIFOReady      <= '1';
                drawingAreaLeft        <= (others => '0');
                drawingAreaTop         <= (others => '0');
                drawingAreaRight       <= (others => '0');
@@ -1366,6 +1373,7 @@ begin
       fifo_Valid           => fifoIn_Valid, 
       fifo_data            => fifoIn_Dout,
       requestFifo          => poly_requestFifo,
+      dreqHold             => poly_dreqHold,
       done                 => poly_done,
       --CmdDone              => poly_CmdDone,
       
