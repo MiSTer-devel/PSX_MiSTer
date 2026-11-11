@@ -66,6 +66,7 @@ entity gpu_poly is
       fifo_Valid           : in  std_logic;
       fifo_data            : in  std_logic_vector(31 downto 0);
       requestFifo          : out std_logic := '0';
+      dreqHold             : out std_logic := '0';
       done                 : out std_logic := '0';
       CmdDone              : out std_logic := '0';
       
@@ -386,11 +387,17 @@ begin
          if (reset = '1') then
          
             state <= IDLE;
+            dreqHold <= '0';
          
          elsif (ce = '1') then
          
             done                 <= '0';
             CmdDone              <= '0';
+
+            if (state = IDLE or (rec_quad = '0' and state = PROCPIXELS) or
+                (rec_quad = '1' and state = ISSUE and nextQuad = '1')) then
+               dreqHold <= '0';
+            end if;
 
             drawModeNew          <= '0';
             
@@ -464,6 +471,7 @@ begin
                   filter_maxV  <= x"00";
                   if (proc_idle = '1' and fifo_Valid = '1' and fifo_data(31 downto 29) = "001") then
                      state             <= REQUESTPOS;
+                     dreqHold          <= '1';
                      rec_index         <= 0;
                      rec_shading       <= fifo_data(28);
                      rec_quad          <= fifo_data(27);
