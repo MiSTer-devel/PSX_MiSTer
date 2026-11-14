@@ -3183,8 +3183,8 @@ begin
                
             elsif (FifoParam_Empty = '0') then
                
-               trackInfo_addrA <= std_logic_vector(to_unsigned(to_integer(unsigned(FifoParam_Dout(6 downto 4))) * 8 + 
-                                                   to_integer(unsigned(FifoParam_Dout(6 downto 4))) * 2 + 
+               trackInfo_addrA <= std_logic_vector(to_unsigned(to_integer(unsigned(FifoParam_Dout(7 downto 4))) * 8 + 
+                                                   to_integer(unsigned(FifoParam_Dout(7 downto 4))) * 2 + 
                                                    to_integer(unsigned(FifoParam_Dout(3 downto 0))), 7));
                
             --else trackInfo_addrA <= "0000100"; -- debug test!
