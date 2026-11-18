@@ -80,6 +80,8 @@ architecture arch of mdec is
   
    -- RL decoding
    signal decodeDone          : std_logic := '0';
+   signal blockDoneNext       : std_logic := '0';
+   signal blockDoneDecode     : std_logic := '0';
    signal fifoSecondAvail     : std_logic := '0';
    signal RLdata              : std_logic_vector(15 downto 0);
    signal currentBlock        : unsigned(2 downto 0);
@@ -104,9 +106,9 @@ architecture arch of mdec is
 	35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51,
 	58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63);
   
-   signal FifoRL_Din          : std_logic_vector(20 downto 0) := (others => '0');
+   signal FifoRL_Din          : std_logic_vector(21 downto 0) := (others => '0');
    signal FifoRL_Wr           : std_logic; 
-   signal FifoRL_Dout         : std_logic_vector(20 downto 0);
+   signal FifoRL_Dout         : std_logic_vector(21 downto 0);
    signal FifoRL_Rd           : std_logic;
    signal FifoRL_Empty        : std_logic;
    
@@ -123,17 +125,17 @@ architecture arch of mdec is
    signal idct_wait_cnt       : integer range 0 to 2171;
    
    -- synthesis translate_off
-   type tidct_input is array(0 to 63) of signed(10 downto 0);
+   type tidct_input is array(0 to 63) of signed(11 downto 0);
    signal idct_input          : tidct_input;
    -- synthesis translate_on
    
    signal IDCTi_address_a     : std_logic_vector(5 downto 0) := (others => '0');
-   signal IDCTi_data_a        : std_logic_vector(10 downto 0) := (others => '0');
+   signal IDCTi_data_a        : std_logic_vector(11 downto 0) := (others => '0');
    signal IDCTi_wren_a        : std_logic := '0';
    signal IDCTi_wren_b        : std_logic := '0';
    signal IDCTi_address_b     : std_logic_vector(5 downto 0) := (others => '0');
-   signal IDCTi_dataO_a       : std_logic_vector(10 downto 0) := (others => '0');
-   signal IDCTi_dataO_b       : std_logic_vector(10 downto 0) := (others => '0');
+   signal IDCTi_dataO_a       : std_logic_vector(11 downto 0) := (others => '0');
+   signal IDCTi_dataO_b       : std_logic_vector(11 downto 0) := (others => '0');
                               
    signal scaleT_address_a    : std_logic_vector(5 downto 0) := (others => '0');
    signal scaleT_address_Wr   : std_logic_vector(5 downto 0) := (others => '0');
@@ -147,20 +149,20 @@ architecture arch of mdec is
    signal idct_y              : integer range 0 to 7;
    signal idct_u              : integer range 0 to 7;
    signal idct_u1             : integer range 0 to 7;
-   signal idct_sum            : signed(48 downto 0);
+   signal idct_sum            : signed(50 downto 0);
    signal idct_done           : std_logic := '0';
    
    --type tidct_temp is array(0 to 63) of signed(29 downto 0);
    --signal idct_temp           : tidct_temp;
    
    signal IDCTt_address_a     : std_logic_vector(5 downto 0) := (others => '0');
-   signal IDCTt_data_a        : std_logic_vector(29 downto 0) := (others => '0');
+   signal IDCTt_data_a        : std_logic_vector(30 downto 0) := (others => '0');
    signal IDCTt_wren_a        : std_logic := '0';
    signal IDCTt_wren_b        : std_logic := '0';
    signal IDCTt_address_b1    : std_logic_vector(5 downto 0) := (others => '0');
    signal IDCTt_address_b2    : std_logic_vector(5 downto 0) := (others => '0');
-   signal IDCTt_dataO_b1      : std_logic_vector(29 downto 0) := (others => '0');
-   signal IDCTt_dataO_b2      : std_logic_vector(29 downto 0) := (others => '0');
+   signal IDCTt_dataO_b1      : std_logic_vector(30 downto 0) := (others => '0');
+   signal IDCTt_dataO_b2      : std_logic_vector(30 downto 0) := (others => '0');
   
    signal idct_calc0_ena      : std_logic := '0';
    signal idct_calc0_stage    : std_logic := '0';
@@ -168,9 +170,9 @@ architecture arch of mdec is
    signal idct_calc0_target2  : integer range 0 to 511;
    signal idct_calc0_first    : std_logic := '0';
    signal idct_calc0_last     : std_logic := '0';
-   signal idct_calc0_mul11    : signed(29 downto 0);
+   signal idct_calc0_mul11    : signed(30 downto 0);
    signal idct_calc0_mul12    : signed(15 downto 0);
-   signal idct_calc0_mul21    : signed(29 downto 0);
+   signal idct_calc0_mul21    : signed(30 downto 0);
    signal idct_calc0_mul22    : signed(15 downto 0);
    signal idct_calc1_ena      : std_logic := '0';
    signal idct_calc1_stage    : std_logic := '0';
@@ -179,8 +181,8 @@ architecture arch of mdec is
    signal idct_calc1_first    : std_logic := '0';
    signal idct_calc1_last     : std_logic := '0';
    signal idct_calc1_swap     : std_logic := '0';
-   signal idct_calc1_mul1     : signed(45 downto 0); 
-   signal idct_calc1_mul2     : signed(45 downto 0); 
+   signal idct_calc1_mul1     : signed(46 downto 0); 
+   signal idct_calc1_mul2     : signed(46 downto 0); 
    signal idct_calc2_ena      : std_logic := '0';
    signal idct_calc2_stage    : std_logic := '0';
    signal idct_calc2_target1  : integer range 0 to 63;
@@ -221,9 +223,9 @@ architecture arch of mdec is
    signal color_read_B        : signed(7 downto 0) := (others => '0');
    signal color_read_Y        : signed(7 downto 0) := (others => '0');
       
-   signal color_conv_R        : signed(8 downto 0) := (others => '0');
-   signal color_conv_G        : signed(8 downto 0) := (others => '0');
-   signal color_conv_B        : signed(8 downto 0) := (others => '0');
+   signal color_conv_R        : signed(16 downto 0) := (others => '0');
+   signal color_conv_G        : signed(16 downto 0) := (others => '0');
+   signal color_conv_B        : signed(16 downto 0) := (others => '0');
       
    signal color_bwAddr        : integer range 0 to 63;
    signal color_addr          : unsigned(7 downto 0) := (others => '0');
@@ -297,6 +299,28 @@ architecture arch of mdec is
    
    signal ss_timeout          : unsigned(23 downto 0);
 
+   function colorChannel(y : signed(7 downto 0); chroma : signed(16 downto 0); mode15 : std_logic; unsignedOut : std_logic) return std_logic_vector is
+      variable sum  : signed(17 downto 0);
+      variable w17  : signed(17 downto 0);
+      variable res  : signed(17 downto 0);
+      variable outv : std_logic_vector(7 downto 0);
+   begin
+      sum := shift_left(resize(y, 18), 8) + resize(chroma, 18);
+      w17 := resize(sum(16 downto 0), 18);
+      if (mode15 = '1') then
+         res := shift_right(w17 + 1024, 11);
+         if (res < -16) then res := to_signed(-16, 18); elsif (res > 15) then res := to_signed(15, 18); end if;
+         outv := std_logic_vector(res(4 downto 0)) & "000";
+         if (unsignedOut = '1') then outv(7) := not outv(7); end if;
+      else
+         res := shift_right(w17 + 128, 8);
+         if (res < -128) then res := to_signed(-128, 18); elsif (res > 127) then res := to_signed(127, 18); end if;
+         outv := std_logic_vector(res(7 downto 0));
+         if (unsignedOut = '1') then outv(7) := not outv(7); end if;
+      end if;
+      return outv;
+   end function;
+
    function roundUp8to5(data : std_logic_vector(7 downto 0)) return std_logic_vector is
    begin
       if (data(7 downto 3) /= "11111" and data(2) = '1') then
@@ -333,7 +357,8 @@ begin
       Empty    => FifoIn_Empty   
    );
    
-   FifoIn_Rd  <= '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_IDLE and FifoIn_Dout(31 downto 29) = "001") else
+   FifoIn_Rd  <= '0' when (blockDoneNext = '1') else
+                 '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_IDLE and FifoIn_Dout(31 downto 29) = "001") else
                  '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_IDLE and FifoIn_Dout(31 downto 29) = "010") else
                  '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_IDLE and FifoIn_Dout(31 downto 29) = "011") else
                  '1' when (FifoIn_Empty = '0' and receiveState = RECEIVE_IDLE and wordsRemain > 0) else
@@ -351,6 +376,7 @@ begin
    -- receive FIFO handling
    process (clk1x)
       variable nextCoeff : unsigned(6 downto 0);
+      variable coeff63   : std_logic;
    begin
       if rising_edge(clk1x) then
       
@@ -366,6 +392,7 @@ begin
          if (reset = '1') then
          
             reset_calc      <= '1';
+            blockDoneNext   <= '0';
          
             receiveState    <= RECEIVE_IDLE;
             fifoSecondAvail <= '0';
@@ -409,6 +436,20 @@ begin
                   reset_calc    <= '1';
                end if;
             end if;
+            
+            if (blockDoneNext = '1') then
+               blockDoneNext    <= '0';
+               currentBlockDone <= '1';
+               if (blockDoneDecode = '1') then
+                  decodeDone <= '1';
+               end if;
+               currentCoeff <= to_unsigned(64, 7);
+               if (receiveState = RECEIVE_BLOCK) then
+                  currentBlock <= currentBlock + 1;
+               else
+                  currentBlock <= (others => '0');
+               end if;
+            else
             
             case (receiveState) is
             
@@ -485,6 +526,7 @@ begin
                   elsif (FifoIn_Empty = '0' and decodeDone = '0') then
                   
                      currentData <= signed(RLdata(9 downto 0));
+                     coeff63     := '0';
                      if (currentCoeff = 64) then
                         if (RLdata /= x"FE00") then
                            currentCoeff  <= (others => '0');
@@ -494,7 +536,16 @@ begin
                      else
                         nextCoeff    := currentCoeff + unsigned(RLdata(15 downto 10)) + 1;
                         currentCoeff <= nextCoeff;
-                        if (nextCoeff >= 63) then -- RL finished
+                        if (nextCoeff = 63) then
+                           coeff63       := '1';
+                           calcNextRL    <= '1';
+                           blockDoneNext <= '1';
+                           if ((rec_depth(1) = '1' and currentBlock = 5) or rec_depth(1) = '0') then
+                              blockDoneDecode <= '1';
+                           else
+                              blockDoneDecode <= '0';
+                           end if;
+                        elsif (nextCoeff >= 63) then
                            currentBlock <= currentBlock + 1;
                            currentCoeff <= to_unsigned(64, 7);
                            if ((rec_depth(1) = '1' and currentBlock = 5) or rec_depth(1) = '0') then
@@ -513,18 +564,23 @@ begin
                         wordsRemain <= wordsRemain - 1;
                         if (wordsRemain = 1) then -- only if at last block?
                            receiveState <= RECEIVE_IDLE;
-                           currentCoeff <= to_unsigned(64, 7);
-                           currentBlock <= (others => '0');
+                           if (coeff63 = '0') then
+                              currentCoeff <= to_unsigned(64, 7);
+                              currentBlock <= (others => '0');
+                           end if;
                         end if;
                      end if;
                      
                   end if;
             
             end case;
+            
+            end if;
          
          end if;
          
          if (reset_receive = '1') then
+            blockDoneNext   <= '0';
             receiveState    <= RECEIVE_IDLE;
             fifoSecondAvail <= '0';
             currentBlock    <= (others => '0');
@@ -589,6 +645,7 @@ begin
    -- RL decoding
    process (clk1x)
       variable calcvalue : integer;
+      variable calcmag   : integer range 0 to 16777215;
    begin
       if rising_edge(clk1x) then
          
@@ -605,38 +662,41 @@ begin
          FifoRL_Wr <= '0';
          if (calcBlockDone = '1') then
             FifoRL_Wr      <= '1';
-            FifoRL_Din(20) <= '1';
+            FifoRL_Din(21) <= '1';
          elsif (calcNowRL = '1') then
             FifoRL_Wr <= '1';
             
             calcvalue := to_integer(calcData);
             if (calcQScale = 0) then
-               calcvalue := calcvalue * 2;
+               calcvalue := calcvalue * 4;
             else
-               calcvalue := calcvalue * to_integer(unsigned(RamYUVdataB));
+               calcmag := abs(calcvalue) * to_integer(unsigned(RamYUVdataB));
                if (calcCoeff > 0) then
-                  calcvalue := calcvalue * to_integer(calcQScale);
-                  calcvalue := calcvalue + 4;
-                  calcvalue := calcvalue / 8;
+                  if (calcvalue < 0) then
+                     calcmag := (calcmag * to_integer(calcQScale) + 7) / 8;
+                  else
+                     calcmag := (calcmag * to_integer(calcQScale) + 4) / 8;
+                  end if;
+               end if;
+               if (calcmag = 0) then
+                  calcvalue := 0;
+               elsif (calcmag >= 1024) then
+                  if (calcvalue < 0) then calcvalue := -2047; else calcvalue := 2047; end if;
+               else
+                  if (calcvalue < 0) then calcvalue := 1 - 2 * calcmag; else calcvalue := 2 * calcmag - 1; end if;
                end if;
             end if;
-            
-            if (calcvalue < -1024) then 
-               calcvalue := -1024;
-            elsif (calcvalue > 1023) then
-               calcvalue := 1023;
-            end if;
         
-            FifoRL_Din(10 downto 0) <= std_logic_vector(to_signed(calcvalue, 11));
+            FifoRL_Din(11 downto 0) <= std_logic_vector(to_signed(calcvalue, 12));
             
-            FifoRL_Din(13 downto 11) <= std_logic_vector(calcBlock);
+            FifoRL_Din(14 downto 12) <= std_logic_vector(calcBlock);
             if (calcQScale = 0) then
-               FifoRL_Din(19 downto 14) <= std_logic_vector(calcCoeff);
+               FifoRL_Din(20 downto 15) <= std_logic_vector(calcCoeff);
             else
-               FifoRL_Din(19 downto 14) <= std_logic_vector(to_unsigned(calcZigzag, 6));
+               FifoRL_Din(20 downto 15) <= std_logic_vector(to_unsigned(calcZigzag, 6));
             end if;
             
-            FifoRL_Din(20) <= '0'; -- block not finished
+            FifoRL_Din(21) <= '0';
                     
          end if;
          
@@ -651,7 +711,7 @@ begin
    generic map
    (
       SIZE             => 512,
-      DATAWIDTH        => 21,
+      DATAWIDTH        => 22,
       NEARFULLDISTANCE => 256
    )
    port map
@@ -672,16 +732,16 @@ begin
    FifoRL_Rd <= '1' when (idctState = IDCT_IDLE and FifoRL_Empty = '0' and FifoOut_Empty = '1') else '0';
 
    -- IDCT
-   IDCTi_address_a <= std_logic_vector(to_unsigned(idct_u  * 8 + idct_x, 6)) when (idctState = IDCT_STAGE1) else FifoRL_Dout(19 downto 14);
+   IDCTi_address_a <= std_logic_vector(to_unsigned(idct_u  * 8 + idct_x, 6)) when (idctState = IDCT_STAGE1) else FifoRL_Dout(20 downto 15);
    IDCTi_address_b <= std_logic_vector(to_unsigned(idct_u1 * 8 + idct_x, 6)) when (idctState = IDCT_STAGE1) else std_logic_vector(to_unsigned(idct_x * 8 + idct_y, 6));
    
-   IDCTi_wren_a    <= ce when (idctState = IDCT_IDLE and FifoRL_Empty = '0' and FifoOut_Empty = '1' and FifoRL_Dout(20) = '0') else '0';
+   IDCTi_wren_a    <= ce when (idctState = IDCT_IDLE and FifoRL_Empty = '0' and FifoOut_Empty = '1' and FifoRL_Dout(21) = '0') else '0';
    IDCTi_wren_b    <= ce when (idctState = IDCT_STAGE2) else '0';
    
-   IDCTi_data_a    <= FifoRL_Dout(10 downto 0);
+   IDCTi_data_a    <= FifoRL_Dout(11 downto 0);
    
    iIDCTiTable: entity work.dpram
-   generic map ( addr_width => 6, data_width => 11)
+   generic map ( addr_width => 6, data_width => 12)
    port map
    (
       clock_a     => clk2x,
@@ -692,7 +752,7 @@ begin
       
       clock_b     => clk2x,
       address_b   => IDCTi_address_b,
-      data_b      => (10 downto 0 => '0'),
+      data_b      => (11 downto 0 => '0'),
       wren_b      => IDCTi_wren_b,
       q_b         => IDCTi_dataO_b
    );
@@ -736,17 +796,17 @@ begin
    
    scaleT1_address_b <= std_logic_vector(to_unsigned(idct_u  * 8 + idct_y, 6)) when (idctState = IDCT_STAGE1) else std_logic_vector(to_unsigned(idct_u  * 8 + idct_x, 6));
    scaleT2_address_b <= std_logic_vector(to_unsigned(idct_u1 * 8 + idct_y, 6)) when (idctState = IDCT_STAGE1) else std_logic_vector(to_unsigned(idct_u1 * 8 + idct_x, 6));
-   idct_calc0_mul12  <= signed(scaleT1_data_b);
-   idct_calc0_mul22  <= signed(scaleT2_data_b);
+   idct_calc0_mul12  <= shift_right(signed(scaleT1_data_b), 3) when (idct_calc0_stage = '0') else shift_right(signed(scaleT1_data_b), 4);
+   idct_calc0_mul22  <= shift_right(signed(scaleT2_data_b), 3) when (idct_calc0_stage = '0') else shift_right(signed(scaleT2_data_b), 4);
    
 -------------------------
    
    IDCTt_address_a <= std_logic_vector(to_unsigned(idct_calc2_target1, 6));
    IDCTt_wren_a    <= ce when (idct_calc2_ena = '1' and idct_calc2_last = '1' and idct_calc2_stage = '0') else '0';
-   IDCTt_data_a    <= std_logic_vector(resize(idct_sum, 30));
+   IDCTt_data_a    <= std_logic_vector(resize(signed(idct_sum(16 downto 4)), 31));
    
    iIDCTtTable1: entity work.dpram
-   generic map ( addr_width => 6, data_width => 30)
+   generic map ( addr_width => 6, data_width => 31)
    port map
    (
       clock_a     => clk2x,
@@ -756,13 +816,13 @@ begin
       
       clock_b     => clk2x,
       address_b   => IDCTt_address_b1,
-      data_b      => (29 downto 0 => '0'),
+      data_b      => (30 downto 0 => '0'),
       wren_b      => '0',
       q_b         => IDCTt_dataO_b1
    );
    
    iIDCTtTable2: entity work.dpram
-   generic map ( addr_width => 6, data_width => 30)
+   generic map ( addr_width => 6, data_width => 31)
    port map
    (
       clock_a     => clk2x,
@@ -772,7 +832,7 @@ begin
       
       clock_b     => clk2x,
       address_b   => IDCTt_address_b2,
-      data_b      => (29 downto 0 => '0'),
+      data_b      => (30 downto 0 => '0'),
       wren_b      => '0',
       q_b         => IDCTt_dataO_b2
    );
@@ -786,7 +846,7 @@ begin
    idct_calc0_mul21 <= resize(signed(IDCTi_dataO_b), idct_calc0_mul11'length) when (idct_calc0_stage = '0') else signed(IDCTt_dataO_b2);
    
    process (clk2x)
-      variable shifted : signed(16 downto 0);
+      variable shifted : signed(17 downto 0);
    begin
       if rising_edge(clk2x) then
       
@@ -810,18 +870,18 @@ begin
                   end if;
                   
                   if (FifoRL_Empty = '0' and FifoOut_Empty = '1') then
-                     if (FifoRL_Dout(20) = '1') then
+                     if (FifoRL_Dout(21) = '1') then
                         idctState   <= IDCT_STAGE1;
                         idct_x      <= 0;
                         idct_y      <= 0;
                         idct_u      <= 0;
                         idct_u1     <= 1;
                      else
-                        if (unsigned(FifoRL_Dout(19 downto 14)) = 0) then
-                           idct_block <= to_integer(unsigned(FifoRL_Dout(13 downto 11)));
+                        if (unsigned(FifoRL_Dout(20 downto 15)) = 0) then
+                           idct_block <= to_integer(unsigned(FifoRL_Dout(14 downto 12)));
                         end if;
                         -- synthesis translate_off
-                        idct_input(to_integer(unsigned(FifoRL_Dout(19 downto 14)))) <= signed(FifoRL_Dout(10 downto 0));
+                        idct_input(to_integer(unsigned(FifoRL_Dout(20 downto 15)))) <= signed(FifoRL_Dout(11 downto 0));
                         -- synthesis translate_on
                      end if;
                   end if;
@@ -925,9 +985,9 @@ begin
             idct_calc2_swap    <= idct_calc1_swap;
             if (idct_calc1_ena = '1') then
                if (idct_calc1_first = '1') then
-                  idct_sum <= to_signed(0, idct_sum'length) + idct_calc1_mul1 + idct_calc1_mul2;
+                  idct_sum <= to_signed(0, idct_sum'length) + shift_right(idct_calc1_mul1, 7) + shift_right(idct_calc1_mul2, 7);
                else
-                  idct_sum <= idct_sum + idct_calc1_mul1 + idct_calc1_mul2;
+                  idct_sum <= idct_sum + shift_right(idct_calc1_mul1, 7) + shift_right(idct_calc1_mul2, 7);
                end if;
             end if;
             
@@ -942,7 +1002,7 @@ begin
                else
                   idct_target <= idct_buffer & to_unsigned(idct_calc2_target2, 9);
                   idct_write  <= '1';
-                  shifted := idct_sum(48 downto 32);
+                  shifted := shift_right(resize(signed(idct_sum(16 downto 0)), 18) + 128, 8);
                   if (shifted < -128) then
                      idct_resultClip <= to_signed(-128, 8);
                   elsif (shifted > 127) then
@@ -989,13 +1049,12 @@ begin
    process (clk2x)
       variable conv_R   : signed(16 downto 0);
       variable conv_G   : signed(16 downto 0);
+      variable mode15   : std_logic;
+      variable bw_value : signed(7 downto 0);
+      variable bw_nibble: signed(8 downto 0);
+      variable bw_out   : std_logic_vector(7 downto 0);
+      variable conv_GR  : signed(16 downto 0);
       variable conv_B   : signed(16 downto 0);
-      variable mix_R    : signed(9 downto 0);
-      variable mix_G    : signed(9 downto 0);
-      variable mix_B    : signed(9 downto 0);
-      variable final_R  : signed(8 downto 0);
-      variable final_G  : signed(8 downto 0);
-      variable final_B  : signed(8 downto 0);
    begin
       if rising_edge(clk2x) then
 
@@ -1049,29 +1108,26 @@ begin
                when COLOR_READ3 =>
                   colorState   <= COLOR_CALC;
                   color_read_Y <= signed(idct_readData);
-                  conv_R := to_signed((to_integer(color_read_R) * 359), 17);
-                  conv_G := to_signed(((to_integer(color_read_B) * (-88)) + (to_integer(color_read_R) * (-183))), 17);
-                  conv_B := to_signed((to_integer(color_read_B) * 454), 17);
-                  color_conv_R <= conv_R(16 downto 8);
-                  color_conv_G <= conv_G(16 downto 8);
-                  color_conv_B <= conv_B(16 downto 8);
+                  conv_R := to_signed(to_integer(color_read_R) * 359, 17);
+                  conv_GR := to_signed(to_integer(color_read_R) * (-183), 17);
+                  conv_GR(4 downto 0) := (others => '0');
+                  conv_G := to_signed(to_integer(color_read_B) * (-88), 17) + conv_GR;
+                  conv_B := to_signed(to_integer(color_read_B) * 454, 17);
+                  color_conv_R <= conv_R;
+                  color_conv_G <= conv_G;
+                  color_conv_B <= conv_B;
                   
                when COLOR_CALC =>
-                  mix_R := (resize(color_read_Y,10) + resize(color_conv_R,10));
-                  mix_G := (resize(color_read_Y,10) + resize(color_conv_G,10));
-                  mix_B := (resize(color_read_Y,10) + resize(color_conv_B,10));
-                  if (mix_R < -128) then final_R := to_signed(-128, 9); elsif (mix_R > 127) then final_R := to_signed(127, 9); else final_R := resize(mix_R, 9); end if;
-                  if (mix_G < -128) then final_G := to_signed(-128, 9); elsif (mix_G > 127) then final_G := to_signed(127, 9); else final_G := resize(mix_G, 9); end if;
-                  if (mix_B < -128) then final_B := to_signed(-128, 9); elsif (mix_B > 127) then final_B := to_signed(127, 9); else final_B := resize(mix_B, 9); end if;
-                  final_R := final_R + 128;
-                  final_G := final_G + 128;
-                  final_B := final_B + 128;
+                  mode15 := '0';
+                  if (rec_depth = "11") then
+                     mode15 := '1';
+                  end if;
                   
                   color_write  <= '1';
                   color_addr   <= to_unsigned((color_x + color_xBase) + (color_y + color_yBase) * 16, 8);
-                  color_result( 7 downto  0) <= std_logic_vector(final_R(7 downto 0));
-                  color_result(15 downto  8) <= std_logic_vector(final_G(7 downto 0));
-                  color_result(23 downto 16) <= std_logic_vector(final_B(7 downto 0));
+                  color_result( 7 downto  0) <= colorChannel(color_read_Y, color_conv_R, mode15, not rec_signed);
+                  color_result(15 downto  8) <= colorChannel(color_read_Y, color_conv_G, mode15, not rec_signed);
+                  color_result(23 downto 16) <= colorChannel(color_read_Y, color_conv_B, mode15, not rec_signed);
 
                   colorState <= COLOR_READ0;
                   if (color_x < 7) then 
@@ -1098,7 +1154,18 @@ begin
                when COLOR_BW_WRITE =>
                   color_write  <= '1';
                   color_addr   <= to_unsigned(color_bwAddr, 8);
-                  color_result <= x"0000" & std_logic_vector(to_unsigned(to_integer(signed(idct_readData)) + 128, 8));
+                  bw_value := signed(idct_readData);
+                  if (rec_depth = "00") then
+                     bw_nibble := shift_right(resize(bw_value, 9) + 8, 4);
+                     if (bw_nibble > 7) then bw_nibble := to_signed(7, 9); end if;
+                     bw_out := std_logic_vector(bw_nibble(3 downto 0)) & "0000";
+                  else
+                     bw_out := std_logic_vector(bw_value);
+                  end if;
+                  if (rec_signed = '0') then
+                     bw_out(7) := not bw_out(7);
+                  end if;
+                  color_result <= x"0000" & bw_out;
                   if (color_bwAddr = 63) then
                      colorState   <= COLOR_IDLE;
                      color_done <= '1';
@@ -1207,9 +1274,9 @@ begin
                -- 16 bit
                when COLORMAP_16_1 | COLORMAP_16_2 =>
                   if (color_readValid = '1') then
-                     color_round16_r := roundUp8to5(color_readData( 7 downto  0));
-                     color_round16_g := roundUp8to5(color_readData(15 downto  8));
-                     color_round16_b := roundUp8to5(color_readData(23 downto 16));
+                     color_round16_r := color_readData( 7 downto  3);
+                     color_round16_g := color_readData(15 downto 11);
+                     color_round16_b := color_readData(23 downto 19);
 
                      if (colormapState = COLORMAP_16_1) then
                         colormapState <= COLORMAP_16_2;
