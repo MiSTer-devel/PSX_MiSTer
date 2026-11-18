@@ -1673,6 +1673,8 @@ begin
    -- vram access
    process (clk2x)
       variable reqVRAMSizeRounded : unsigned(10 downto 0);
+      variable reqVRAMWordsTotal  : unsigned(8 downto 0);
+      variable reqVRAMWordsFirst  : unsigned(8 downto 0);
    begin
       if rising_edge(clk2x) then
       
@@ -1755,6 +1757,24 @@ begin
                         if (vram2vram_reqVRAMEnable = '1' or vram2cpu_reqVRAMEnable = '1') then
                            if (reqVRAMXPos + reqVRAMSizeRounded > 1024) then
                               reqVRAMwrap <= resize(((reqVRAMXPos + reqVRAMSizeRounded) - 1024) / 4, 8);
+                           end if;
+                        end if;
+                        if (videoout_reqVRAMEnable = '1') then
+                           reqVRAMWordsTotal := reqVRAMSizeRounded(10 downto 2);
+                           reqVRAMWordsFirst := to_unsigned(256, 9) - resize(reqVRAMXPos(9 downto 2), 9);
+                           if (reqVRAMWordsTotal > reqVRAMWordsFirst) then
+                              reqVRAMwrap <= resize(reqVRAMWordsTotal - reqVRAMWordsFirst, 8);
+                              if (reqVRAMWordsFirst > 128) then
+                                 vram_BURSTCNT  <= x"80";
+                                 reqVRAMremain  <= x"80" - 1;
+                                 reqVRAMremain2 <= x"80" - 1;
+                                 reqVRAMnext    <= resize(reqVRAMWordsFirst - 128, 8);
+                              else
+                                 vram_BURSTCNT  <= std_logic_vector(reqVRAMWordsFirst(7 downto 0));
+                                 reqVRAMremain  <= reqVRAMWordsFirst(7 downto 0) - 1;
+                                 reqVRAMremain2 <= reqVRAMWordsFirst(7 downto 0) - 1;
+                                 reqVRAMnext    <= (others => '0');
+                              end if;
                            end if;
                         end if;
                      elsif (fifoOut_Empty = '0') then
