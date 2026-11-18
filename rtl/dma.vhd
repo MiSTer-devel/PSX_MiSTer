@@ -25,6 +25,7 @@ entity dma is
       canDMA               : in  std_logic;
       cpuPaused            : in  std_logic;
       dmaRequest           : out std_logic;
+      dmaPrioRequest       : out std_logic;
       dmaStallCPU          : out std_logic;
       dmaOn                : out std_logic;
       irqOut               : out std_logic := '0';
@@ -196,6 +197,9 @@ architecture arch of dma is
 begin 
 
    toDevice <= dmaSettings.D_CHCR(0);
+   
+   -- GPU block transfer RAM->GPU (CPU->VRAM upload): may take the bus while CPU writes are still queued
+   dmaPrioRequest <= '1' when (dmaRequest = '1' and triggerchannel = 2 and dmaArray(2).D_CHCR(10 downto 9) = "01" and dmaArray(2).D_CHCR(0) = '1') else '0';
 
    ram_cnt <= "00" when (directionNeg = '1' and ram_adr(9 downto 2) = x"01") else
               "01" when (directionNeg = '1' and ram_adr(9 downto 2) = x"02") else
