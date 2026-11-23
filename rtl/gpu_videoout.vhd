@@ -73,7 +73,12 @@ architecture arch of gpu_videoout is
 
    signal DisplayOffsetX            : unsigned( 9 downto 0) := (others => '0'); 
    signal DisplayOffsetY            : unsigned( 8 downto 0) := (others => '0'); 
-   signal vDisplayStart             : unsigned( 9 downto 0) := (others => '0'); 
+   signal vDisplayStart             : unsigned( 9 downto 0) := (others => '0');
+   signal vDisplayEnd               : unsigned( 9 downto 0) := (others => '0');
+   signal DisplayAdjustY            : unsigned( 9 downto 0) := (others => '0');
+   signal DisplayLineCount          : unsigned(10 downto 0) := (others => '0');
+   signal blankLine                 : std_logic := '0';
+   signal lineram_din               : std_logic_vector(63 downto 0);
          
    -- muxing      
    signal videoout_reports_s        : tvideoout_reports;
@@ -232,29 +237,47 @@ begin
    DisplayOffsetX <= videoout_settings.vramRange(9 downto 0);
    
    vDisplayStart  <= videoout_settings.vDisplayRange(9 downto 0);
-   
+   vDisplayEnd    <= videoout_settings.vDisplayRange(19 downto 10);
+
+   lineram_din <= (others => '0') when (blankLine = '1') else vram_DOUT;
+
    process (clk2x)
    begin
       if rising_edge(clk2x) then
          
          -- display offset is adjusted if display start is below typical line for CRTs
          DisplayOffsetY <= videoout_settings.vramRange(18 downto 10);
+         DisplayAdjustY <= (others => '0');
          if (videoout_settings.GPUSTAT_PalVideoMode = '1' and videoout_settings.pal60 = '0') then
             if (vDisplayStart < 19) then
                if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_settings.GPUSTAT_VertInterlace = '1') then
                   DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + ((19 - vDisplayStart) * 2), 9);
+                  DisplayAdjustY <= resize((19 - vDisplayStart) * 2, 10);
                else
                   DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + (19 - vDisplayStart), 9);
+                  DisplayAdjustY <= 19 - vDisplayStart;
                end if;
             end if;
          else
             if (vDisplayStart < 16) then
                if (videoout_settings.GPUSTAT_VerRes = '1' and videoout_settings.GPUSTAT_VertInterlace = '1') then
                   DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + ((16 - vDisplayStart) * 2), 9);
+                  DisplayAdjustY <= resize((16 - vDisplayStart) * 2, 10);
                else
                   DisplayOffsetY <= resize(videoout_settings.vramRange(18 downto 10) + (16 - vDisplayStart), 9);
+                  DisplayAdjustY <= 16 - vDisplayStart;
                end if;
             end if;
+         end if;
+         
+         if (vDisplayEnd > vDisplayStart) then
+            if (videoout_settings.GPUSTAT_VerRes = '1') then
+               DisplayLineCount <= resize(vDisplayEnd - vDisplayStart, 10) & '0';
+            else
+               DisplayLineCount <= resize(vDisplayEnd - vDisplayStart, 11);
+            end if;
+         else
+            DisplayLineCount <= (others => '1');
          end if;
          
          if (state =  WAITREAD or state =  WAITREAD2) then
@@ -301,6 +324,10 @@ begin
                      lineAct   <= videoout_request_clk2x.lineInNext;
                      reqPosX   <= DisplayOffsetX;
                      reqPosY   <= videoout_request_clk2x.lineInNext + DisplayOffsetY;
+                     blankLine <= '0';
+                     if (DisplayAdjustY > 0 and (resize(videoout_request_clk2x.lineInNext, 11) + resize(DisplayAdjustY, 11)) >= DisplayLineCount) then
+                        blankLine <= '1';
+                     end if;
                      fillAddr  <= videoout_request_clk2x.lineInNext(0) & x"00";
                      fillAddr2 <= videoout_request_clk2x.lineInNext(0) & x"00";
                      if (videoout_settings.GPUSTAT_VerRes = '1') then
@@ -349,7 +376,7 @@ begin
    (
       clock_a     => clk2x,
       address_a   => std_logic_vector(fillAddr),
-      data_a      => vram_DOUT,
+      data_a      => lineram_din,
       wren_a      => (vram_DOUT_READY and store),
       
       clock_b     => clkvid,
@@ -371,7 +398,7 @@ begin
    (
       clock_a     => clk2x,
       address_a   => std_logic_vector(fillAddr2),
-      data_a      => vram_DOUT,
+      data_a      => lineram_din,
       wren_a      => (vram_DOUT_READY and store2),
       
       clock_b     => clkvid,

@@ -14,6 +14,7 @@ entity memorymux is
       
       pauseNext            : in  std_logic;
       isIdle               : out std_logic;
+      isBusFree            : out std_logic;
       
       loadExe              : in  std_logic;
       exe_initial_pc       : in  unsigned(31 downto 0);
@@ -309,6 +310,9 @@ architecture arch of memorymux is
 begin 
 
    isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0' and writeFifo_busy = '0' and mem_save_request = '0') else '0';
+   
+   -- no access in progress, queued CPU writes may still wait in the write fifo
+   isBusFree <= '1' when (state = IDLE and readram = '0' and writeram = '0') else '0';
 
    process (state, addressData_buf, writeMask_buf, dataWrite_buf)
       variable address  : unsigned(28 downto 0);

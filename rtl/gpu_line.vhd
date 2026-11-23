@@ -12,6 +12,7 @@ entity gpu_line is
       clk2xIndex           : in  std_logic;
       ce                   : in  std_logic;
       reset                : in  std_logic;
+      drawer_reset         : in  std_logic;
       
       REPRODUCIBLEGPUTIMING: in  std_logic;
       
@@ -151,8 +152,6 @@ architecture arch of gpu_line is
    signal pixelCnt            : unsigned(9 downto 0) := (others => '0');
    
    signal firstPixel          : std_logic;
-   
-   signal timeout             : integer range 0 to 1048575 := 0;
 
 begin 
 
@@ -195,16 +194,7 @@ begin
                drawTiming <= drawTiming + 1;
             end if;
             
-            error <= '0';
-            if (recstate = REQUESTIDLE) then
-               timeout <= 0;
-            elsif (timeout < 1048575) then
-               timeout  <= timeout + 1;
-            else
-               error    <= '1';
-               recstate <= REQUESTIDLE;
-               done     <= '1';
-            end if;
+            error <= '0'; -- no timeout: a line waiting for parameters must keep waiting like on console (Doraemon 2)
             
             if (fifoLine_Full = '1') then
                error <= '1';
@@ -289,6 +279,13 @@ begin
                   end if;
                        
             end case;
+            
+            -- GP1(01h) drops a line command that is still waiting for parameters
+            if (drawer_reset = '1' and (recstate = REQUESTPOS1 or recstate = REQUESTCOLOR2 or recstate = REQUESTPOS2)) then
+               recstate    <= REQUESTWAITDONE;
+               fifoLine_Wr <= '0';
+               swap12      <= '0';
+            end if;
          
          end if;
          

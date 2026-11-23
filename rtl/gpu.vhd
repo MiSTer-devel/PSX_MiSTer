@@ -221,6 +221,9 @@ architecture arch of gpu is
    signal proc_done                 : std_logic;
    --signal proc_CmdDone              : std_logic;
    signal proc_requestFifo          : std_logic;
+   signal fifoIn_lastWrClass        : std_logic_vector(2 downto 0) := "000";
+   signal proc_cmdClass             : std_logic_vector(2 downto 0) := "000";
+   signal cmdQueued_dreqHold        : std_logic;
    signal timeout                   : integer range 0 to 67108863 := 0;
    
    signal pixelStall                : std_logic;
@@ -844,6 +847,20 @@ begin
 
    fifoIn_Pending <= resize(fifoIn_Count, 9) + 1 when (fifoIn_Valid = '1') else resize(fifoIn_Count, 9);
 
+   process (clk2x)
+   begin
+      if rising_edge(clk2x) then
+         if (fifoIn_Wr = '1' and fifoIn_Full = '0') then
+            fifoIn_lastWrClass <= fifoIn_Din(31 downto 29);
+         end if;
+      end if;
+   end process;
+   
+   -- GPUSTAT.28 drops as soon as a polygon/line command word is received, even if it is still queued behind a busy primitive (Doraemon 2)
+   cmdQueued_dreqHold <= '1' when (fifoIn_Pending = 1 and proc_requestFifo = '0' and 
+                                   (fifoIn_lastWrClass = "001" or fifoIn_lastWrClass = "010") and
+                                   (proc_idle = '1' or proc_cmdClass = "001" or proc_cmdClass = "010" or proc_cmdClass = "011")) else '0';
+
    fifoIn_Rd <= '1' when (ce = '1' and (proc_idle = '1' or proc_requestFifo = '1') and pipeline_busy = '0' and fifoIn_Empty = '0' and fifoIn_Valid = '0' and (clk2xIndex = '0' or REPRODUCIBLEGPUTIMING = '0')) else '0';
    
    process (clk2x)
@@ -958,6 +975,7 @@ begin
                   
                   proc_idle           <= '0';
                   GPUSTAT_ReadyRecCmd <= '0';
+                  proc_cmdClass       <= fifoIn_Dout(31 downto 29);
                   
                elsif (cmdNew = 16#01#) then -- clear cache
                   pipeline_clearCacheTexture <= '1';
@@ -1006,12 +1024,12 @@ begin
             end if;
 
             GPUSTAT_FIFOReady <= fifoIn_Empty;
-            if (fifoIn_Valid = '1' and proc_idle = '1' and fifoIn_Dout(31 downto 29) = "001") then
+            if (fifoIn_Valid = '1' and proc_idle = '1' and (fifoIn_Dout(31 downto 29) = "001" or fifoIn_Dout(31 downto 29) = "010")) then
                GPUSTAT_ReadyRecDMA <= '0';
             elsif (GPUSTAT_DMADirection = "10" and fifoIn_Pending <= 1) then
-               GPUSTAT_ReadyRecDMA <= not poly_dreqHold;
+               GPUSTAT_ReadyRecDMA <= not (poly_dreqHold or line_requestFifo or cmdQueued_dreqHold);
             else
-               GPUSTAT_ReadyRecDMA <= fifoIn_Empty and not poly_dreqHold;
+               GPUSTAT_ReadyRecDMA <= fifoIn_Empty and not (poly_dreqHold or line_requestFifo);
             end if;
             
             if (proc_done = '1') then
@@ -1205,6 +1223,7 @@ begin
       clk2xIndex           => clk2xIndex,
       ce                   => ce,        
       reset                => softreset or SS_reset,
+      drawer_reset         => drawer_reset,
 
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,
 
@@ -1654,6 +1673,8 @@ begin
    -- vram access
    process (clk2x)
       variable reqVRAMSizeRounded : unsigned(10 downto 0);
+      variable reqVRAMWordsTotal  : unsigned(8 downto 0);
+      variable reqVRAMWordsFirst  : unsigned(8 downto 0);
    begin
       if rising_edge(clk2x) then
       
@@ -1736,6 +1757,24 @@ begin
                         if (vram2vram_reqVRAMEnable = '1' or vram2cpu_reqVRAMEnable = '1') then
                            if (reqVRAMXPos + reqVRAMSizeRounded > 1024) then
                               reqVRAMwrap <= resize(((reqVRAMXPos + reqVRAMSizeRounded) - 1024) / 4, 8);
+                           end if;
+                        end if;
+                        if (videoout_reqVRAMEnable = '1') then
+                           reqVRAMWordsTotal := reqVRAMSizeRounded(10 downto 2);
+                           reqVRAMWordsFirst := to_unsigned(256, 9) - resize(reqVRAMXPos(9 downto 2), 9);
+                           if (reqVRAMWordsTotal > reqVRAMWordsFirst) then
+                              reqVRAMwrap <= resize(reqVRAMWordsTotal - reqVRAMWordsFirst, 8);
+                              if (reqVRAMWordsFirst > 128) then
+                                 vram_BURSTCNT  <= x"80";
+                                 reqVRAMremain  <= x"80" - 1;
+                                 reqVRAMremain2 <= x"80" - 1;
+                                 reqVRAMnext    <= resize(reqVRAMWordsFirst - 128, 8);
+                              else
+                                 vram_BURSTCNT  <= std_logic_vector(reqVRAMWordsFirst(7 downto 0));
+                                 reqVRAMremain  <= reqVRAMWordsFirst(7 downto 0) - 1;
+                                 reqVRAMremain2 <= reqVRAMWordsFirst(7 downto 0) - 1;
+                                 reqVRAMnext    <= (others => '0');
+                              end if;
                            end if;
                         end if;
                      elsif (fifoOut_Empty = '0') then
